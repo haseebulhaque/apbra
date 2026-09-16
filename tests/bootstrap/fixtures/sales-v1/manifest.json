@@ -1,0 +1,21 @@
+{
+  "fixture_version": "1.0.0",
+  "synthetic": true,
+  "files": {
+    "DimBusinessArea.csv": "d650f45c03f13dee987f9c4d5d2c5d609a90c750f53a7109ad80c8ab61961c2f",
+    "DimCustomer.csv": "bc1904fb791063a9be87d9d8b18f93e299aa6b1cb8ed729428cf4d6cb6f04733",
+    "DimDate.csv": "d680deef0e606beb6595180752f17e60ded3beffc7d19644325501961912e9be",
+    "DimProduct.csv": "1d6e0f96f8f91543f1cc219c6bfe285bbdbd685647f58cc61d9c67bc868359d9",
+    "DimRegion.csv": "2708d392cd475a0a32487ae639cf37192c5ad6463b081ca26ce96f7416777d26",
+    "FactSales.csv": "2ce5cf3f3e8098c9acfc6def05bfada69cd81d5c109ac15b56f0fc4b848046be",
+    "README.md": "5b1710175326312d335ae86898c92afa164be8a44522d04e156d714a5622253a",
+    "cases.json": "51511163151f8b006dab56d9a80ad1654bc64435918058d93926271eddba179a",
+    "design.expected.json": "e5995a589f60725cb448ddee4957f7aa6bcc5d240926c79dbf7e79c5809de65c",
+    "numeric.expectations.json": "9c88008396105fc3fbe7e99dfef627c6c76f6fa36af93c4ed9e32ae8dd97a9ba",
+    "request.json": "3105ef35f32250af293211268c276c5910373d50c75b5c9822cafb5e7d728413",
+    "requirements.expected.json": "c348922a018c449d5dc99413c8a04dc00a71efca7c268c94f65a3abf93a1140f",
+    "schema.json": "12c87f56d255a7fbfdea2047659d0d26a6a83fb47d982c0675bc9e4f53259c24",
+    "schema.sql": "55fc5109e248cdcf4a28f442000ec2065de6ee1477665a434af683ebb4affed7",
+    "standards.json": "0abb05483faaa5e8ef1103b6a32886167b36eb54a2683619f4d9e6c0175c7aae"
+  }
+}

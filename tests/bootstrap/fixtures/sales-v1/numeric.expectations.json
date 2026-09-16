@@ -1,0 +1,70 @@
+{
+  "fixture_version": "1.0.0",
+  "purpose": "Hand-calculated fixture sanity totals, not DAX or Power BI runtime evidence.",
+  "monetary_tolerance": "0.005 AUD; round only presentation values, not intermediate division.",
+  "contexts": [
+    {
+      "year": 2024,
+      "sales": "440.00",
+      "orders": 3,
+      "quantity": 6,
+      "cost": "270.00",
+      "aov_fraction": [
+        "440",
+        "3"
+      ],
+      "prior_sales": null,
+      "yoy_fraction": null
+    },
+    {
+      "year": 2025,
+      "sales": "630.00",
+      "orders": 3,
+      "quantity": 8,
+      "cost": "390.00",
+      "aov_fraction": [
+        "630",
+        "3"
+      ],
+      "prior_sales": "440.00",
+      "yoy_fraction": [
+        "190",
+        "440"
+      ]
+    },
+    {
+      "year": 2025,
+      "region": "R01",
+      "sales": "380.00",
+      "orders": 1,
+      "quantity": 5,
+      "cost": "240.00",
+      "aov_fraction": [
+        "380",
+        "1"
+      ],
+      "prior_sales": "240.00",
+      "yoy_fraction": [
+        "140",
+        "240"
+      ]
+    },
+    {
+      "year": 2025,
+      "region": "R02",
+      "sales": "250.00",
+      "orders": 2,
+      "quantity": 3,
+      "cost": "150.00",
+      "aov_fraction": [
+        "250",
+        "2"
+      ],
+      "prior_sales": "200.00",
+      "yoy_fraction": [
+        "50",
+        "200"
+      ]
+    }
+  ]
+}

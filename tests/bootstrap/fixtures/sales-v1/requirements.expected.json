@@ -1,0 +1,39 @@
+{
+  "fixture_version": "1.0.0",
+  "artifact_kind": "EXPECTED_NOT_EXECUTED",
+  "request_id": "sales-request-v1",
+  "schema_id": "sales-star-v1",
+  "confirmed_clarification_ids": [
+    "sales-definition",
+    "yoy-coverage",
+    "region-security"
+  ],
+  "confirmation": "Required from actual user during execution; this fixture records expected answers, not a real approval.",
+  "sales_definition": "net SalesAmount",
+  "currency": "AUD",
+  "comparison": {
+    "current_year": 2025,
+    "prior_year": 2024,
+    "missing_or_zero_prior": "blank"
+  },
+  "region_usage": "slicer_only",
+  "rls_required": false,
+  "required_measure_ids": [
+    "total-sales",
+    "total-orders",
+    "average-order-value",
+    "sales-previous-year",
+    "sales-yoy-change",
+    "sales-yoy-percent"
+  ],
+  "pages": [
+    "Executive Summary",
+    "Regional Performance"
+  ],
+  "filters": [
+    "DimRegion.RegionName",
+    "DimBusinessArea.BusinessAreaName",
+    "DimProduct.ProductCategory"
+  ],
+  "time_axis": "DimDate.YearMonth"
+}

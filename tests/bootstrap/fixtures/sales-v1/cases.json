@@ -1,0 +1,47 @@
+{
+  "fixture_version": "1.0.0",
+  "execution_status": "NOT_RUN",
+  "cases": [
+    {
+      "id": "golden",
+      "input": "request.json",
+      "answers": "request.json#/clarifications",
+      "expected_requirements": "requirements.expected.json",
+      "expected_design": "design.expected.json",
+      "expected": "Explicit confirmation before generation; this file is input, not execution evidence."
+    },
+    {
+      "id": "unanswered-security",
+      "base": "golden",
+      "withhold_answer": "region-security",
+      "expected": "Clarify or block; never infer RLS or treat a Region slicer as security."
+    },
+    {
+      "id": "unanswered-sales",
+      "base": "golden",
+      "withhold_answer": "sales-definition",
+      "expected": "Clarify or block; never guess gross versus net."
+    },
+    {
+      "id": "missing-prior-year",
+      "base": "golden",
+      "data_selection": {
+        "FactSales.SaleDate": {
+          "min": "2025-01-01"
+        },
+        "DimDate.Date": {
+          "min": "2025-01-01"
+        }
+      },
+      "coverage_override": {
+        "start": "2025-01-01",
+        "end": "2025-12-31"
+      },
+      "expected": "Prior-year coverage must be clarified; YoY is unavailable, not zero growth."
+    }
+  ],
+  "candidate_baseline": {
+    "status": "NOT_AVAILABLE",
+    "reason": "APBRA-90 supplies inputs/expectations; generator is not implemented. Add an exact generated, independently validated candidate in its authorised task; do not fabricate one."
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "fixture_version": "1.0.0",
+  "request_id": "sales-request-v1",
+  "schema_id": "sales-star-v1",
+  "original_text": "Create an executive Power BI sales-performance report. I need total sales, total orders, average order value and year-over-year sales. Show performance over time and let users filter by region, business area and product category. Include an executive summary and a detailed regional view. Use our corporate reporting standards.",
+  "initial_state": "AWAITING_CLARIFICATION",
+  "clarifications": [
+    {
+      "id": "sales-definition",
+      "topic": "Does Sales mean net SalesAmount or gross pre-discount value?",
+      "golden_answer": "Net sales in AUD, SUM(FactSales.SalesAmount); DiscountAmount is a line-level discount already deducted."
+    },
+    {
+      "id": "yoy-coverage",
+      "topic": "What prior-year coverage and comparison period should YoY use?",
+      "golden_answer": "Use full calendar 2025 against 2024; both complete synthetic years are supplied. Outside coverage or with zero prior-year sales, return blank rather than inventing growth."
+    },
+    {
+      "id": "region-security",
+      "topic": "Is Region only a slicer or an access-security requirement?",
+      "golden_answer": "Region is a slicer only in this golden case; no regional RLS is requested. A slicer is not security."
+    }
+  ],
+  "confirmation_required": true
+}
