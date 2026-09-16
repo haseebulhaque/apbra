@@ -1,5 +1,5 @@
 # Real owner; not an independent approver when this owner authored the PR.
-# Enforcement and private-plan eligibility must be configured separately.
+# Public GitHub Free eligibility does not apply a native protection rule.
 * @haseebulhaque
 /AGENTS.md @haseebulhaque
 /.github/ @haseebulhaque

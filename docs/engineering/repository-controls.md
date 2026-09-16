@@ -1,34 +1,49 @@
 # Repository control verification and open gates
 
-## Observed, 16 September 2026
+## Current decision and observations, 16 September 2026
 
-Repository haseebulhaque/apbra is private. Initial main commit is e8edf749cbd2009946cc96bdf7ee6850b9d3f44f. A separate APBRA-85 branch was created; a file write succeeded and was read back. That proves branch/file access, not administration.
+The owner changed haseebulhaque/apbra to PUBLIC and requires free-license-compatible tooling. The repository API confirms public visibility. The rulesets endpoint now succeeds but returns an empty array. This supersedes the earlier private-repository licensing blocker, not the evidence that a rule must actually be configured.
 
-The main branch read returned protected=false and no required checks. GET /repos/haseebulhaque/apbra/rulesets returned HTTP 403 with: Upgrade to GitHub Pro or make this repository public to enable this feature. We did not make it public, purchase a plan or change access. The connector exposes no verified protection-write operation. Native enforcement remains blocked/unconfigured.
+The separate branch-protection read returned Resource not accessible by integration (403). No ruleset/branch-protection administration write operation is exposed by this connection. Reported user admin permissions do not grant the integration every administration permission. No native rule is claimed configured by this change.
 
-## Files versus enforced controls
+The earlier private-rulesets 403 remains a historical finding; it is not a current requirement to buy Pro. Do not change visibility again, purchase anything or create broader permissions to work around a missing capability.
 
-CODEOWNERS identifies the real existing owner, not twelve fictitious users. It is routing metadata, not proof of independent review or a required-review rule. The bootstrap workflow is a bounded repository check. A green check is not a required merge gate until the appropriate platform setting is configured and verified.
+## Researched free-tier choices
 
-All connected writes use Haseeb's account. An agent label, changed Git author or a second persona cannot supply a qualifying independent GitHub approval on a PR authored by that account. Do not request the author as their own reviewer. Separate agent review can provide evidence but does not create segregation of duties.
+| Control | Eligible free approach | Boundary |
+| --- | --- | --- |
+| Main protection | Public-repository branch ruleset on GitHub Free | Admin configuration and readback still required; not a paid push ruleset |
+| CI | Standard ubuntu-24.04 GitHub-hosted public workflow | No larger/paid or production-connected self-hosted runner; evidence retention seven days; storage allowance is not unlimited |
+| Secret checks | Public GitHub scanning plus standalone MIT Gitleaks CLI 8.30.1 | Native alerts not inspected here; CLI version and release hash pinned; no licensed organization Action |
+| Review | Existing independent-review requirement and actual human decision | Shared-account personas cannot supply qualifying non-author approval |
+| Future integrations | Research free entitlement, quota and permissions first | Azure, model APIs, Power BI publishing and other services are not free just because GitHub is public |
 
-## Before any merge
+## Import candidate, not an installed rule
 
-Inspect the actual PR author, base/head SHA, changed paths, check runs and required human/security review. Resolve one of: separately authorized non-author reviewer/app topology with supported private protection; or an explicitly owner-accepted limited solo-demo operating model with its limitations recorded. No automatic choice of the weaker option. Keep bootstrap as a draft until resolved.
+`.github/rulesets/main-protection.json` is a branch ruleset configuration prepared for owner import. Target: refs/heads/main only. It blocks deletion and non-fast-forward updates, requires a pull request, one non-author approval, approval of the most recent push, resolution of review threads and a current APBRA Bootstrap Checks result from GitHub Actions app 15368. No bypass actors, paid push rules, merge queue or signature requirement have been added.
 
-When an eligible plan and admin path exist, configure main to require PRs, relevant named checks, resolved conversations, stale-review invalidation and no force push/deletion. Apply restrictions to bypass actors as supported. Verify with harmless positive/negative test PRs, not a destructive probe of main. Add the precise trusted check publisher where supported. Do not enforce an impossible self-approval rule.
+Import through repository Settings > Rules/Rulesets > New ruleset > Import a ruleset, then confirm the target and enforcement state. Re-read the applied rule and effective main rules afterward. File presence and local JSON tests are not proof of native enforcement.
 
-## CI security profile
+**Review constraint remains explicit:** the present PR author is haseebulhaque. The same account cannot satisfy its own independent approval requirement. A real eligible non-author reviewer must be available before merge. Alternatively the owner may explicitly choose a limited solo-demo model; it must be described honestly and is not automatically accepted by making the repository public. No such waiver is implemented here. Keep PR #1 in draft.
 
-Use pull_request and manual dispatch, not pull_request_target to execute untrusted PR code. Read-only contents token; checkout does not persist credentials; no secrets, production runner, cloud identity, deploy or automatic merge. Actions are pinned to verified upstream commit references. Check outputs identify the checked-out merge/test SHA and PR head separately.
+## Public PR and CI security
 
-These controls reduce exposure, but the PR can modify its own workflow/check code. Trusted base-branch enforcement and independent review are still needed. Hygiene patterns are not a full secrets/SAST/supply-chain audit. No application tests are claimed by bootstrap checks.
+Use pull_request and manual dispatch, read-only contents, checkout without persisted credentials and full fetched history for scanning. No production secrets, elevated pull_request_target execution, cloud identity or automatic merge. Third-party actions and scanner downloads are pinned. The scanner self-tests, scans the tracked tree and all fetched refs, redacts findings and does not upload raw scan reports. Forks, remote caches, native security alerts and copies outside fetched history are not covered by that CLI result.
 
-## Sources consulted
+An author can propose changes to workflow/checker code, so a green author-modified workflow alone is not independent security assurance. CODEOWNERS routes to a real existing owner; it does not create another person or enforce a required review itself. Confirm the exact PR base/head and actual checks at review time.
 
-- https://docs.github.com/en/actions/reference/security/secure-use
-- https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
-- https://docs.github.com/en/pull-requests/reference/pull-request-reviews
-- https://developers.openai.com/codex/guides/agents-md/
+## Public-content incident rule
 
-Vendor statements above are external research, not clauses invented in the APBRA requirements. Repository access findings are direct connector observations. APBRA-127/85 remain open until real control acceptance and enforcement evidence exist.
+See [SECURITY.md](../../SECURITY.md). Do not confuse public project metadata with credentials. Keep customer information and secret-bearing connector download URLs out of commits and PR comments. A discovered valid credential must be revoked/rotated; current-file deletion does not purge historical exposure. Coordinate any necessary history rewrite separately and never claim existing forks/caches were recalled.
+
+## Source references
+
+- https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets
+- https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/managing-rulesets-for-a-repository
+- https://docs.github.com/en/billing/concepts/product-billing/github-actions
+- https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning
+- https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository
+- https://github.com/gitleaks/gitleaks/blob/v8.30.1/LICENSE
+- https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1
+
+These references support capability/licensing decisions, not a claim of implemented enforcement. APBRA-85/127 remain open until actual control and review evidence is available.
