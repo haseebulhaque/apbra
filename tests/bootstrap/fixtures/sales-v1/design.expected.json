@@ -1,0 +1,189 @@
+{
+  "fixture_version": "1.0.0",
+  "artifact_kind": "ASSERTIONS_NOT_GENERATED_DESIGN",
+  "assertion_semantics": "Required intent and bindings; wording, DAX syntax, visual IDs and layout may vary. These expectations do not prescribe the future production DesignPlan wire schema.",
+  "schema_id": "sales-star-v1",
+  "project_name": "SalesPerformance",
+  "required_tables": [
+    "DimDate",
+    "DimProduct",
+    "DimRegion",
+    "DimBusinessArea",
+    "DimCustomer",
+    "FactSales"
+  ],
+  "relationships": [
+    {
+      "from_table": "FactSales",
+      "from_column": "SaleDate",
+      "to_table": "DimDate",
+      "to_column": "Date",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "ProductId",
+      "to_table": "DimProduct",
+      "to_column": "ProductId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "RegionId",
+      "to_table": "DimRegion",
+      "to_column": "RegionId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "BusinessAreaId",
+      "to_table": "DimBusinessArea",
+      "to_column": "BusinessAreaId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "CustomerId",
+      "to_table": "DimCustomer",
+      "to_column": "CustomerId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    }
+  ],
+  "date_table": "DimDate",
+  "date_column": "Date",
+  "measures": [
+    {
+      "id": "total-sales",
+      "name": "Total Sales",
+      "meaning": "Sum net SalesAmount in current filter context",
+      "expression_intent": "SUM(FactSales.SalesAmount)",
+      "format": "AUD 0.00"
+    },
+    {
+      "id": "total-orders",
+      "name": "Total Orders",
+      "meaning": "Distinct OrderId in current filter context, not sales-line count",
+      "expression_intent": "DISTINCTCOUNT(FactSales.OrderId)",
+      "format": "integer"
+    },
+    {
+      "id": "average-order-value",
+      "name": "Average Order Value",
+      "meaning": "Total Sales divided by Total Orders; blank for zero denominator",
+      "expression_intent": "DIVIDE(Total Sales, Total Orders, BLANK)",
+      "format": "AUD 0.00"
+    },
+    {
+      "id": "sales-previous-year",
+      "name": "Sales Previous Year",
+      "meaning": "Sales in equivalent prior-calendar-year date context; blank outside supplied coverage",
+      "expression_intent": "shift DimDate.Date context back one calendar year",
+      "format": "AUD 0.00"
+    },
+    {
+      "id": "sales-yoy-change",
+      "name": "Sales YoY Change",
+      "meaning": "Total Sales minus Sales Previous Year; blank if comparison unavailable",
+      "expression_intent": "Total Sales - Sales Previous Year",
+      "format": "AUD 0.00"
+    },
+    {
+      "id": "sales-yoy-percent",
+      "name": "Sales YoY %",
+      "meaning": "Sales YoY Change divided by Sales Previous Year; blank for unavailable or zero denominator",
+      "expression_intent": "DIVIDE(Sales YoY Change, Sales Previous Year, BLANK)",
+      "format": "0.00%"
+    }
+  ],
+  "pages": [
+    {
+      "id": "executive-summary",
+      "name": "Executive Summary",
+      "visual_intents": [
+        {
+          "kind": "kpi-cards",
+          "measures": [
+            "total-sales",
+            "total-orders",
+            "average-order-value",
+            "sales-yoy-percent"
+          ]
+        },
+        {
+          "kind": "line",
+          "axis": "DimDate.YearMonth",
+          "measure": "total-sales"
+        },
+        {
+          "kind": "bar",
+          "axis": "DimRegion.RegionName",
+          "measure": "total-sales"
+        },
+        {
+          "kind": "bar",
+          "axis": "DimProduct.ProductCategory",
+          "measure": "total-sales"
+        }
+      ]
+    },
+    {
+      "id": "regional-performance",
+      "name": "Regional Performance",
+      "visual_intents": [
+        {
+          "kind": "bar",
+          "axis": "DimRegion.RegionName",
+          "measure": "total-sales"
+        },
+        {
+          "kind": "table",
+          "axis": "DimRegion.RegionName",
+          "measures": [
+            "total-sales",
+            "total-orders",
+            "average-order-value",
+            "sales-yoy-percent"
+          ]
+        }
+      ]
+    }
+  ],
+  "page_filters": [
+    "DimRegion.RegionName",
+    "DimBusinessArea.BusinessAreaName",
+    "DimProduct.ProductCategory"
+  ],
+  "initial_date_filter": {
+    "year": 2025
+  },
+  "rls": {
+    "required": false,
+    "roles": [],
+    "security_claim": "None; Region slicer is not RLS"
+  },
+  "required_evidence_ids": [
+    "CORP-001",
+    "CORP-002",
+    "CORP-003",
+    "CORP-004",
+    "CORP-005",
+    "CORP-007",
+    "CORP-008"
+  ],
+  "unsupported_claims": [
+    "Power BI openability verified",
+    "DAX runtime verified",
+    "RLS runtime verified",
+    "Production deployment complete"
+  ]
+}

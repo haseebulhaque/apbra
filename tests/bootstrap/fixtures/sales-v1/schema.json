@@ -1,0 +1,254 @@
+{
+  "fixture_version": "1.0.0",
+  "schema_id": "sales-star-v1",
+  "synthetic": true,
+  "grain": "One sales line per SaleId; an OrderId may contain multiple lines.",
+  "currency": "AUD",
+  "date_coverage": {
+    "start": "2024-01-01",
+    "end": "2025-12-31",
+    "calendar": "Gregorian, contiguous daily; complete two-year synthetic ledger; days without sales mean zero activity."
+  },
+  "null_policy": "No nulls in baseline CSVs. Monetary values are nonnegative fixed two-decimal strings in CSV; quantities are positive integers.",
+  "tables": [
+    {
+      "name": "DimDate",
+      "file": "DimDate.csv",
+      "primary_key": "Date",
+      "columns": [
+        {
+          "name": "Date",
+          "type": "date",
+          "nullable": false
+        },
+        {
+          "name": "Year",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "Quarter",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "MonthNumber",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "MonthName",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "YearMonth",
+          "type": "text",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DimProduct",
+      "file": "DimProduct.csv",
+      "primary_key": "ProductId",
+      "columns": [
+        {
+          "name": "ProductId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "ProductName",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "ProductCategory",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "ProductSubcategory",
+          "type": "text",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DimRegion",
+      "file": "DimRegion.csv",
+      "primary_key": "RegionId",
+      "columns": [
+        {
+          "name": "RegionId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "RegionName",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "State",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "Country",
+          "type": "text",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DimBusinessArea",
+      "file": "DimBusinessArea.csv",
+      "primary_key": "BusinessAreaId",
+      "columns": [
+        {
+          "name": "BusinessAreaId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "BusinessAreaName",
+          "type": "text",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "DimCustomer",
+      "file": "DimCustomer.csv",
+      "primary_key": "CustomerId",
+      "columns": [
+        {
+          "name": "CustomerId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "Segment",
+          "type": "text",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "FactSales",
+      "file": "FactSales.csv",
+      "primary_key": "SaleId",
+      "columns": [
+        {
+          "name": "SaleId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "OrderId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "SaleDate",
+          "type": "date",
+          "nullable": false
+        },
+        {
+          "name": "ProductId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "RegionId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "BusinessAreaId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "Quantity",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "UnitPrice",
+          "type": "decimal",
+          "nullable": false
+        },
+        {
+          "name": "DiscountAmount",
+          "type": "decimal",
+          "nullable": false
+        },
+        {
+          "name": "SalesAmount",
+          "type": "decimal",
+          "nullable": false
+        },
+        {
+          "name": "CostAmount",
+          "type": "decimal",
+          "nullable": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from_table": "FactSales",
+      "from_column": "SaleDate",
+      "to_table": "DimDate",
+      "to_column": "Date",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "ProductId",
+      "to_table": "DimProduct",
+      "to_column": "ProductId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "RegionId",
+      "to_table": "DimRegion",
+      "to_column": "RegionId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "BusinessAreaId",
+      "to_table": "DimBusinessArea",
+      "to_column": "BusinessAreaId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    },
+    {
+      "from_table": "FactSales",
+      "from_column": "CustomerId",
+      "to_table": "DimCustomer",
+      "to_column": "CustomerId",
+      "cardinality": "many-to-one",
+      "filter_direction": "dimension-to-fact",
+      "active": true
+    }
+  ]
+}

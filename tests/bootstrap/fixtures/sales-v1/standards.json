@@ -1,0 +1,80 @@
+{
+  "fixture_version": "1.0.0",
+  "pack_id": "fictional-sales-corporate-v1",
+  "synthetic": true,
+  "customer_id": "synthetic-capstone-sales",
+  "authority": "Fictional customer reporting standards for this fixture only",
+  "precedence": "Security/platform controls and confirmed facts cannot be overridden; customer mandatory rules override generic recommendations.",
+  "theme": {
+    "name": "Sales Demo",
+    "background": "#FFFFFF",
+    "text": "#172B4D",
+    "primary": "#005A9C"
+  },
+  "rules": [
+    {
+      "evidence_id": "CORP-001",
+      "source_version": "1.0.0",
+      "section": "naming",
+      "level": "mandatory",
+      "text": "Use SalesPerformance as the project name and Executive Summary / Regional Performance as the page names.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-001"
+    },
+    {
+      "evidence_id": "CORP-002",
+      "source_version": "1.0.0",
+      "section": "theme",
+      "level": "mandatory",
+      "text": "Use fictional theme Sales Demo: background #FFFFFF, text #172B4D, primary #005A9C. Do not convey meaning through colour alone.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-002"
+    },
+    {
+      "evidence_id": "CORP-003",
+      "source_version": "1.0.0",
+      "section": "kpis",
+      "level": "mandatory",
+      "text": "Executive Summary must show Total Sales, distinct Total Orders, Average Order Value and Sales YoY %.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-003"
+    },
+    {
+      "evidence_id": "CORP-004",
+      "source_version": "1.0.0",
+      "section": "accessibility",
+      "level": "mandatory",
+      "text": "Use meaningful visual names and titles, readable labels, text alternatives and deliberate keyboard navigation. Actual accessibility verification remains pending.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-004"
+    },
+    {
+      "evidence_id": "CORP-005",
+      "source_version": "1.0.0",
+      "section": "calendar",
+      "level": "mandatory",
+      "text": "Use the dedicated contiguous DimDate table for calendar-year comparisons; never fabricate missing prior-year values.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-005"
+    },
+    {
+      "evidence_id": "CORP-006",
+      "source_version": "1.0.0",
+      "section": "comparison",
+      "level": "recommendation",
+      "text": "Prefer bar charts over pie/donut charts for regional and category comparisons.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-006"
+    },
+    {
+      "evidence_id": "CORP-007",
+      "source_version": "1.0.0",
+      "section": "security",
+      "level": "mandatory",
+      "text": "Region is a filter, not access control. Do not claim RLS unless explicitly requested, implemented and runtime-tested.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-007"
+    },
+    {
+      "evidence_id": "CORP-008",
+      "source_version": "1.0.0",
+      "section": "handover",
+      "level": "mandatory",
+      "text": "Document local synthetic CSV inputs and unresolved deployment actions. Use TARGET_WORKSPACE_PLACEHOLDER rather than any real tenant, credential or endpoint.",
+      "citation": "fixture:fictional-sales-corporate-v1/CORP-008"
+    }
+  ]
+}
