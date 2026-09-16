@@ -162,7 +162,9 @@ def workflow_errors(text: str) -> list[str]:
                     errors.append('Action is not in the exact verified pin allow-list')
                 if step['uses'].startswith('actions/checkout@') and step.get('with', {}).get('persist-credentials') != 'false':
                     errors.append('Checkout credentials must not persist')
-    if 'secrets.' in text or 'pull_request_target' in text:
+    # Match the secrets context as a token, including bracket notation. The old
+    # substring test incorrectly rejected a harmless path such as scan_secrets.sh.
+    if re.search(r'\bsecrets\s*(?:\.|\[)', text) or 'pull_request_target' in text:
         errors.append('Privileged trigger/secret reference prohibited')
     return errors
 
