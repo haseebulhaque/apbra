@@ -1,0 +1,9 @@
+# Real owner; not an independent approver when this owner authored the PR.
+# Enforcement and private-plan eligibility must be configured separately.
+* @haseebulhaque
+/AGENTS.md @haseebulhaque
+/.github/ @haseebulhaque
+/contracts/ @haseebulhaque
+/agents/ @haseebulhaque
+/scripts/ @haseebulhaque
+/tasks/ @haseebulhaque
