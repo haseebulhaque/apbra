@@ -1,19 +1,21 @@
-# First Codex handoff
+# Codex handoff: review first, build second
 
-This branch prepares context; it does not configure or launch a Codex environment.
+## Entitlement and setup check
 
-## First task: review this bootstrap
+Use the owner's existing Codex access only. Check available usage before launching; no API key, additional subscription, purchased credits or new paid Action is authorized. If access/quota is unavailable, stop and report it. Public GitHub does not make Codex usage unlimited. Official setup references: https://developers.openai.com/codex/cloud/code-review/ and https://developers.openai.com/codex/cloud/environments/ .
 
-Select the repository and the actual bootstrap branch/revision in the chosen Codex environment. Do not assume main contains these files until a reviewed merge occurs. No Azure keys, production content or privileged GitHub token is needed for the checks.
+Connect only haseebulhaque/apbra. Select the bootstrap branch for review: agent/APBRA-DEVOPS/APBRA-85-repository-bootstrap. Do not assume main contains these instructions before the owner merges PR 1. No Azure secrets, business data or elevated GitHub token is needed. The application has not been built.
 
-Use this task instruction:
+## First task: fresh review-only execution
 
-> Read AGENTS.md, tasks/APBRA-85-bootstrap.json, agents/catalog.json, the source register and repository-controls.md. Act in a separate review execution. Inspect the exact change against main and run the documented bootstrap validator and unit tests. Check inherited requirements, task scope, negative cases, source-status honesty, permissions and absence of product-readiness claims. Report findings with severity, file/line, expected/actual and evidence. Do not merge, approve under the author's account, modify main, create Azure resources or implement report features. Missing dependencies/network or inaccessible sources are explicit blockers, not passing tests.
+Record the actual PR head/base at dispatch, then give a NEW review execution this instruction:
 
-Record the actual actor and runtime exposed by Codex; do not guess its model. Offline tests cannot validate current Jira/Confluence revisions. Refresh those inputs through authorized access before dispatching subsequent implementation.
+> Review PR 1 in haseebulhaque/apbra against its current main base. Read AGENTS.md, docs/decisions/solo-owner-process.md, tasks/APBRA-85-bootstrap.json, the engineering schemas, source register, CI policy and tests. Record the exact head/base SHA and actual runtime identity when exposed. Review the full diff and relevant existing code. Pay particular attention to policy bypasses, path/secret handling, Git history scanning, false-green CI, truthful source status, and the unexecuted APBRA-27 build contract. Run documented bootstrap and CI-policy checks and unit tests. Run the scanner only in its supported Linux/full-history environment; unavailable tests are NOT RUN, not PASS. Do not modify files, approve as the PR author, merge, change permissions, provision resources or implement product features. Return findings with severity, file/line, expected/actual and evidence, followed by PASS_WITH_FINDINGS, CHANGES_REQUIRED or BLOCKED as justified. A clean result may recommend manual merge, not perform it. Changes to the head after review require a fresh/reconciled review.
 
-## Next implementation task
+A different role label in the authoring session is not a fresh review. If the reviewer finds a defect, the implementer fixes it on the PR branch, CI reruns, and the reviewer reassesses the new revision. Do not issue an automatic GitHub APPROVE action using the author's account. Haseeb is the final manual merge authority under the accepted solo process.
 
-After the reviewed bootstrap and control decisions, prepare a new bounded contract for APBRA-27. Resolve and lock the selected product dependency families, implement only local bootstrap/configuration/health behavior, and prove positive/negative startup tests. APBRA-18/20 owns actual dependency-boundary tests when modules exist. No other Epic is implicitly authorized.
+## Second task: APBRA-27 local application bootstrap
 
-For each new task, select only its relevant context and verification obligations. Do not ask Codex to implement all 127 work items from one mega-prompt. Keep one implementation and one separate review in flight initially, with meaningful Jira comments and real test evidence.
+Only after bootstrap review and Haseeb's merge, use [the detailed build contract](APBRA-27-build-contract.md) and tasks/APBRA-27-build.json. The JSON is currently a planning draft: its base and execution fields are unbound to the future merged source. Refresh Jira/Confluence acceptance and rebind these fields before dispatch. Do not carry the APBRA-85 bootstrap scope into application implementation.
+
+The build creates only a local Python API bootstrap, locked dependencies, validated configuration, liveness/readiness, safe errors/correlation and tests. No frontend, live AI, Azure, Power BI generation or business persistence is included. Preserve security and review requirements when adapting bootstrap-only CI for this first implementation. Do not send the entire MVP backlog in one prompt.

@@ -1,4 +1,4 @@
-"""Configuration regression checks; they do not prove native GitHub enforcement."""
+"""Regression checks for owner-accepted policy; not native enforcement proof."""
 import json
 from pathlib import Path
 import subprocess
@@ -13,18 +13,26 @@ class PublicPolicyTests(unittest.TestCase):
         self.policy = json.loads((ROOT / '.github/rulesets/main-protection.json').read_text())
         self.rules = {r['type']: r.get('parameters', {}) for r in self.policy['rules']}
 
-    def test_exact_main_target_and_no_bypass(self):
+    def test_default_branch_target_and_no_bypass(self):
         self.assertEqual(self.policy['target'], 'branch')
-        self.assertEqual(self.policy['conditions']['ref_name'], {'include': ['refs/heads/main'], 'exclude': []})
+        self.assertEqual(self.policy['enforcement'], 'active')
+        self.assertEqual(self.policy['conditions']['ref_name'], {'include': ['~DEFAULT_BRANCH'], 'exclude': []})
         self.assertEqual(self.policy['bypass_actors'], [])
 
     def test_no_paid_push_rules_or_merge_queue(self):
         self.assertEqual(set(self.rules), {'deletion', 'non_fast_forward', 'pull_request', 'required_status_checks'})
 
-    def test_independent_review_not_silently_removed(self):
-        self.assertEqual(self.rules['pull_request']['required_approving_review_count'], 1)
-        self.assertTrue(self.rules['pull_request']['require_last_push_approval'])
-        self.assertTrue(self.rules['pull_request']['required_review_thread_resolution'])
+    def test_owner_accepted_solo_review_policy(self):
+        pr = self.rules['pull_request']
+        self.assertEqual(pr['required_approving_review_count'], 0)
+        self.assertFalse(pr['require_last_push_approval'])
+        self.assertFalse(pr['require_code_owner_review'])
+        self.assertTrue(pr['required_review_thread_resolution'])
+        decision = (ROOT / 'docs/decisions/solo-owner-process.md').read_text()
+        self.assertIn('Haseeb', decision)
+        self.assertIn('fresh AI review', decision)
+        self.assertIn('manually merges', decision)
+        # This checks consistency; a document is not an authentication mechanism.
 
     def test_actual_check_publisher_and_context(self):
         self.assertEqual(self.rules['required_status_checks']['required_status_checks'],

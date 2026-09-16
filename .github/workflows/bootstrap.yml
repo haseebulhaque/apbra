@@ -23,11 +23,13 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
-      - name: Scan tracked files and fetched history for secrets
+      - name: Scan tracked files and fetched history
         run: bash scripts/scan_secrets.sh
       - name: Install exact engineering tooling
         run: |
           python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
+      - name: Validate mandatory CI policy
+        run: python scripts/check_ci_policy.py
       - name: Validate engineering contracts and scope
         run: python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json
       - name: Exercise positive and negative tests
@@ -38,5 +40,5 @@ jobs:
         with:
           name: bootstrap-checks-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/bootstrap/checks.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7

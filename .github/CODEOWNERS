@@ -1,5 +1,5 @@
-# Real owner; not an independent approver when this owner authored the PR.
-# Public GitHub Free eligibility does not apply a native protection rule.
+# Real owner; routing is not independent approval or a merge permission.
+# Public GitHub Free solo policy: PR + required CI + separate AI review + owner merge.
 * @haseebulhaque
 /AGENTS.md @haseebulhaque
 /.github/ @haseebulhaque

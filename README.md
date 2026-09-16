@@ -1,61 +1,60 @@
 # AI-Powered Power BI Report Automation (APBRA)
 
-Governed report engineering: business intent and a declared schema become a structured BI DesignPlan, editable Power BI candidate, independent validation evidence and a controlled deployment pack.
+Governed report engineering: business intent and a declared schema become a typed BI DesignPlan, an editable Power BI candidate, independent validation evidence and a controlled deployment pack.
 
-## Current scope
+## Current repository state
 
-The owner has made this repository **public**. Repository engineering uses GitHub Free and free tooling; no Pro upgrade, paid runner, new paid service or automatic expenditure is authorized. This branch is an engineering bootstrap, not a working report builder. Product implementation, live models, Azure deployment and Power BI runtime verification remain separate work.
+The repository is public by owner decision and uses applicable GitHub Free engineering capabilities. This PR branch contains the engineering bootstrap, not a running report builder. Main remains unchanged until Haseeb manually merges after review. No application, Azure deployment, model evaluation or Power BI Desktop verification is claimed here.
 
-The selected Python/FastAPI, React/TypeScript, PostgreSQL/pgvector, bounded LangGraph and Azure-adapter direction is an implementation proposal from the recorded Confluence baseline. Product dependency locks and actual integration evidence do not exist merely because the design is documented. See [architecture](ARCHITECTURE.md) and [baseline](docs/decisions/implementation-baseline.md).
+The owner configured an active default-branch ruleset and removed all bypass actors. It requires a PR, resolved review threads and a current APBRA Bootstrap Checks result from GitHub Actions. Zero native approving reviews is intentional under the [accepted solo-owner process](docs/decisions/solo-owner-process.md). Separate AI review and Haseeb's manual merge remain process gates; no automatic merge is authorized.
 
 ## Start here
 
-1. Read [AGENTS.md](AGENTS.md) and the relevant [requirements](REQUIREMENTS.md).
-2. Load the assigned logical Agent Card and bounded Task Contract, with current source versions.
-3. Work on an isolated branch; retain review and exact-revision evidence.
-4. Keep customer material, credentials and raw provider responses out of public files, comments and logs.
+1. Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md) and [REQUIREMENTS.md](REQUIREMENTS.md).
+2. Load the relevant specifications, source register, Agent Card and bounded task.
+3. Follow [the Codex handoff](docs/engineering/codex-handoff.md): a fresh review of PR 1 before any application build.
+4. The first future build is [APBRA-27](docs/engineering/APBRA-27-build-contract.md), not the entire MVP. Its JSON is a planning draft until rebound to merged main and accepted source versions.
 
-## Engineering checks
+## Engineering verification
 
-With Python 3.13 in an isolated environment:
+Use Python 3.13 and an isolated environment:
 
 ```sh
 python -m venv .venv
-# Activate the environment using the command for your shell.
+# Activate .venv for your shell.
 python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
+python scripts/check_ci_policy.py
 python scripts/check_bootstrap.py
 python -m unittest discover -s tests/bootstrap -v
-```
-
-On Linux x64 with Git, curl, tar and sha256sum, from a non-shallow repository:
-
-```sh
+# Linux x64, full non-shallow Git checkout:
 bash scripts/scan_secrets.sh
 ```
 
-The scanner downloads a checksum-pinned, MIT-licensed standalone Gitleaks CLI, checks a synthetic positive/negative detector fixture, and scans the current tracked tree and fetched Git history. It does not validate credentials against providers or inspect copies held by other people. Reports/logs redact secrets. No paid Gitleaks Action is used. CI uses a standard GitHub-hosted public-repository runner, read-only permissions and no cloud secrets.
+These validate engineering metadata, explicit scope, mandatory workflow shape and selected secret/hygiene checks, not application security or report correctness. Targeted local tests and complete hosted CI evidence are distinguished in [the review record](docs/engineering/review-20260916.md). Consult PR 1's current head/checks for the final run; an earlier successful run does not cover later changes.
 
-Bootstrap checks cover engineering metadata and selected hygiene controls, not application authorization, RAG quality, business arithmetic or Power BI compatibility. The original environment could not generate dependency hash locks because PyPI DNS was unavailable; exact-version installation is not a completed hash-lock or vulnerability assessment.
+No cloud key or live model call is needed. The original full dependency hash-lock attempt failed due authoring-environment DNS; exact bootstrap package versions are recorded, but full product lock/build verification is APBRA-27 work. Missing tests or dependencies are not a passing result.
 
-## Public safety and repository controls
+## Public content and cost controls
 
-See [SECURITY.md](SECURITY.md), [repository controls](docs/engineering/repository-controls.md) and the [public-repository review](docs/engineering/public-repository-review.md). A deleted file or added ignore pattern does not remove a credential from old commits; revoke/rotate actual exposed credentials first.
+Never publish credentials, private keys, customer data, confidential documents, raw authenticated URLs, private transcripts or unredacted logs. Ignore rules cannot remove tracked content or history. [SECURITY.md](SECURITY.md) explains safe reporting and credential revocation/rotation before coordinated cleanup.
 
-Public branch rulesets are eligible on GitHub Free. Eligibility is not configuration: the inspected rulesets list was empty, and the current connection cannot administer branch protection. `.github/rulesets/main-protection.json` is an import candidate, not an applied rule. It targets main, blocks deletion/force-push, requires the named GitHub Actions check and preserves one non-author approval. No approval requirement is silently removed to accommodate a shared account. An explicitly accepted solo-review alternative would be a separate decision.
+The pinned standalone Gitleaks CLI scans the tracked tree and fetched-reference history. It is bounded detection evidence, not proof that every possible secret, external clone or native alert was audited. Native secret-scanning settings must be checked through an authorized owner interface.
 
-Keep PR #1 in draft until its actual checks, review and control decisions are complete. A green workflow is not enforced merge protection until the platform rule is applied. No automatic merge or direct main write.
+Research each platform's entitlement, usage limits, integration permissions and costs BEFORE implementation. GitHub public availability does not grant free Azure inference, Power BI sharing or unlimited Codex usage. No paid upgrade, larger runner, live service or additional credits are authorized automatically.
 
-## Sources of truth
+## Sources and decisions
 
-- [Confluence architecture](https://arkitektz.atlassian.net/wiki/spaces/APBRA/overview)
-- [APBRA-85 repository foundation](https://arkitektz.atlassian.net/browse/APBRA-85)
-- [APBRA-18 module boundaries](https://arkitektz.atlassian.net/browse/APBRA-18)
-- [APBRA-86 agent contracts](https://arkitektz.atlassian.net/browse/APBRA-86)
-- [APBRA-87 CI assurance](https://arkitektz.atlassian.net/browse/APBRA-87)
-- [APBRA-127 access and protection](https://arkitektz.atlassian.net/browse/APBRA-127)
+Confluence owns architecture, Jira owns work intent and GitHub owns implementation/evidence. Public repository specifications are curated implementation views; access-controlled references do not authorize bulk exporting private content.
 
-These access-controlled references preserve traceability; they do not grant anonymous access to Jira or Confluence. Do not export private customer content to make a link readable. Source versions are in `docs/source-register.json`.
+- [Source versions](docs/source-register.json)
+- [Implementation baseline](docs/decisions/implementation-baseline.md)
+- [Verified repository controls and limits](docs/engineering/repository-controls.md)
+- [Confluence governance 22.05](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391060)
+- [Jira APBRA-85](https://arkitektz.atlassian.net/browse/APBRA-85)
+- [Jira APBRA-27](https://arkitektz.atlassian.net/browse/APBRA-27)
 
-## Licence and cost boundary
+The detailed product baseline still retains its recorded Proposed source status until acceptance is reconciled before application dispatch. Documented technology choices are not tested cloud/model/runtime capabilities.
 
-No open-source licence has been selected for APBRA. Public visibility does not itself select one. A licence choice requires owner approval. GitHub Free does not make Azure, model APIs, Power BI publishing or other services free. Check the relevant free entitlement, quota, technical access and licensing before proposing or implementing a dependency; stop and ask before a paid requirement or a scope-changing alternative.
+## License
+
+Public visibility is intentional; no open-source license has been selected. License selection is a separate owner decision, not something an implementation agent silently adds.

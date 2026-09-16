@@ -1,27 +1,21 @@
-# Public-repository safety change
+# Historical public-repository safety change
 
-Work: APBRA-85 and APBRA-127. Execution reference: GH-PUBLIC-20260916-01. Prepared by ChatGPT through the owner's connection, not a separately authenticated independent reviewer.
+Work: APBRA-85/APBRA-127. Historical execution: GH-PUBLIC-20260916-01. This records the public-visibility transition, before the later solo-owner decision and native ruleset installation. For current controls see [repository-controls.md](repository-controls.md) and [the accepted solo process](../decisions/solo-owner-process.md).
 
-## Authorized boundary
+## Authorized boundary at that stage
 
-The owner confirmed public visibility and requested free-license-compatible safeguards, documentation alignment and removal of any exposed credentials. This authorizes public-safety work, not a licence purchase, product-stack change, automatic merge, blanket review waiver or unrelated history rewrite.
+The owner changed visibility to public, required free-license-compatible safeguards and requested review of possible credential exposure. This did not at that time authorize a review waiver, paid service, new source license, product implementation or unrelated history rewrite.
 
-## Change content
+## Changes and actual historical results
 
-- Public/free wording replaces current private-only assumptions in README, AGENTS, the Task Contract and repository controls. Historical evidence is preserved as historical.
-- SECURITY.md defines public-data rules and exposure response; ignore patterns cover local keys, state, credentials and data files.
-- The existing bounded CI job now fetches history and uses a checksum-pinned standalone Gitleaks CLI. No new paid Action, provider or runner is introduced.
-- Six configuration tests cover the import target, bypass policy, required independent review, real check publisher, scanner pin/history/redaction and ignore behavior.
-- A free-compatible branch ruleset import candidate is versioned. It has not been applied to GitHub by committing this file.
+README/AGENTS/task guidance was aligned to public use; SECURITY.md and ignore rules were added. The bounded workflow fetched complete history and ran checksum-pinned standalone Gitleaks 8.30.1 rather than a paid scanner Action. A proposed one-approval ruleset was prepared but not installed by committing it.
 
-## Verification scope
+At PR head 3e03563ccad677b408bb3e76af21256c2a924eee, hosted run 35062142119 passed engineering checks and 42 tests. Its scanner reported 32 tracked files and eight reachable commits including the PR test-merge commit, with no findings in its configured scope. This is an old exact-revision result, not coverage of later edits. The preceding run 35061955221 failed an overbroad workflow heuristic that mistook the scan_secrets.sh filename for a secret-context reference; regression tests accompanied that correction.
 
-The local environment could not clone GitHub because DNS resolution failed. Local configuration tests and shell syntax checking are separate from the actual secret scan. The full scan and combined engineering tests must run in GitHub-hosted CI, with the exact head and outcome recorded in PR #1. Adding this document does not assert that a scan has passed.
+The local clone had failed due DNS. Hosted scanning did not audit native alerts, every comment, forks/caches, unreachable objects or all possible personal information. No real exposed credential was detected or claimed rotated. Failed attempts remain part of the record.
 
-Gitleaks checks the exact tracked checkout tree and history reachable from fetched refs. Its synthetic detector self-test does not call a credential provider. No native secret-alert inspection, full manual audit of every historical comment, fork/cache removal or guarantee of zero possible secrets is implied. If findings exist, retain redacted evidence and follow SECURITY.md rather than suppressing them.
+## Later superseding decisions
 
-The native rulesets API was readable after public conversion and returned no rules. Branch-protection administration remains unavailable to the connector. The one-review requirement is preserved; shared-account limitations remain explicit. No production or paid service is activated.
+The owner subsequently selected the solo-owner process and installed ruleset 23529228 with zero native approvals, required PR/CI, and no bypass actors. The current JSON/test expectations intentionally follow that explicit decision. A fresh AI review and Haseeb manual merge remain required. The earlier empty-ruleset and private-license blockers are resolved, not reasons to buy Pro.
 
-## Cost and licence preflight rule
-
-Before choosing an external service, runner, marketplace Action or platform feature: identify the exact capability, official licence/free entitlement, usage cap, required permissions and side effects. Record supported versus unavailable. Ask the owner before a paid dependency or an alternative that changes security, visibility or product scope. GitHub public availability does not authorize publishing private Jira/Confluence contents or activating billable Azure/model integrations.
+Before external feature work, verify exact free entitlement, usage caps and integration permissions. Ask before spending or a material alternative. Public GitHub never authorizes confidential-source publication or billable Azure/model usage.
