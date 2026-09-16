@@ -1,0 +1,9 @@
+# Engineering-check environment snapshot, not the product dependency lock.
+# Fully resolved versions observed in the Python 3.13 authoring environment.
+# Install with --no-deps --only-binary=:all:. Hash lock pending network access.
+attrs==26.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+referencing==0.37.0
+rpds-py==2026.5.1
+PyYAML==6.0.3

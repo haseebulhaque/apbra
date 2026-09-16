@@ -1,0 +1,44 @@
+name: APBRA Bootstrap
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  bootstrap:
+    name: APBRA Bootstrap Checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Scan tracked files and fetched history
+        run: bash scripts/scan_secrets.sh
+      - name: Install exact engineering tooling
+        run: |
+          python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
+      - name: Validate mandatory CI policy
+        run: python scripts/check_ci_policy.py
+      - name: Validate engineering contracts and scope
+        run: python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json
+      - name: Exercise positive and negative tests
+        run: python -m unittest discover -s tests/bootstrap -v
+      - name: Retain bounded checker evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bootstrap-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/bootstrap/checks.json
+          if-no-files-found: error
+          retention-days: 7

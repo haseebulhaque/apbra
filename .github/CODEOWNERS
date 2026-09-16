@@ -1,0 +1,9 @@
+# Real owner; routing is not independent approval or a merge permission.
+# Public GitHub Free solo policy: PR + required CI + separate AI review + owner merge.
+* @haseebulhaque
+/AGENTS.md @haseebulhaque
+/.github/ @haseebulhaque
+/contracts/ @haseebulhaque
+/agents/ @haseebulhaque
+/scripts/ @haseebulhaque
+/tasks/ @haseebulhaque
