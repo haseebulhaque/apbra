@@ -9,10 +9,12 @@ import os
 from pathlib import Path, PurePosixPath
 import platform
 import re
+import stat
 import subprocess
 import sys
 
 from jsonschema import Draft202012Validator
+from referencing import Registry
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,8 +81,9 @@ def schema_errors(schema: dict, value: object) -> list[str]:
     # All current engineering schemas are self-contained: no remote resolution.
     def inspect(node):
         if isinstance(node, dict):
-            if '$ref' in node and not node['$ref'].startswith('#'):
-                raise ValueError('External schema references are forbidden')
+            for keyword in ('$ref', '$dynamicRef'):
+                if keyword in node and not node[keyword].startswith('#'):
+                    raise ValueError('External schema references are forbidden')
             for item in node.values():
                 inspect(item)
         elif isinstance(node, list):
@@ -88,7 +91,7 @@ def schema_errors(schema: dict, value: object) -> list[str]:
                 inspect(item)
     inspect(schema)
     return [str(e.json_path) + ': ' + e.message for e in
-            sorted(Draft202012Validator(schema).iter_errors(value), key=lambda e: e.json_path)]
+            sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
 
 
 def catalog_errors(catalog: dict) -> list[str]:
@@ -223,6 +226,51 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
         return ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
 
 
+def write_report(root: Path, name: str, report: dict) -> None:
+    """Create new evidence under artifacts without following symlinks (POSIX)."""
+    if not valid_path(name) or not name.startswith('artifacts/'):
+        raise ValueError('Report must be a safe relative path under artifacts/')
+    root = root.resolve(strict=True)
+    parts = name.split('/')
+    # Validate every existing component before creating any directories.
+    candidate = root
+    for index, part in enumerate(parts):
+        candidate = candidate / part
+        try:
+            mode = candidate.lstat().st_mode
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(mode):
+            raise ValueError('Report path cannot contain symlinks')
+        if index == len(parts) - 1:
+            raise ValueError('Report already exists; choose a new evidence filename')
+        if not stat.S_ISDIR(mode):
+            raise ValueError('Report parent must be a directory')
+    if not candidate.resolve().is_relative_to(root / 'artifacts'):
+        raise ValueError('Report escaped artifacts/')
+    # Bind traversal to directory descriptors; never follow a replaced symlink.
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(root, flags)
+    try:
+        for part in parts[:-1]:
+            try:
+                child = os.open(part, flags, dir_fd=directory)
+            except FileNotFoundError:
+                try:
+                    os.mkdir(part, dir_fd=directory)
+                except FileExistsError:
+                    pass  # A concurrent creator must still pass the no-follow open.
+                child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        output = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory)
+        with os.fdopen(output, 'w', encoding='utf-8') as stream:
+            stream.write(json.dumps(report, indent=2) + '\n')
+    finally:
+        os.close(directory)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--report', help='Optional JSON report under artifacts/')
@@ -238,11 +286,10 @@ def main() -> int:
               'claims': {'product_verified': False, 'native_protection_verified': False,
                          'remote_source_freshness_verified': False}}
     if args.report:
-        path = ROOT / args.report
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.resolve().is_relative_to((ROOT / 'artifacts').resolve()):
-            parser.error('Report escaped artifacts/')
-        path.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+        try:
+            write_report(ROOT, args.report, report)
+        except (OSError, ValueError):
+            parser.error('Cannot create report safely; use a new path under artifacts/ without symlinks')
     print(report['status'] + ': engineering bootstrap; ' + str(len(manifest)) + ' files')
     for error in errors:
         print(error, file=sys.stderr)

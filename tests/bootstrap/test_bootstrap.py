@@ -1,10 +1,13 @@
 """Requirement-derived engineering checks; no product execution is implied."""
 import copy
 import importlib.util
+import json
+import os
 import shutil
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('check_bootstrap', ROOT / 'scripts/check_bootstrap.py')
@@ -167,6 +170,129 @@ class BootstrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             errors, _ = c.check(Path(tmp))
             self.assertTrue(any('Missing required file' in e for e in errors))
+
+
+class SchemaRetrievalTests(unittest.TestCase):
+    def test_external_reference_keywords_never_retrieve(self):
+        for keyword in ('$ref', '$dynamicRef'):
+            for uri in ('https://example.invalid/schema', 'file:///synthetic-schema',
+                        'relative-schema.json'):
+                with self.subTest(keyword=keyword, uri=uri):
+                    with patch('urllib.request.urlopen') as retrieve:
+                        with self.assertRaises(ValueError):
+                            c.schema_errors({keyword: uri}, {})
+                        retrieve.assert_not_called()
+
+    def test_nested_external_references_never_retrieve(self):
+        for keyword in ('$ref', '$dynamicRef'):
+            schema = {'properties': {'value': {'allOf': [
+                {keyword: 'https://example.invalid/schema'}]}}}
+            with self.subTest(keyword=keyword), patch('urllib.request.urlopen') as retrieve:
+                with self.assertRaises(ValueError):
+                    c.schema_errors(schema, {'value': 1})
+                retrieve.assert_not_called()
+
+    def test_valid_local_references(self):
+        schemas = [
+            {'$defs': {'number': {'type': 'integer'}}, '$ref': '#/$defs/number'},
+            {'$defs': {'number': {'$dynamicAnchor': 'number', 'type': 'integer'}},
+             '$dynamicRef': '#number'},
+        ]
+        with patch('urllib.request.urlopen') as retrieve:
+            for schema in schemas:
+                self.assertEqual(c.schema_errors(schema, 1), [])
+                self.assertTrue(c.schema_errors(schema, 'invalid'))
+            retrieve.assert_not_called()
+
+    def test_explicit_registry_disables_unregistered_retrieval(self):
+        # Exercise the configured registry independently of the keyword preflight.
+        with patch.object(c, 'Registry', wraps=c.Registry) as registry:
+            self.assertEqual(c.schema_errors({'type': 'integer'}, 1), [])
+        registry.assert_called_once_with()
+        configured = registry.call_args
+        self.assertEqual(configured.args, ())
+        validator = c.Draft202012Validator(
+            {'$dynamicRef': 'https://example.invalid/schema'}, registry=c.Registry())
+        with patch('urllib.request.urlopen') as retrieve:
+            from referencing.exceptions import Unresolvable
+            with self.assertRaises(Unresolvable):
+                list(validator.iter_errors({}))
+            retrieve.assert_not_called()
+
+
+class ReportContainmentTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / 'repo'
+        self.root.mkdir()
+        self.outside = Path(self.temp.name) / 'outside'
+        self.outside.mkdir()
+
+    def test_valid_report_and_existing_evidence_preserved(self):
+        name = 'artifacts/reviews/result.json'
+        c.write_report(self.root, name, {'status': 'PASS'})
+        target = self.root / name
+        self.assertEqual(json.loads(target.read_text()), {'status': 'PASS'})
+        with self.assertRaises(ValueError):
+            c.write_report(self.root, name, {'status': 'REPLACED'})
+        self.assertEqual(json.loads(target.read_text()), {'status': 'PASS'})
+
+    def test_symlinked_artifacts_root_has_no_external_side_effects(self):
+        (self.root / 'artifacts').symlink_to(self.outside, target_is_directory=True)
+        sentinel = self.outside / 'report.json'
+        sentinel.write_text('original evidence')
+        for name in ('artifacts/report.json', 'artifacts/new/report.json'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                c.write_report(self.root, name, {})
+        self.assertEqual(sentinel.read_text(), 'original evidence')
+        self.assertEqual(list(self.outside.iterdir()), [sentinel])
+
+    def test_nested_escape_creates_no_external_directory(self):
+        (self.root / 'artifacts').mkdir()
+        (self.root / 'artifacts/link').symlink_to(self.outside, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            c.write_report(self.root, 'artifacts/link/new/report.json', {})
+        self.assertEqual(list(self.outside.iterdir()), [])
+
+    def test_output_symlink_preserves_external_file(self):
+        (self.root / 'artifacts').mkdir()
+        target = self.outside / 'sentinel'
+        target.write_text('original')
+        (self.root / 'artifacts/report.json').symlink_to(target)
+        with self.assertRaises(ValueError):
+            c.write_report(self.root, 'artifacts/report.json', {})
+        self.assertEqual(target.read_text(), 'original')
+
+    def test_dangling_symlink_is_rejected_without_creation(self):
+        (self.root / 'artifacts').symlink_to(self.outside / 'absent')
+        with self.assertRaises(ValueError):
+            c.write_report(self.root, 'artifacts/new/report.json', {})
+        self.assertEqual(list(self.outside.iterdir()), [])
+
+    def test_traversal_is_rejected_before_creating_artifacts(self):
+        for name in ('artifacts/../outside/report.json', 'artifacts/./report.json',
+                     'artifacts//report.json', '/artifacts/report.json'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                c.write_report(self.root, name, {})
+        self.assertEqual(list(self.root.iterdir()), [])
+        self.assertEqual(list(self.outside.iterdir()), [])
+
+    def test_symlink_replacement_after_preflight_is_not_followed(self):
+        artifacts = self.root / 'artifacts'
+        artifacts.mkdir()
+        original_open = os.open
+
+        def replace_then_open(path, flags, *args, **kwargs):
+            if path == 'artifacts':
+                artifacts.rename(self.root / 'saved-artifacts')
+                artifacts.symlink_to(self.outside, target_is_directory=True)
+            return original_open(path, flags, *args, **kwargs)
+
+        with patch.object(c.os, 'open', side_effect=replace_then_open):
+            with self.assertRaises(OSError):
+                c.write_report(self.root, 'artifacts/new/report.json', {})
+        self.assertEqual(list(self.outside.iterdir()), [])
 
 
 if __name__ == '__main__':
