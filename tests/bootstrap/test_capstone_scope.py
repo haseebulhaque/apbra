@@ -74,3 +74,51 @@ class ShellScopeTests(unittest.TestCase):
                 errors,_=c.check(root)
                 self.assertTrue(any("requires" in e for e in errors))
                 self.assertTrue(any("safe bootstrap scope: apps/web/" in e for e in errors))
+
+class RequirementsScopeTests(unittest.TestCase):
+    def setUp(self):
+        self.catalog=json.loads((ROOT/"agents/catalog.json").read_text())
+        self.sources=json.loads((ROOT/"docs/source-register.json").read_text())
+        self.card=next(v for v in self.catalog["cards"] if v["agent_id"]=="APBRA-DEVOPS")
+        self.task=json.loads((ROOT/"tasks/APBRA-130-requirements-snapshot.json").read_text())
+
+    def test_exact_paths_only(self):
+        self.assertEqual(set(self.task["allowed_paths"]), c.CAPSTONE_REQUIREMENTS_PATHS)
+        for path in ["apps/web/src/knowledge.ts","apps/api/main.py","apps/web/src/../secret"]:
+            self.assertFalse(c.path_allowed(path,self.task,self.card))
+
+    def test_unknown_or_missing_status_never_authorizes_dispatch(self):
+        for status in [None,"PROPOSED","REJECTED","TYPO",""]:
+            sources=copy.deepcopy(self.sources)
+            source=next(s for s in sources["sources"] if s["id"]=="capstone-requirements-snapshot")
+            if status is None: source.pop("status")
+            else: source["status"]=status
+            self.assertTrue(c.task_errors(self.task,self.catalog,sources))
+
+    def test_contract_mutations_fail_closed_for_new_snapshot_module(self):
+        import tempfile
+        import shutil
+        mutations = [
+            {"allowed_paths": ["apps/**"]},
+            {"task_id": "APBRA-131"},
+            {"assigned_agent": "APBRA-DEV-FE"},
+            {"task_mode": "REVIEW"},
+            {"readiness": "NEEDS_REFINEMENT"},
+            {"owner_acceptance": "PENDING"},
+            {"source_ids": ["engineering-structure"]},
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                for file in c.repo_files(ROOT):
+                    target=root/file.relative_to(ROOT)
+                    target.parent.mkdir(parents=True,exist_ok=True)
+                    shutil.copyfile(file,target)
+                module=root/"apps/web/src/requirements.ts"
+                module.parent.mkdir(parents=True,exist_ok=True)
+                module.write_text("// bounded test module\n")
+                task=copy.deepcopy(self.task)
+                task.update(mutation)
+                (root/"tasks/APBRA-130-requirements-snapshot.json").write_text(json.dumps(task))
+                errors,_=c.check(root)
+                self.assertIn("File outside safe bootstrap scope: apps/web/src/requirements.ts", errors)
