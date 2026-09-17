@@ -26,6 +26,18 @@ class CiPolicyTests(unittest.TestCase):
         self.job['steps'][0]['name'] = 'A different description'
         self.assertEqual(c.validate(yaml.safe_dump(self.doc)), [])
 
+    def test_missing_frontend_tests(self):
+        self.job['steps'] = [s for s in self.job['steps'] if s.get('run', '').strip() != c.WEB_COMMAND]
+        self.rejected()
+
+    def test_frontend_failure_not_hidden(self):
+        next(s for s in self.job['steps'] if s.get('run', '').strip() == c.WEB_COMMAND)['run'] += ' || true'
+        self.rejected()
+
+    def test_wrong_node_version(self):
+        next(s for s in self.job['steps'] if s.get('uses', '').startswith('actions/setup-node@'))['with']['node-version'] = '19'
+        self.rejected()
+
     def test_missing_scanner(self):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run') != c.COMMANDS[0]]
         self.rejected()

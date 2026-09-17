@@ -4,6 +4,7 @@ import sys
 import yaml
 
 PINS = {
+    'actions/setup-node': '249970729cb0ef3589644e2896645e5dc5ba9c38',
     'actions/checkout': 'd23441a48e516b6c34aea4fa41551a30e30af803',
     'actions/setup-python': 'ece7cb06caefa5fff74198d8649806c4678c61a1',
     'actions/upload-artifact': 'ea165f8d65b6e75b540449e92b4886f43607fa02',
@@ -15,7 +16,9 @@ COMMANDS = (
     'python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json',
     'python -m unittest discover -s tests/bootstrap -v',
 )
+WEB_COMMAND = 'npm --prefix apps/web ci --ignore-scripts\nnpm --prefix apps/web test\nnpm --prefix apps/web run build'
 OPTIONS = {
+    'actions/setup-node': {'node-version': '24.19.0'},
     'actions/checkout': {'persist-credentials': 'false', 'fetch-depth': '0'},
     'actions/setup-python': {'python-version': '3.13'},
     'actions/upload-artifact': {
@@ -91,7 +94,7 @@ def validate(text: str) -> list[str]:
                     errors.append('Unapproved action configuration')
             else:
                 errors.append('Step must be a known command or pinned action')
-        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, 'actions/upload-artifact']
+        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
         if sequence != expected:
             errors.append('Mandatory steps missing, duplicated, reordered or replaced')
         return errors

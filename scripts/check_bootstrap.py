@@ -17,6 +17,8 @@ from jsonschema import Draft202012Validator
 from referencing import Registry
 import yaml
 
+CAPSTONE_SHELL_PATHS = {'apps/web/src/style.css', 'apps/web/README.md', 'apps/web/src/workflow.test.ts', 'apps/web/src/App.tsx', 'apps/web/tsconfig.json', 'apps/web/package.json', 'apps/web/src/workflow.ts', 'apps/web/package-lock.json', 'apps/web/index.html', 'apps/web/src/App.test.tsx', 'apps/web/src/main.tsx'}
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
     'README.md', 'AGENTS.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md',
@@ -34,6 +36,7 @@ ROLE_IDS = {'APBRA-' + s for s in (
     'PLANNER', 'ARCH', 'DEV-BE', 'DEV-FE', 'AI', 'RAG', 'PBI',
     'QA', 'SEC', 'REVIEW', 'DEVOPS', 'DOCS')}
 ACTION_PINS = {
+    'actions/setup-node': '249970729cb0ef3589644e2896645e5dc5ba9c38',
     'actions/checkout': 'd23441a48e516b6c34aea4fa41551a30e30af803',
     'actions/setup-python': 'ece7cb06caefa5fff74198d8649806c4678c61a1',
     'actions/upload-artifact': 'ea165f8d65b6e75b540449e92b4886f43607fa02',
@@ -129,8 +132,8 @@ def task_errors(task: dict, catalog: dict, sources: dict) -> list[str]:
             errors.append('Implementation acceptance is not recorded')
         if card['max_autonomy'] != 'A3':
             errors.append('Role cannot perform implementation')
-        if any(source_map[s]['status'] == 'PROPOSED' for s in task['source_ids'] if s in source_map):
-            errors.append('Proposed sources cannot authorize implementation')
+        if any(source_map[s].get('status') not in {'ACCEPTED', 'BASELINED'} for s in task['source_ids'] if s in source_map):
+            errors.append('Proposed sources cannot authorize implementation' if any(source_map[s].get('status') == 'PROPOSED' for s in task['source_ids'] if s in source_map) else 'Unaccepted sources cannot authorize implementation')
     if task['task_mode'] == 'SPECIFICATION' and task['readiness'] == 'READY_FOR_SPECIFICATION':
         if task['owner_acceptance'] not in ('BOOTSTRAP_ONLY', 'RECORDED'):
             errors.append('Specification authority missing')
@@ -197,10 +200,29 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
         errors += task_errors(task, catalog, sources)
         errors += workflow_errors((root / '.github/workflows/bootstrap.yml').read_text())
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
+        # One explicitly reviewed Capstone extension, not arbitrary task discovery.
+        shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
+        shell_task = None
+        if shell_path.exists():
+            shell_task = load_json(shell_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), shell_task)
+            if not extension_errors:
+                extension_errors += task_errors(shell_task, catalog, sources)
+                if shell_task['task_id'] != 'APBRA-129' or shell_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone task identity')
+                if set(shell_task['allowed_paths']) != CAPSTONE_SHELL_PATHS:
+                    extension_errors.append('Unexpected Capstone shell scope')
+                if (shell_task['task_mode'], shell_task['readiness'], shell_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone shell requires issued implementation acceptance')
+                if shell_task['source_ids'] != ['capstone-web-shell']:
+                    extension_errors.append('Capstone shell requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                shell_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not path_allowed(name, task, card):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
