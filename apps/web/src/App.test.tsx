@@ -6,7 +6,7 @@ it('renders labelled input and honest unavailable release state', () => {
   expect(html).toContain('for="prompt"');
   for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).toContain(`for="${id}"`);
   expect(html.match(/NOT_RUN/g)).toHaveLength(6);
-  expect(html).toContain('No approved release package exists.');
-  expect(html).toContain('disabled="">Download release package');
+  expect(html).toContain('Use the isolated demo governance panel for eligibility and package downloads.');
+  expect(html).toContain('disabled="">Production release');
   expect(html).not.toContain('href=');
 });
