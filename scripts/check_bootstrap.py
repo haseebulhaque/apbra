@@ -21,6 +21,8 @@ CAPSTONE_SHELL_PATHS = {'apps/web/src/style.css', 'apps/web/README.md', 'apps/we
 
 CAPSTONE_REQUIREMENTS_PATHS = {'apps/web/src/App.test.tsx', 'apps/web/src/requirements.test.ts', 'apps/web/README.md', 'apps/web/src/requirements.ts', 'apps/web/src/App.tsx'}
 
+CAPSTONE_KNOWLEDGE_PATHS = {'apps/web/src/knowledge.test.tsx', 'apps/web/src/App.tsx', 'apps/web/src/knowledge.ts', 'apps/web/src/KnowledgePanel.tsx', 'apps/web/README.md'}
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
     'README.md', 'AGENTS.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md',
@@ -239,10 +241,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 requirements_task = None
+        knowledge_task = None
+        knowledge_path = root / 'tasks/APBRA-131-curated-knowledge.json'
+        if knowledge_path.exists():
+            knowledge_task = load_json(knowledge_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), knowledge_task)
+            if not extension_errors:
+                extension_errors += task_errors(knowledge_task, catalog, sources)
+                if knowledge_task['task_id'] != 'APBRA-131' or knowledge_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone knowledge identity')
+                if set(knowledge_task['allowed_paths']) != CAPSTONE_KNOWLEDGE_PATHS:
+                    extension_errors.append('Unexpected Capstone knowledge scope')
+                if (knowledge_task['task_mode'], knowledge_task['readiness'], knowledge_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone knowledge requires issued implementation acceptance')
+                if knowledge_task['source_ids'] != ['capstone-curated-knowledge']:
+                    extension_errors.append('Capstone knowledge requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                knowledge_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
