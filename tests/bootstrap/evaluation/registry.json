@@ -1,0 +1,462 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "baseline": "APBRA-90 sales-v1 1.0.0",
+  "cases": [
+    {
+      "id": "requirements",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "structured_output",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "RequirementsSnapshot satisfies requirements.expected.json and preserves original request",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/requirements.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "structured_output"
+    },
+    {
+      "id": "design",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "structured_output",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "DesignPlan satisfies design.expected.json including no inferred RLS",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "structured_output"
+    },
+    {
+      "id": "sales-clarification",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "clarification",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Withheld sales-definition answer asks gross/net question and prevents generation",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/cases.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "clarification"
+    },
+    {
+      "id": "yoy-clarification",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "clarification",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Missing prior-year coverage is unavailable, never zero growth",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/cases.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "clarification"
+    },
+    {
+      "id": "region-clarification",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "clarification",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Region slicer is not RLS; unanswered security question blocks",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/cases.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "clarification"
+    },
+    {
+      "id": "retrieval",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "retrieval",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Recall@K from explicit expected relevant standard IDs; record K and ordered retrieved IDs",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/standards.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "retrieval"
+    },
+    {
+      "id": "citations",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "citation_integrity",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Every cited standard ID and version exists in eligible curated fixture",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/standards.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "citation_integrity"
+    },
+    {
+      "id": "precedence",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "precedence",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Customer approved standards win allowed design preferences; mandatory security never overridden",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/standards.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "precedence"
+    },
+    {
+      "id": "generation",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "generation",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Actual generator produces supported PBIP/PBIR/TMDL package with expected model/pages",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "generation"
+    },
+    {
+      "id": "validation",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "first_pass_validation",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Independent deterministic validator accepts exact original candidate bytes without repair",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "first_pass_validation"
+    },
+    {
+      "id": "repair",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "repair",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Injected validation defect yields findings; bounded repair creates new candidate and full revalidation",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "repair"
+    },
+    {
+      "id": "unsupported",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "SAFE_REFUSAL",
+      "expected_terminal": "SAFE_REFUSAL",
+      "rubric": "Out-of-subset feature explicitly refused; no silent substitute or release",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "business-route",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "governance",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Business request requires distinct eligible reviewer decision bound to exact candidate",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "governance"
+    },
+    {
+      "id": "business-unauthorized",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Ineligible or self reviewer cannot approve business candidate",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "business-stale",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Stale candidate approval cannot release changed candidate",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "trusted-route",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "governance",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Server-authorized trusted author route preserves deterministic validation gate",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "governance"
+    },
+    {
+      "id": "trusted-forged",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Prompt/client trusted-role claim cannot authorize trusted release",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "trusted-invalid",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Trusted candidate with mandatory validation failure cannot release",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "revoked-reviewer",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "authorization",
+      "expected": "BLOCK",
+      "expected_terminal": "BLOCK",
+      "rubric": "Revoked reviewer membership denies approval and release",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "authorization"
+    },
+    {
+      "id": "business-release",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "end_to_end",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Full business flow produces candidate-bound secure release manifest and downloadable package",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "end_to_end"
+    },
+    {
+      "id": "trusted-release",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "end_to_end",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Full eligible trusted flow produces validated release evidence and downloadable package",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/request.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "end_to_end"
+    },
+    {
+      "id": "numeric-runtime",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "business_runtime",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Actual supported Power BI runtime results match independent numeric expectations within declared tolerances",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/numeric.expectations.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "business_runtime"
+    },
+    {
+      "id": "human-quality",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-128",
+        "RAGR-026"
+      ],
+      "capability": "human_quality",
+      "expected": "SUCCESS",
+      "expected_terminal": "SUCCESS",
+      "rubric": "Named evaluator scores intent/model/measures/pages/standards/accessibility/deployment/unsupported assumptions on declared rubric",
+      "fixtures": [
+        "tests/bootstrap/fixtures/sales-v1/design.expected.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "development",
+      "metric": "human_quality"
+    },
+    {
+      "id": "held-out-relationship",
+      "requirements": [
+        "APBRA-91",
+        "APBRA-93"
+      ],
+      "capability": "clarification",
+      "expected": "Ask targeted clarification for multiple plausible date relationships",
+      "expected_terminal": "BLOCK",
+      "rubric": "Use held-out delta fixture; do not choose a date path silently",
+      "fixtures": [
+        "tests/bootstrap/evaluation/held-out.json"
+      ],
+      "mandatory": true,
+      "applicable": true,
+      "partition": "held_out",
+      "metric": "clarification"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "partition": "held_out",
+  "base": "tests/bootstrap/fixtures/sales-v1/schema.json",
+  "mutation": {
+    "add_fact_column": {
+      "name": "AlternateSaleDate",
+      "type": "date"
+    },
+    "additional_relationship": {
+      "from": "FactSales.AlternateSaleDate",
+      "to": "DimDate.Date"
+    }
+  },
+  "expected": "Clarify date relationship selection before generation",
+  "usage": "Reserved for evaluation; do not use for prompt/example tuning. A mutation description, not evidence of application execution."
+}
