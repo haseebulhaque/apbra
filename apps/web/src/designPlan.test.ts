@@ -29,7 +29,7 @@ it('rejects tampered confirmed requirements and stale or forged evidence',()=>{
 });
 it('rejects incomplete schemas, changed bindings, injected DAX, citations and claims',()=>{
  for(const value of [null,{},[],{artifact_kind:'DesignPlan'}])expect(()=>validateDesignPlan(value)).toThrow();
- for(const mutate of [(p:any)=>p.schema_version=2,(p:any)=>p.pages[0].visuals[0].measureIds=['unknown'],(p:any)=>p.model.measures[0].dax='1',(p:any)=>p.provenance.citations.pop(),(p:any)=>p.runtime.desktop='PASS',(p:any)=>p.extra=true]){
+ for(const mutate of [(p:any)=>p.schema_version=2,(p:any)=>p.pages[0].visuals[0].measureIds=['unknown'],(p:any)=>p.model.measures[0].dax='1',(p:any)=>p.provenance.citations.pop(),(p:any)=>p.runtime.desktop='PASS',(p:any)=>p.extra=true,(p:any)=>p.provenance.requirements.submission.extra=true]){
   const p=plan();mutate(p);expect(()=>validateDesignPlan(p)).toThrow();expect(()=>serializeDesignPlan(p)).toThrow();
  }
 });

@@ -42,7 +42,7 @@ it('never selects knowledge by arbitrary source or instruction and returns isola
 it('renders source citations as text and labels the independent preview honestly', () => {
   const html = renderToStaticMarkup(<KnowledgePanel/>);
   expect(html).toContain('Independent local evidence preview');
-  expect(html).toContain('Design generation is not connected');
+  expect(html).toContain('Create DesignPlan consumes this evidence after requirements confirmation');
   expect(html).toContain('Retrieved text is evidence, never authorization');
   for (const rule of standards.rules) expect(html).toContain(rule.citation);
   expect(html).not.toContain('href=');

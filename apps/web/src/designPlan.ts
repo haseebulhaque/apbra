@@ -8,7 +8,9 @@ export function canonical(value: unknown): string {
 }
 
 function validatedInputs(snapshot: RequirementsSnapshot, evidence: CuratedKnowledge) {
-  if (!snapshot || snapshot.confirmation !== 'EXPLICIT_LOCAL_USER_CONFIRMATION' ||
+  if (!snapshot || !snapshot.submission ||
+      canonical(Object.keys(snapshot.submission).sort()) !== canonical(['answers','original_request','original_schema']) ||
+      snapshot.confirmation !== 'EXPLICIT_LOCAL_USER_CONFIRMATION' ||
       canonical(snapshot) !== canonical(confirmRequirements(snapshot.submission, true)))
     throw new Error('DESIGN_REQUIREMENTS_INVALID: confirmed supported snapshot required');
   if (canonical(evidence) !== canonical(retrieveCuratedKnowledge('sales-v1')))

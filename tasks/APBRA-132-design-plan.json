@@ -22,7 +22,9 @@
     "apps/web/src/designPlan.ts",
     "apps/web/src/designPlan.test.ts",
     "apps/web/src/App.tsx",
-    "apps/web/README.md"
+    "apps/web/README.md",
+    "apps/web/src/KnowledgePanel.tsx",
+    "apps/web/src/knowledge.test.tsx"
   ],
   "restricted_paths": [
     "apps/api/**",
