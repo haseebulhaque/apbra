@@ -47,3 +47,14 @@ export function createFailureCandidate(original:Candidate):Candidate{
  const blocks=copy.files[path].split(/\n\s*\n/);if(!blocks[0].includes('fromColumn: FactSales.SaleDate'))throw new Error('FAILURE_FIXTURE_PRECONDITION');
  copy.files[path]=blocks.slice(1).join('\n\n');return copy;
 }
+
+export type ValidationAttempt={caseId:string;original:Candidate;candidate:Candidate|null;outcome:'COMPLETE'|'INCOMPLETE';result:Validation|null;error:string|null};
+/** Capture source before mutation or async work, including failure-first and
+ * crashed checks. Incomplete attempts never carry a passing result. */
+export async function runValidationAttempt(source:Candidate,failure:boolean):Promise<ValidationAttempt>{
+ const original=structuredClone(source);
+ const record:ValidationAttempt={caseId:failure?failureCase.id:'GOLDEN_SOURCE',original,candidate:null,outcome:'INCOMPLETE',result:null,error:null};
+ try{record.candidate=failure?createFailureCandidate(original):structuredClone(original);record.result=await validateCandidate(record.candidate);record.outcome='COMPLETE';}
+ catch{record.error='VALIDATION_INCOMPLETE: mandatory checks did not complete; human escalation required';}
+ return record;
+}

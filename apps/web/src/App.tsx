@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useRef} from 'react';
-import {validateCandidate, createFailureCandidate, failureCase, type Validation} from './validation';
+import {runValidationAttempt, failureCase, type Validation, type ValidationAttempt} from './validation';
 import {generatePowerBI, type Candidate} from './powerbi';
 import {zipFiles} from './archive';
 import {createDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
@@ -18,15 +18,15 @@ export function App() {
   const [plan, setPlan] = useState<DesignPlan | null>(null);
   const [candidate,setCandidate]=useState<Candidate|null>(null);
   const [validation,setValidation]=useState<Validation|null>(null);
-  const [history,setHistory]=useState<{caseId:string;candidate:Candidate;result:Validation}[]>([]);
+  const [history,setHistory]=useState<ValidationAttempt[]>([]);
   const [validating,setValidating]=useState(false),[validationError,setValidationError]=useState('');
   const epoch=useRef(0);
   async function runValidation(failure:boolean){
-    if(!candidate)return;const current=epoch.current;const tested=failure?createFailureCandidate(candidate):structuredClone(candidate);
+    if(!candidate)return;const current=epoch.current;
     setValidating(true);setValidationError('');
-    try{const result=await validateCandidate(tested);setHistory(h=>[...h,{caseId:failure?failureCase.id:'GOLDEN_SOURCE',candidate:tested,result}]);if(epoch.current===current)setValidation(result);}
-    catch{if(epoch.current===current){setValidation(null);setValidationError('Validation did not complete. No pass or release eligibility.');}}
-    finally{if(epoch.current===current)setValidating(false);}
+    const attempt=await runValidationAttempt(candidate,failure);
+    setHistory(h=>[...h,attempt]);
+    if(epoch.current===current){setValidation(attempt.result);setValidationError(attempt.error??'');setValidating(false);}
   }
   const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
   useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);

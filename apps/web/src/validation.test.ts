@@ -1,8 +1,8 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
 import schema from '../../../tests/bootstrap/fixtures/sales-v1/schema.json';
 import {createDesignPlan} from './designPlan';import {confirmRequirements} from './requirements';import {retrieveCuratedKnowledge} from './knowledge';import {generatePowerBI} from './powerbi';
-import {validateCandidate,candidateDigest,createFailureCandidate,failureCase} from './validation';
+import {validateCandidate,candidateDigest,createFailureCandidate,failureCase,runValidationAttempt} from './validation';
 const golden=()=>generatePowerBI(createDesignPlan(confirmRequirements({original_request:request.original_text,original_schema:schema,answers:Object.fromEntries(request.clarifications.map(c=>[c.id,c.golden_answer]))},true),retrieveCuratedKnowledge('sales-v1')));
 it('passes only declared source checks and binds a SHA256 without runtime/release claims',async()=>{const c=golden(),v=await validateCandidate(c);expect(v.status).toBe('PASS');expect(v.candidateSha256).toBe(await candidateDigest(c));expect(v.nextAction).toBe('GOVERNANCE_REQUIRED');expect(v.runtime).toEqual({desktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN'});});
 it('executes predeclared failure with independent findings, distinct digest and original retained',async()=>{const c=golden(),before=JSON.stringify(c),f=createFailureCandidate(c),v=await validateCandidate(f);expect(v.status).toBe('FAIL');expect(v.findings.some(x=>x.code===failureCase.expectedCode)).toBe(true);expect(v.nextAction).toBe('HUMAN_ESCALATION');expect(v.candidateSha256).not.toBe(await candidateDigest(c));expect(JSON.stringify(c)).toBe(before);});
@@ -13,4 +13,12 @@ it('rejects changed bytes in every file, even whitespace, and malformed/extra/mi
 it('rejects forged envelope and snapshots input before asynchronous hashing',async()=>{
  for(const value of [null,[],{},'PASS',{...golden(),release:'APPROVED'},{...golden(),runtime:{desktop:'PASS'}},{...golden(),status:'PASS'}])expect((await validateCandidate(value)).status).toBe('FAIL');
  const c=golden(),pending=validateCandidate(c);c.files['README.txt']='changed';const v=await pending;expect(v.status).toBe('PASS');expect(v.candidateSha256).not.toBe(await candidateDigest(c));expect((await validateCandidate(c)).status).toBe('FAIL');
+});
+
+it('retains original on failure-first and incomplete hashing attempts',async()=>{
+ const c=golden(),before=structuredClone(c),failure=await runValidationAttempt(c,true);
+ expect(failure.outcome).toBe('COMPLETE');expect(failure.original).toEqual(before);expect(failure.result?.status).toBe('FAIL');expect(failure.candidate).not.toEqual(before);
+ c.files['README.txt']='edited';expect(failure.original).toEqual(before);
+ const mock=vi.spyOn(crypto.subtle,'digest').mockRejectedValueOnce(new Error('crashed'));
+ try{const incomplete=await runValidationAttempt(before,false);expect(incomplete.outcome).toBe('INCOMPLETE');expect(incomplete.result).toBeNull();expect(incomplete.original).toEqual(before);expect(incomplete.candidate).toEqual(before);expect(incomplete.error).toContain('VALIDATION_INCOMPLETE');}finally{mock.mockRestore();}
 });
