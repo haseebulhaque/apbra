@@ -60,6 +60,14 @@
       "acceptance": "Haseeb explicitly authorized autonomous bounded Capstone implementation in this execution. Jira129 read updated2026-09-16T23:40:18.163+1000; Jira128 updated2026-09-16T23:38:35.980+1000; Confluence21.03v2. This acceptance applies only to129 and does not relabel proposed broader product sources."
     },
     {
+      "id": "capstone-requirements-snapshot",
+      "content_id": "APBRA-130",
+      "version": "Live Jira acceptance / Confluence21.03v2",
+      "status": "ACCEPTED",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-130",
+      "acceptance": "Haseeb authorized bounded autonomous Capstone implementation. Parent execution read current Jira130 and Confluence21.03v2 and recorded PLAN comment10019. Acceptance applies only to explicit APBRA90 requirements clarification/snapshot processing, not broader proposed sources."
+    },
+    {
       "id": "capstone-curated-knowledge",
       "content_id": "APBRA-131",
       "version": 1,
