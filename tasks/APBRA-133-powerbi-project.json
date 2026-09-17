@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-133",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260917-133",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Generate inspectable downloadable bounded Power BI project source from validated DesignPlan.",
+  "requirements": [
+    "APBRA-133 acceptance",
+    "APBRA-128 bounded golden flow"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction"
+  ],
+  "architecture_refs": [
+    "21.03 v2"
+  ],
+  "allowed_paths": [
+    "apps/web/src/powerbi.ts",
+    "apps/web/src/powerbi.test.ts",
+    "apps/web/src/archive.ts",
+    "apps/web/src/raw.d.ts",
+    "apps/web/src/App.tsx",
+    "apps/web/src/App.test.tsx",
+    "apps/web/README.md"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    ".env*"
+  ],
+  "acceptance_criteria": [
+    "Revalidate the supported DesignPlan before generating actual PBIP/PBIR/TMDL and embedded synthetic data.",
+    "Project files and complete ZIP are inspectable and downloadable from running solution.",
+    "Unimplemented Desktop, numeric DAX and RLS runtime verification explicitly remains NOT_RUN."
+  ],
+  "verification_required": [
+    "npm ci --ignore-scripts",
+    "npm test",
+    "npm run build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted scanner and separate review"
+  ],
+  "out_of_scope": [
+    "Production tenant publishing, cloud/model calls and arbitrary M/SQL execution",
+    "Desktop runtime and commercial backlog"
+  ],
+  "escalate_when": [
+    "Source contradiction",
+    "Dependency or tests unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex implementation execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "674c5fd3dc4120575b9f07106fcade5c7dfa7e58",
+  "branch": "agent/APBRA-DEVOPS/APBRA-133-powerbi-project",
+  "source_ids": [
+    "capstone-powerbi-project"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged APBRA-132; APBRA-134 adds independent candidate validation."
+  ]
+}

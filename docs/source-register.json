@@ -83,6 +83,14 @@
       "status": "ACCEPTED",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-132",
       "acceptance": "Haseeb authorized the complete bounded Capstone workflow and autonomous merges only after independent review and mandatory gates on2026-09-17. Live sources read; PLAN10027. Scope is deterministic golden DesignPlan, not commercial generation or AI interpretation."
+    },
+    {
+      "id": "capstone-powerbi-project",
+      "content_id": "APBRA-133",
+      "version": "Live Jira133 / Confluence21.03v2",
+      "status": "ACCEPTED",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-133",
+      "acceptance": "Haseeb authorized complete bounded Capstone workflow and gated autonomous merges. Jira133 and Confluence3932866v2 read2026-09-17; PLAN10032. Exact golden generator only; runtime claims remain NOT_RUN."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

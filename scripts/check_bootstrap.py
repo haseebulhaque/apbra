@@ -23,6 +23,7 @@ CAPSTONE_REQUIREMENTS_PATHS = {'apps/web/src/App.test.tsx', 'apps/web/src/requir
 
 CAPSTONE_KNOWLEDGE_PATHS = {'apps/web/src/knowledge.test.tsx', 'apps/web/src/App.tsx', 'apps/web/src/knowledge.ts', 'apps/web/src/KnowledgePanel.tsx', 'apps/web/README.md'}
 
+CAPSTONE_GENERATION_PATHS = {'apps/web/src/archive.ts', 'apps/web/src/App.test.tsx', 'apps/web/src/raw.d.ts', 'apps/web/src/App.tsx', 'apps/web/src/powerbi.ts', 'apps/web/src/powerbi.test.ts', 'apps/web/README.md'}
 CAPSTONE_DESIGN_PATHS = {'apps/web/src/KnowledgePanel.tsx', 'apps/web/src/knowledge.test.tsx', 'apps/web/README.md', 'apps/web/src/designPlan.ts', 'apps/web/src/App.tsx', 'apps/web/src/designPlan.test.ts'}
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -279,10 +280,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 design_task = None
+        generation_task = None
+        generation_path = root / 'tasks/APBRA-133-powerbi-project.json'
+        if generation_path.exists():
+            generation_task = load_json(generation_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), generation_task)
+            if not extension_errors:
+                extension_errors += task_errors(generation_task, catalog, sources)
+                if generation_task['task_id'] != 'APBRA-133' or generation_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone generation identity')
+                if set(generation_task['allowed_paths']) != CAPSTONE_GENERATION_PATHS:
+                    extension_errors.append('Unexpected Capstone generation scope')
+                if (generation_task['task_mode'], generation_task['readiness'], generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone generation requires issued implementation acceptance')
+                if generation_task['source_ids'] != ['capstone-powerbi-project']:
+                    extension_errors.append('Capstone generation requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                generation_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
