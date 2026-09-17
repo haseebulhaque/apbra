@@ -1,4 +1,5 @@
 import React, {useState} from 'react';
+import {KnowledgePanel} from './KnowledgePanel';
 import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
 import schema from '../../../tests/bootstrap/fixtures/sales-v1/schema.json';
 import {draftReady, unavailableStages, type Answers} from './workflow';
@@ -24,6 +25,6 @@ export function App() {
       <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.status}</strong></li>)}</ol>
       <h2>Release artefacts</h2><p>No generated candidate or release package exists.</p><button disabled>Download release package · unavailable</button>
       <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><footer>APBRA-129 · Local Capstone requester shell</footer>
+    </section></div><KnowledgePanel/><footer>APBRA-129 · Local Capstone requester shell</footer>
   </main>;
 }

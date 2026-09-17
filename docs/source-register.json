@@ -58,6 +58,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-129",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized autonomous bounded Capstone implementation in this execution. Jira129 read updated2026-09-16T23:40:18.163+1000; Jira128 updated2026-09-16T23:38:35.980+1000; Confluence21.03v2. This acceptance applies only to129 and does not relabel proposed broader product sources."
+    },
+    {
+      "id": "capstone-curated-knowledge",
+      "content_id": "APBRA-131",
+      "version": 1,
+      "section": "21.03 v2 / APBRA-128",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-131",
+      "status": "ACCEPTED",
+      "acceptance": "Bounded Capstone implementation authorized by Haseeb; parent execution read current Jira128/131 and Confluence21.03v2 on2026-09-17 and recorded PLAN10020. Applies only to local curated fixture adapter, provenance evaluation and independent preview; broader proposed sources remain unchanged."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
