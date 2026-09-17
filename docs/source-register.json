@@ -99,6 +99,14 @@
       "status": "ACCEPTED",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-134",
       "acceptance": "Haseeb authorized bounded Capstone execution; live134 read2026-09-17, PLAN10035. Independent deterministic source validation only; source profile hash acceptance is not runtime compatibility."
+    },
+    {
+      "id": "capstone-governance",
+      "content_id": "APBRA-135",
+      "version": "Live Jira135 / Confluence21.03v2",
+      "status": "ACCEPTED",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-135",
+      "acceptance": "Haseeb authorized bounded Capstone implementation/autonomous gated merges. Live135 read2026-09-17, PLAN10038. Explicit isolated demo identity permitted by Jira; never production authorization."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
