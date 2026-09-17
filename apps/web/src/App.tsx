@@ -1,4 +1,5 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
+import {createExecutionTrace} from './execution';
 import {GovernancePanel} from './GovernancePanel';
 import {runValidationAttempt, failureCase, type Validation, type ValidationAttempt} from './validation';
 import {generatePowerBI, type Candidate} from './powerbi';
@@ -13,6 +14,10 @@ import {unavailableStages, type Answers} from './workflow';
 import {assessRequirements, confirmRequirements, type RequirementsSnapshot} from './requirements';
 
 export function App() {
+  const [trace]=useState(createExecutionTrace);
+  const [,setTraceRevision]=useState(0);
+  const notify=useCallback(()=>setTraceRevision(n=>n+1),[]);
+  function observed<T,>(stage:string,work:()=>T){try{return trace.sync(stage,work);}finally{notify();}}
   const [prompt, setPrompt] = useState(request.original_text);
   const [answers, setAnswers] = useState<Answers>({});
   const [snapshot, setSnapshot] = useState<RequirementsSnapshot | null>(null);
@@ -25,14 +30,16 @@ export function App() {
   const epoch=useRef(0);
   async function runValidation(failure:boolean){
     if(!candidate)return;const current=epoch.current;
+    const token=trace.start(failure?'DECLARED_FAILURE_VALIDATION':'SOURCE_VALIDATION');notify();
     setValidating(true);setValidationError('');
     const attempt=await runValidationAttempt(candidate,failure);
+    trace.finish(token,attempt,attempt.outcome==='INCOMPLETE'?'VALIDATION_INCOMPLETE':undefined);notify();
     setHistory(h=>[...h,attempt]);
     if(epoch.current===current){setValidation(attempt.result);setValidationError(attempt.error??'');setValidating(false);}
   }
   const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
   useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);
-  function invalidate() { setSnapshot(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
+  function invalidate() { if(snapshot||plan||candidate){trace.invalidate('Requirements input changed');notify();} setSnapshot(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
   const submission = {original_request: prompt, original_schema: schema, answers};
   const assessment = assessRequirements(submission);
   const ready = assessment.status === 'READY_TO_CONFIRM';
@@ -46,17 +53,17 @@ export function App() {
       <label htmlFor="prompt">Report request</label><textarea id="prompt" rows={7} maxLength={4000} value={prompt} onChange={e => {setPrompt(e.target.value); invalidate();}}/>
       <h2>02 · Clarify the request</h2><p>These are predefined golden-scenario topics, not AI-generated questions.</p>
       {request.clarifications.map(c => <div className="question" key={c.id}><label htmlFor={c.id}>{c.topic}</label><textarea id={c.id} rows={3} maxLength={2000} value={answers[c.id] ?? ''} onChange={e => editAnswer(c.id, e.target.value)}/><button className="secondary" onClick={() => editAnswer(c.id,c.golden_answer)}>Use synthetic golden answer</button></div>)}
-      <button disabled={!ready || !!snapshot} onClick={() => setSnapshot(confirmRequirements(submission, true))}>Confirm requirements and create snapshot</button>
+      <button disabled={!ready || !!snapshot} onClick={() => setSnapshot(observed('REQUIREMENTS_CONFIRMED',()=>confirmRequirements(submission, true)))}>Confirm requirements and create snapshot</button>
       <p role="status">{snapshot ? 'RequirementsSnapshot confirmed in browser memory. Editing inputs invalidates it; refresh clears it.' : assessment.status}</p>
       {assessment.issues.length > 0 && <ul>{assessment.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
       {snapshot && <details open><summary>Inspect confirmed RequirementsSnapshot</summary><pre>{JSON.stringify(snapshot, null, 2)}</pre></details>}
       <h2>03 · Create the design</h2><p>Deterministic golden-scenario planning consumes confirmed requirements and current curated evidence. No AI interpretation is claimed.</p>
-      <button disabled={!snapshot || !!plan} onClick={() => setPlan(createDesignPlan(snapshot!, retrieveCuratedKnowledge('sales-v1')))}>Create DesignPlan</button>
+      <button disabled={!snapshot || !!plan} onClick={() => {const evidence=observed('CURATED_EVIDENCE',()=>retrieveCuratedKnowledge('sales-v1'));setPlan(observed('DESIGN_PLAN',()=>createDesignPlan(snapshot!,evidence)));}}>Create DesignPlan</button>
       {plan && <><p role="status">DesignPlan created and linked to requirements and all eight citations. Save the JSON to retain it after refresh.</p>
         <details><summary>Inspect DesignPlan and source bindings</summary><pre>{serializeDesignPlan(plan)}</pre></details>
         <a download="SalesPerformance.DesignPlan.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(serializeDesignPlan(plan))}>Save DesignPlan JSON</a></>}
       <h2>04 · Generate the project</h2><p>Render the validated DesignPlan into a synthetic Power BI candidate. This download is source inspection, not an approved release.</p>
-      <button disabled={!plan||!!candidate} onClick={()=>setCandidate(generatePowerBI(plan))}>Generate Power BI candidate</button>
+      <button disabled={!plan||!!candidate} onClick={()=>setCandidate(observed('POWER_BI_GENERATION',()=>generatePowerBI(plan)))}>Generate Power BI candidate</button>
       {candidate&&<><p role="status">Candidate generated · {Object.keys(candidate.files).length} files · Desktop, DAX and RLS runtime NOT_RUN.</p>
         <details><summary>Inspect generated project files</summary>{Object.entries(candidate.files).map(([path,content])=><details key={path}><summary>{path}</summary><pre>{content}</pre></details>)}</details>
         {archiveUrl&&<a href={archiveUrl} download="SalesPerformance.candidate.zip">Save candidate ZIP · not a release</a>}</>}
@@ -70,6 +77,6 @@ export function App() {
       <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : validation && s.name === 'Deterministic validation' ? validation.status : s.name === 'Governance & release' ? governanceState : s.status}</strong></li>)}</ol>
       <h2>Release artefacts</h2><p>Use the isolated demo governance panel for eligibility and package downloads.</p><button disabled>Production release · unavailable</button>
       <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><GovernancePanel candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><KnowledgePanel/><footer>APBRA-135 · Local Capstone demo governance</footer>
+    </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">07 · Retain execution evidence</h2><p>Execution {trace.id}. Save the complete record before refreshing. Timings measure local processing only; identities are simulated and external runtime remains untested.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(trace.export(),null,2))}>Save complete execution evidence JSON</a>}</section><KnowledgePanel/><footer>APBRA-136 · Local Capstone execution evidence</footer>
   </main>;
 }
