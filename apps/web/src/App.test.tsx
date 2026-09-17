@@ -5,8 +5,9 @@ it('renders labelled input and honest unavailable release state', () => {
   const html=renderToStaticMarkup(<App/>);
   expect(html).toContain('for="prompt"');
   for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).toContain(`for="${id}"`);
-  expect(html.match(/NOT_RUN/g)).toHaveLength(6);
-  expect(html).toContain('Use the isolated demo governance panel for eligibility and package downloads.');
+  expect(html).toContain('Prototype limitations');
+  expect(html).toContain('Requirement → Clarification → Governed Knowledge → DesignPlan → Generation → Validation');
+  for(const stage of ['Requirement','Clarification','Governed Knowledge','DesignPlan','Generation','Validation']) expect(html).toContain(stage);
   expect(html).toContain('disabled="">Production release');
   expect(html).toContain('controlled local retrieval with citations');
   expect(html).toContain('reviewer workflow');
@@ -19,4 +20,11 @@ it('renders the excessive-visual request as a terminal human-review state',()=>{
   expect(html).toContain('EXCESSIVE_SINGLE_PAGE_VISUALS');
   expect(html).toContain('local-policy:capstone-power-bi-demo-boundaries/GUARD-001');
   expect(html).toContain('download="SalesPerformance.guardrail-evidence.json"');
+  expect(html).not.toContain('UNSUPPORTED');
+});
+it('renders the unrelated request as a terminal out-of-scope state',()=>{
+  const html=renderToStaticMarkup(<App initialPrompt="Write a marketing campaign for our new product."/>);
+  expect(html).toContain('OUT OF SCOPE');
+  expect(html).toContain('No Power BI report has been generated');
+  expect(html).not.toContain('UNSUPPORTED');
 });

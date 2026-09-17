@@ -1,4 +1,4 @@
-export const stages = ['RequirementsSnapshot', 'Knowledge & citations', 'DesignPlan', 'Power BI generation', 'Deterministic validation', 'Governance & release'] as const;
+export const stages = ['Requirement', 'Clarification', 'Governed Knowledge', 'DesignPlan', 'Generation', 'Validation'] as const;
 export type Answers = Record<string, string>;
 // UI draft validation only: does not create an authoritative RequirementsSnapshot.
 export function draftReady(prompt: string, ids: string[], answers: Answers): boolean {
