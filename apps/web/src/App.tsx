@@ -5,22 +5,24 @@ import {runValidationAttempt, failureCase, type Validation, type ValidationAttem
 import {generatePowerBI, type Candidate} from './powerbi';
 import {zipFiles} from './archive';
 import {createDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
-import {retrieveCuratedKnowledge} from './knowledge';
+import {retrieveCuratedKnowledge, type CuratedKnowledge} from './knowledge';
 import {KnowledgePanel} from './KnowledgePanel';
+import {assessRequestGuardrail} from './guardrail';
 import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
 import schema from '../../../tests/bootstrap/fixtures/sales-v1/schema.json';
 import {unavailableStages, type Answers} from './workflow';
 
 import {assessRequirements, confirmRequirements, type RequirementsSnapshot} from './requirements';
 
-export function App() {
+export function App({initialPrompt=request.original_text}:{initialPrompt?:string}={}) {
   const [trace]=useState(createExecutionTrace);
   const [,setTraceRevision]=useState(0);
   const notify=useCallback(()=>setTraceRevision(n=>n+1),[]);
   function observed<T,>(stage:string,work:()=>T){try{return trace.sync(stage,work);}finally{notify();}}
-  const [prompt, setPrompt] = useState(request.original_text);
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [answers, setAnswers] = useState<Answers>({});
   const [snapshot, setSnapshot] = useState<RequirementsSnapshot | null>(null);
+  const [knowledge,setKnowledge]=useState<CuratedKnowledge|null>(null);
   const [plan, setPlan] = useState<DesignPlan | null>(null);
   const [candidate,setCandidate]=useState<Candidate|null>(null);
   const [governanceState,setGovernanceState]=useState('NOT_RUN');
@@ -39,27 +41,30 @@ export function App() {
   }
   const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
   useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);
-  function invalidate() { if(snapshot||plan||candidate){trace.invalidate('Requirements input changed');notify();} setSnapshot(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
+  function invalidate() { if(snapshot||knowledge||plan||candidate){trace.invalidate('Requirements input changed');notify();} setSnapshot(null); setKnowledge(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
   const submission = {original_request: prompt, original_schema: schema, answers};
-  const assessment = assessRequirements(submission);
-  const ready = assessment.status === 'READY_TO_CONFIRM';
+  const guardrail = assessRequestGuardrail(prompt);
+  const assessment = guardrail.status === 'ALLOW' ? assessRequirements(submission) : {status:'UNSUPPORTED' as const,issues:[guardrail.reason]};
+  const ready = guardrail.status === 'ALLOW' && assessment.status === 'READY_TO_CONFIRM';
   function editAnswer(id: string, value: string) { invalidate(); setAnswers({...answers, [id]:value}); }
   return <main>
     <header><span className="eyebrow">APBRA / ELVTR CAPSTONE</span><h1>Your report starts here.</h1><p>Explore the synthetic sales scenario and prepare your request.</p></header>
-    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Synthetic project generation runs locally. Power BI runtime evaluation is not available. Governance uses explicitly simulated demo identities.</aside>
+    <aside className="notice">Local AI architecture demo · No backend or model provider connected. Clarification, retrieval, planning, guardrails and generation are deterministic local prototype operations. The sample PBIP has separate human Desktop evidence; this browser session does not rerun Power BI.</aside>
     <div className="layout"><section aria-labelledby="request-heading"><h2 id="request-heading">01 · Define the report</h2>
       <label htmlFor="scenario">Synthetic scenario</label><select id="scenario" value="sales-v1" onChange={() => {}}><option value="sales-v1">Sales performance · APBRA-90 v1.0.0</option></select>
       <details><summary>Inspect the synthetic schema</summary><pre>{JSON.stringify(schema, null, 2)}</pre></details>
       <label htmlFor="prompt">Report request</label><textarea id="prompt" rows={7} maxLength={4000} value={prompt} onChange={e => {setPrompt(e.target.value); invalidate();}}/>
-      <h2>02 · Clarify the request</h2><p>These are predefined golden-scenario topics, not AI-generated questions.</p>
+      {guardrail.status !== 'ALLOW' && <div className="guardrail" role="alert"><strong>{guardrail.status === 'HUMAN_REVIEW_REQUIRED' ? 'HUMAN REVIEW REQUIRED' : 'OUT OF SCOPE'}</strong><p>{guardrail.reason}</p><p>No Power BI report has been generated. This is a terminal demo state; no reviewer workflow or notification is implemented.</p><details><summary>Inspect guardrail evidence</summary><pre>{JSON.stringify(guardrail,null,2)}</pre></details><a download="SalesPerformance.guardrail-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(guardrail,null,2))}>Save guardrail evidence JSON</a></div>}
+      <h2>02 · AI clarification boundary</h2><p>These targeted questions are predefined for the reliable golden scenario. The demo does not claim open-ended model-generated clarification.</p>
       {request.clarifications.map(c => <div className="question" key={c.id}><label htmlFor={c.id}>{c.topic}</label><textarea id={c.id} rows={3} maxLength={2000} value={answers[c.id] ?? ''} onChange={e => editAnswer(c.id, e.target.value)}/><button className="secondary" onClick={() => editAnswer(c.id,c.golden_answer)}>Use synthetic golden answer</button></div>)}
       <button disabled={!ready || !!snapshot} onClick={() => setSnapshot(observed('REQUIREMENTS_CONFIRMED',()=>confirmRequirements(submission, true)))}>Confirm requirements and create snapshot</button>
       <p role="status">{snapshot ? 'RequirementsSnapshot confirmed in browser memory. Editing inputs invalidates it; refresh clears it.' : assessment.status}</p>
       {assessment.issues.length > 0 && <ul>{assessment.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
       {snapshot && <details open><summary>Inspect confirmed RequirementsSnapshot</summary><pre>{JSON.stringify(snapshot, null, 2)}</pre></details>}
       <h2>03 · Create the design</h2><p>Deterministic golden-scenario planning consumes confirmed requirements and current curated evidence. No AI interpretation is claimed.</p>
-      <button disabled={!snapshot || !!plan} onClick={() => {const evidence=observed('CURATED_EVIDENCE',()=>retrieveCuratedKnowledge('sales-v1'));setPlan(observed('DESIGN_PLAN',()=>createDesignPlan(snapshot!,evidence)));}}>Create DesignPlan</button>
-      {plan && <><p role="status">DesignPlan created and linked to requirements and all eight citations. Save the JSON to retain it after refresh.</p>
+      <button disabled={!snapshot || !!plan} onClick={() => {const evidence=observed('CURATED_EVIDENCE',()=>retrieveCuratedKnowledge('sales-v1'));setKnowledge(evidence);setPlan(observed('DESIGN_PLAN',()=>createDesignPlan(snapshot!,evidence)));}}>Retrieve governed standards and create DesignPlan</button>
+      {knowledge&&<details open><summary>Retrieved controlled local standards · {knowledge.retrievedCount} rules</summary><p>Pack <code>{knowledge.packId}</code> · version {knowledge.fixtureVersion} · local source <code>{knowledge.sourcePath}</code></p><ul>{knowledge.rules.map(rule=><li key={rule.evidenceId}><strong>{rule.evidenceId}</strong> · {rule.text}<br/><code>{rule.citation}</code></li>)}</ul></details>}
+      {plan && <><p role="status">DesignPlan created and linked to requirements and all {plan.provenance.citations.length} controlled-source citations. Save the JSON to retain it after refresh.</p>
         <details><summary>Inspect DesignPlan and source bindings</summary><pre>{serializeDesignPlan(plan)}</pre></details>
         <a download="SalesPerformance.DesignPlan.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(serializeDesignPlan(plan))}>Save DesignPlan JSON</a></>}
       <h2>04 · Generate the project</h2><p>Render the validated DesignPlan into a synthetic Power BI candidate. This download is source inspection, not an approved release.</p>
@@ -77,6 +82,6 @@ export function App() {
       <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : validation && s.name === 'Deterministic validation' ? validation.status : s.name === 'Governance & release' ? governanceState : s.status}</strong></li>)}</ol>
       <h2>Release artefacts</h2><p>Use the isolated demo governance panel for eligibility and package downloads.</p><button disabled>Production release · unavailable</button>
       <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">07 · Retain execution evidence</h2><p>Execution {trace.id}. Save the complete record before refreshing. Timings measure local processing only; identities are simulated and external runtime remains untested.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(trace.export(),null,2))}>Save complete execution evidence JSON</a>}</section><KnowledgePanel/><footer>APBRA-136 · Local Capstone execution evidence</footer>
+    </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">07 · Retain execution evidence</h2><p>Execution {trace.id}. Save the complete record before refreshing. Timings measure local processing only; identities are simulated and external runtime remains untested by this browser session.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(trace.export(),null,2))}>Save complete execution evidence JSON</a>}</section><KnowledgePanel/><section aria-labelledby="boundaries-heading"><h2 id="boundaries-heading">Capability boundaries</h2><p><strong>Implemented locally:</strong> bounded clarification, controlled local retrieval with citations, structured requirements and DesignPlan, guardrail decisions, source validation, and Power BI package generation. The current sample PBIP has separate successful human Desktop evidence.</p><p><strong>Prototype:</strong> fictional customer knowledge and the deliberately limited Power BI feature set.</p><p><strong>Not implemented:</strong> production Azure deployment, tenant publishing, enterprise SSO or multi-tenancy, reviewer workflow, notifications, automated production deployment, and dynamic handover-document generation.</p></section><footer>APBRA Capstone · Local AI architecture demonstration</footer>
   </main>;
 }

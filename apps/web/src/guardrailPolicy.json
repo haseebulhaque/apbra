@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "policy_id": "capstone-power-bi-demo-boundaries",
+  "source": "Controlled local Capstone policy",
+  "rules": [
+    {
+      "id": "GUARD-001",
+      "max_visuals_per_page": 20,
+      "text": "Requests for more than 20 visuals on one page require human verification and must not enter generation.",
+      "citation": "local-policy:capstone-power-bi-demo-boundaries/GUARD-001"
+    },
+    {
+      "id": "GUARD-002",
+      "text": "Only bounded Power BI report-design requests are supported; unrelated marketing-content requests must not enter generation.",
+      "citation": "local-policy:capstone-power-bi-demo-boundaries/GUARD-002"
+    }
+  ]
+}
