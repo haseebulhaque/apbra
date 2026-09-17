@@ -1,0 +1,16 @@
+[
+  {
+    "name": "business.zip",
+    "sha256": "f3f7d80c4683d79bb53d66621b1dcb0ace432af831e29797236d6f0dfe70f321",
+    "bytes": 153433,
+    "entries": 43,
+    "crc": "PASS"
+  },
+  {
+    "name": "trusted.zip",
+    "sha256": "2fb204a559ab4b5b368d33a7dc40291deb3fa6adb1b2e9f05c1a8aaa05440341",
+    "bytes": 153209,
+    "entries": 43,
+    "crc": "PASS"
+  }
+]

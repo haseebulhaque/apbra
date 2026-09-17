@@ -1,0 +1,45 @@
+{
+  "sourceRevision": "4d16d8d0a2e275c5f93d42efe5d4854b130bed2f",
+  "method": "Actual native Chrome keyboard-only via cua_repl; Tab/Shift-Tab/Enter/Arrow keys and text paste; no mouse actions in journey",
+  "executionId": "d5f34afa-8d14-48f6-8261-8ceb447e3d2f",
+  "focusTransitionsObserved": 61,
+  "checks": [
+    "Three clarification answer buttons keyboard reachable",
+    "Explicit confirmation, design, generation and validation keyboard reachable",
+    "Blank reviewer reason produces text REASON_REQUIRED and blocks release",
+    "Shift-Tab restores reason editor; correction permits approval",
+    "Business and trusted routes package through keyboard",
+    "Save dialogs confirmed with Enter; persisted ZIPs read and hashes verified",
+    "Route switch removes old package and active approval; evidence retained"
+  ],
+  "observedFocusBehavior": "Completed one-shot buttons become disabled and AX focus reports HTML container; subsequent Tab continues to adjacent disclosure/download/next action. No keyboard trap observed. No blanket focus-management conformance claim.",
+  "artifacts": [
+    {
+      "name": "SalesPerformance.demo-release (2).zip",
+      "bytes": 153469,
+      "sha256": "db923542f9bcf3b22675cb72ad957dc0df6133ece0e3a67e1747a4663ea79c6c",
+      "operationId": "7c53ec00-cc54-4404-ab48-be07039108c4",
+      "governance": "DEMO_BUSINESS_REVIEW"
+    },
+    {
+      "name": "SalesPerformance.demo-release (3).zip",
+      "bytes": 153209,
+      "sha256": "4a189624565eec26b2b19218d54f1ed7b4c8125268a6294131c44a5ddcd84904",
+      "operationId": "9bb8ac66-11d1-482a-be65-270c3fc123c0",
+      "governance": "DEMO_TRUSTED_POLICY"
+    },
+    {
+      "name": "SalesPerformance.execution-evidence (2).json",
+      "bytes": 1726163,
+      "sha256": "35132c80f5dd0a7831d06b6a9096813b100ab6a1ca58d4be88fe704987819265",
+      "executionId": "d5f34afa-8d14-48f6-8261-8ceb447e3d2f"
+    }
+  ],
+  "limits": [
+    "VoiceOver/assistive technology announcements NOT_RUN",
+    "Desktop report interactions NOT_RUN",
+    "Keyboard request changes/decline not repeated here; actual module cases separately tested",
+    "No full WCAG certification",
+    "No production sessions, backend cancellation or distributed queue in bounded app"
+  ]
+}
