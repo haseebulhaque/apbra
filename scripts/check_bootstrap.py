@@ -19,6 +19,8 @@ import yaml
 
 CAPSTONE_SHELL_PATHS = {'apps/web/src/style.css', 'apps/web/README.md', 'apps/web/src/workflow.test.ts', 'apps/web/src/App.tsx', 'apps/web/tsconfig.json', 'apps/web/package.json', 'apps/web/src/workflow.ts', 'apps/web/package-lock.json', 'apps/web/index.html', 'apps/web/src/App.test.tsx', 'apps/web/src/main.tsx'}
 
+CAPSTONE_REQUIREMENTS_PATHS = {'apps/web/src/App.test.tsx', 'apps/web/src/requirements.test.ts', 'apps/web/README.md', 'apps/web/src/requirements.ts', 'apps/web/src/App.tsx'}
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
     'README.md', 'AGENTS.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md',
@@ -200,7 +202,7 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
         errors += task_errors(task, catalog, sources)
         errors += workflow_errors((root / '.github/workflows/bootstrap.yml').read_text())
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
-        # One explicitly reviewed Capstone extension, not arbitrary task discovery.
+        # Explicitly bounded Capstone extensions, not arbitrary task discovery.
         shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
         shell_task = None
         if shell_path.exists():
@@ -219,10 +221,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 shell_task = None
+        requirements_path = root / 'tasks/APBRA-130-requirements-snapshot.json'
+        requirements_task = None
+        if requirements_path.exists():
+            requirements_task = load_json(requirements_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), requirements_task)
+            if not extension_errors:
+                extension_errors += task_errors(requirements_task, catalog, sources)
+                if requirements_task['task_id'] != 'APBRA-130' or requirements_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone task identity')
+                if set(requirements_task['allowed_paths']) != CAPSTONE_REQUIREMENTS_PATHS:
+                    extension_errors.append('Unexpected Capstone requirements scope')
+                if (requirements_task['task_mode'], requirements_task['readiness'], requirements_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone requirements requires issued implementation acceptance')
+                if requirements_task['source_ids'] != ['capstone-requirements-snapshot']:
+                    extension_errors.append('Capstone requirements requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                requirements_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

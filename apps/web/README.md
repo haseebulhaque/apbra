@@ -1,4 +1,4 @@
-# APBRA-129 local requester shell
+# APBRA-129/130 local requester and requirements snapshot
 
 This React/TypeScript/Vite shell is the first browser surface for the ELVTR Capstone. It consumes the frozen APBRA-90 request/schema directly, displays the three expected clarification topics and keeps edited answers only in browser memory. Refresh discards them. No private or production data should be entered.
 
@@ -17,9 +17,9 @@ Open the printed loopback URL. No global installation, cloud account, API keys o
 
 ## Honest boundary
 
-The browser supports request entry, frozen synthetic schema selection/inspection, manual clarification inputs and draft preparation. It does not infer answers, create an authoritative RequirementsSnapshot, retrieve knowledge, generate/validate Power BI, authorize release, or record actual end-to-end evaluation. Those stages remain NOT_RUN and package download is disabled. Expected fixture answers are explicitly labelled, not presented as AI output. These UI drafts are not authorization or durable evidence.
+The browser supports request entry, frozen synthetic schema selection/inspection, manual clarification inputs and draft preparation. APBRA-130 adds a typed local RequirementsSnapshot after explicit confirmation of the unchanged golden request and all three exact synthetic answers. It preserves copied original inputs, exposes JSON for inspection/replay, and invalidates the snapshot on edits. Unsupported text, RLS requirements or schema/coverage changes fail explicitly. This deterministic fixture adapter makes no provider call or AI inference claim. It does not retrieve knowledge, generate/validate Power BI, authorize release, or record actual end-to-end evaluation. Those later stages remain NOT_RUN and package download is disabled. Expected fixture answers are explicitly labelled, not presented as AI output. These UI drafts are not authorization or durable evidence.
 
-APBRA-130 through APBRA-136 will integrate real domain/backend behaviour; full APBRA-129 golden-scenario acceptance requires that integration and is pending. No APBRA-27 or subsequent item is implemented here. Power BI Desktop, DAX and RLS runtime are NOT_RUN.
+APBRA-131 through APBRA-136 will integrate real domain/backend behaviour; full APBRA-129 golden-scenario acceptance requires that integration and is pending. No broad APBRA-27 backend or APBRA-131+ item is implemented here. Power BI Desktop, DAX and RLS runtime are NOT_RUN.
 
 ## Sources and engineering boundary
 
