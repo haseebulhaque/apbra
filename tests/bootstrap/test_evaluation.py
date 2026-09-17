@@ -24,6 +24,10 @@ class EvaluationTests(unittest.TestCase):
                     evaluator='unittest synthetic adapter', evidence=['artifacts/synthetic/result.json'],
                     latency_ms=10, terminal=definition['expected_terminal'],
                     rubric_evidence='Synthetic deterministic assertion', assessment_method='deterministic')
+        if definition['metric'] == 'human_quality':
+            args.update(assessment_method='human', rubric_evidence={
+                'assessor': args['evaluator'], 'scale': {'min': 0, 'max': 4},
+                'scores': {dimension: 4 for dimension in h.HUMAN_DIMENSIONS}})
         if status not in h.EXECUTED:
             args['latency_ms'] = None
         args.update(changes)
@@ -230,6 +234,56 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(list(Path(external).iterdir()), [])
             with self.assertRaises(ValueError):
                 h.export(self.run, root, 'artifacts/../escape.json')
+
+    def test_human_quality_llm_and_unstructured_rubric_rejected(self):
+        with self.assertRaises(ValueError):
+            self.add(case='human-quality', assessment_method='llm_only', evaluator='LLM',
+                     rubric_evidence='Looks good')
+        with self.assertRaises(ValueError):
+            self.add(case='human-quality', assessment_method='human', rubric_evidence='Looks good')
+        self.assertEqual(h.summarize(self.add(case='human-quality'))['passed'], 1)
+
+    def test_human_rubric_identity_scale_and_scores_required(self):
+        valid = dict(assessor='unittest synthetic adapter', scale={'min': 0, 'max': 4},
+                     scores={dimension: 4 for dimension in h.HUMAN_DIMENSIONS})
+        for mutation in ('identity', 'missing', 'range', 'scale'):
+            rubric = copy.deepcopy(valid)
+            if mutation == 'identity':
+                rubric['assessor'] = 'different assessor'
+            elif mutation == 'missing':
+                rubric['scores'].pop('intent')
+            elif mutation == 'range':
+                rubric['scores']['intent'] = 5
+            else:
+                rubric['scale'] = {'min': 4, 'max': 0}
+            with self.assertRaises(ValueError):
+                self.add(case='human-quality', rubric_evidence=rubric)
+
+    def test_governance_llm_and_unknown_methods_rejected(self):
+        for case in ('business-route', 'trusted-route', 'business-release', 'generation', 'design'):
+            with self.assertRaises(ValueError):
+                self.add(case=case, assessment_method='llm_only')
+            with self.assertRaises(ValueError):
+                self.add(case=case, assessment_method='LLM')
+            self.assertEqual(h.summarize(self.add(case=case))['passed'], 1)
+
+    def test_imported_run_missing_versions_or_lineage_mismatch_rejected(self):
+        for mutation in ('versions', 'version-value', 'lineage', 'run-id', 'rerun', 'utc'):
+            run = self.add()
+            if mutation == 'versions':
+                del run['versions']
+            elif mutation == 'version-value':
+                run['versions']['model'] = {'value': 42}
+            elif mutation == 'lineage':
+                run['attempts'][0]['execution_id'] = 'different-run'
+            elif mutation == 'run-id':
+                run['run_id'] = ''
+            elif mutation == 'rerun':
+                run['previous_run_id'] = run['run_id']
+            else:
+                run['created_utc'] = '2026-09-17T12:00:00'
+            with self.assertRaises(ValueError):
+                h.summarize(run)
 
     def test_altered_attempt_sequence_rejected(self):
         run = self.add()

@@ -17,6 +17,12 @@ import uuid
 ROOT = Path(__file__).resolve().parents[3]
 STATUSES = {'PASSED', 'FAILED', 'ERRORED', 'NOT_RUN', 'BLOCKED', 'UNSUPPORTED'}
 EXECUTED = {'PASSED', 'FAILED', 'ERRORED', 'UNSUPPORTED'}
+ASSESSMENT_METHODS = {'deterministic', 'human', 'llm_only'}
+HUMAN_DIMENSIONS = {'intent', 'model', 'measures', 'pages', 'standards',
+                    'accessibility', 'deployment', 'unsupported_assumptions'}
+TRUTH_METRICS = {'structured_output', 'citation_integrity', 'precedence',
+                 'first_pass_validation', 'repair', 'generation', 'governance',
+                 'end_to_end', 'business_runtime', 'authorization'}
 VERSIONS = ('model', 'deployment', 'profile', 'prompt', 'schema', 'embedding',
             'index', 'source', 'generator', 'validator', 'compatibility')
 METRICS = ('structured_output', 'clarification', 'retrieval', 'citation_integrity',
@@ -73,17 +79,13 @@ def new_run(registry, *, versions=None, execution_id=None, previous_run_id=None)
     version_info = {key: {'value': None, 'reason': 'Component/provider not available'}
                     for key in VERSIONS}
     if versions is not None:
-        if set(versions) != set(VERSIONS):
-            raise ValueError('Record every required version or explicit unavailable reason')
-        for info in versions.values():
-            if not isinstance(info, dict) or not (info.get('value') or info.get('reason')):
-                raise ValueError('Unavailable version requires reason')
+        validate_versions(versions)
         version_info = deepcopy(versions)
-    return {'format_version': 1, 'run_id': execution_id or str(uuid.uuid4()),
+    return validate_run({'format_version': 1, 'run_id': execution_id or str(uuid.uuid4()),
             'created_utc': datetime.now(timezone.utc).isoformat(),
             'previous_run_id': previous_run_id, 'repeated_run': previous_run_id is not None,
             'registry': registry, 'registry_sha256': digest(registry),
-            'versions': version_info, 'attempts': []}
+            'versions': version_info, 'attempts': []})
 
 
 def validate_attempt(case, attempt):
@@ -92,7 +94,7 @@ def validate_attempt(case, attempt):
         raise ValueError('Unknown status')
     if not case['applicable']:
         raise ValueError('Cannot execute excluded case without a new declared inventory')
-    if not attempt.get('actual') or not attempt.get('evaluator'):
+    if not nonempty_string(attempt.get('actual')) or not nonempty_string(attempt.get('evaluator')):
         raise ValueError('Actual outcome and evaluator identity required')
     if status in EXECUTED:
         if not attempt.get('evidence') or not all(safe_reference(p) for p in attempt['evidence']):
@@ -105,9 +107,25 @@ def validate_attempt(case, attempt):
         raise ValueError('Passing terminal must match declared expectation')
     if status == 'PASSED' and not attempt.get('rubric_evidence'):
         raise ValueError('Pass requires rubric assessment, not status alone')
-    if case['metric'] in ('business_runtime', 'authorization', 'first_pass_validation') and (
-            status == 'PASSED' and attempt.get('assessment_method') == 'llm_only'):
-        raise ValueError('LLM-only arithmetic/security/file validity judgment forbidden')
+    method = attempt.get('assessment_method')
+    if method not in ASSESSMENT_METHODS:
+        raise ValueError('Unknown assessment method')
+    if status == 'PASSED' and case['metric'] in TRUTH_METRICS and method == 'llm_only':
+        raise ValueError('LLM-only security/runtime/governance/file truth judgment forbidden')
+    if status == 'PASSED' and case['metric'] == 'human_quality':
+        rubric = attempt.get('rubric_evidence')
+        if method != 'human' or not isinstance(rubric, dict):
+            raise ValueError('Human quality requires explicit human assessment and structured rubric')
+        if rubric.get('assessor') != attempt['evaluator']:
+            raise ValueError('Human rubric assessor must match evaluator identity')
+        scale, scores = rubric.get('scale', {}), rubric.get('scores', {})
+        if (not isinstance(scale, dict) or not isinstance(scores, dict)
+                or not finite_nonnegative(scale.get('min'))
+                or not finite_nonnegative(scale.get('max')) or scale['min'] >= scale['max']
+                or set(scores) != HUMAN_DIMENSIONS
+                or not all(finite_nonnegative(v) and scale['min'] <= v <= scale['max']
+                           for v in scores.values())):
+            raise ValueError('Human rubric requires declared scale and all dimension scores')
     if status == 'UNSUPPORTED' and case['expected_terminal'] != 'SAFE_REFUSAL':
         raise ValueError('Unsupported on supported request must be FAILED')
     cost = attempt.get('cost', {})
@@ -131,8 +149,8 @@ def validate_attempt(case, attempt):
         if type(attempt.get('k')) is not int or attempt['k'] <= 0:
             raise ValueError('Recall requires positive K')
     for field in ('execution_id', 'candidate_id', 'review_id', 'release_id'):
-        if field not in attempt:
-            raise ValueError('Record lineage identifiers, null when unavailable')
+        if field not in attempt or (attempt[field] is not None and not nonempty_string(attempt[field])):
+            raise ValueError('Record string lineage identifiers, null when unavailable')
 
 
 def record(run, case_id, *, status, actual, evaluator, evidence=(), latency_ms=None,
@@ -159,7 +177,36 @@ def record(run, case_id, *, status, actual, evaluator, evidence=(), latency_ms=N
     return result
 
 
+def nonempty_string(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def validate_versions(versions):
+    if not isinstance(versions, dict) or set(versions) != set(VERSIONS):
+        raise ValueError('Record every required version or explicit unavailable reason')
+    for info in versions.values():
+        if not isinstance(info, dict) or not (nonempty_string(info.get('value')) or (
+                info.get('value') is None and nonempty_string(info.get('reason')))):
+            raise ValueError('Version must be a nonempty string or null with unavailable reason')
+
+
 def validate_run(run):
+    if run.get('format_version') != 1 or not nonempty_string(run.get('run_id')):
+        raise ValueError('Versioned run identity required')
+    previous = run.get('previous_run_id')
+    if previous is not None and (not nonempty_string(previous) or previous == run['run_id']):
+        raise ValueError('Previous run must be a distinct nonempty identity')
+    if type(run.get('repeated_run')) is not bool or run['repeated_run'] != (previous is not None):
+        raise ValueError('Rerun flag must match previous run identity')
+    try:
+        created = datetime.fromisoformat(run['created_utc'])
+        if created.utcoffset() is None or created.utcoffset().total_seconds() != 0:
+            raise ValueError('UTC timestamp required')
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError('Valid UTC run timestamp required') from error
+    validate_versions(run.get('versions'))
+    if not isinstance(run.get('attempts'), list):
+        raise ValueError('Attempt history must be a list')
     registry = validate_registry(run['registry'])
     if digest(registry) != run['registry_sha256']:
         raise ValueError('Declared inventory changed after run creation')
@@ -168,6 +215,8 @@ def validate_run(run):
     for attempt in run['attempts']:
         if attempt['case_id'] not in cases:
             raise ValueError('Undeclared case')
+        if attempt.get('execution_id') != run['run_id']:
+            raise ValueError('Attempt execution identity must match containing run')
         counts[attempt['case_id']] += 1
         if attempt['attempt'] != counts[attempt['case_id']]:
             raise ValueError('Attempt history is not sequential')
