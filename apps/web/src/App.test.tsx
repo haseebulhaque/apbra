@@ -1,15 +1,18 @@
 import {it, expect} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {App} from './App';
+import {App,sampleGeneratorEligible} from './App';
+import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
 it('renders labelled input and honest unavailable release state', () => {
   const html=renderToStaticMarkup(<App/>);
   expect(html).toContain('for="prompt"');
-  for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).toContain(`for="${id}"`);
+  expect(html).toContain('Interpret requirement with GPT-4.1');
+  expect(html).toContain('Questions below are generated at runtime');
+  for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).not.toContain(`for="${id}"`);
   expect(html).toContain('Prototype limitations');
   expect(html).toContain('Requirement → Clarification → Governed Knowledge → DesignPlan → Generation → Validation');
   for(const stage of ['Requirement','Clarification','Governed Knowledge','DesignPlan','Generation','Validation']) expect(html).toContain(stage);
   expect(html).toContain('disabled="">Production release');
-  expect(html).toContain('controlled local retrieval with citations');
+  expect(html).toContain('controlled local retrieval with real embeddings and citations');
   expect(html).toContain('reviewer workflow');
   expect(html).not.toContain('href=');
 });
@@ -27,4 +30,10 @@ it('renders the unrelated request as a terminal out-of-scope state',()=>{
   expect(html).toContain('OUT OF SCOPE');
   expect(html).toContain('No Power BI report has been generated');
   expect(html).not.toContain('UNSUPPORTED');
+});
+it('enables the preserved sample compiler only for explicit APBRA-90 demo decisions',()=>{
+  expect(sampleGeneratorEligible(request.original_text,{},true)).toBe(true);
+  expect(sampleGeneratorEligible('another supported Power BI request',{},true)).toBe(false);
+  expect(sampleGeneratorEligible(request.original_text,Object.fromEntries(request.clarifications.map(c=>[c.id,c.golden_answer])),false)).toBe(true);
+  expect(sampleGeneratorEligible(request.original_text,{one:'partial'},false)).toBe(false);
 });
