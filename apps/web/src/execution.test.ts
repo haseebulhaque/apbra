@@ -16,3 +16,14 @@ it('retains failures and pending work and prevents stale completion becoming act
  t.start('pending');expect(t.export().steps.at(-1)).toMatchObject({status:'RUNNING',durationMs:null});
  expect(()=>t.finish(stale,{})).toThrow('INVALID_TRACE_TOKEN');
 });
+it('retires governance lineage and ignores late governance completion while preserving upstream artifacts',()=>{
+ const t=createExecutionTrace();t.sync('requirements',()=>({v:1}));
+ const approval=t.start('DEMO_APPROVAL','SIMULATED_IDENTITY');t.finish(approval,{decision:'APPROVE'});
+ const pending=t.start('DEMO_PACKAGE','SIMULATED_IDENTITY',{reason:'test',revision:1});
+ t.invalidateGovernance('route changed');t.finish(pending,{status:'PACKAGED'});
+ expect(Object.keys(t.export().active)).toEqual(['requirements']);
+ expect(t.export().steps.find(s=>s.id===pending)?.input).toEqual({reason:'test',revision:1});
+ const rejected=t.start('DEMO_APPROVAL','SIMULATED_IDENTITY',{reason:''});
+ t.finish(rejected,{events:[{kind:'INVALIDATED'}]},'REASON_REQUIRED');
+ expect(t.export().steps.at(-1)).toMatchObject({status:'ERROR',error:'REASON_REQUIRED',input:{reason:''}});
+});
