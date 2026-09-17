@@ -1,0 +1,56 @@
+{
+  "caseId": "MISSING_DATE_RELATIONSHIP_V1",
+  "declaredBeforeRun": "APBRA-134 failureCase",
+  "executionId": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6",
+  "latency_ms": 2.2970420000000047,
+  "originalSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+  "failedSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+  "result": {
+    "kind": "CandidateValidation",
+    "validatorVersion": "capstone-validator-1",
+    "profileId": "golden-source-1",
+    "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+    "status": "FAIL",
+    "findings": [
+      {
+        "code": "SOURCE_BYTES_CHANGED",
+        "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+        "message": "Bytes differ from independently reviewed golden source profile"
+      },
+      {
+        "code": "MISSING_RELATIONSHIP",
+        "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+        "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+      }
+    ],
+    "completedChecks": [
+      "CANDIDATE_ENVELOPE",
+      "FILE_SET",
+      "PINNED_SOURCE_SHA256",
+      "JSON_PARSE",
+      "DESIGN_BINDING",
+      "PROJECT_REFERENCE",
+      "RELATIONSHIPS"
+    ],
+    "declaredChecks": [
+      "CANDIDATE_ENVELOPE",
+      "FILE_SET",
+      "PINNED_SOURCE_SHA256",
+      "JSON_PARSE",
+      "DESIGN_BINDING",
+      "PROJECT_REFERENCE",
+      "RELATIONSHIPS"
+    ],
+    "runtime": {
+      "desktop": "NOT_RUN",
+      "dax": "NOT_RUN",
+      "rls": "NOT_RUN"
+    },
+    "nextAction": "HUMAN_ESCALATION"
+  },
+  "changedPath": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+  "original": "relationship golden-1\n\tfromColumn: FactSales.SaleDate\n\ttoColumn: DimDate.Date\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-2\n\tfromColumn: FactSales.ProductId\n\ttoColumn: DimProduct.ProductId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-3\n\tfromColumn: FactSales.RegionId\n\ttoColumn: DimRegion.RegionId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-4\n\tfromColumn: FactSales.BusinessAreaId\n\ttoColumn: DimBusinessArea.BusinessAreaId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-5\n\tfromColumn: FactSales.CustomerId\n\ttoColumn: DimCustomer.CustomerId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n",
+  "failed": "relationship golden-2\n\tfromColumn: FactSales.ProductId\n\ttoColumn: DimProduct.ProductId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-3\n\tfromColumn: FactSales.RegionId\n\ttoColumn: DimRegion.RegionId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-4\n\tfromColumn: FactSales.BusinessAreaId\n\ttoColumn: DimBusinessArea.BusinessAreaId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n\nrelationship golden-5\n\tfromColumn: FactSales.CustomerId\n\ttoColumn: DimCustomer.CustomerId\n\tfromCardinality: many\n\ttoCardinality: one\n\tcrossFilteringBehavior: oneDirection\n\tisActive: true\n",
+  "repair": "UNSUPPORTED",
+  "escalation": "HUMAN_ESCALATION"
+}

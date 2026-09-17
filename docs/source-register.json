@@ -115,6 +115,14 @@
       "status": "ACCEPTED",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-136",
       "acceptance": "Haseeb authorized bounded Capstone execution with gated autonomous merges. Live136 read2026-09-17, PLAN10041. Local evidence orchestration only; no runtime/AI/production claims."
+    },
+    {
+      "id": "capstone-evaluation",
+      "content_id": "APBRA-92",
+      "version": "Live Jira92/93/122/123/124 and128 / Confluence21.03v2",
+      "status": "ACCEPTED",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-92",
+      "acceptance": "Haseeb authorized bounded autonomous evaluation and gated PRs. Live sources read2026-09-17; PLAN10043. No acceptance, registry or mandatory gate waived."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

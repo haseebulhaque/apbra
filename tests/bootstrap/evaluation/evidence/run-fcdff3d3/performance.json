@@ -1,0 +1,1050 @@
+{
+  "sourceRevision": "4d16d8d0a2e275c5f93d42efe5d4854b130bed2f",
+  "environment": {
+    "node": "v24.19.0",
+    "os": "darwin",
+    "osRelease": "25.6.0",
+    "architecture": "arm64",
+    "cpu": "Apple M1 Pro",
+    "memoryBytes": 17179869184,
+    "concurrency": 1,
+    "sampleCount": 20,
+    "warmup": 0,
+    "model": "NOT_INVOKED",
+    "costCap": "Zero provider calls",
+    "fixtureTables": 6,
+    "fixtureVersion": "1.0.0"
+  },
+  "workload": "20 sequential local module flows; every fifth candidate deliberately removes date relationship. All samples retained. Initial module load/startup excluded; first invocation identified.",
+  "apiTarget": "NOT_APPLICABLE: no API in bounded local Capstone",
+  "providerCost": null,
+  "localCost": "UNMEASURED",
+  "samples": [
+    {
+      "index": 0,
+      "state": "FIRST_INVOCATION_AFTER_MODULE_LOAD",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.21958300000000008,
+        "retrieval": 0.05945900000000037,
+        "design": 0.5534169999999996,
+        "generation": 3.53425,
+        "validation": 9.377375
+      },
+      "totalMs": 13.772667000000002,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 1,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.07704199999999872,
+        "retrieval": 0.004292000000003071,
+        "design": 1.0677079999999997,
+        "generation": 1.5014999999999965,
+        "validation": 2.8223330000000004
+      },
+      "totalMs": 5.48,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 2,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.055540999999998064,
+        "retrieval": 0.0035840000000035843,
+        "design": 0.841040999999997,
+        "generation": 2.1183750000000003,
+        "validation": 3.321165999999998
+      },
+      "totalMs": 6.3607920000000036,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 3,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.07475000000000165,
+        "retrieval": 0.0015420000000005984,
+        "design": 0.49191599999999625,
+        "generation": 3.506542000000003,
+        "validation": 4.563665999999998
+      },
+      "totalMs": 8.650334,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 4,
+      "state": "WARM",
+      "declaredFailure": true,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.06400000000000006,
+        "retrieval": 0.0015829999999965594,
+        "design": 0.263582999999997,
+        "generation": 1.4018749999999969,
+        "validation": 2.2561660000000003
+      },
+      "totalMs": 4.152417,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+        "status": "FAIL",
+        "findings": [
+          {
+            "code": "SOURCE_BYTES_CHANGED",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Bytes differ from independently reviewed golden source profile"
+          },
+          {
+            "code": "MISSING_RELATIONSHIP",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+          }
+        ],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "HUMAN_ESCALATION"
+      }
+    },
+    {
+      "index": 5,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05045899999999648,
+        "retrieval": 0.001125000000001819,
+        "design": 0.2485409999999959,
+        "generation": 1.4718749999999972,
+        "validation": 2.7674579999999978
+      },
+      "totalMs": 4.546875,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 6,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.07087500000000091,
+        "retrieval": 0.0014170000000035543,
+        "design": 0.2427500000000009,
+        "generation": 1.7207089999999994,
+        "validation": 3.610500000000002
+      },
+      "totalMs": 5.6576670000000036,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 7,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.07466699999999804,
+        "retrieval": 0.0013339999999999463,
+        "design": 0.46708300000000236,
+        "generation": 2.0246659999999963,
+        "validation": 2.5705000000000098
+      },
+      "totalMs": 5.149500000000003,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 8,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.06954100000000096,
+        "retrieval": 0.0017089999999910788,
+        "design": 0.2500830000000036,
+        "generation": 1.373082999999994,
+        "validation": 2.8811249999999973
+      },
+      "totalMs": 4.587125,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 9,
+      "state": "WARM",
+      "declaredFailure": true,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05191599999999141,
+        "retrieval": 0.0016669999999976426,
+        "design": 0.46795900000000756,
+        "generation": 1.1436670000000078,
+        "validation": 2.7163749999999993
+      },
+      "totalMs": 4.453541999999999,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+        "status": "FAIL",
+        "findings": [
+          {
+            "code": "SOURCE_BYTES_CHANGED",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Bytes differ from independently reviewed golden source profile"
+          },
+          {
+            "code": "MISSING_RELATIONSHIP",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+          }
+        ],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "HUMAN_ESCALATION"
+      }
+    },
+    {
+      "index": 10,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05500000000000682,
+        "retrieval": 0.0013339999999999463,
+        "design": 0.25012499999999704,
+        "generation": 1.5649580000000043,
+        "validation": 3.011665999999991
+      },
+      "totalMs": 4.887666999999993,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 11,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.07183300000001225,
+        "retrieval": 0.0015420000000005984,
+        "design": 0.23320799999999053,
+        "generation": 1.3771250000000066,
+        "validation": 2.113250000000008
+      },
+      "totalMs": 3.8008329999999972,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 12,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05083399999999472,
+        "retrieval": 0.0012499999999988631,
+        "design": 0.23633399999999938,
+        "generation": 1.6276670000000024,
+        "validation": 2.5453329999999994
+      },
+      "totalMs": 4.464708999999999,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 13,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05195799999999906,
+        "retrieval": 0.0007500000000106866,
+        "design": 0.23387500000001182,
+        "generation": 1.3649999999999949,
+        "validation": 2.3932909999999907
+      },
+      "totalMs": 4.048166999999992,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 14,
+      "state": "WARM",
+      "declaredFailure": true,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.0554170000000056,
+        "retrieval": 0.000916999999986956,
+        "design": 0.26354099999998937,
+        "generation": 1.7683339999999959,
+        "validation": 2.641458
+      },
+      "totalMs": 4.788459000000003,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+        "status": "FAIL",
+        "findings": [
+          {
+            "code": "SOURCE_BYTES_CHANGED",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Bytes differ from independently reviewed golden source profile"
+          },
+          {
+            "code": "MISSING_RELATIONSHIP",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+          }
+        ],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "HUMAN_ESCALATION"
+      }
+    },
+    {
+      "index": 15,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.06137499999999818,
+        "retrieval": 0.001333000000002471,
+        "design": 0.39808299999999974,
+        "generation": 1.4585830000000044,
+        "validation": 3.060167000000007
+      },
+      "totalMs": 4.982958999999994,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 16,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05595800000000395,
+        "retrieval": 0.0010830000000083828,
+        "design": 0.4517500000000041,
+        "generation": 1.8141250000000042,
+        "validation": 2.3834579999999903
+      },
+      "totalMs": 4.710499999999996,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 17,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.05245899999999892,
+        "retrieval": 0.0007909999999924366,
+        "design": 0.29520899999999983,
+        "generation": 1.5528329999999926,
+        "validation": 2.2721250000000026
+      },
+      "totalMs": 4.177208999999991,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 18,
+      "state": "WARM",
+      "declaredFailure": false,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.04925000000000068,
+        "retrieval": 0.0008749999999935199,
+        "design": 0.23595800000001077,
+        "generation": 1.4411249999999995,
+        "validation": 2.646416000000002
+      },
+      "totalMs": 4.376625000000004,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      }
+    },
+    {
+      "index": 19,
+      "state": "WARM",
+      "declaredFailure": true,
+      "status": "COMPLETE",
+      "error": null,
+      "durations": {
+        "requirements": 0.04970799999999542,
+        "retrieval": 0.0008339999999975589,
+        "design": 0.22724999999999795,
+        "generation": 1.7270000000000039,
+        "validation": 2.968874999999997
+      },
+      "totalMs": 5.029125000000008,
+      "validation": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+        "status": "FAIL",
+        "findings": [
+          {
+            "code": "SOURCE_BYTES_CHANGED",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Bytes differ from independently reviewed golden source profile"
+          },
+          {
+            "code": "MISSING_RELATIONSHIP",
+            "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+            "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+          }
+        ],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "HUMAN_ESCALATION"
+      }
+    }
+  ],
+  "summary": {
+    "requirements": {
+      "n": 20,
+      "min": 0.04925000000000068,
+      "max": 0.21958300000000008,
+      "p50": 0.055540999999998064,
+      "p95": 0.07704199999999872,
+      "method": "nearest_rank"
+    },
+    "retrieval": {
+      "n": 20,
+      "min": 0.0007500000000106866,
+      "max": 0.05945900000000037,
+      "p50": 0.0013339999999999463,
+      "p95": 0.004292000000003071,
+      "method": "nearest_rank"
+    },
+    "design": {
+      "n": 20,
+      "min": 0.22724999999999795,
+      "max": 1.0677079999999997,
+      "p50": 0.26354099999998937,
+      "p95": 0.841040999999997,
+      "method": "nearest_rank"
+    },
+    "generation": {
+      "n": 20,
+      "min": 1.1436670000000078,
+      "max": 3.53425,
+      "p50": 1.5528329999999926,
+      "p95": 3.506542000000003,
+      "method": "nearest_rank"
+    },
+    "validation": {
+      "n": 20,
+      "min": 2.113250000000008,
+      "max": 9.377375,
+      "p50": 2.7163749999999993,
+      "p95": 4.563665999999998,
+      "method": "nearest_rank"
+    }
+  }
+}

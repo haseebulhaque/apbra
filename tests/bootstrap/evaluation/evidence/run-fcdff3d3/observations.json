@@ -1,0 +1,1776 @@
+{
+  "executionId": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6",
+  "sourceRevision": "4d16d8d0a2e275c5f93d42efe5d4854b130bed2f",
+  "environment": {
+    "node": "v24.19.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "concurrency": 1,
+    "modelCalls": 0,
+    "modelTokens": 0,
+    "costCap": "No provider calls",
+    "workload": "One sequential invocation per24predeclared cases; warm shared modules; not an API benchmark",
+    "fixture": "sales-v1/1.0.0"
+  },
+  "observations": [
+    {
+      "id": "requirements",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.5885829999999999,
+      "actual": {
+        "artifact_kind": "RequirementsSnapshot",
+        "version": 1,
+        "processing": "DETERMINISTIC_GOLDEN_FIXTURE",
+        "source": {
+          "fixture_version": "1.0.0",
+          "request_id": "sales-request-v1",
+          "schema_id": "sales-star-v1"
+        },
+        "submission": {
+          "original_request": "Create an executive Power BI sales-performance report. I need total sales, total orders, average order value and year-over-year sales. Show performance over time and let users filter by region, business area and product category. Include an executive summary and a detailed regional view. Use our corporate reporting standards.",
+          "original_schema": {
+            "fixture_version": "1.0.0",
+            "schema_id": "sales-star-v1",
+            "synthetic": true,
+            "grain": "One sales line per SaleId; an OrderId may contain multiple lines.",
+            "currency": "AUD",
+            "date_coverage": {
+              "start": "2024-01-01",
+              "end": "2025-12-31",
+              "calendar": "Gregorian, contiguous daily; complete two-year synthetic ledger; days without sales mean zero activity."
+            },
+            "null_policy": "No nulls in baseline CSVs. Monetary values are nonnegative fixed two-decimal strings in CSV; quantities are positive integers.",
+            "tables": [
+              {
+                "name": "DimDate",
+                "file": "DimDate.csv",
+                "primary_key": "Date",
+                "columns": [
+                  {
+                    "name": "Date",
+                    "type": "date",
+                    "nullable": false
+                  },
+                  {
+                    "name": "Year",
+                    "type": "integer",
+                    "nullable": false
+                  },
+                  {
+                    "name": "Quarter",
+                    "type": "integer",
+                    "nullable": false
+                  },
+                  {
+                    "name": "MonthNumber",
+                    "type": "integer",
+                    "nullable": false
+                  },
+                  {
+                    "name": "MonthName",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "YearMonth",
+                    "type": "text",
+                    "nullable": false
+                  }
+                ]
+              },
+              {
+                "name": "DimProduct",
+                "file": "DimProduct.csv",
+                "primary_key": "ProductId",
+                "columns": [
+                  {
+                    "name": "ProductId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "ProductName",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "ProductCategory",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "ProductSubcategory",
+                    "type": "text",
+                    "nullable": false
+                  }
+                ]
+              },
+              {
+                "name": "DimRegion",
+                "file": "DimRegion.csv",
+                "primary_key": "RegionId",
+                "columns": [
+                  {
+                    "name": "RegionId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "RegionName",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "State",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "Country",
+                    "type": "text",
+                    "nullable": false
+                  }
+                ]
+              },
+              {
+                "name": "DimBusinessArea",
+                "file": "DimBusinessArea.csv",
+                "primary_key": "BusinessAreaId",
+                "columns": [
+                  {
+                    "name": "BusinessAreaId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "BusinessAreaName",
+                    "type": "text",
+                    "nullable": false
+                  }
+                ]
+              },
+              {
+                "name": "DimCustomer",
+                "file": "DimCustomer.csv",
+                "primary_key": "CustomerId",
+                "columns": [
+                  {
+                    "name": "CustomerId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "Segment",
+                    "type": "text",
+                    "nullable": false
+                  }
+                ]
+              },
+              {
+                "name": "FactSales",
+                "file": "FactSales.csv",
+                "primary_key": "SaleId",
+                "columns": [
+                  {
+                    "name": "SaleId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "OrderId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "SaleDate",
+                    "type": "date",
+                    "nullable": false
+                  },
+                  {
+                    "name": "ProductId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "RegionId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "BusinessAreaId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "CustomerId",
+                    "type": "text",
+                    "nullable": false
+                  },
+                  {
+                    "name": "Quantity",
+                    "type": "integer",
+                    "nullable": false
+                  },
+                  {
+                    "name": "UnitPrice",
+                    "type": "decimal",
+                    "nullable": false
+                  },
+                  {
+                    "name": "DiscountAmount",
+                    "type": "decimal",
+                    "nullable": false
+                  },
+                  {
+                    "name": "SalesAmount",
+                    "type": "decimal",
+                    "nullable": false
+                  },
+                  {
+                    "name": "CostAmount",
+                    "type": "decimal",
+                    "nullable": false
+                  }
+                ]
+              }
+            ],
+            "relationships": [
+              {
+                "from_table": "FactSales",
+                "from_column": "SaleDate",
+                "to_table": "DimDate",
+                "to_column": "Date",
+                "cardinality": "many-to-one",
+                "filter_direction": "dimension-to-fact",
+                "active": true
+              },
+              {
+                "from_table": "FactSales",
+                "from_column": "ProductId",
+                "to_table": "DimProduct",
+                "to_column": "ProductId",
+                "cardinality": "many-to-one",
+                "filter_direction": "dimension-to-fact",
+                "active": true
+              },
+              {
+                "from_table": "FactSales",
+                "from_column": "RegionId",
+                "to_table": "DimRegion",
+                "to_column": "RegionId",
+                "cardinality": "many-to-one",
+                "filter_direction": "dimension-to-fact",
+                "active": true
+              },
+              {
+                "from_table": "FactSales",
+                "from_column": "BusinessAreaId",
+                "to_table": "DimBusinessArea",
+                "to_column": "BusinessAreaId",
+                "cardinality": "many-to-one",
+                "filter_direction": "dimension-to-fact",
+                "active": true
+              },
+              {
+                "from_table": "FactSales",
+                "from_column": "CustomerId",
+                "to_table": "DimCustomer",
+                "to_column": "CustomerId",
+                "cardinality": "many-to-one",
+                "filter_direction": "dimension-to-fact",
+                "active": true
+              }
+            ]
+          },
+          "answers": {
+            "sales-definition": "Net sales in AUD, SUM(FactSales.SalesAmount); DiscountAmount is a line-level discount already deducted.",
+            "yoy-coverage": "Use full calendar 2025 against 2024; both complete synthetic years are supplied. Outside coverage or with zero prior-year sales, return blank rather than inventing growth.",
+            "region-security": "Region is a slicer only in this golden case; no regional RLS is requested. A slicer is not security."
+          }
+        },
+        "confirmation": "EXPLICIT_LOCAL_USER_CONFIRMATION",
+        "requirements": {
+          "fixture_version": "1.0.0",
+          "request_id": "sales-request-v1",
+          "schema_id": "sales-star-v1",
+          "confirmed_clarification_ids": [
+            "sales-definition",
+            "yoy-coverage",
+            "region-security"
+          ],
+          "sales_definition": "net SalesAmount",
+          "currency": "AUD",
+          "comparison": {
+            "current_year": 2025,
+            "prior_year": 2024,
+            "missing_or_zero_prior": "blank"
+          },
+          "region_usage": "slicer_only",
+          "rls_required": false,
+          "required_measure_ids": [
+            "total-sales",
+            "total-orders",
+            "average-order-value",
+            "sales-previous-year",
+            "sales-yoy-change",
+            "sales-yoy-percent"
+          ],
+          "pages": [
+            "Executive Summary",
+            "Regional Performance"
+          ],
+          "filters": [
+            "DimRegion.RegionName",
+            "DimBusinessArea.BusinessAreaName",
+            "DimProduct.ProductCategory"
+          ],
+          "time_axis": "DimDate.YearMonth"
+        }
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "design",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 1.521957999999998,
+      "actual": {
+        "artifact_kind": "DesignPlan",
+        "schema_version": 1,
+        "planner_version": "capstone-deterministic-1",
+        "processing": "DETERMINISTIC_GOLDEN_FIXTURE",
+        "provenance": {
+          "requirements": {
+            "artifact_kind": "RequirementsSnapshot",
+            "version": 1,
+            "processing": "DETERMINISTIC_GOLDEN_FIXTURE",
+            "source": {
+              "fixture_version": "1.0.0",
+              "request_id": "sales-request-v1",
+              "schema_id": "sales-star-v1"
+            },
+            "submission": {
+              "original_request": "Create an executive Power BI sales-performance report. I need total sales, total orders, average order value and year-over-year sales. Show performance over time and let users filter by region, business area and product category. Include an executive summary and a detailed regional view. Use our corporate reporting standards.",
+              "original_schema": {
+                "fixture_version": "1.0.0",
+                "schema_id": "sales-star-v1",
+                "synthetic": true,
+                "grain": "One sales line per SaleId; an OrderId may contain multiple lines.",
+                "currency": "AUD",
+                "date_coverage": {
+                  "start": "2024-01-01",
+                  "end": "2025-12-31",
+                  "calendar": "Gregorian, contiguous daily; complete two-year synthetic ledger; days without sales mean zero activity."
+                },
+                "null_policy": "No nulls in baseline CSVs. Monetary values are nonnegative fixed two-decimal strings in CSV; quantities are positive integers.",
+                "tables": [
+                  {
+                    "name": "DimDate",
+                    "file": "DimDate.csv",
+                    "primary_key": "Date",
+                    "columns": [
+                      {
+                        "name": "Date",
+                        "type": "date",
+                        "nullable": false
+                      },
+                      {
+                        "name": "Year",
+                        "type": "integer",
+                        "nullable": false
+                      },
+                      {
+                        "name": "Quarter",
+                        "type": "integer",
+                        "nullable": false
+                      },
+                      {
+                        "name": "MonthNumber",
+                        "type": "integer",
+                        "nullable": false
+                      },
+                      {
+                        "name": "MonthName",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "YearMonth",
+                        "type": "text",
+                        "nullable": false
+                      }
+                    ]
+                  },
+                  {
+                    "name": "DimProduct",
+                    "file": "DimProduct.csv",
+                    "primary_key": "ProductId",
+                    "columns": [
+                      {
+                        "name": "ProductId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "ProductName",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "ProductCategory",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "ProductSubcategory",
+                        "type": "text",
+                        "nullable": false
+                      }
+                    ]
+                  },
+                  {
+                    "name": "DimRegion",
+                    "file": "DimRegion.csv",
+                    "primary_key": "RegionId",
+                    "columns": [
+                      {
+                        "name": "RegionId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "RegionName",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "State",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "Country",
+                        "type": "text",
+                        "nullable": false
+                      }
+                    ]
+                  },
+                  {
+                    "name": "DimBusinessArea",
+                    "file": "DimBusinessArea.csv",
+                    "primary_key": "BusinessAreaId",
+                    "columns": [
+                      {
+                        "name": "BusinessAreaId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "BusinessAreaName",
+                        "type": "text",
+                        "nullable": false
+                      }
+                    ]
+                  },
+                  {
+                    "name": "DimCustomer",
+                    "file": "DimCustomer.csv",
+                    "primary_key": "CustomerId",
+                    "columns": [
+                      {
+                        "name": "CustomerId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "Segment",
+                        "type": "text",
+                        "nullable": false
+                      }
+                    ]
+                  },
+                  {
+                    "name": "FactSales",
+                    "file": "FactSales.csv",
+                    "primary_key": "SaleId",
+                    "columns": [
+                      {
+                        "name": "SaleId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "OrderId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "SaleDate",
+                        "type": "date",
+                        "nullable": false
+                      },
+                      {
+                        "name": "ProductId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "RegionId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "BusinessAreaId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "CustomerId",
+                        "type": "text",
+                        "nullable": false
+                      },
+                      {
+                        "name": "Quantity",
+                        "type": "integer",
+                        "nullable": false
+                      },
+                      {
+                        "name": "UnitPrice",
+                        "type": "decimal",
+                        "nullable": false
+                      },
+                      {
+                        "name": "DiscountAmount",
+                        "type": "decimal",
+                        "nullable": false
+                      },
+                      {
+                        "name": "SalesAmount",
+                        "type": "decimal",
+                        "nullable": false
+                      },
+                      {
+                        "name": "CostAmount",
+                        "type": "decimal",
+                        "nullable": false
+                      }
+                    ]
+                  }
+                ],
+                "relationships": [
+                  {
+                    "from_table": "FactSales",
+                    "from_column": "SaleDate",
+                    "to_table": "DimDate",
+                    "to_column": "Date",
+                    "cardinality": "many-to-one",
+                    "filter_direction": "dimension-to-fact",
+                    "active": true
+                  },
+                  {
+                    "from_table": "FactSales",
+                    "from_column": "ProductId",
+                    "to_table": "DimProduct",
+                    "to_column": "ProductId",
+                    "cardinality": "many-to-one",
+                    "filter_direction": "dimension-to-fact",
+                    "active": true
+                  },
+                  {
+                    "from_table": "FactSales",
+                    "from_column": "RegionId",
+                    "to_table": "DimRegion",
+                    "to_column": "RegionId",
+                    "cardinality": "many-to-one",
+                    "filter_direction": "dimension-to-fact",
+                    "active": true
+                  },
+                  {
+                    "from_table": "FactSales",
+                    "from_column": "BusinessAreaId",
+                    "to_table": "DimBusinessArea",
+                    "to_column": "BusinessAreaId",
+                    "cardinality": "many-to-one",
+                    "filter_direction": "dimension-to-fact",
+                    "active": true
+                  },
+                  {
+                    "from_table": "FactSales",
+                    "from_column": "CustomerId",
+                    "to_table": "DimCustomer",
+                    "to_column": "CustomerId",
+                    "cardinality": "many-to-one",
+                    "filter_direction": "dimension-to-fact",
+                    "active": true
+                  }
+                ]
+              },
+              "answers": {
+                "sales-definition": "Net sales in AUD, SUM(FactSales.SalesAmount); DiscountAmount is a line-level discount already deducted.",
+                "yoy-coverage": "Use full calendar 2025 against 2024; both complete synthetic years are supplied. Outside coverage or with zero prior-year sales, return blank rather than inventing growth.",
+                "region-security": "Region is a slicer only in this golden case; no regional RLS is requested. A slicer is not security."
+              }
+            },
+            "confirmation": "EXPLICIT_LOCAL_USER_CONFIRMATION",
+            "requirements": {
+              "fixture_version": "1.0.0",
+              "request_id": "sales-request-v1",
+              "schema_id": "sales-star-v1",
+              "confirmed_clarification_ids": [
+                "sales-definition",
+                "yoy-coverage",
+                "region-security"
+              ],
+              "sales_definition": "net SalesAmount",
+              "currency": "AUD",
+              "comparison": {
+                "current_year": 2025,
+                "prior_year": 2024,
+                "missing_or_zero_prior": "blank"
+              },
+              "region_usage": "slicer_only",
+              "rls_required": false,
+              "required_measure_ids": [
+                "total-sales",
+                "total-orders",
+                "average-order-value",
+                "sales-previous-year",
+                "sales-yoy-change",
+                "sales-yoy-percent"
+              ],
+              "pages": [
+                "Executive Summary",
+                "Regional Performance"
+              ],
+              "filters": [
+                "DimRegion.RegionName",
+                "DimBusinessArea.BusinessAreaName",
+                "DimProduct.ProductCategory"
+              ],
+              "time_axis": "DimDate.YearMonth"
+            }
+          },
+          "knowledge": {
+            "kind": "CURATED_FIXTURE_EVIDENCE",
+            "scenario": "sales-v1",
+            "packId": "fictional-sales-corporate-v1",
+            "fixtureVersion": "1.0.0",
+            "customerId": "synthetic-capstone-sales",
+            "synthetic": true,
+            "sourcePath": "tests/bootstrap/fixtures/sales-v1/standards.json",
+            "authority": "Fictional customer reporting standards for this fixture only",
+            "precedence": "Security/platform controls and confirmed facts cannot be overridden; customer mandatory rules override generic recommendations.",
+            "authorization": "NONE",
+            "retrievalK": 8,
+            "retrievedCount": 8,
+            "orderedEvidenceIds": [
+              "CORP-001",
+              "CORP-002",
+              "CORP-003",
+              "CORP-004",
+              "CORP-005",
+              "CORP-006",
+              "CORP-007",
+              "CORP-008"
+            ],
+            "rules": [
+              {
+                "evidenceId": "CORP-001",
+                "sourceVersion": "1.0.0",
+                "section": "naming",
+                "level": "mandatory",
+                "text": "Use SalesPerformance as the project name and Executive Summary / Regional Performance as the page names.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-001"
+              },
+              {
+                "evidenceId": "CORP-002",
+                "sourceVersion": "1.0.0",
+                "section": "theme",
+                "level": "mandatory",
+                "text": "Use fictional theme Sales Demo: background #FFFFFF, text #172B4D, primary #005A9C. Do not convey meaning through colour alone.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-002"
+              },
+              {
+                "evidenceId": "CORP-003",
+                "sourceVersion": "1.0.0",
+                "section": "kpis",
+                "level": "mandatory",
+                "text": "Executive Summary must show Total Sales, distinct Total Orders, Average Order Value and Sales YoY %.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-003"
+              },
+              {
+                "evidenceId": "CORP-004",
+                "sourceVersion": "1.0.0",
+                "section": "accessibility",
+                "level": "mandatory",
+                "text": "Use meaningful visual names and titles, readable labels, text alternatives and deliberate keyboard navigation. Actual accessibility verification remains pending.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-004"
+              },
+              {
+                "evidenceId": "CORP-005",
+                "sourceVersion": "1.0.0",
+                "section": "calendar",
+                "level": "mandatory",
+                "text": "Use the dedicated contiguous DimDate table for calendar-year comparisons; never fabricate missing prior-year values.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-005"
+              },
+              {
+                "evidenceId": "CORP-006",
+                "sourceVersion": "1.0.0",
+                "section": "comparison",
+                "level": "recommendation",
+                "text": "Prefer bar charts over pie/donut charts for regional and category comparisons.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-006"
+              },
+              {
+                "evidenceId": "CORP-007",
+                "sourceVersion": "1.0.0",
+                "section": "security",
+                "level": "mandatory",
+                "text": "Region is a filter, not access control. Do not claim RLS unless explicitly requested, implemented and runtime-tested.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-007"
+              },
+              {
+                "evidenceId": "CORP-008",
+                "sourceVersion": "1.0.0",
+                "section": "handover",
+                "level": "mandatory",
+                "text": "Document local synthetic CSV inputs and unresolved deployment actions. Use TARGET_WORKSPACE_PLACEHOLDER rather than any real tenant, credential or endpoint.",
+                "citation": "fixture:fictional-sales-corporate-v1/CORP-008"
+              }
+            ]
+          },
+          "citations": [
+            "fixture:fictional-sales-corporate-v1/CORP-001",
+            "fixture:fictional-sales-corporate-v1/CORP-002",
+            "fixture:fictional-sales-corporate-v1/CORP-003",
+            "fixture:fictional-sales-corporate-v1/CORP-004",
+            "fixture:fictional-sales-corporate-v1/CORP-005",
+            "fixture:fictional-sales-corporate-v1/CORP-006",
+            "fixture:fictional-sales-corporate-v1/CORP-007",
+            "fixture:fictional-sales-corporate-v1/CORP-008"
+          ]
+        },
+        "projectName": "SalesPerformance",
+        "model": {
+          "tables": [
+            {
+              "name": "DimDate",
+              "file": "DimDate.csv",
+              "primary_key": "Date",
+              "columns": [
+                {
+                  "name": "Date",
+                  "type": "date",
+                  "nullable": false
+                },
+                {
+                  "name": "Year",
+                  "type": "integer",
+                  "nullable": false
+                },
+                {
+                  "name": "Quarter",
+                  "type": "integer",
+                  "nullable": false
+                },
+                {
+                  "name": "MonthNumber",
+                  "type": "integer",
+                  "nullable": false
+                },
+                {
+                  "name": "MonthName",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "YearMonth",
+                  "type": "text",
+                  "nullable": false
+                }
+              ]
+            },
+            {
+              "name": "DimProduct",
+              "file": "DimProduct.csv",
+              "primary_key": "ProductId",
+              "columns": [
+                {
+                  "name": "ProductId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "ProductName",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "ProductCategory",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "ProductSubcategory",
+                  "type": "text",
+                  "nullable": false
+                }
+              ]
+            },
+            {
+              "name": "DimRegion",
+              "file": "DimRegion.csv",
+              "primary_key": "RegionId",
+              "columns": [
+                {
+                  "name": "RegionId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "RegionName",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "State",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "Country",
+                  "type": "text",
+                  "nullable": false
+                }
+              ]
+            },
+            {
+              "name": "DimBusinessArea",
+              "file": "DimBusinessArea.csv",
+              "primary_key": "BusinessAreaId",
+              "columns": [
+                {
+                  "name": "BusinessAreaId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "BusinessAreaName",
+                  "type": "text",
+                  "nullable": false
+                }
+              ]
+            },
+            {
+              "name": "DimCustomer",
+              "file": "DimCustomer.csv",
+              "primary_key": "CustomerId",
+              "columns": [
+                {
+                  "name": "CustomerId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "Segment",
+                  "type": "text",
+                  "nullable": false
+                }
+              ]
+            },
+            {
+              "name": "FactSales",
+              "file": "FactSales.csv",
+              "primary_key": "SaleId",
+              "columns": [
+                {
+                  "name": "SaleId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "OrderId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "SaleDate",
+                  "type": "date",
+                  "nullable": false
+                },
+                {
+                  "name": "ProductId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "RegionId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "BusinessAreaId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "CustomerId",
+                  "type": "text",
+                  "nullable": false
+                },
+                {
+                  "name": "Quantity",
+                  "type": "integer",
+                  "nullable": false
+                },
+                {
+                  "name": "UnitPrice",
+                  "type": "decimal",
+                  "nullable": false
+                },
+                {
+                  "name": "DiscountAmount",
+                  "type": "decimal",
+                  "nullable": false
+                },
+                {
+                  "name": "SalesAmount",
+                  "type": "decimal",
+                  "nullable": false
+                },
+                {
+                  "name": "CostAmount",
+                  "type": "decimal",
+                  "nullable": false
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "from_table": "FactSales",
+              "from_column": "SaleDate",
+              "to_table": "DimDate",
+              "to_column": "Date",
+              "cardinality": "many-to-one",
+              "filter_direction": "dimension-to-fact",
+              "active": true
+            },
+            {
+              "from_table": "FactSales",
+              "from_column": "ProductId",
+              "to_table": "DimProduct",
+              "to_column": "ProductId",
+              "cardinality": "many-to-one",
+              "filter_direction": "dimension-to-fact",
+              "active": true
+            },
+            {
+              "from_table": "FactSales",
+              "from_column": "RegionId",
+              "to_table": "DimRegion",
+              "to_column": "RegionId",
+              "cardinality": "many-to-one",
+              "filter_direction": "dimension-to-fact",
+              "active": true
+            },
+            {
+              "from_table": "FactSales",
+              "from_column": "BusinessAreaId",
+              "to_table": "DimBusinessArea",
+              "to_column": "BusinessAreaId",
+              "cardinality": "many-to-one",
+              "filter_direction": "dimension-to-fact",
+              "active": true
+            },
+            {
+              "from_table": "FactSales",
+              "from_column": "CustomerId",
+              "to_table": "DimCustomer",
+              "to_column": "CustomerId",
+              "cardinality": "many-to-one",
+              "filter_direction": "dimension-to-fact",
+              "active": true
+            }
+          ],
+          "dateTable": "DimDate",
+          "dateColumn": "Date",
+          "measures": [
+            {
+              "id": "total-sales",
+              "name": "Total Sales",
+              "dax": "SUM(FactSales[SalesAmount])",
+              "format": "\"AUD \"#,0.00"
+            },
+            {
+              "id": "total-orders",
+              "name": "Total Orders",
+              "dax": "DISTINCTCOUNT(FactSales[OrderId])",
+              "format": "0"
+            },
+            {
+              "id": "average-order-value",
+              "name": "Average Order Value",
+              "dax": "DIVIDE([Total Sales], [Total Orders])",
+              "format": "\"AUD \"#,0.00"
+            },
+            {
+              "id": "sales-previous-year",
+              "name": "Sales Previous Year",
+              "dax": "CALCULATE([Total Sales], DATEADD(DimDate[Date], -1, YEAR))",
+              "format": "\"AUD \"#,0.00"
+            },
+            {
+              "id": "sales-yoy-change",
+              "name": "Sales YoY Change",
+              "dax": "IF(ISBLANK([Sales Previous Year]), BLANK(), [Total Sales] - [Sales Previous Year])",
+              "format": "\"AUD \"#,0.00"
+            },
+            {
+              "id": "sales-yoy-percent",
+              "name": "Sales YoY %",
+              "dax": "DIVIDE([Sales YoY Change], [Sales Previous Year])",
+              "format": "0.00%"
+            }
+          ]
+        },
+        "pages": [
+          {
+            "id": "executive-summary",
+            "name": "Executive Summary",
+            "visuals": [
+              {
+                "id": "kpi-total-sales",
+                "kind": "card",
+                "axis": null,
+                "measureIds": [
+                  "total-sales"
+                ],
+                "title": "Total Sales",
+                "altText": "Total Sales"
+              },
+              {
+                "id": "kpi-total-orders",
+                "kind": "card",
+                "axis": null,
+                "measureIds": [
+                  "total-orders"
+                ],
+                "title": "Total Orders",
+                "altText": "Total Orders"
+              },
+              {
+                "id": "kpi-average-order-value",
+                "kind": "card",
+                "axis": null,
+                "measureIds": [
+                  "average-order-value"
+                ],
+                "title": "Average Order Value",
+                "altText": "Average Order Value"
+              },
+              {
+                "id": "kpi-sales-yoy-percent",
+                "kind": "card",
+                "axis": null,
+                "measureIds": [
+                  "sales-yoy-percent"
+                ],
+                "title": "Sales YoY %",
+                "altText": "Sales YoY %"
+              },
+              {
+                "id": "sales-trend",
+                "kind": "line",
+                "axis": "DimDate.YearMonth",
+                "measureIds": [
+                  "total-sales"
+                ],
+                "title": "Sales over time",
+                "altText": "Sales over time"
+              },
+              {
+                "id": "sales-region",
+                "kind": "bar",
+                "axis": "DimRegion.RegionName",
+                "measureIds": [
+                  "total-sales"
+                ],
+                "title": "Sales by region",
+                "altText": "Sales by region"
+              },
+              {
+                "id": "sales-category",
+                "kind": "bar",
+                "axis": "DimProduct.ProductCategory",
+                "measureIds": [
+                  "total-sales"
+                ],
+                "title": "Sales by product category",
+                "altText": "Sales by product category"
+              }
+            ]
+          },
+          {
+            "id": "regional-performance",
+            "name": "Regional Performance",
+            "visuals": [
+              {
+                "id": "regional-sales",
+                "kind": "bar",
+                "axis": "DimRegion.RegionName",
+                "measureIds": [
+                  "total-sales"
+                ],
+                "title": "Regional sales",
+                "altText": "Regional sales"
+              },
+              {
+                "id": "regional-detail",
+                "kind": "table",
+                "axis": "DimRegion.RegionName",
+                "measureIds": [
+                  "total-sales",
+                  "total-orders",
+                  "average-order-value",
+                  "sales-yoy-percent"
+                ],
+                "title": "Regional performance detail",
+                "altText": "Regional performance detail"
+              }
+            ]
+          }
+        ],
+        "filters": [
+          "DimRegion.RegionName",
+          "DimBusinessArea.BusinessAreaName",
+          "DimProduct.ProductCategory"
+        ],
+        "initialYear": 2025,
+        "theme": {
+          "name": "Sales Demo",
+          "background": "#FFFFFF",
+          "foreground": "#172B4D",
+          "primary": "#005A9C"
+        },
+        "rls": {
+          "required": false,
+          "roles": [],
+          "securityClaim": "None; Region slicer is not RLS"
+        },
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        }
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "sales-clarification",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 0.22779099999999985,
+      "actual": {
+        "status": "AWAITING_CLARIFICATION",
+        "issues": [
+          "Does Sales mean net SalesAmount or gross pre-discount value?"
+        ]
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "yoy-clarification",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 0.06499999999999773,
+      "actual": {
+        "status": "AWAITING_CLARIFICATION",
+        "issues": [
+          "What prior-year coverage and comparison period should YoY use?"
+        ]
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "region-clarification",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 0.059499999999999886,
+      "actual": {
+        "status": "AWAITING_CLARIFICATION",
+        "issues": [
+          "Is Region only a slicer or an access-security requirement?"
+        ]
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "retrieval",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.05600000000000094,
+      "actual": {
+        "kind": "CURATED_FIXTURE_EVIDENCE",
+        "scenario": "sales-v1",
+        "packId": "fictional-sales-corporate-v1",
+        "fixtureVersion": "1.0.0",
+        "customerId": "synthetic-capstone-sales",
+        "synthetic": true,
+        "sourcePath": "tests/bootstrap/fixtures/sales-v1/standards.json",
+        "authority": "Fictional customer reporting standards for this fixture only",
+        "precedence": "Security/platform controls and confirmed facts cannot be overridden; customer mandatory rules override generic recommendations.",
+        "authorization": "NONE",
+        "retrievalK": 8,
+        "retrievedCount": 8,
+        "orderedEvidenceIds": [
+          "CORP-001",
+          "CORP-002",
+          "CORP-003",
+          "CORP-004",
+          "CORP-005",
+          "CORP-006",
+          "CORP-007",
+          "CORP-008"
+        ],
+        "rules": [
+          {
+            "evidenceId": "CORP-001",
+            "sourceVersion": "1.0.0",
+            "section": "naming",
+            "level": "mandatory",
+            "text": "Use SalesPerformance as the project name and Executive Summary / Regional Performance as the page names.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-001"
+          },
+          {
+            "evidenceId": "CORP-002",
+            "sourceVersion": "1.0.0",
+            "section": "theme",
+            "level": "mandatory",
+            "text": "Use fictional theme Sales Demo: background #FFFFFF, text #172B4D, primary #005A9C. Do not convey meaning through colour alone.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-002"
+          },
+          {
+            "evidenceId": "CORP-003",
+            "sourceVersion": "1.0.0",
+            "section": "kpis",
+            "level": "mandatory",
+            "text": "Executive Summary must show Total Sales, distinct Total Orders, Average Order Value and Sales YoY %.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-003"
+          },
+          {
+            "evidenceId": "CORP-004",
+            "sourceVersion": "1.0.0",
+            "section": "accessibility",
+            "level": "mandatory",
+            "text": "Use meaningful visual names and titles, readable labels, text alternatives and deliberate keyboard navigation. Actual accessibility verification remains pending.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-004"
+          },
+          {
+            "evidenceId": "CORP-005",
+            "sourceVersion": "1.0.0",
+            "section": "calendar",
+            "level": "mandatory",
+            "text": "Use the dedicated contiguous DimDate table for calendar-year comparisons; never fabricate missing prior-year values.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-005"
+          },
+          {
+            "evidenceId": "CORP-006",
+            "sourceVersion": "1.0.0",
+            "section": "comparison",
+            "level": "recommendation",
+            "text": "Prefer bar charts over pie/donut charts for regional and category comparisons.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-006"
+          },
+          {
+            "evidenceId": "CORP-007",
+            "sourceVersion": "1.0.0",
+            "section": "security",
+            "level": "mandatory",
+            "text": "Region is a filter, not access control. Do not claim RLS unless explicitly requested, implemented and runtime-tested.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-007"
+          },
+          {
+            "evidenceId": "CORP-008",
+            "sourceVersion": "1.0.0",
+            "section": "handover",
+            "level": "mandatory",
+            "text": "Document local synthetic CSV inputs and unresolved deployment actions. Use TARGET_WORKSPACE_PLACEHOLDER rather than any real tenant, credential or endpoint.",
+            "citation": "fixture:fictional-sales-corporate-v1/CORP-008"
+          }
+        ]
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "citations",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.11587499999999906,
+      "actual": {
+        "passed": true,
+        "missing": [],
+        "unknown": []
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "precedence",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.7050000000000018,
+      "actual": {
+        "precedence": "Security/platform controls and confirmed facts cannot be overridden; customer mandatory rules override generic recommendations.",
+        "authorization": "NONE",
+        "theme": {
+          "name": "Sales Demo",
+          "background": "#FFFFFF",
+          "foreground": "#172B4D",
+          "primary": "#005A9C"
+        },
+        "limit": "Pinned curated golden policy; no general policy engine claim"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "generation",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 4.307167,
+      "actual": {
+        "generator": "capstone-pbip-1",
+        "fileHashes": {
+          "SalesPerformance.pbip": "c159ed51e7aa77fae9065d76cae964cb9ca8dfc220da4621cbfd603a67a3355b",
+          "SalesPerformance.Report/definition.pbir": "819200546be3c1ac3d1df10278767a789493273bb61c1e30a0ec639a6b642731",
+          "SalesPerformance.SemanticModel/definition.pbism": "c6ac66b7d299865a5936942e3c39cfbbf936bf086b63c53123e4ab9d12f7f21e",
+          "SalesPerformance.SemanticModel/definition/database.tmdl": "8063b865bf531e14b59b97632e01bf9fe7d9e50a9c08c29b6b22b04c7955a077",
+          "SalesPerformance.SemanticModel/definition/model.tmdl": "eb6ca1f1465e5750b7951eade7339c1d4fefe4407faf3e4f506d7fd1f8bc0a17",
+          "SalesPerformance.SemanticModel/definition/relationships.tmdl": "c00d7573859b558466f6d4e6fd8819236c0cf5b0f5d7291e318055fc8bc42d73",
+          "SalesPerformance.SemanticModel/definition/tables/DimDate.tmdl": "bd9a5b8e3f3dfaede62b151781d13e3b3c9b0577c3f17c43c321030e22552ada",
+          "data/DimDate.csv": "d680deef0e606beb6595180752f17e60ded3beffc7d19644325501961912e9be",
+          "SalesPerformance.SemanticModel/definition/tables/DimProduct.tmdl": "5ec95f2059109fda947a481503edc2bd0f0fff80825bca0296011d26ee77614b",
+          "data/DimProduct.csv": "1d6e0f96f8f91543f1cc219c6bfe285bbdbd685647f58cc61d9c67bc868359d9",
+          "SalesPerformance.SemanticModel/definition/tables/DimRegion.tmdl": "55c49823387b11f4fea1d7cc54fee9c9fdd6deb0af3cfb0bde11beacdbd45b68",
+          "data/DimRegion.csv": "2708d392cd475a0a32487ae639cf37192c5ad6463b081ca26ce96f7416777d26",
+          "SalesPerformance.SemanticModel/definition/tables/DimBusinessArea.tmdl": "00c9b9ffd5127a159784430b4006650f6a184b81c2aa60f30da40e2b427eafd8",
+          "data/DimBusinessArea.csv": "d650f45c03f13dee987f9c4d5d2c5d609a90c750f53a7109ad80c8ab61961c2f",
+          "SalesPerformance.SemanticModel/definition/tables/DimCustomer.tmdl": "342081e14a87ae5009e887f603ae6c3d54d515c66565f201e7ca0b23400cbf50",
+          "data/DimCustomer.csv": "bc1904fb791063a9be87d9d8b18f93e299aa6b1cb8ed729428cf4d6cb6f04733",
+          "SalesPerformance.SemanticModel/definition/tables/FactSales.tmdl": "27dd62e2debb818142dedbd8b76a104eff042c38c0f800525995076b669d2b49",
+          "data/FactSales.csv": "2ce5cf3f3e8098c9acfc6def05bfada69cd81d5c109ac15b56f0fc4b848046be",
+          "SalesPerformance.Report/definition/version.json": "c761e768563bdd636679fc53a7acf2c973f02a8843ee7dcdfb0cc82616c28c38",
+          "SalesPerformance.Report/definition/report.json": "d42f272ab49d843f35e2a16bebe4db9f925f54f6118afdc88ba98fced392c223",
+          "SalesPerformance.Report/definition/pages/pages.json": "5f365cfda9da343fa078c93e8aae0f612f4598d9a9435db140b7512344e22c72",
+          "SalesPerformance.Report/definition/pages/executive-summary/page.json": "31a119915012ae01c98d8d009691f0a9ef79c825a070ef13c83579fcb7751dd6",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-sales/visual.json": "464d0f6a6ab30f79e4f49fdcb8d6dcf6cadd36a7960eaed4e552c845993600d4",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-orders/visual.json": "bf54bd7d8fdbcd60aeeeed1a7d87451e597130c42a17f8562903653f891eca92",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-average-order-value/visual.json": "c385f1204c36062f01fff2098ac645a593e5f718a75c817fe8c51b30f8f4e476",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-sales-yoy-percent/visual.json": "07882f927afb5a702b59ccd2ba7e093531591faecfef7d65e9fecd2e64409e89",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-trend/visual.json": "9a1f71840ed778e0fb8ae837e6878e72208509f4ff2403b8b7c3228f6bf8fcb4",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-region/visual.json": "c26033dff4d1cbfd62ec3fde801ff05a98c7d0a295075c9031dd5c1ec14d3c59",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-category/visual.json": "72181e8dbfaff347f2954b5f6031c35c343a229b42a426a2a6c2c3d046b2a663",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-0/visual.json": "d184515b930564e054af2994e6d4cc2e82a814ccf7203e5d3bacb804f8bd6663",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-1/visual.json": "e9a21f8316b6a41e19827e92304caee7db26c218cbf9fdd259088e66ace0b6ff",
+          "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-2/visual.json": "8a937d32cb60e8b6462f1f6437e37a0fbbf091d473342bc8a1797013edb088e2",
+          "SalesPerformance.Report/definition/pages/regional-performance/page.json": "8907cd8c0c28c27052e3166277de39ee9e039bb328251ace5fdb1d0af35453a8",
+          "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-sales/visual.json": "b3ed30ed764efa4bf6160c2a24508b94be398b57a90744de995b1f42268112f4",
+          "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-detail/visual.json": "d8f50074c2a4596eb6c611de3169a5bd4a939ae2468cee642e5adac94fc85996",
+          "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-0/visual.json": "510839baa4ba614b98d4f8df7b84d64fd5ef83e4cbc7cea9f0cac1224a79725a",
+          "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-1/visual.json": "131ef710d53e1d8394305fe4b6900de223619c7766f93713cb42ee7e01b728a1",
+          "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-2/visual.json": "252b5d475dce7709b04d97d8574952d557385c4dc705a68928b728255420425b",
+          "DesignPlan.json": "1bdbcd256311a96d38043c61b772cd9bada2969c0b035091dda8f9caee6be291",
+          "README.txt": "84776a6c5258486293e672bafaa849474d62bc2a1c1f8724342faf80f42982ac"
+        },
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        }
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "validation",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 3.1237920000000017,
+      "actual": {
+        "kind": "CandidateValidation",
+        "validatorVersion": "capstone-validator-1",
+        "profileId": "golden-source-1",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "status": "PASS",
+        "findings": [],
+        "completedChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "declaredChecks": [
+          "CANDIDATE_ENVELOPE",
+          "FILE_SET",
+          "PINNED_SOURCE_SHA256",
+          "JSON_PARSE",
+          "DESIGN_BINDING",
+          "PROJECT_REFERENCE",
+          "RELATIONSHIPS"
+        ],
+        "runtime": {
+          "desktop": "NOT_RUN",
+          "dax": "NOT_RUN",
+          "rls": "NOT_RUN"
+        },
+        "nextAction": "GOVERNANCE_REQUIRED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "repair",
+      "status": "BLOCKED",
+      "terminal": null,
+      "latency_ms": null,
+      "actual": {
+        "reason": "No repair implementation exists. APBRA-134 explicitly escalates; preserved golden resubmission is not repair of the failed candidate. Mandatory registry remains unresolved."
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "unsupported",
+      "status": "PASSED",
+      "terminal": "SAFE_REFUSAL",
+      "latency_ms": 0.10883300000000418,
+      "actual": {
+        "status": "UNSUPPORTED",
+        "issues": [
+          "Only the unchanged APBRA-90 request is supported. Edited requests require separate interpretation."
+        ]
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "business-route",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 34.844625,
+      "actual": {
+        "operationId": "4c7c8207-e6c2-4c73-81e4-0e3e5b14df65",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "manifest": {
+          "mode": "ISOLATED_DEMO",
+          "operationId": "4c7c8207-e6c2-4c73-81e4-0e3e5b14df65",
+          "revision": 1,
+          "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+          "governance": "DEMO_BUSINESS_REVIEW",
+          "identityEvidence": "SIMULATED",
+          "requester": "requester",
+          "review": {
+            "actor": "reviewer",
+            "decision": "APPROVE",
+            "reason": "Synthetic evaluator checked exact source candidate",
+            "revision": 1,
+            "digest": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5"
+          },
+          "policyVersion": "demo-governance-1",
+          "fileHashes": {
+            "SalesPerformance.pbip": "c159ed51e7aa77fae9065d76cae964cb9ca8dfc220da4621cbfd603a67a3355b",
+            "SalesPerformance.Report/definition.pbir": "819200546be3c1ac3d1df10278767a789493273bb61c1e30a0ec639a6b642731",
+            "SalesPerformance.SemanticModel/definition.pbism": "c6ac66b7d299865a5936942e3c39cfbbf936bf086b63c53123e4ab9d12f7f21e",
+            "SalesPerformance.SemanticModel/definition/database.tmdl": "8063b865bf531e14b59b97632e01bf9fe7d9e50a9c08c29b6b22b04c7955a077",
+            "SalesPerformance.SemanticModel/definition/model.tmdl": "eb6ca1f1465e5750b7951eade7339c1d4fefe4407faf3e4f506d7fd1f8bc0a17",
+            "SalesPerformance.SemanticModel/definition/relationships.tmdl": "c00d7573859b558466f6d4e6fd8819236c0cf5b0f5d7291e318055fc8bc42d73",
+            "SalesPerformance.SemanticModel/definition/tables/DimDate.tmdl": "bd9a5b8e3f3dfaede62b151781d13e3b3c9b0577c3f17c43c321030e22552ada",
+            "data/DimDate.csv": "d680deef0e606beb6595180752f17e60ded3beffc7d19644325501961912e9be",
+            "SalesPerformance.SemanticModel/definition/tables/DimProduct.tmdl": "5ec95f2059109fda947a481503edc2bd0f0fff80825bca0296011d26ee77614b",
+            "data/DimProduct.csv": "1d6e0f96f8f91543f1cc219c6bfe285bbdbd685647f58cc61d9c67bc868359d9",
+            "SalesPerformance.SemanticModel/definition/tables/DimRegion.tmdl": "55c49823387b11f4fea1d7cc54fee9c9fdd6deb0af3cfb0bde11beacdbd45b68",
+            "data/DimRegion.csv": "2708d392cd475a0a32487ae639cf37192c5ad6463b081ca26ce96f7416777d26",
+            "SalesPerformance.SemanticModel/definition/tables/DimBusinessArea.tmdl": "00c9b9ffd5127a159784430b4006650f6a184b81c2aa60f30da40e2b427eafd8",
+            "data/DimBusinessArea.csv": "d650f45c03f13dee987f9c4d5d2c5d609a90c750f53a7109ad80c8ab61961c2f",
+            "SalesPerformance.SemanticModel/definition/tables/DimCustomer.tmdl": "342081e14a87ae5009e887f603ae6c3d54d515c66565f201e7ca0b23400cbf50",
+            "data/DimCustomer.csv": "bc1904fb791063a9be87d9d8b18f93e299aa6b1cb8ed729428cf4d6cb6f04733",
+            "SalesPerformance.SemanticModel/definition/tables/FactSales.tmdl": "27dd62e2debb818142dedbd8b76a104eff042c38c0f800525995076b669d2b49",
+            "data/FactSales.csv": "2ce5cf3f3e8098c9acfc6def05bfada69cd81d5c109ac15b56f0fc4b848046be",
+            "SalesPerformance.Report/definition/version.json": "c761e768563bdd636679fc53a7acf2c973f02a8843ee7dcdfb0cc82616c28c38",
+            "SalesPerformance.Report/definition/report.json": "d42f272ab49d843f35e2a16bebe4db9f925f54f6118afdc88ba98fced392c223",
+            "SalesPerformance.Report/definition/pages/pages.json": "5f365cfda9da343fa078c93e8aae0f612f4598d9a9435db140b7512344e22c72",
+            "SalesPerformance.Report/definition/pages/executive-summary/page.json": "31a119915012ae01c98d8d009691f0a9ef79c825a070ef13c83579fcb7751dd6",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-sales/visual.json": "464d0f6a6ab30f79e4f49fdcb8d6dcf6cadd36a7960eaed4e552c845993600d4",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-orders/visual.json": "bf54bd7d8fdbcd60aeeeed1a7d87451e597130c42a17f8562903653f891eca92",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-average-order-value/visual.json": "c385f1204c36062f01fff2098ac645a593e5f718a75c817fe8c51b30f8f4e476",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-sales-yoy-percent/visual.json": "07882f927afb5a702b59ccd2ba7e093531591faecfef7d65e9fecd2e64409e89",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-trend/visual.json": "9a1f71840ed778e0fb8ae837e6878e72208509f4ff2403b8b7c3228f6bf8fcb4",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-region/visual.json": "c26033dff4d1cbfd62ec3fde801ff05a98c7d0a295075c9031dd5c1ec14d3c59",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-category/visual.json": "72181e8dbfaff347f2954b5f6031c35c343a229b42a426a2a6c2c3d046b2a663",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-0/visual.json": "d184515b930564e054af2994e6d4cc2e82a814ccf7203e5d3bacb804f8bd6663",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-1/visual.json": "e9a21f8316b6a41e19827e92304caee7db26c218cbf9fdd259088e66ace0b6ff",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-2/visual.json": "8a937d32cb60e8b6462f1f6437e37a0fbbf091d473342bc8a1797013edb088e2",
+            "SalesPerformance.Report/definition/pages/regional-performance/page.json": "8907cd8c0c28c27052e3166277de39ee9e039bb328251ace5fdb1d0af35453a8",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-sales/visual.json": "b3ed30ed764efa4bf6160c2a24508b94be398b57a90744de995b1f42268112f4",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-detail/visual.json": "d8f50074c2a4596eb6c611de3169a5bd4a939ae2468cee642e5adac94fc85996",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-0/visual.json": "510839baa4ba614b98d4f8df7b84d64fd5ef83e4cbc7cea9f0cac1224a79725a",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-1/visual.json": "131ef710d53e1d8394305fe4b6900de223619c7766f93713cb42ee7e01b728a1",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-2/visual.json": "252b5d475dce7709b04d97d8574952d557385c4dc705a68928b728255420425b",
+            "DesignPlan.json": "1bdbcd256311a96d38043c61b772cd9bada2969c0b035091dda8f9caee6be291",
+            "README.txt": "84776a6c5258486293e672bafaa849474d62bc2a1c1f8724342faf80f42982ac"
+          },
+          "runtime": {
+            "desktop": "NOT_RUN",
+            "dax": "NOT_RUN",
+            "rls": "NOT_RUN"
+          }
+        },
+        "identity": "SIMULATED",
+        "download": "Direct module ZIP written to disk; browser persistence verified separately"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "trusted-route",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 21.729083000000003,
+      "actual": {
+        "operationId": "9767bbac-0a89-4992-81e9-51345f8fe3d8",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "manifest": {
+          "mode": "ISOLATED_DEMO",
+          "operationId": "9767bbac-0a89-4992-81e9-51345f8fe3d8",
+          "revision": 1,
+          "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+          "governance": "DEMO_TRUSTED_POLICY",
+          "identityEvidence": "SIMULATED",
+          "requester": "trusted",
+          "review": null,
+          "policyVersion": "demo-governance-1",
+          "fileHashes": {
+            "SalesPerformance.pbip": "c159ed51e7aa77fae9065d76cae964cb9ca8dfc220da4621cbfd603a67a3355b",
+            "SalesPerformance.Report/definition.pbir": "819200546be3c1ac3d1df10278767a789493273bb61c1e30a0ec639a6b642731",
+            "SalesPerformance.SemanticModel/definition.pbism": "c6ac66b7d299865a5936942e3c39cfbbf936bf086b63c53123e4ab9d12f7f21e",
+            "SalesPerformance.SemanticModel/definition/database.tmdl": "8063b865bf531e14b59b97632e01bf9fe7d9e50a9c08c29b6b22b04c7955a077",
+            "SalesPerformance.SemanticModel/definition/model.tmdl": "eb6ca1f1465e5750b7951eade7339c1d4fefe4407faf3e4f506d7fd1f8bc0a17",
+            "SalesPerformance.SemanticModel/definition/relationships.tmdl": "c00d7573859b558466f6d4e6fd8819236c0cf5b0f5d7291e318055fc8bc42d73",
+            "SalesPerformance.SemanticModel/definition/tables/DimDate.tmdl": "bd9a5b8e3f3dfaede62b151781d13e3b3c9b0577c3f17c43c321030e22552ada",
+            "data/DimDate.csv": "d680deef0e606beb6595180752f17e60ded3beffc7d19644325501961912e9be",
+            "SalesPerformance.SemanticModel/definition/tables/DimProduct.tmdl": "5ec95f2059109fda947a481503edc2bd0f0fff80825bca0296011d26ee77614b",
+            "data/DimProduct.csv": "1d6e0f96f8f91543f1cc219c6bfe285bbdbd685647f58cc61d9c67bc868359d9",
+            "SalesPerformance.SemanticModel/definition/tables/DimRegion.tmdl": "55c49823387b11f4fea1d7cc54fee9c9fdd6deb0af3cfb0bde11beacdbd45b68",
+            "data/DimRegion.csv": "2708d392cd475a0a32487ae639cf37192c5ad6463b081ca26ce96f7416777d26",
+            "SalesPerformance.SemanticModel/definition/tables/DimBusinessArea.tmdl": "00c9b9ffd5127a159784430b4006650f6a184b81c2aa60f30da40e2b427eafd8",
+            "data/DimBusinessArea.csv": "d650f45c03f13dee987f9c4d5d2c5d609a90c750f53a7109ad80c8ab61961c2f",
+            "SalesPerformance.SemanticModel/definition/tables/DimCustomer.tmdl": "342081e14a87ae5009e887f603ae6c3d54d515c66565f201e7ca0b23400cbf50",
+            "data/DimCustomer.csv": "bc1904fb791063a9be87d9d8b18f93e299aa6b1cb8ed729428cf4d6cb6f04733",
+            "SalesPerformance.SemanticModel/definition/tables/FactSales.tmdl": "27dd62e2debb818142dedbd8b76a104eff042c38c0f800525995076b669d2b49",
+            "data/FactSales.csv": "2ce5cf3f3e8098c9acfc6def05bfada69cd81d5c109ac15b56f0fc4b848046be",
+            "SalesPerformance.Report/definition/version.json": "c761e768563bdd636679fc53a7acf2c973f02a8843ee7dcdfb0cc82616c28c38",
+            "SalesPerformance.Report/definition/report.json": "d42f272ab49d843f35e2a16bebe4db9f925f54f6118afdc88ba98fced392c223",
+            "SalesPerformance.Report/definition/pages/pages.json": "5f365cfda9da343fa078c93e8aae0f612f4598d9a9435db140b7512344e22c72",
+            "SalesPerformance.Report/definition/pages/executive-summary/page.json": "31a119915012ae01c98d8d009691f0a9ef79c825a070ef13c83579fcb7751dd6",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-sales/visual.json": "464d0f6a6ab30f79e4f49fdcb8d6dcf6cadd36a7960eaed4e552c845993600d4",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-total-orders/visual.json": "bf54bd7d8fdbcd60aeeeed1a7d87451e597130c42a17f8562903653f891eca92",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-average-order-value/visual.json": "c385f1204c36062f01fff2098ac645a593e5f718a75c817fe8c51b30f8f4e476",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/kpi-sales-yoy-percent/visual.json": "07882f927afb5a702b59ccd2ba7e093531591faecfef7d65e9fecd2e64409e89",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-trend/visual.json": "9a1f71840ed778e0fb8ae837e6878e72208509f4ff2403b8b7c3228f6bf8fcb4",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-region/visual.json": "c26033dff4d1cbfd62ec3fde801ff05a98c7d0a295075c9031dd5c1ec14d3c59",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/sales-category/visual.json": "72181e8dbfaff347f2954b5f6031c35c343a229b42a426a2a6c2c3d046b2a663",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-0/visual.json": "d184515b930564e054af2994e6d4cc2e82a814ccf7203e5d3bacb804f8bd6663",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-1/visual.json": "e9a21f8316b6a41e19827e92304caee7db26c218cbf9fdd259088e66ace0b6ff",
+            "SalesPerformance.Report/definition/pages/executive-summary/visuals/slicer-2/visual.json": "8a937d32cb60e8b6462f1f6437e37a0fbbf091d473342bc8a1797013edb088e2",
+            "SalesPerformance.Report/definition/pages/regional-performance/page.json": "8907cd8c0c28c27052e3166277de39ee9e039bb328251ace5fdb1d0af35453a8",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-sales/visual.json": "b3ed30ed764efa4bf6160c2a24508b94be398b57a90744de995b1f42268112f4",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/regional-detail/visual.json": "d8f50074c2a4596eb6c611de3169a5bd4a939ae2468cee642e5adac94fc85996",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-0/visual.json": "510839baa4ba614b98d4f8df7b84d64fd5ef83e4cbc7cea9f0cac1224a79725a",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-1/visual.json": "131ef710d53e1d8394305fe4b6900de223619c7766f93713cb42ee7e01b728a1",
+            "SalesPerformance.Report/definition/pages/regional-performance/visuals/slicer-2/visual.json": "252b5d475dce7709b04d97d8574952d557385c4dc705a68928b728255420425b",
+            "DesignPlan.json": "1bdbcd256311a96d38043c61b772cd9bada2969c0b035091dda8f9caee6be291",
+            "README.txt": "84776a6c5258486293e672bafaa849474d62bc2a1c1f8724342faf80f42982ac"
+          },
+          "runtime": {
+            "desktop": "NOT_RUN",
+            "dax": "NOT_RUN",
+            "rls": "NOT_RUN"
+          }
+        },
+        "identity": "SIMULATED",
+        "download": "Direct module ZIP written to disk; browser persistence verified separately"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "business-unauthorized",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 4.9377919999999875,
+      "actual": {
+        "operationId": "33269e98-352d-416c-9074-f92b7a976f6c",
+        "self": "REVIEWER_DENIED",
+        "foreignTenant": "OPERATION_DENIED",
+        "identity": "SIMULATED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "business-stale",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 9.375459000000006,
+      "actual": {
+        "operationId": "22d3a25d-a5b3-4c62-830b-c5ab6dee559d",
+        "revision": 2,
+        "audit": [
+          {
+            "kind": "SUBMITTED"
+          },
+          {
+            "kind": "REVIEWED"
+          },
+          {
+            "kind": "RESUBMITTED"
+          }
+        ],
+        "identity": "SIMULATED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "trusted-forged",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 1.7145419999999945,
+      "actual": {
+        "error": "CONTEXT_DENIED",
+        "identity": "SIMULATED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "trusted-invalid",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 4.285583000000003,
+      "actual": {
+        "operationId": "561d0393-2c85-4f99-a531-55721c1d0119",
+        "validation": {
+          "kind": "CandidateValidation",
+          "validatorVersion": "capstone-validator-1",
+          "profileId": "golden-source-1",
+          "candidateSha256": "ed28ed227c9d8a02e184cc607b62bc205dd8ab014214bbf08922bc552efc0ea9",
+          "status": "FAIL",
+          "findings": [
+            {
+              "code": "SOURCE_BYTES_CHANGED",
+              "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+              "message": "Bytes differ from independently reviewed golden source profile"
+            },
+            {
+              "code": "MISSING_RELATIONSHIP",
+              "path": "SalesPerformance.SemanticModel/definition/relationships.tmdl",
+              "message": "Required FactSales.SaleDate -> DimDate.Date is absent"
+            }
+          ],
+          "completedChecks": [
+            "CANDIDATE_ENVELOPE",
+            "FILE_SET",
+            "PINNED_SOURCE_SHA256",
+            "JSON_PARSE",
+            "DESIGN_BINDING",
+            "PROJECT_REFERENCE",
+            "RELATIONSHIPS"
+          ],
+          "declaredChecks": [
+            "CANDIDATE_ENVELOPE",
+            "FILE_SET",
+            "PINNED_SOURCE_SHA256",
+            "JSON_PARSE",
+            "DESIGN_BINDING",
+            "PROJECT_REFERENCE",
+            "RELATIONSHIPS"
+          ],
+          "runtime": {
+            "desktop": "NOT_RUN",
+            "dax": "NOT_RUN",
+            "rls": "NOT_RUN"
+          },
+          "nextAction": "HUMAN_ESCALATION"
+        },
+        "identity": "SIMULATED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "revoked-reviewer",
+      "status": "PASSED",
+      "terminal": "BLOCK",
+      "latency_ms": 3.9397909999999996,
+      "actual": {
+        "operationId": "e85a6f84-dcfe-4383-a283-e843f150a6e4",
+        "error": "GOVERNANCE",
+        "identity": "SIMULATED"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "business-release",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.21183399999999608,
+      "actual": {
+        "operationId": "4c7c8207-e6c2-4c73-81e4-0e3e5b14df65",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "bytes": 153433,
+        "identity": "SIMULATED",
+        "limit": "Persisted ZIP; actual UI downloads are separately evidenced, no production secure transport claim"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "trusted-release",
+      "status": "PASSED",
+      "terminal": "SUCCESS",
+      "latency_ms": 0.060915999999991755,
+      "actual": {
+        "operationId": "9767bbac-0a89-4992-81e9-51345f8fe3d8",
+        "candidateSha256": "fd3dc1677b8c273fa08634dc5415dcd47ee9ab23d724e8a77bc866d1d57cdbd5",
+        "bytes": 153209,
+        "identity": "SIMULATED",
+        "limit": "Persisted ZIP; actual UI downloads are separately evidenced, no production secure transport claim"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "numeric-runtime",
+      "status": "BLOCKED",
+      "terminal": null,
+      "latency_ms": null,
+      "actual": {
+        "reason": "No configured supported Power BI runtime on this macOS execution. Source files and numeric fixture oracle are not DAX execution."
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "human-quality",
+      "status": "BLOCKED",
+      "terminal": null,
+      "latency_ms": null,
+      "actual": {
+        "reason": "Named human rubric scores and owner assessment not supplied. Independent AI review is not a human evaluator."
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    },
+    {
+      "id": "held-out-relationship",
+      "status": "FAILED",
+      "terminal": null,
+      "latency_ms": 0.8720409999999958,
+      "actual": {
+        "error": "Held-out case requires targeted date relationship clarification; blanket unsupported is safe but does not satisfy rubric\n+ actual - expected\n\n+ 'UNSUPPORTED'\n- 'AWAITING_CLARIFICATION'\n"
+      },
+      "execution_id": "fcdff3d3-7988-40de-9d66-4f0c12fedcc6"
+    }
+  ]
+}

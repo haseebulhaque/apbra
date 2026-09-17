@@ -35,3 +35,33 @@ Evidence paths permit tests/ and artifacts/ only; no external/signed URLs, raw p
 ## Verification
 
 Existing engineering CI discovers tests/bootstrap/test_evaluation.py. Run CI policy, bootstrap, all bootstrap unittests and pip check. Linux-only secret scanner runs hosted, not on macOS. Fresh independent review on exact commit and passing hosted checks precede Haseeb's manual merge. Real suite execution remains pending APBRA-128 components; no APBRA-92/93/94 execution is claimed.
+
+## APBRA-92 actual local execution (2026-09-17)
+
+`execute-local.ts` bundles and invokes the actual merged app modules, not mocks. It reads the unchanged registry and fixture oracles indirectly through the importer. Run from repository root with the locked web dependencies installed:
+
+```sh
+node apps/web/node_modules/esbuild/bin/esbuild tests/bootstrap/evaluation/execute-local.ts --bundle --platform=node --format=cjs --loader:.csv=text --outfile=/tmp/apbra-evaluate.cjs
+APBRA_SOURCE_REVISION=<verified-app-commit> node /tmp/apbra-evaluate.cjs /tmp/apbra-unique-new-run
+python tests/bootstrap/evaluation/import-local.py /tmp/apbra-unique-new-run/observations.json tests/bootstrap/evaluation/evidence/<retained-run>/observations.json artifacts/evaluation/<unique-run>.json
+```
+
+Retain the observed source JSON at the exact referenced path before publishing the report. Each output directory/file must be new; original failures are not overwritten. The adapter’s successful process exit means observations were written, **not** that the mandatory product gate passed. Imported report summary owns that conclusion. Existing CI tests the evidence accounting and retained manifests; it does not silently reinterpret blocked product cases as successes.
+
+Stored [run report](evidence/run-fcdff3d3/report.json) has 24 applicable mandatory cases, 21 executed, 20 passed, one failed and three blocked. Mandatory gate is false. Failure: held-out alternate date relationship receives general UNSUPPORTED rather than the targeted clarification demanded by its rubric. Blocked: no repair implementation, no actual Power BI numeric runtime, and no named human quality rubric. Safe escalation is real but does not satisfy the registry’s repair-success expectation. The held-out fixture was exposed only for this evaluation, not used to tune implementation; any future tuning requires honest repartition/new held-out evidence. No registry flags or expected outcomes changed.
+
+The earlier adapter-calibration observations are retained separately. Two incorrect evaluator comparisons included fixture-only metadata in RequirementsSnapshot and rejected an extra eligible citation. Those were evaluator defects, fixed before the reported product run; the initial data and genuine held-out failure remain visible. They are not mixed into product accuracy/latency samples. An independent reviewer must validate this disposition.
+
+Both routes invoke an explicitly isolated **SIMULATED** identity adapter. Source validation and module ZIP writes are real; they are not production authorization, TLS/secure-delivery assurance or actual human approval. Browser Downloads were separately read during APBRA-135/136 and the keyboard journey, with all40source bytes and manifest hashes verified. Numeric oracle values are not DAX measurements. Provider calls/tokens are zero; costs are unknown, not a fabricated zero-cost invoice. The mixed-case harness p95 describes heterogeneous evaluator invocations, **not** an API SLA or end-to-end user latency.
+
+### APBRA-93 genuine failure
+
+[failure.json](evidence/run-fcdff3d3/failure.json) records the predeclared APBRA-134 missing-date-relationship mutation, original and changed TMDL, different candidate hashes, deterministic findings and HUMAN_ESCALATION. Original candidate is retained separately. No repair claim: later submitting the preserved original is a resubmission, not repairing failed bytes. Actual browser failure and source profile checks are documented in PR9/11. [decline.json](evidence/run-fcdff3d3/decline.json) retains a separate simulated decline followed by a new pending revision; release was denied before resubmission.
+
+### Applicable APBRA-122/123/124 disposition
+
+[keyboard.json](evidence/run-fcdff3d3/keyboard.json) records a fresh actual native Chrome keyboard-only journey at the merged app revision, both routes, rejected blank reason, 61 observed focus transitions, save dialogs and physically verified downloads. All observed controls remained reachable. Disabled completed buttons expose HTML focus, with subsequent Tab continuing to adjacent controls; no blanket focus-management or assistive-technology certification is asserted. VoiceOver, actual Power BI report interactions and complete WCAG assessment remain NOT_RUN. Source labels/status text and non-colour state descriptions exist; a source inspection is not proof of spoken announcements.
+
+[performance.json](evidence/run-fcdff3d3/performance.json) is generated by `measure-local.ts`: 20 sequential single-user local module flows, six-table fixed synthetic fixture, Apple M1 Pro/arm64/macOS Darwin25.6, Node24.19, no warmup; first invocation after module load identified, startup excluded. Every fifth validation intentionally fails, all20samples retained. Separate per-stage nearest-rank p50/p95 use actual monotonic durations. No API exists in this bounded architecture, so the non-AI API2s objective is N/A here; no production SLA claim. Model latency/provider saturation/429s, production sessions, tenant isolation, distributed queues and cloud restore are outside128’s local boundary and remain commercial backlog, not passed. Local cancellation is unsupported; input invalidation and stale/incomplete rejection are tested, refresh clears memory as disclosed, saved exports persist independently. Package metadata is inspectable; Desktop interaction/accessibility stays NOT_RUN.
+
+APBRA-92 remains incomplete. APBRA-94’s measured final narrative and owner approval cannot claim CAPSTONE_READY while mandatory evaluation gates remain unresolved. This evidence increment may be reviewed/merged independently without marking92Done or weakening acceptance.
