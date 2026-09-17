@@ -1,1 +1,65 @@
-{"schema_version":1,"baseline":"APBRA-IMPL-0.1","sources":[{"id":"engineering-structure","content_id":"3965522","version":2,"section":"14.01","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3965522","status":"BASELINED"},{"id":"implementation-contract","content_id":"4751362","version":1,"section":"14.07","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4751362","status":"PROPOSED"},{"id":"implementation-adrs","content_id":"4653067","version":1,"section":"05.07","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4653067","status":"PROPOSED"},{"id":"task-contract","content_id":"4391081","version":3,"section":"22.06","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391081","status":"BASELINED"},{"id":"jira-workflow","content_id":"4391039","version":4,"section":"22.04","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391039","status":"BASELINED"},{"id":"solo-owner-policy","content_id":"4391060","version":5,"section":"22.05","url":"https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391060","status":"ACCEPTED"}],"freshness":"Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.","approval_note":"Solo-owner/public GitHub governance was explicitly accepted. Proposed product source pages are not silently relabelled Accepted; reconcile their acceptance separately before application dispatch."}
+{
+  "schema_version": 1,
+  "baseline": "APBRA-IMPL-0.1",
+  "sources": [
+    {
+      "id": "engineering-structure",
+      "content_id": "3965522",
+      "version": 2,
+      "section": "14.01",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3965522",
+      "status": "BASELINED"
+    },
+    {
+      "id": "implementation-contract",
+      "content_id": "4751362",
+      "version": 1,
+      "section": "14.07",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4751362",
+      "status": "PROPOSED"
+    },
+    {
+      "id": "implementation-adrs",
+      "content_id": "4653067",
+      "version": 1,
+      "section": "05.07",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4653067",
+      "status": "PROPOSED"
+    },
+    {
+      "id": "task-contract",
+      "content_id": "4391081",
+      "version": 3,
+      "section": "22.06",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391081",
+      "status": "BASELINED"
+    },
+    {
+      "id": "jira-workflow",
+      "content_id": "4391039",
+      "version": 4,
+      "section": "22.04",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391039",
+      "status": "BASELINED"
+    },
+    {
+      "id": "solo-owner-policy",
+      "content_id": "4391060",
+      "version": 5,
+      "section": "22.05",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391060",
+      "status": "ACCEPTED"
+    },
+    {
+      "id": "capstone-web-shell",
+      "content_id": "APBRA-129",
+      "version": 1,
+      "section": "21.03 v2 / APBRA-128",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-129",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized autonomous bounded Capstone implementation in this execution. Jira129 read updated2026-09-16T23:40:18.163+1000; Jira128 updated2026-09-16T23:38:35.980+1000; Confluence21.03v2. This acceptance applies only to129 and does not relabel proposed broader product sources."
+    }
+  ],
+  "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
+  "approval_note": "Solo-owner/public GitHub governance was explicitly accepted. Proposed product source pages are not silently relabelled Accepted; reconcile their acceptance separately before application dispatch."
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-129",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260917-SHELL",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Create the bounded local React/TypeScript/Vite requester shell and exact supporting CI scope transition.",
+  "requirements": [
+    "APBRA-129 acceptance",
+    "APBRA-128 browser requester journey"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction"
+  ],
+  "architecture_refs": [
+    "21.03 v2"
+  ],
+  "allowed_paths": [
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/tsconfig.json",
+    "apps/web/index.html",
+    "apps/web/README.md",
+    "apps/web/src/main.tsx",
+    "apps/web/src/style.css",
+    "apps/web/src/workflow.ts",
+    "apps/web/src/workflow.test.ts",
+    "apps/web/src/App.tsx",
+    "apps/web/src/App.test.tsx"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    ".env*"
+  ],
+  "acceptance_criteria": [
+    "Locally runnable browser shell accepts APBRA90 prompt and exposes exact synthetic schema.",
+    "Three golden clarification topics are editable; drafts remain browser memory.",
+    "Every unimplemented stage is NOT_RUN and unavailable release is disabled.",
+    "Full golden-browser integration remains pending APBRA136, not claimed completed."
+  ],
+  "verification_required": [
+    "npm ci --ignore-scripts",
+    "npm test",
+    "npm run build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted scanner and separate review"
+  ],
+  "out_of_scope": [
+    "APBRA130+ implementation",
+    "Backend, model calls, generation, validation or release policy",
+    "Production identity/cloud"
+  ],
+  "escalate_when": [
+    "Source contradiction",
+    "Dependency or tests unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex implementation execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "b22680c97b84aa86c78da11a4d4035f7b32af15b",
+  "branch": "agent/APBRA-DEVOPS/APBRA-129-capstone-shell",
+  "source_ids": [
+    "capstone-web-shell"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "APBRA90 merged fixtures; APBRA136 future full flow integration"
+  ]
+}

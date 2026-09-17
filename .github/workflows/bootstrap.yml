@@ -34,6 +34,14 @@ jobs:
         run: python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json
       - name: Exercise positive and negative tests
         run: python -m unittest discover -s tests/bootstrap -v
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+      - name: Build and test locked Capstone requester shell
+        run: |
+          npm --prefix apps/web ci --ignore-scripts
+          npm --prefix apps/web test
+          npm --prefix apps/web run build
       - name: Retain bounded checker evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
