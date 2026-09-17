@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-134",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260917-134",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Deterministically validate exact golden source candidate and preserve genuine safe failure evidence.",
+  "requirements": [
+    "APBRA-134 acceptance",
+    "APBRA-93 predeclared failure"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction"
+  ],
+  "architecture_refs": [
+    "21.03 v2"
+  ],
+  "allowed_paths": [
+    "apps/web/src/validation.ts",
+    "apps/web/src/validation.test.ts",
+    "apps/web/src/validationProfile.json",
+    "apps/web/src/App.tsx",
+    "apps/web/README.md"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    ".env*"
+  ],
+  "acceptance_criteria": [
+    "Independent structural checks and pinned reviewed source hashes admit golden candidate and reject altered files.",
+    "Predeclared missing-date-relationship failure produces bound machine-readable findings, retains original and fails safely.",
+    "Persisted evidence distinguishes source checks from NOT_RUN runtime and never confers approval."
+  ],
+  "verification_required": [
+    "npm ci --ignore-scripts",
+    "npm test",
+    "npm run build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted scanner and separate review"
+  ],
+  "out_of_scope": [
+    "General Power BI parser or numeric/runtime validation",
+    "Automatic repair and governance release implementation"
+  ],
+  "escalate_when": [
+    "Source contradiction",
+    "Dependency or tests unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex implementation execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "410e752d597441813874943e66f20a1ac0f87a1b",
+  "branch": "agent/APBRA-DEVOPS/APBRA-134-validation",
+  "source_ids": [
+    "capstone-validation"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged APBRA-133 source generator; APBRA-135 separately gates release."
+  ]
+}

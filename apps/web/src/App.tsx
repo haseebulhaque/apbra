@@ -1,4 +1,5 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
+import {runValidationAttempt, failureCase, type Validation, type ValidationAttempt} from './validation';
 import {generatePowerBI, type Candidate} from './powerbi';
 import {zipFiles} from './archive';
 import {createDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
@@ -16,16 +17,27 @@ export function App() {
   const [snapshot, setSnapshot] = useState<RequirementsSnapshot | null>(null);
   const [plan, setPlan] = useState<DesignPlan | null>(null);
   const [candidate,setCandidate]=useState<Candidate|null>(null);
+  const [validation,setValidation]=useState<Validation|null>(null);
+  const [history,setHistory]=useState<ValidationAttempt[]>([]);
+  const [validating,setValidating]=useState(false),[validationError,setValidationError]=useState('');
+  const epoch=useRef(0);
+  async function runValidation(failure:boolean){
+    if(!candidate)return;const current=epoch.current;
+    setValidating(true);setValidationError('');
+    const attempt=await runValidationAttempt(candidate,failure);
+    setHistory(h=>[...h,attempt]);
+    if(epoch.current===current){setValidation(attempt.result);setValidationError(attempt.error??'');setValidating(false);}
+  }
   const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
   useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);
-  function invalidate() { setSnapshot(null); setPlan(null); setCandidate(null); }
+  function invalidate() { setSnapshot(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
   const submission = {original_request: prompt, original_schema: schema, answers};
   const assessment = assessRequirements(submission);
   const ready = assessment.status === 'READY_TO_CONFIRM';
   function editAnswer(id: string, value: string) { invalidate(); setAnswers({...answers, [id]:value}); }
   return <main>
     <header><span className="eyebrow">APBRA / ELVTR CAPSTONE</span><h1>Your report starts here.</h1><p>Explore the synthetic sales scenario and prepare your request.</p></header>
-    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Synthetic project generation runs locally. Runtime evaluation and release are not available yet.</aside>
+    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Synthetic project generation runs locally. Power BI runtime evaluation and governed release are not available yet.</aside>
     <div className="layout"><section aria-labelledby="request-heading"><h2 id="request-heading">01 · Define the report</h2>
       <label htmlFor="scenario">Synthetic scenario</label><select id="scenario" value="sales-v1" onChange={() => {}}><option value="sales-v1">Sales performance · APBRA-90 v1.0.0</option></select>
       <details><summary>Inspect the synthetic schema</summary><pre>{JSON.stringify(schema, null, 2)}</pre></details>
@@ -46,10 +58,16 @@ export function App() {
       {candidate&&<><p role="status">Candidate generated · {Object.keys(candidate.files).length} files · Desktop, DAX and RLS runtime NOT_RUN.</p>
         <details><summary>Inspect generated project files</summary>{Object.entries(candidate.files).map(([path,content])=><details key={path}><summary>{path}</summary><pre>{content}</pre></details>)}</details>
         {archiveUrl&&<a href={archiveUrl} download="SalesPerformance.candidate.zip">Save candidate ZIP · not a release</a>}</>}
-    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow progress</h2><p>Requirements and DesignPlan use deterministic golden-fixture processing. Generation renders source files; validation and release have not run.</p>
-      <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : s.status}</strong></li>)}</ol>
+      <h2>05 · Validate the candidate</h2><p>Checks the exact reviewed golden source profile and structural rules. This is not Desktop or DAX runtime validation.</p>
+      <button disabled={!candidate||validating} onClick={()=>void runValidation(false)}>Validate golden candidate</button>
+      <button className="secondary" disabled={!candidate||validating} onClick={()=>void runValidation(true)}>Run declared missing-relationship failure</button>
+      {validating&&<p role="status">Validation running · no result yet</p>}{validationError&&<p role="alert">{validationError}</p>}
+      {validation&&<><p role="status">Source validation {validation.status} · {validation.nextAction}</p><pre>{JSON.stringify(validation,null,2)}</pre></>}
+      {history.length>0&&<><p>{history.length} validation attempts retained, including failures. Automatic repair is not implemented.</p><a download="SalesPerformance.validation-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({failureCase,attempts:history},null,2))}>Save validation evidence JSON</a></>}
+    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow progress</h2><p>Requirements and DesignPlan use deterministic golden-fixture processing. Generation renders source files; validation checks source files only; release has not run.</p>
+      <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : validation && s.name === 'Deterministic validation' ? validation.status : s.status}</strong></li>)}</ol>
       <h2>Release artefacts</h2><p>No approved release package exists.</p><button disabled>Download release package · unavailable</button>
       <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><KnowledgePanel/><footer>APBRA-133 · Local Capstone project generation</footer>
+    </section></div><KnowledgePanel/><footer>APBRA-134 · Local Capstone deterministic validation</footer>
   </main>;
 }
