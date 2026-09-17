@@ -1,4 +1,6 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
+import {generatePowerBI, type Candidate} from './powerbi';
+import {zipFiles} from './archive';
 import {createDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
 import {retrieveCuratedKnowledge} from './knowledge';
 import {KnowledgePanel} from './KnowledgePanel';
@@ -13,14 +15,17 @@ export function App() {
   const [answers, setAnswers] = useState<Answers>({});
   const [snapshot, setSnapshot] = useState<RequirementsSnapshot | null>(null);
   const [plan, setPlan] = useState<DesignPlan | null>(null);
-  function invalidate() { setSnapshot(null); setPlan(null); }
+  const [candidate,setCandidate]=useState<Candidate|null>(null);
+  const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
+  useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);
+  function invalidate() { setSnapshot(null); setPlan(null); setCandidate(null); }
   const submission = {original_request: prompt, original_schema: schema, answers};
   const assessment = assessRequirements(submission);
   const ready = assessment.status === 'READY_TO_CONFIRM';
   function editAnswer(id: string, value: string) { invalidate(); setAnswers({...answers, [id]:value}); }
   return <main>
     <header><span className="eyebrow">APBRA / ELVTR CAPSTONE</span><h1>Your report starts here.</h1><p>Explore the synthetic sales scenario and prepare your request.</p></header>
-    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Generated Power BI packages and evaluation results are not available yet.</aside>
+    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Synthetic project generation runs locally. Runtime evaluation and release are not available yet.</aside>
     <div className="layout"><section aria-labelledby="request-heading"><h2 id="request-heading">01 · Define the report</h2>
       <label htmlFor="scenario">Synthetic scenario</label><select id="scenario" value="sales-v1" onChange={() => {}}><option value="sales-v1">Sales performance · APBRA-90 v1.0.0</option></select>
       <details><summary>Inspect the synthetic schema</summary><pre>{JSON.stringify(schema, null, 2)}</pre></details>
@@ -36,10 +41,15 @@ export function App() {
       {plan && <><p role="status">DesignPlan created and linked to requirements and all eight citations. Save the JSON to retain it after refresh.</p>
         <details><summary>Inspect DesignPlan and source bindings</summary><pre>{serializeDesignPlan(plan)}</pre></details>
         <a download="SalesPerformance.DesignPlan.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(serializeDesignPlan(plan))}>Save DesignPlan JSON</a></>}
-    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow progress</h2><p>Requirements and DesignPlan use deterministic golden-fixture processing. Generation and later stages have not run.</p>
-      <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : s.status}</strong></li>)}</ol>
-      <h2>Release artefacts</h2><p>No generated candidate or release package exists.</p><button disabled>Download release package · unavailable</button>
+      <h2>04 · Generate the project</h2><p>Render the validated DesignPlan into a synthetic Power BI candidate. This download is source inspection, not an approved release.</p>
+      <button disabled={!plan||!!candidate} onClick={()=>setCandidate(generatePowerBI(plan))}>Generate Power BI candidate</button>
+      {candidate&&<><p role="status">Candidate generated · {Object.keys(candidate.files).length} files · Desktop, DAX and RLS runtime NOT_RUN.</p>
+        <details><summary>Inspect generated project files</summary>{Object.entries(candidate.files).map(([path,content])=><details key={path}><summary>{path}</summary><pre>{content}</pre></details>)}</details>
+        {archiveUrl&&<a href={archiveUrl} download="SalesPerformance.candidate.zip">Save candidate ZIP · not a release</a>}</>}
+    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow progress</h2><p>Requirements and DesignPlan use deterministic golden-fixture processing. Generation renders source files; validation and release have not run.</p>
+      <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : s.status}</strong></li>)}</ol>
+      <h2>Release artefacts</h2><p>No approved release package exists.</p><button disabled>Download release package · unavailable</button>
       <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><KnowledgePanel/><footer>APBRA-132 · Local Capstone DesignPlan</footer>
+    </section></div><KnowledgePanel/><footer>APBRA-133 · Local Capstone project generation</footer>
   </main>;
 }
