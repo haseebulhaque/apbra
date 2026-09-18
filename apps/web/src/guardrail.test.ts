@@ -1,28 +1,14 @@
-import {expect, it} from 'vitest';
-import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
-import schema from '../../../tests/bootstrap/fixtures/sales-v1/schema.json';
-import {assessRequestGuardrail} from './guardrail';
-import {assessRequirements, confirmRequirements} from './requirements';
+import {expect,it} from 'vitest';
+import {evaluateGuardrails} from './guardrail';
+import {defaultTenantSettings} from './tenant';
+import type {ReportDesign,RequirementInterpretation} from './foundry';
+import type {DataStructure} from './schemaIngestion';
 
-const answers=Object.fromEntries(request.clarifications.map(item=>[item.id,item.golden_answer]));
+const interpretation=(kind:RequirementInterpretation['request_kind']='POWER_BI_REPORT'):RequirementInterpretation=>({request_kind:kind,objective:'Analyse revenue',businessQuestions:[],kpis:['Revenue'],dimensions:['Region'],filters:['Sales.Region'],audience:'Leadership',pages:['Overview'],assumptions:[],ambiguities:[],clarifications:[]});
+const schema:DataStructure={kind:'REQUEST_DATA_STRUCTURE',fileName:'sales.csv',format:'CSV',parsedAt:'2026-01-01',tables:[{name:'Sales',sourceName:'Sales',rowCount:2,rows:[['North','10'],['South','20']],columns:[{name:'Region',sourceName:'Region',type:'text',nullable:false,sampleValues:['North','South']},{name:'Revenue',sourceName:'Revenue',type:'integer',nullable:false,sampleValues:['10','20']}]}],relationships:[]};
+const design=():ReportDesign=>({artifact_kind:'ReportDesign',schema_version:1,projectName:'RevenueReport',overview:'Revenue overview',audience:'Leadership',dataModel:{factTables:['Sales'],dimensionTables:[],relationships:[]},measures:[{id:'revenue',name:'Revenue',businessDefinition:'Revenue',aggregation:'SUM',field:'Sales.Revenue',numeratorMeasureId:'',denominatorMeasureId:'',format:'currency'}],pages:[{id:'overview',name:'Overview',purpose:'Summary',visuals:[{id:'revenue-card',type:'card',title:'Revenue',categoryField:'',measureIds:['revenue'],fields:[],altText:'Total revenue'}]}],filters:['Sales.Region'],branding:{themeName:'Tenant',primary:'#005A9C',accent:'#2D7D9A'},accessibility:['Titles and alternatives'],standardsApplied:[{citation:'local:test#1',decision:'Use cards'}],assumptions:[],warnings:[],generationRequirements:[]});
 
-it('allows the bounded Sales Performance request to continue through requirements',()=>{
-  expect(assessRequestGuardrail(request.original_text).status).toBe('ALLOW');
-  const submission={original_request:request.original_text,original_schema:schema,answers};
-  expect(assessRequirements(submission).status).toBe('READY_TO_CONFIRM');
-  expect(confirmRequirements(submission,true).artifact_kind).toBe('RequirementsSnapshot');
-});
-
-it('terminates a 250-visual request with structured human-review evidence and no generation',()=>{
-  const prompt='Create an executive sales report with 250 visuals on a single report page.';
-  const decision=assessRequestGuardrail(prompt);
-  expect(decision).toMatchObject({status:'HUMAN_REVIEW_REQUIRED',terminal:true,code:'EXCESSIVE_SINGLE_PAGE_VISUALS',generation:'BLOCKED_NOT_RUN'});
-  expect(decision.reason).toContain('250 visuals');
-  expect(decision.evidence[0].citation).toBe('local-policy:capstone-power-bi-demo-boundaries/GUARD-001');
-  expect(()=>confirmRequirements({original_request:prompt,original_schema:schema,answers},true)).toThrow();
-});
-
-it('blocks an unrelated marketing request outside Power BI scope',()=>{
-  const decision=assessRequestGuardrail('Write a marketing campaign for our new product.');
-  expect(decision).toMatchObject({status:'OUT_OF_SCOPE',terminal:true,code:'NOT_A_POWER_BI_REQUEST',generation:'BLOCKED_NOT_RUN'});
-});
+it('allows a valid structured Power BI design without inspecting prompt text',()=>{const result=evaluateGuardrails(interpretation(),design(),schema,defaultTenantSettings);expect(result.outcome).toBe('PASS');expect(result.generation).toBe('AVAILABLE');expect(result.evaluations.every(item=>item.result==='PASS')).toBe(true)});
+it('returns OUT_OF_SCOPE from the typed interpretation and never starts generation',()=>{const result=evaluateGuardrails(interpretation('OUT_OF_SCOPE'),null,schema,defaultTenantSettings);expect(result).toMatchObject({outcome:'OUT_OF_SCOPE',generation:'NOT_STARTED'});expect(result.evaluations[0].ruleId).toBe('SCOPE-001')});
+it('naturally requires human review when structured complexity exceeds tenant policy',()=>{const value=design();value.pages[0].visuals=Array.from({length:21},(_,index)=>({...value.pages[0].visuals[0],id:`visual-${index}`}));const result=evaluateGuardrails(interpretation(),value,schema,defaultTenantSettings);expect(result.outcome).toBe('HUMAN_REVIEW_REQUIRED');expect(result.generation).toBe('NOT_STARTED');expect(result.evaluations.find(item=>item.ruleId==='COMPLEXITY-001')?.result).toBe('HUMAN_REVIEW_REQUIRED')});
+it('blocks unknown schema references and inaccessible visual contracts',()=>{const value=design();value.measures[0].field='Sales.Missing';value.pages[0].visuals[0].altText='';const result=evaluateGuardrails(interpretation(),value,schema,defaultTenantSettings);expect(result.outcome).toBe('BLOCKED');expect(result.evaluations.filter(item=>item.result==='BLOCKED').map(item=>item.ruleId)).toEqual(expect.arrayContaining(['SCHEMA-001','ACCESSIBILITY-001']))});

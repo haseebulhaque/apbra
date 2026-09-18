@@ -1,43 +1,27 @@
-import policy from './guardrailPolicy.json';
+import type {ReportDesign,RequirementInterpretation} from './foundry';
+import type {DataStructure} from './schemaIngestion';
+import type {TenantSettings} from './tenant';
 
-export type GuardrailDecision = {
-  status: 'ALLOW' | 'HUMAN_REVIEW_REQUIRED' | 'OUT_OF_SCOPE';
-  terminal: boolean;
-  code: string;
-  reason: string;
-  generation: 'AVAILABLE_AFTER_REQUIREMENTS' | 'BLOCKED_NOT_RUN';
-  evidence: Array<{evidenceId: string; citation: string; sourcePath: string}>;
-};
+export type PolicyResult='PASS'|'WARNING'|'HUMAN_REVIEW_REQUIRED'|'BLOCKED'|'OUT_OF_SCOPE';
+export type PolicyEvaluation={ruleId:string;category:'scope'|'complexity'|'schema-quality'|'accessibility'|'unsupported-feature'|'generation-capability'|'ai-output-validity';severity:'info'|'warning'|'error';result:PolicyResult;reason:string;recommendedAction:string};
+export type GuardrailDecision={outcome:PolicyResult;generation:'AVAILABLE'|'NOT_STARTED';evaluations:PolicyEvaluation[]};
+const evaluation=(ruleId:PolicyEvaluation['ruleId'],category:PolicyEvaluation['category'],result:PolicyResult,reason:string,recommendedAction:string):PolicyEvaluation=>({ruleId,category,result,reason,recommendedAction,severity:result==='PASS'?'info':result==='WARNING'?'warning':'error'});
+const rank:Record<PolicyResult,number>={PASS:0,WARNING:1,HUMAN_REVIEW_REQUIRED:2,BLOCKED:3,OUT_OF_SCOPE:4};
+const fieldExists=(reference:string,schema:DataStructure)=>{const [table,column]=reference.split('.');return Boolean(table&&column&&schema.tables.some(item=>item.name===table&&item.columns.some(value=>value.name===column)))};
 
-const allowed = (): GuardrailDecision => ({
-  status: 'ALLOW', terminal: false, code: 'BOUNDED_POWER_BI_REQUEST',
-  reason: 'Request remains within the bounded Sales Performance demonstration.',
-  generation: 'AVAILABLE_AFTER_REQUIREMENTS', evidence: [],
-});
-
-/** Deterministic Capstone policy boundary. It demonstrates where an AI-facing
- * workflow stops; it is not a general-purpose content classifier or reviewer workflow. */
-export function assessRequestGuardrail(prompt: string): GuardrailDecision {
-  const excessiveVisuals = policy.rules[0];
-  const visualCount = [...prompt.matchAll(/\b(\d{1,4})\s+(?:report\s+)?visuals?\b/gi)]
-    .map(match => Number(match[1])).find(count => count > excessiveVisuals.max_visuals_per_page!);
-  if (visualCount !== undefined) {
-    return {
-      status: 'HUMAN_REVIEW_REQUIRED', terminal: true, code: 'EXCESSIVE_SINGLE_PAGE_VISUALS',
-      reason: `The request asks for ${visualCount} visuals on one page, beyond the bounded, readable report-design pattern supported by this demo.`,
-      generation: 'BLOCKED_NOT_RUN',
-      evidence: [{evidenceId: excessiveVisuals.id, citation: excessiveVisuals.citation, sourcePath: 'apps/web/src/guardrailPolicy.json'}],
-    };
-  }
-  if (/\b(marketing campaign|email campaign|social media campaign|advertising copy)\b/i.test(prompt)
-      && !/\b(power\s*bi|report|dashboard|analytics|business intelligence)\b/i.test(prompt)) {
-    const scopeRule=policy.rules[1];
-    return {
-      status: 'OUT_OF_SCOPE', terminal: true, code: 'NOT_A_POWER_BI_REQUEST',
-      reason: 'This request is outside the bounded Power BI report-generation scope.',
-      generation: 'BLOCKED_NOT_RUN',
-      evidence: [{evidenceId:scopeRule.id,citation:scopeRule.citation,sourcePath:'apps/web/src/guardrailPolicy.json'}],
-    };
-  }
-  return allowed();
+/** Deterministic tenant policy evaluates typed AI output and request schema.
+ * Prompt text never directly grants, blocks, or authorizes generation. */
+export function evaluateGuardrails(interpretation:RequirementInterpretation,design:ReportDesign|null,schema:DataStructure,settings:TenantSettings):GuardrailDecision{
+  const evaluations:PolicyEvaluation[]=[];
+  evaluations.push(interpretation.request_kind==='POWER_BI_REPORT'?evaluation('SCOPE-001','scope','PASS','The structured interpretation is a Power BI report request.','Continue with bounded design.'):evaluation('SCOPE-001','scope','OUT_OF_SCOPE','The structured interpretation is outside Power BI report generation.','Return to the requester; generation must not start.'));
+  if(!design)return{outcome:evaluations[0].result,generation:'NOT_STARTED',evaluations};
+  const allFields=[...design.measures.filter(measure=>measure.aggregation!=='RATIO').map(measure=>measure.field),...design.filters,...design.pages.flatMap(page=>page.visuals.flatMap(visual=>[visual.categoryField,...visual.fields].filter(Boolean)))];
+  const missing=[...new Set(allFields.filter(reference=>!fieldExists(reference,schema)))];evaluations.push(missing.length?evaluation('SCHEMA-001','schema-quality','BLOCKED',`Report Design references unknown fields: ${missing.join(', ')}.`,'Correct the design or upload a compatible schema.'):evaluation('SCHEMA-001','schema-quality','PASS','All compiled field references exist in the uploaded schema.','Continue.'));
+  const missingRelationships=design.dataModel.relationships.filter(rel=>!schema.relationships.some(item=>item.fromTable===rel.fromTable&&item.fromColumn===rel.fromColumn&&item.toTable===rel.toTable&&item.toColumn===rel.toColumn));evaluations.push(missingRelationships.length?evaluation('SCHEMA-002','schema-quality','HUMAN_REVIEW_REQUIRED','The design proposes relationships not explicitly discovered from the uploaded structure.','Verify relationship keys before generation.'):evaluation('SCHEMA-002','schema-quality','PASS','Design relationships are present in the detected structure.','Continue.'));
+  const pageMax=Math.max(0,...design.pages.map(page=>page.visuals.length));evaluations.push(design.pages.length>settings.governance.maxPages||pageMax>settings.governance.maxVisualsPerPage?evaluation('COMPLEXITY-001','complexity','HUMAN_REVIEW_REQUIRED',`The design has ${design.pages.length} pages and up to ${pageMax} visuals on a page; tenant limits are ${settings.governance.maxPages} and ${settings.governance.maxVisualsPerPage}.`,'Reduce scope or obtain human verification.'):pageMax>=settings.governance.humanReviewAtVisuals?evaluation('COMPLEXITY-001','complexity','WARNING',`A page contains ${pageMax} visuals, near the tenant review threshold.`,'Review readability before release.'):evaluation('COMPLEXITY-001','complexity','PASS','Page and visual counts are within tenant limits.','Continue.'));
+  const inaccessible=design.pages.flatMap(page=>page.visuals).filter(visual=>!visual.title.trim()||!visual.altText.trim());evaluations.push(settings.governance.requireAccessibility&&inaccessible.length?evaluation('ACCESSIBILITY-001','accessibility','BLOCKED',`${inaccessible.length} visuals lack a title or text alternative.`,'Add accessible titles and descriptions.'):evaluation('ACCESSIBILITY-001','accessibility','PASS','Visuals provide titles and text alternatives.','Continue.'));
+  const supported=new Set(['card','bar','column','line','table','slicer']);const unsupported=design.pages.flatMap(page=>page.visuals).filter(visual=>!supported.has(visual.type));evaluations.push(unsupported.length?evaluation('CAPABILITY-001','unsupported-feature','HUMAN_REVIEW_REQUIRED',`Unsupported visual types: ${[...new Set(unsupported.map(item=>item.type))].join(', ')}.`,'Revise the design or extend the compiler.'):evaluation('CAPABILITY-001','unsupported-feature','PASS','All requested visuals are in the bounded compiler capability set.','Continue.'));
+  evaluations.push(settings.generation.enabled?evaluation('GENERATION-001','generation-capability','PASS','PBIP generation is enabled for supported designs.','Compile after all blocking policies pass.'):evaluation('GENERATION-001','generation-capability','BLOCKED','PBIP generation is disabled by tenant policy.','An administrator must enable generation.'));
+  evaluations.push(!settings.governance.requireKnowledge||design.standardsApplied.length?evaluation('GROUNDING-001','ai-output-validity','PASS','The design retains governed-knowledge provenance.','Continue.'):evaluation('GROUNDING-001','ai-output-validity','BLOCKED','Tenant policy requires governed knowledge but no standards were applied.','Retrieve governed knowledge and regenerate the design.'));
+  const outcome=evaluations.reduce<PolicyResult>((current,item)=>rank[item.result]>rank[current]?item.result:current,'PASS');return{outcome,generation:rank[outcome]>=rank.HUMAN_REVIEW_REQUIRED?'NOT_STARTED':'AVAILABLE',evaluations};
 }

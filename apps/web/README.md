@@ -1,47 +1,58 @@
-# APBRA Capstone web demo
+# APBRA Capstone — enterprise Power BI architecture prototype
 
-This local React/Vite application demonstrates a real, bounded AI architecture for the synthetic Sales Performance scenario:
+This local React/Vite application separates tenant administration from a business report-creation workspace. Its active flow is:
 
-`requirement + schema → GPT-4.1 interpretation → dynamic clarification → confirmed snapshot → text-embedding-3-small retrieval → grounded GPT-4.1 DesignPlan → deterministic guardrails/generation/validation`
+`uploaded CSV/XLSX + requirement → GPT-4.1 interpretation → dynamic clarification → local semantic retrieval → grounded ReportDesign → deterministic policy → bounded PBIP compilation → deterministic candidate validation`
 
-## Local configuration
+It does not select a canned scenario from prompt text. GPT-4.1 proposes typed advisory outputs; deterministic code owns policy, compilation, validation, and whether generation may start.
 
-Copy `.env.example` to `.env.local` and fill the Azure AI values. `.env.local` is ignored by Git. The Vite server reads the API key and proxies only the bounded chat and embedding routes; browser JavaScript never receives the key. The configured endpoint may use the Azure OpenAI `/openai/v1` contract or the deployment/API-version contract. No version is guessed: non-v1 endpoints require `AZURE_AI_API_VERSION`.
+## Run locally
+
+Copy `.env.example` to `.env.local` and provide the Azure AI configuration. `.env.local` is ignored. The Vite server holds the credential and exposes only bounded chat and embedding adapters; the browser never receives the API key. The endpoint can use Azure OpenAI's `/openai/v1` contract or an explicitly configured deployment/API-version contract. No API version is guessed.
 
 ```sh
+npm install
 npm test
 npm run build
 npm run dev
 ```
 
-If Foundry is unavailable, AI-dependent stages show `AI SERVICE UNAVAILABLE` and remain incomplete. There is no fixture fallback presented as AI output.
+If Foundry is unavailable, AI-dependent stages fail visibly and remain incomplete. There is no deterministic response presented as AI output.
 
-## Dynamic workflow
+## Administration and workspace
 
-GPT-4.1 interprets the current request and schema and returns typed objective, KPI, dimension, filter, page, assumption, and clarification fields. Clarification controls are rendered from that response. APBRA-90 remains the default prompt and offers explicit convenience answers, but its old three questions are not rendered as the normal workflow.
+The administration plane provides local prototype settings for organisation identity, AI/model status, governed knowledge, branding/report standards, and guardrail/generation thresholds. These settings are browser-local and are not a production tenant control plane.
 
-The real AI DesignPlan is a structured advisory artefact. The unchanged, manually Desktop-verified PBIP compiler remains intentionally bound to the exact APBRA-90 sample decisions; arbitrary AI plans are not silently converted to executable DAX, M, or Power BI metadata.
+The business workspace starts empty. A user uploads CSV or XLSX data, reviews the detected tables/columns/types/relationships, enters a requirement, answers questions generated for that input, confirms the requirements, and receives a grounded typed ReportDesign. Policy results and source validation precede candidate download. My Runs is browser-session history only.
 
 ## Governed local RAG
 
-The fictional corpus is stored under `knowledge/` as five Markdown documents. `rag.ts` loads each document and creates one chunk per level-two policy heading. The current corpus has 10 chunks. This heading-aware strategy is more appropriate than arbitrary 400–600-token windows because each short section is one complete policy topic. It uses zero overlap to avoid duplicated rules in ranking and records source, version, heading, stable chunk ID, token estimate, and citation.
+Five fictional policy documents under `knowledge/` form the controlled corpus. The index uses heading boundaries; sections beyond the target are split into roughly 500-token windows with about 50 tokens of overlap. Each chunk retains source, version, heading, stable chunk ID, character/token estimates, and citation. `text-embedding-3-small` embeds chunks and queries. A local in-memory exact cosine index returns top-k evidence for the design call.
 
-`text-embedding-3-small` embeds the chunks and query. The application retains vectors only in an in-memory exact-vector index and ranks by cosine similarity. It supplies the top four chunks, including their citations, to the grounded DesignPlan call. No raw vectors are displayed or persisted. The evaluation set contains seven branding, KPI, date, accessibility, visual, security, and handover queries and measures Hit@3.
+Administrators can add or replace local Markdown documents and re-index during the browser session. This is a bounded prototype, not enterprise content lifecycle management.
 
-Run the real smoke/evaluation against a running local server:
+## Bounded PBIP compiler
+
+The compiler accepts the typed ReportDesign contract and detected data structure. It supports embedded CSV data, one or more imported tables, explicit measures using SUM, DISTINCTCOUNT, COUNT, AVERAGE or measure ratios, simple discovered relationships, multiple pages, KPI cards, bar/column/line charts, tables, slicers, and tenant theme colours. It does not execute model-authored DAX, M, SQL or shell content.
+
+Unsupported features, unknown fields, unverified relationships, excessive complexity, missing accessibility metadata, absent grounding, or disabled generation are handled by typed deterministic policy. Human review is a terminal status in this prototype; no approval workflow exists.
+
+Source validation checks project structure, table files, PBIR references and identifiers, visual count/types, unresolved values, measures, and relationships. It is not Power BI Desktop runtime evidence.
+
+## Real Foundry evaluation
+
+With the local server running, execute:
 
 ```sh
 node scripts/foundry-smoke.mjs
 ```
 
-Secret-free evidence is written under ignored `artifacts/local/`.
+The opt-in integration harness runs two materially different natural-language requirements and schemas through real interpretation, embedding retrieval, grounded design, policy, compilation and validation. It also sends an unrelated request through real interpretation and verifies that generation never starts. Secret-free evidence and candidate ZIPs are written under ignored `artifacts/local/`.
 
-## Authority and claim boundary
+## Claim boundary
 
-The LLM proposes typed interpretation and design outputs. Deterministic code retains guardrail, schema validation, candidate validation, governance, and release authority. The 250-visual request remains `HUMAN REVIEW REQUIRED / BLOCKED_NOT_RUN`; the marketing request remains `OUT OF SCOPE`.
+Implemented locally: CSV/XLSX ingestion, real Azure-hosted inference and embeddings, dynamic clarification, local semantic retrieval with citations, structured grounded design, deterministic guardrails, a bounded generic PBIP compiler, source validation, trace data, downloads, and browser-session run history.
 
-Implemented here: real Azure-hosted inference and embeddings, dynamic clarification, local semantic retrieval with citations, structured grounded design, deterministic policy, and the bounded Power BI sample path.
+Prototype/staged: tenant administration, fictional customer standards, in-memory index, API-key local adapter, inferred relationships, and PBIP candidates pending manual Desktop testing.
 
-Prototype: fictional customer corpus, local Vite adapter, in-memory exact-vector index, and the Sales Performance compiler.
-
-Not implemented: production hosting, Azure AI Search, production identity or multi-tenancy, tenant publishing, reviewer workflow, arbitrary AI-to-PBIP compilation, automated deployment, or dynamic handover-document generation.
+Not implemented: production hosting, persistent multi-tenancy, enterprise identity/RBAC, Azure AI Search, reviewer workflow, production Power BI publishing, arbitrary DAX/M execution, automated deployment, or dynamic handover-document generation.

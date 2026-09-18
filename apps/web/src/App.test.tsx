@@ -1,39 +1,20 @@
-import {it, expect} from 'vitest';
+import {it,expect} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {App,sampleGeneratorEligible} from './App';
-import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
-it('renders labelled input and honest unavailable release state', () => {
+import {App} from './App';
+import {ReviewPanel} from './EnterpriseApp';
+import type {GuardrailDecision} from './guardrail';
+
+it('renders distinct business and administration navigation',()=>{
   const html=renderToStaticMarkup(<App/>);
-  expect(html).toContain('for="prompt"');
-  expect(html).toContain('Interpret requirement with GPT-4.1');
-  expect(html).toContain('Questions below are generated at runtime');
-  for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).not.toContain(`for="${id}"`);
-  expect(html).toContain('Prototype limitations');
-  expect(html).toContain('Requirement → Clarification → Governed Knowledge → DesignPlan → Generation → Validation');
-  for(const stage of ['Requirement','Clarification','Governed Knowledge','DesignPlan','Generation','Validation']) expect(html).toContain(stage);
-  expect(html).toContain('disabled="">Production release');
-  expect(html).toContain('controlled local retrieval with real embeddings and citations');
-  expect(html).toContain('reviewer workflow');
-  expect(html).not.toContain('href=');
+  for(const label of ['Create Report','My Runs','Tenant Settings','AI &amp; Models','Governed Knowledge','Branding &amp; Report Standards','Guardrails &amp; Generation'])expect(html).toContain(label);
+  expect(html).toContain('Create Power BI Report');expect(html).toContain('Upload Excel');expect(html).toContain('Upload CSV');expect(html).toContain('Analyse Requirement');
 });
-it('renders the excessive-visual request as a terminal human-review state',()=>{
-  const html=renderToStaticMarkup(<App initialPrompt="Create an executive sales report with 250 visuals on a single report page."/>);
-  expect(html).toContain('HUMAN REVIEW REQUIRED');
-  expect(html).toContain('No Power BI report has been generated');
-  expect(html).toContain('EXCESSIVE_SINGLE_PAGE_VISUALS');
-  expect(html).toContain('local-policy:capstone-power-bi-demo-boundaries/GUARD-001');
-  expect(html).toContain('download="SalesPerformance.guardrail-evidence.json"');
-  expect(html).not.toContain('UNSUPPORTED');
+it('renders a structured complexity policy outcome as human review with generation not started',()=>{
+  const decision:GuardrailDecision={outcome:'HUMAN_REVIEW_REQUIRED',generation:'NOT_STARTED',evaluations:[{ruleId:'COMPLEXITY-001',category:'complexity',severity:'error',result:'HUMAN_REVIEW_REQUIRED',reason:'The structured design exceeds tenant visual limits.',recommendedAction:'Reduce scope or obtain verification.'}]};const html=renderToStaticMarkup(<ReviewPanel decision={decision}/>);expect(html).toContain('Human Review Required');expect(html).toContain('Generation status:');expect(html).toContain('Not started');expect(html).toContain('COMPLEXITY-001');
 });
-it('renders the unrelated request as a terminal out-of-scope state',()=>{
-  const html=renderToStaticMarkup(<App initialPrompt="Write a marketing campaign for our new product."/>);
-  expect(html).toContain('OUT OF SCOPE');
-  expect(html).toContain('No Power BI report has been generated');
-  expect(html).not.toContain('UNSUPPORTED');
+it('renders a typed out-of-scope outcome without starting generation',()=>{
+  const decision:GuardrailDecision={outcome:'OUT_OF_SCOPE',generation:'NOT_STARTED',evaluations:[{ruleId:'SCOPE-001',category:'scope',severity:'error',result:'OUT_OF_SCOPE',reason:'The structured interpretation is outside Power BI reporting.',recommendedAction:'Return to the requester.'}]};const html=renderToStaticMarkup(<ReviewPanel decision={decision}/>);expect(html).toContain('Outside report-generation scope');expect(html).toContain('Not started');expect(html).toContain('SCOPE-001');
 });
-it('enables the preserved sample compiler only for explicit APBRA-90 demo decisions',()=>{
-  expect(sampleGeneratorEligible(request.original_text,{},true)).toBe(true);
-  expect(sampleGeneratorEligible('another supported Power BI request',{},true)).toBe(false);
-  expect(sampleGeneratorEligible(request.original_text,Object.fromEntries(request.clarifications.map(c=>[c.id,c.golden_answer])),false)).toBe(true);
-  expect(sampleGeneratorEligible(request.original_text,{one:'partial'},false)).toBe(false);
+it('keeps course fixtures and built-in demo controls out of the business UX',()=>{
+  const html=renderToStaticMarkup(<App/>);for(const term of ['APBRA-90','ELVTR','golden answer','Try a sample','Scenario','NOT_RUN'])expect(html).not.toContain(term);
 });

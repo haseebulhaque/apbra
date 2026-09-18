@@ -1,3 +1,4 @@
+/* Retained historical implementation for local comparison only; the active application is EnterpriseApp.
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {createExecutionTrace} from './execution';
 import {GovernancePanel} from './GovernancePanel';
@@ -28,6 +29,9 @@ function demoAnswer(question:RequirementInterpretation['clarifications'][number]
   if(question.category==='FILTER_SCOPE')return 'Use Region, Business Area and Product Category as slicers.';
   if(question.category==='OTHER'&&/(standard|brand|theme)/.test(text))return 'Apply the governed corporate standards retrieved by this demo.';
 }
+*/
+export {EnterpriseApp as App} from './EnterpriseApp';
+/*
 export function sampleGeneratorEligible(prompt:string,answers:Answers,demoFixtureAnswersApplied:boolean){const values=new Set(Object.values(answers));return prompt===request.original_text&&(demoFixtureAnswersApplied||request.clarifications.every(c=>values.has(c.golden_answer)))}
 
 export function App({initialPrompt=request.original_text}:{initialPrompt?:string}={}){
@@ -82,3 +86,4 @@ export function App({initialPrompt=request.original_text}:{initialPrompt?:string
     </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">Retain execution evidence</h2><p>Execution {trace.id}. Active AI responses, retrieval provenance, candidate bytes, and validation outcomes remain local browser state unless explicitly downloaded.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({trace:trace.export(),ai:{interpretMetrics,designMetrics,rag}},null,2))}>Save complete execution evidence JSON</a>}</section><section aria-labelledby="boundaries-heading"><h2 id="boundaries-heading">Capability boundaries</h2><p><strong>Implemented:</strong> real Azure-hosted GPT-4.1 interpretation and structured design, dynamic clarification, controlled local retrieval with real embeddings and citations, deterministic guardrails, source validation, and the bounded Power BI sample generator.</p><p><strong>Prototype:</strong> fictional customer corpus, in-memory exact-vector index, local Vite server adapter, and the deliberately limited Sales Performance compiler.</p><p><strong>Not implemented:</strong> production hosting, Azure AI Search, tenant publishing, enterprise SSO or multi-tenancy, reviewer workflow, automated deployment, arbitrary AI-to-PBIP compilation, and dynamic handover-document generation.</p></section><footer>APBRA Capstone · Real AI architecture demonstration</footer>
   </main>
 }
+*/

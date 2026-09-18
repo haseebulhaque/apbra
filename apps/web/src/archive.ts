@@ -7,7 +7,7 @@ export function zipFiles(files:Record<string,string>):Uint8Array<ArrayBuffer> {
  const local:number[]=[],central:number[]=[];
  const append=(to:number[],value:number,size:number)=>{for(let i=0;i<size;i++)to.push((value>>>(8*i))&255);};
  for(const [path,text] of entries){
-  if(!/^[A-Za-z0-9_-][A-Za-z0-9_./-]*$/.test(path)||path.split('/').some(p=>!p||p==='.'||p==='..'))throw new Error('ARCHIVE_UNSAFE_PATH');
+  if(!/^[A-Za-z0-9_\[\]-][A-Za-z0-9_\[\]./-]*$/.test(path)||path.split('/').some(p=>!p||p==='.'||p==='..'))throw new Error('ARCHIVE_UNSAFE_PATH');
   const name=encoder.encode(path),data=encoder.encode(text),offset=local.length,crc=crc32(data);
   if(name.length>255||data.length>2_000_000||offset+data.length>10_000_000)throw new Error('ARCHIVE_SIZE_LIMIT');
   for(const [value,size] of [[0x04034b50,4],[20,2],[0x800,2],[0,2],[0,2],[33,2],[crc,4],[data.length,4],[data.length,4],[name.length,2],[0,2]])append(local,value,size);
