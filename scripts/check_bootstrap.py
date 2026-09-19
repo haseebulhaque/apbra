@@ -28,6 +28,14 @@ CAPSTONE_ORCHESTRATION_PATHS = {'apps/web/src/execution.test.ts', 'apps/web/src/
 CAPSTONE_VALIDATION_PATHS = {'apps/web/README.md', 'apps/web/src/validation.ts', 'apps/web/src/validation.test.ts', 'apps/web/src/validationProfile.json', 'apps/web/src/App.tsx'}
 CAPSTONE_GENERATION_PATHS = {'apps/web/src/archive.ts', 'apps/web/src/App.test.tsx', 'apps/web/src/raw.d.ts', 'apps/web/src/App.tsx', 'apps/web/src/powerbi.ts', 'apps/web/src/powerbi.test.ts', 'apps/web/README.md'}
 CAPSTONE_DESIGN_PATHS = {'apps/web/src/KnowledgePanel.tsx', 'apps/web/src/knowledge.test.tsx', 'apps/web/README.md', 'apps/web/src/designPlan.ts', 'apps/web/src/App.tsx', 'apps/web/src/designPlan.test.ts'}
+DEPLOYMENT_GUIDE_PATHS = {
+    'apps/web/src/deploymentGuide.ts',
+    'apps/web/src/deploymentGuide.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+    'apps/web/package.json',
+    'apps/web/package-lock.json',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -397,10 +405,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 evaluation_task = None
+        deployment_guide_task = None
+        deployment_guide_path = root / 'tasks/APBRA-76-deployment-guide.json'
+        if deployment_guide_path.exists():
+            deployment_guide_task = load_json(deployment_guide_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), deployment_guide_task)
+            if not extension_errors:
+                extension_errors += task_errors(deployment_guide_task, catalog, sources)
+                if deployment_guide_task['task_id'] != 'APBRA-76' or deployment_guide_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected deployment guide identity')
+                if set(deployment_guide_task['allowed_paths']) != DEPLOYMENT_GUIDE_PATHS:
+                    extension_errors.append('Unexpected deployment guide scope')
+                if (deployment_guide_task['task_mode'], deployment_guide_task['readiness'], deployment_guide_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Deployment guide requires issued implementation acceptance')
+                if deployment_guide_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Deployment guide requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                deployment_guide_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
