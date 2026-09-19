@@ -1,82 +1,89 @@
-import React, {useState, useEffect, useRef, useCallback} from 'react';
+/* Retained historical implementation for local comparison only; the active application is EnterpriseApp.
+import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {createExecutionTrace} from './execution';
 import {GovernancePanel} from './GovernancePanel';
-import {runValidationAttempt, failureCase, type Validation, type ValidationAttempt} from './validation';
-import {generatePowerBI, type Candidate} from './powerbi';
+import {runValidationAttempt,failureCase,type Validation,type ValidationAttempt} from './validation';
+import {generatePowerBI,type Candidate} from './powerbi';
 import {zipFiles} from './archive';
-import {createDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
+import {createDesignPlan,type DesignPlan} from './designPlan';
 import {retrieveCuratedKnowledge} from './knowledge';
-import {KnowledgePanel} from './KnowledgePanel';
+import {assessRequestGuardrail} from './guardrail';
+import {foundryStatus,generateGroundedDesignPlan,interpretRequirement,type AIDesignPlan,type AIMetrics,type FoundryStatus,type RequirementInterpretation} from './foundry';
+import {retrieveKnowledge,type RagRetrieval} from './rag';
 import request from '../../../tests/bootstrap/fixtures/sales-v1/request.json';
 import schema from '../../../tests/bootstrap/fixtures/sales-v1/schema.json';
-import {unavailableStages, type Answers} from './workflow';
+import {unavailableStages,type Answers} from './workflow';
+import {confirmRequirements} from './requirements';
 
-import {assessRequirements, confirmRequirements, type RequirementsSnapshot} from './requirements';
-
-export function App() {
-  const [trace]=useState(createExecutionTrace);
-  const [,setTraceRevision]=useState(0);
-  const notify=useCallback(()=>setTraceRevision(n=>n+1),[]);
-  function observed<T,>(stage:string,work:()=>T){try{return trace.sync(stage,work);}finally{notify();}}
-  const [prompt, setPrompt] = useState(request.original_text);
-  const [answers, setAnswers] = useState<Answers>({});
-  const [snapshot, setSnapshot] = useState<RequirementsSnapshot | null>(null);
-  const [plan, setPlan] = useState<DesignPlan | null>(null);
-  const [candidate,setCandidate]=useState<Candidate|null>(null);
-  const [governanceState,setGovernanceState]=useState('NOT_RUN');
-  const [validation,setValidation]=useState<Validation|null>(null);
-  const [history,setHistory]=useState<ValidationAttempt[]>([]);
-  const [validating,setValidating]=useState(false),[validationError,setValidationError]=useState('');
-  const epoch=useRef(0);
-  async function runValidation(failure:boolean){
-    if(!candidate)return;const current=epoch.current;
-    const token=trace.start(failure?'DECLARED_FAILURE_VALIDATION':'SOURCE_VALIDATION');notify();
-    setValidating(true);setValidationError('');
-    const attempt=await runValidationAttempt(candidate,failure);
-    trace.finish(token,attempt,attempt.outcome==='INCOMPLETE'?'VALIDATION_INCOMPLETE':undefined);notify();
-    setHistory(h=>[...h,attempt]);
-    if(epoch.current===current){setValidation(attempt.result);setValidationError(attempt.error??'');setValidating(false);}
-  }
-  const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
-  useEffect(()=>{if(!candidate){setArchiveUrl(null);return;}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url);},[candidate]);
-  function invalidate() { if(snapshot||plan||candidate){trace.invalidate('Requirements input changed');notify();} setSnapshot(null); setPlan(null); setCandidate(null); setValidation(null); setValidating(false); setValidationError(''); epoch.current++; }
-  const submission = {original_request: prompt, original_schema: schema, answers};
-  const assessment = assessRequirements(submission);
-  const ready = assessment.status === 'READY_TO_CONFIRM';
-  function editAnswer(id: string, value: string) { invalidate(); setAnswers({...answers, [id]:value}); }
-  return <main>
-    <header><span className="eyebrow">APBRA / ELVTR CAPSTONE</span><h1>Your report starts here.</h1><p>Explore the synthetic sales scenario and prepare your request.</p></header>
-    <aside className="notice">Local requester shell · No backend connected. Your inputs stay in browser memory. Synthetic project generation runs locally. Power BI runtime evaluation is not available. Governance uses explicitly simulated demo identities.</aside>
-    <div className="layout"><section aria-labelledby="request-heading"><h2 id="request-heading">01 · Define the report</h2>
-      <label htmlFor="scenario">Synthetic scenario</label><select id="scenario" value="sales-v1" onChange={() => {}}><option value="sales-v1">Sales performance · APBRA-90 v1.0.0</option></select>
-      <details><summary>Inspect the synthetic schema</summary><pre>{JSON.stringify(schema, null, 2)}</pre></details>
-      <label htmlFor="prompt">Report request</label><textarea id="prompt" rows={7} maxLength={4000} value={prompt} onChange={e => {setPrompt(e.target.value); invalidate();}}/>
-      <h2>02 · Clarify the request</h2><p>These are predefined golden-scenario topics, not AI-generated questions.</p>
-      {request.clarifications.map(c => <div className="question" key={c.id}><label htmlFor={c.id}>{c.topic}</label><textarea id={c.id} rows={3} maxLength={2000} value={answers[c.id] ?? ''} onChange={e => editAnswer(c.id, e.target.value)}/><button className="secondary" onClick={() => editAnswer(c.id,c.golden_answer)}>Use synthetic golden answer</button></div>)}
-      <button disabled={!ready || !!snapshot} onClick={() => setSnapshot(observed('REQUIREMENTS_CONFIRMED',()=>confirmRequirements(submission, true)))}>Confirm requirements and create snapshot</button>
-      <p role="status">{snapshot ? 'RequirementsSnapshot confirmed in browser memory. Editing inputs invalidates it; refresh clears it.' : assessment.status}</p>
-      {assessment.issues.length > 0 && <ul>{assessment.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
-      {snapshot && <details open><summary>Inspect confirmed RequirementsSnapshot</summary><pre>{JSON.stringify(snapshot, null, 2)}</pre></details>}
-      <h2>03 · Create the design</h2><p>Deterministic golden-scenario planning consumes confirmed requirements and current curated evidence. No AI interpretation is claimed.</p>
-      <button disabled={!snapshot || !!plan} onClick={() => {const evidence=observed('CURATED_EVIDENCE',()=>retrieveCuratedKnowledge('sales-v1'));setPlan(observed('DESIGN_PLAN',()=>createDesignPlan(snapshot!,evidence)));}}>Create DesignPlan</button>
-      {plan && <><p role="status">DesignPlan created and linked to requirements and all eight citations. Save the JSON to retain it after refresh.</p>
-        <details><summary>Inspect DesignPlan and source bindings</summary><pre>{serializeDesignPlan(plan)}</pre></details>
-        <a download="SalesPerformance.DesignPlan.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(serializeDesignPlan(plan))}>Save DesignPlan JSON</a></>}
-      <h2>04 · Generate the project</h2><p>Render the validated DesignPlan into a synthetic Power BI candidate. This download is source inspection, not an approved release.</p>
-      <button disabled={!plan||!!candidate} onClick={()=>setCandidate(observed('POWER_BI_GENERATION',()=>generatePowerBI(plan)))}>Generate Power BI candidate</button>
-      {candidate&&<><p role="status">Candidate generated · {Object.keys(candidate.files).length} files · Desktop, DAX and RLS runtime NOT_RUN.</p>
-        <details><summary>Inspect generated project files</summary>{Object.entries(candidate.files).map(([path,content])=><details key={path}><summary>{path}</summary><pre>{content}</pre></details>)}</details>
-        {archiveUrl&&<a href={archiveUrl} download="SalesPerformance.candidate.zip">Save candidate ZIP · not a release</a>}</>}
-      <h2>05 · Validate the candidate</h2><p>Checks the exact reviewed golden source profile and structural rules. This is not Desktop or DAX runtime validation.</p>
-      <button disabled={!candidate||validating} onClick={()=>void runValidation(false)}>Validate golden candidate</button>
-      <button className="secondary" disabled={!candidate||validating} onClick={()=>void runValidation(true)}>Run declared missing-relationship failure</button>
-      {validating&&<p role="status">Validation running · no result yet</p>}{validationError&&<p role="alert">{validationError}</p>}
-      {validation&&<><p role="status">Source validation {validation.status} · {validation.nextAction}</p><pre>{JSON.stringify(validation,null,2)}</pre></>}
-      {history.length>0&&<><p>{history.length} validation attempts retained, including failures. Automatic repair is not implemented.</p><a download="SalesPerformance.validation-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({failureCase,attempts:history},null,2))}>Save validation evidence JSON</a></>}
-    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow progress</h2><p>Requirements and DesignPlan use deterministic golden-fixture processing. Generation renders source files; validation checks source files only; demo governance is shown below.</p>
-      <ol className="stages">{unavailableStages().map(s => <li key={s.name}><span>{s.name}</span><strong>{s.name === 'RequirementsSnapshot' && snapshot ? 'CONFIRMED' : plan && s.name === 'Knowledge & citations' ? 'CONSUMED' : plan && s.name === 'DesignPlan' ? 'CREATED' : candidate && s.name === 'Power BI generation' ? 'GENERATED' : validation && s.name === 'Deterministic validation' ? validation.status : s.name === 'Governance & release' ? governanceState : s.status}</strong></li>)}</ol>
-      <h2>Release artefacts</h2><p>Use the isolated demo governance panel for eligibility and package downloads.</p><button disabled>Production release · unavailable</button>
-      <p className="small">No production identity, tenant authorization, Power BI Desktop compatibility, DAX correctness or RLS runtime verification is claimed.</p>
-    </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">07 · Retain execution evidence</h2><p>Execution {trace.id}. Save the complete record before refreshing. Timings measure local processing only; identities are simulated and external runtime remains untested.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(trace.export(),null,2))}>Save complete execution evidence JSON</a>}</section><KnowledgePanel/><footer>APBRA-136 · Local Capstone execution evidence</footer>
-  </main>;
+type AISnapshot={artifact_kind:'AIRequirementsSnapshot';version:1;processing:'AZURE_OPENAI_GPT_4_1';original_request:string;schema_id:string;interpretation:RequirementInterpretation;clarification_answers:Answers;demo_fixture_answers_applied:boolean;confirmation:'EXPLICIT_LOCAL_USER_CONFIRMATION'};
+function demoAnswer(question:RequirementInterpretation['clarifications'][number]){
+  const text=question.question.toLowerCase();
+  if(question.category==='TIME_COMPARISON'||/(year.over.year|yoy|prior.year|prior period|time grain)/.test(text))return request.clarifications.find(c=>c.id==='yoy-coverage')!.golden_answer;
+  if(question.category==='SECURITY'||/(row.level security|\brls\b|access control)/.test(text))return request.clarifications.find(c=>c.id==='region-security')!.golden_answer;
+  if(/average order value/.test(text))return 'Average Order Value is Total Sales divided by distinct Total Orders.';
+  if(/total orders|unique order|distinct.*order/.test(text))return 'Count distinct FactSales[OrderId]; an order may contain multiple sales lines.';
+  if(question.category==='METRIC_DEFINITION'&&/(sales|revenue|gross|net|salesamount)/.test(text))return request.clarifications.find(c=>c.id==='sales-definition')!.golden_answer;
+  if(question.category==='METRIC_DEFINITION'&&/product/.test(text))return 'Use DimProduct.ProductCategory for the requested category filter and breakdown.';
+  if(question.category==='PAGE_SCOPE')return 'Use an Executive Summary and a detailed Regional Performance view.';
+  if(question.category==='AUDIENCE')return 'Executive leaders are the primary audience.';
+  if(question.category==='FILTER_SCOPE')return 'Use Region, Business Area and Product Category as slicers.';
+  if(question.category==='OTHER'&&/(standard|brand|theme)/.test(text))return 'Apply the governed corporate standards retrieved by this demo.';
 }
+*/
+export {EnterpriseApp as App} from './EnterpriseApp';
+/*
+export function sampleGeneratorEligible(prompt:string,answers:Answers,demoFixtureAnswersApplied:boolean){const values=new Set(Object.values(answers));return prompt===request.original_text&&(demoFixtureAnswersApplied||request.clarifications.every(c=>values.has(c.golden_answer)))}
+
+export function App({initialPrompt=request.original_text}:{initialPrompt?:string}={}){
+  const [trace]=useState(createExecutionTrace);const [,setTraceRevision]=useState(0);const notify=useCallback(()=>setTraceRevision(n=>n+1),[]);
+  function observed<T>(stage:string,work:()=>T){try{return trace.sync(stage,work)}finally{notify()}}
+  const [prompt,setPrompt]=useState(initialPrompt);const [answers,setAnswers]=useState<Answers>({});const [demoDecisionsApplied,setDemoDecisionsApplied]=useState(false);
+  const [service,setService]=useState<FoundryStatus|null>(null);const [interpretation,setInterpretation]=useState<RequirementInterpretation|null>(null);const [interpretMetrics,setInterpretMetrics]=useState<AIMetrics|null>(null);
+  const [snapshot,setSnapshot]=useState<AISnapshot|null>(null);const [rag,setRag]=useState<RagRetrieval|null>(null);const [aiPlan,setAIPlan]=useState<AIDesignPlan|null>(null);const [designMetrics,setDesignMetrics]=useState<AIMetrics|null>(null);const [generatorPlan,setGeneratorPlan]=useState<DesignPlan|null>(null);
+  const [candidate,setCandidate]=useState<Candidate|null>(null);const [validation,setValidation]=useState<Validation|null>(null);const [history,setHistory]=useState<ValidationAttempt[]>([]);const [,setGovernanceState]=useState('NOT_RUN');
+  const [aiBusy,setAIBusy]=useState<'INTERPRET'|'DESIGN'|null>(null);const [aiError,setAIError]=useState('');const [validating,setValidating]=useState(false);const [validationError,setValidationError]=useState('');const epoch=useRef(0);
+  const [archiveUrl,setArchiveUrl]=useState<string|null>(null);
+  useEffect(()=>{void foundryStatus().then(setService).catch(()=>setService(null))},[]);
+  useEffect(()=>{if(!candidate){setArchiveUrl(null);return}const url=URL.createObjectURL(new Blob([zipFiles(candidate.files)],{type:'application/zip'}));setArchiveUrl(url);return()=>URL.revokeObjectURL(url)},[candidate]);
+  function invalidate(){if(interpretation||snapshot||rag||aiPlan||candidate){trace.invalidate('Requirements input changed');notify()}setAnswers({});setDemoDecisionsApplied(false);setInterpretation(null);setInterpretMetrics(null);setSnapshot(null);setRag(null);setAIPlan(null);setDesignMetrics(null);setGeneratorPlan(null);setCandidate(null);setValidation(null);setHistory([]);setAIBusy(null);setAIError('');setValidationError('');epoch.current++}
+  const guardrail=assessRequestGuardrail(prompt);const requestStatus=guardrail.status==='ALLOW'?(interpretation?'INTERPRETED BY AZURE AI FOUNDRY':'READY FOR AI INTERPRETATION'):guardrail.status.replaceAll('_',' ');
+  const requiredAnswered=Boolean(interpretation&&interpretation.clarifications.filter(q=>q.required).every(q=>answers[q.id]?.trim()));
+  async function interpret(){if(guardrail.status!=='ALLOW')return;const current=epoch.current;setAIBusy('INTERPRET');setAIError('');const token=trace.start('AZURE_AI_REQUIREMENT_INTERPRETATION');notify();try{const result=await interpretRequirement(prompt,schema);trace.finish(token,{interpretation:result.value,metrics:result.metrics});notify();if(epoch.current===current){setInterpretation(result.value);setInterpretMetrics(result.metrics)}}catch(error){trace.finish(token,undefined,error instanceof Error?error.message:'AI_SERVICE_UNAVAILABLE');notify();if(epoch.current===current)setAIError('AI SERVICE UNAVAILABLE · requirement interpretation did not complete.')}finally{if(epoch.current===current)setAIBusy(null)}}
+  function confirm(){if(!interpretation||!requiredAnswered)return;setSnapshot({artifact_kind:'AIRequirementsSnapshot',version:1,processing:'AZURE_OPENAI_GPT_4_1',original_request:prompt,schema_id:schema.schema_id,interpretation,clarification_answers:structuredClone(answers),demo_fixture_answers_applied:demoDecisionsApplied,confirmation:'EXPLICIT_LOCAL_USER_CONFIRMATION'})}
+  async function groundAndDesign(){if(!snapshot)return;const current=epoch.current;setAIBusy('DESIGN');setAIError('');const token=trace.start('AZURE_AI_RAG_AND_DESIGN');notify();try{const query=[snapshot.original_request,snapshot.interpretation.objective,...snapshot.interpretation.kpis,...snapshot.interpretation.dimensions,...Object.values(snapshot.clarification_answers)].join('\n');const retrieval=await retrieveKnowledge(query,4);const result=await generateGroundedDesignPlan(snapshot,schema,retrieval.retrieved.map(c=>({citation:c.citation,text:c.text})));trace.finish(token,{retrieval,result:result.value,metrics:result.metrics});notify();if(epoch.current!==current)return;setRag(retrieval);setAIPlan(result.value);setDesignMetrics(result.metrics);
+      const canonicalAnswers=Object.fromEntries(request.clarifications.map(c=>[c.id,c.golden_answer]));if(sampleGeneratorEligible(prompt,snapshot.clarification_answers,snapshot.demo_fixture_answers_applied)){const legacy=confirmRequirements({original_request:request.original_text,original_schema:schema,answers:canonicalAnswers},true);setGeneratorPlan(observed('BOUNDED_SAMPLE_COMPILATION',()=>createDesignPlan(legacy,retrieveCuratedKnowledge('sales-v1'))));}
+    }catch(error){trace.finish(token,undefined,error instanceof Error?error.message:'AI_SERVICE_UNAVAILABLE');notify();if(epoch.current===current)setAIError('AI SERVICE UNAVAILABLE · semantic retrieval or grounded DesignPlan generation did not complete.')}finally{if(epoch.current===current)setAIBusy(null)}}
+  async function runValidation(failure:boolean){if(!candidate)return;const current=epoch.current;const token=trace.start(failure?'DECLARED_FAILURE_VALIDATION':'SOURCE_VALIDATION');notify();setValidating(true);setValidationError('');const attempt=await runValidationAttempt(candidate,failure);trace.finish(token,attempt,attempt.outcome==='INCOMPLETE'?'VALIDATION_INCOMPLETE':undefined);notify();setHistory(h=>[...h,attempt]);if(epoch.current===current){setValidation(attempt.result);setValidationError(attempt.error??'');setValidating(false)}}
+  const stageStatus=(name:string)=>name==='Requirement'?(guardrail.status==='ALLOW'?(interpretation?'AI_INTERPRETED':'CAPTURED'):requestStatus):name==='Clarification'?(guardrail.status!=='ALLOW'?'NOT_RUN':snapshot?'CONFIRMED':interpretation?'REQUIRED':'NOT_RUN'):name==='Governed Knowledge'?(rag?'RETRIEVED':'NOT_RUN'):name==='DesignPlan'?(aiPlan?'AI_GENERATED':'NOT_RUN'):name==='Generation'?(candidate?'READY':aiPlan&&!generatorPlan?'SAMPLE_ONLY':'NOT_RUN'):name==='Validation'?(validation?.status??'NOT_RUN'):'NOT_RUN';
+  const totalTokens=(interpretMetrics?.totalTokens??0)+(designMetrics?.totalTokens??0)+(rag?.indexMetrics.totalTokens??0)+(rag?.queryMetrics.totalTokens??0);const totalLatency=(interpretMetrics?.latencyMs??0)+(designMetrics?.latencyMs??0)+(rag?.indexMetrics.latencyMs??0)+(rag?.queryMetrics.latencyMs??0);
+  return <main>
+    <header><span className="eyebrow">APBRA / ELVTR CAPSTONE</span><h1>AI Power BI solution architect</h1><p>Interpret a report requirement with GPT-4.1, retrieve governed standards semantically, and produce a grounded structured design.</p></header>
+    <details><summary>Prototype limitations</summary><p>Azure AI Foundry provides real inference and embeddings through a local server-side adapter. The customer corpus and supported Power BI compiler are bounded prototypes. The API key remains server-side. The manually verified PBIP is the fixed Sales Performance sample; arbitrary AI designs are not automatically compiled into Power BI.</p></details>
+    <div className="layout"><section aria-labelledby="request-heading"><h2 id="request-heading">01 · Requirement</h2>
+      <label htmlFor="scenario">Synthetic schema</label><select id="scenario" value="sales-v1" onChange={()=>{}}><option value="sales-v1">Sales performance · APBRA-90 v1.0.0</option></select><details><summary>View synthetic schema</summary><pre>{JSON.stringify(schema,null,2)}</pre></details>
+      <label htmlFor="prompt">Power BI requirement</label><textarea id="prompt" rows={7} maxLength={4000} value={prompt} onChange={e=>{invalidate();setPrompt(e.target.value)}}/>
+      {guardrail.status!=='ALLOW'&&<aside className="notice" role="alert"><strong>{requestStatus}</strong><p>{guardrail.reason}</p><p><strong>No Power BI report has been generated.</strong> This is a terminal deterministic policy state.</p><details><summary>View technical evidence</summary><pre>{JSON.stringify(guardrail,null,2)}</pre></details><a download="SalesPerformance.guardrail-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(guardrail,null,2))}>Save guardrail evidence JSON</a></aside>}
+      <button disabled={guardrail.status!=='ALLOW'||!!aiBusy||!!interpretation} onClick={()=>void interpret()}>{aiBusy==='INTERPRET'?'GPT-4.1 interpreting…':'Interpret requirement with GPT-4.1'}</button>
+      {aiError&&<aside className="notice" role="alert"><strong>{aiError}</strong><p>No deterministic fixture fallback was used.</p></aside>}
+      {interpretation&&<><aside className="notice"><strong>AI interpretation complete</strong><p>Processed by {interpretMetrics?.model}; {interpretMetrics?.latencyMs} ms; {interpretMetrics?.totalTokens??'token count unavailable'} tokens.</p></aside><details><summary>View technical evidence · AI interpretation</summary><pre>{JSON.stringify(interpretation,null,2)}</pre></details></>}
+      <h2>02 · Clarification</h2><p>Questions below are generated at runtime from the current requirement and schema.</p>
+      {interpretation?.clarifications.map((q,index)=>{const convenience=demoAnswer(q);return <div className="question" key={q.id}><label htmlFor={`ai-question-${index}`}>{q.question}</label><p className="small">{q.reason}</p><textarea id={`ai-question-${index}`} rows={3} maxLength={2000} value={answers[q.id]??''} onChange={e=>{setAnswers({...answers,[q.id]:e.target.value});setDemoDecisionsApplied(false);setSnapshot(null);setRag(null);setAIPlan(null);setDesignMetrics(null);setGeneratorPlan(null);setCandidate(null);setValidation(null)}}/>{prompt===request.original_text&&convenience&&<button className="secondary" onClick={()=>{setAnswers({...answers,[q.id]:convenience});setDemoDecisionsApplied(false)}}>Use APBRA-90 demo answer</button>}</div>})}
+      {interpretation&&prompt===request.original_text&&<><button className="secondary" onClick={()=>{setAnswers(Object.fromEntries(interpretation.clarifications.map(q=>[q.id,demoAnswer(q)??'Apply the governed local standards and record unsupported information.'])));setDemoDecisionsApplied(true)}}>Apply APBRA-90 demo decisions to generated questions</button>{demoDecisionsApplied&&<p className="small">Demo decisions applied: net SalesAmount in AUD; full-calendar 2025 versus 2024 with blank missing prior; Region is a slicer and not RLS.</p>}</>}
+      {interpretation&&interpretation.clarifications.length===0&&<p role="status">GPT-4.1 identified no material clarification questions.</p>}
+      <button disabled={!interpretation||!requiredAnswered||!!snapshot} onClick={confirm}>Confirm interpreted requirements</button>
+      {snapshot&&<><p role="status">RequirementsSnapshot confirmed from the AI interpretation and user answers.</p><details><summary>View technical evidence · RequirementsSnapshot</summary><pre>{JSON.stringify(snapshot,null,2)}</pre></details></>}
+      <h2>03 · Governed Knowledge and DesignPlan</h2><button disabled={!snapshot||!!aiBusy||!!aiPlan} onClick={()=>void groundAndDesign()}>{aiBusy==='DESIGN'?'Embedding, retrieving and designing…':'Run semantic RAG and create DesignPlan'}</button>
+      {rag&&<><aside className="notice"><strong>Semantic retrieval completed</strong><p>Embedding model: {rag.embeddingModel}. Indexed {rag.chunksIndexed} heading-aware chunks; top {rag.topK} selected.</p><ol>{rag.retrieved.map(c=><li key={c.chunkId}><code>{c.citation}</code> · score {c.score.toFixed(3)}</li>)}</ol></aside><details><summary>View technical evidence · RAG retrieval</summary><pre>{JSON.stringify(rag,null,2)}</pre></details></>}
+      {aiPlan&&<><aside className="notice"><strong>DesignPlan generated by GPT-4.1 using retrieved evidence</strong><p>{designMetrics?.latencyMs} ms · {designMetrics?.totalTokens??'token count unavailable'} tokens · {aiPlan.applied_standards.length} cited standards applied.</p></aside><details><summary>View technical evidence · AI DesignPlan</summary><pre>{JSON.stringify(aiPlan,null,2)}</pre></details><a download="SalesPerformance.AI.DesignPlan.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(aiPlan,null,2))}>Save AI DesignPlan JSON</a></>}
+      {aiPlan&&!generatorPlan&&<p className="small">The AI design is complete. The existing verified PBIP compiler remains intentionally limited to the unchanged APBRA-90 request with its three demo answers.</p>}
+      <h2>04 · Generation</h2><button disabled={!generatorPlan||!!candidate} onClick={()=>setCandidate(observed('POWER_BI_GENERATION',()=>generatePowerBI(generatorPlan)))}>Generate verified Sales Performance sample</button>
+      {candidate&&<><aside className="notice" role="status"><strong>POWER BI CANDIDATE READY</strong><p>{Object.keys(candidate.files).length} generated files are ready to download and validate.</p></aside>{archiveUrl&&<a href={archiveUrl} download="SalesPerformance.candidate.zip">Save candidate ZIP · not a release</a>}</>}
+      <h2>05 · Validation</h2><button disabled={!candidate||validating} onClick={()=>void runValidation(false)}>Validate golden candidate</button><button className="secondary" disabled={!candidate||validating} onClick={()=>void runValidation(true)}>Run declared missing-relationship failure</button>
+      {validating&&<p role="status">Validation running · no result yet</p>}{validationError&&<p role="alert">{validationError}</p>}{validation&&<><p role="status">Deterministic source validation {validation.status} · {validation.nextAction}</p><details><summary>View technical evidence · validation</summary><pre>{JSON.stringify(validation,null,2)}</pre></details></>}{history.length>0&&<a download="SalesPerformance.validation-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({failureCase,attempts:history},null,2))}>Save validation evidence JSON</a>}
+    </section><section aria-labelledby="progress-heading"><h2 id="progress-heading">Workflow</h2><p>Requirement → Clarification → Governed Knowledge → DesignPlan → Generation → Validation</p><ol className="stages">{unavailableStages().map(s=><li key={s.name}><span>{s.name}</span><strong>{stageStatus(s.name)}</strong></li>)}</ol>
+      <h2>Real AI runtime</h2><p>{service?<>Chat deployment: <strong>{service.chatDeployment}</strong><br/>Embedding deployment: <strong>{service.embeddingDeployment}</strong><br/>Adapter: <strong>{service.apiMode}</strong></>:'Configuration status unavailable until the local adapter responds.'}</p>{(interpretMetrics||designMetrics)&&<p>Happy-path AI calls: {(interpretMetrics?1:0)+(designMetrics?1:0)} LLM, {rag?2:0} embedding requests.<br/>Observed AI and retrieval latency: {totalLatency} ms.<br/>Observed tokens: {totalTokens||'unavailable'}.<br/>External inference API cost: not calculated; Azure usage may incur account charges.</p>}
+      <h2>Sample output</h2><p>The fixed SalesPerformance PBIP has separate successful human validation in Windows Power BI Desktop.</p><button disabled>Production release · unavailable</button><p className="small">The LLM proposes typed outputs. Deterministic code retains policy, validation, and release authority.</p>
+    </section></div><GovernancePanel trace={trace} notify={notify} candidate={validation?.status==='PASS'?candidate:null} onState={setGovernanceState}/><section aria-labelledby="execution-heading"><h2 id="execution-heading">Retain execution evidence</h2><p>Execution {trace.id}. Active AI responses, retrieval provenance, candidate bytes, and validation outcomes remain local browser state unless explicitly downloaded.</p>{trace.export().steps.length>0&&<a download="SalesPerformance.execution-evidence.json" href={'data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({trace:trace.export(),ai:{interpretMetrics,designMetrics,rag}},null,2))}>Save complete execution evidence JSON</a>}</section><section aria-labelledby="boundaries-heading"><h2 id="boundaries-heading">Capability boundaries</h2><p><strong>Implemented:</strong> real Azure-hosted GPT-4.1 interpretation and structured design, dynamic clarification, controlled local retrieval with real embeddings and citations, deterministic guardrails, source validation, and the bounded Power BI sample generator.</p><p><strong>Prototype:</strong> fictional customer corpus, in-memory exact-vector index, local Vite server adapter, and the deliberately limited Sales Performance compiler.</p><p><strong>Not implemented:</strong> production hosting, Azure AI Search, tenant publishing, enterprise SSO or multi-tenancy, reviewer workflow, automated deployment, arbitrary AI-to-PBIP compilation, and dynamic handover-document generation.</p></section><footer>APBRA Capstone · Real AI architecture demonstration</footer>
+  </main>
+}
+*/

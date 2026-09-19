@@ -1,64 +1,58 @@
-# APBRA-129/130 local requester and requirements snapshot
+# APBRA Capstone — enterprise Power BI architecture prototype
 
-This React/TypeScript/Vite shell is the first browser surface for the ELVTR Capstone. It consumes the frozen APBRA-90 request/schema directly, displays the three expected clarification topics and keeps edited answers only in browser memory. Refresh discards them. No private or production data should be entered.
+This local React/Vite application separates tenant administration from a business report-creation workspace. Its active flow is:
+
+`uploaded CSV/XLSX + requirement → GPT-4.1 interpretation → dynamic clarification → local semantic retrieval → grounded ReportDesign → deterministic policy → bounded PBIP compilation → deterministic candidate validation`
+
+It does not select a canned scenario from prompt text. GPT-4.1 proposes typed advisory outputs; deterministic code owns policy, compilation, validation, and whether generation may start.
 
 ## Run locally
 
-Use Node 22.12+ (verified locally with Node 24.19.0), then from this directory:
+Copy `.env.example` to `.env.local` and provide the Azure AI configuration. `.env.local` is ignored. The Vite server holds the credential and exposes only bounded chat and embedding adapters; the browser never receives the API key. The endpoint can use Azure OpenAI's `/openai/v1` contract or an explicitly configured deployment/API-version contract. No API version is guessed.
 
 ```sh
-npm ci --ignore-scripts
+npm install
 npm test
 npm run build
 npm run dev
 ```
 
-Open the printed loopback URL. No global installation, cloud account, API keys or backend is required. Vite is a local development server; do not expose it publicly. Build output is ignored under dist. package-lock.json records exact transitive versions and integrity hashes; install scripts are disabled.
+If Foundry is unavailable, AI-dependent stages fail visibly and remain incomplete. There is no deterministic response presented as AI output.
 
-## Honest boundary
+## Administration and workspace
 
-The browser supports request entry, frozen synthetic schema selection/inspection, manual clarification inputs and draft preparation. APBRA-130 adds a typed local RequirementsSnapshot after explicit confirmation of the unchanged golden request and all three exact synthetic answers. It preserves copied original inputs, exposes JSON for inspection/replay, and invalidates the snapshot on edits. Unsupported text, RLS requirements or schema/coverage changes fail explicitly. This deterministic fixture adapter makes no provider call or AI inference claim. It does not run integrated knowledge retrieval, generate/validate Power BI, authorize release, or record actual end-to-end evaluation. Those later stages remain NOT_RUN and package download is disabled. Expected fixture answers are explicitly labelled, not presented as AI output. These UI drafts are not authorization or durable evidence.
+The administration plane provides local prototype settings for organisation identity, AI/model status, governed knowledge, branding/report standards, and guardrail/generation thresholds. These settings are browser-local and are not a production tenant control plane.
 
-APBRA-133 through APBRA-136 will integrate real domain/backend behaviour; full APBRA-129 golden-scenario acceptance requires that integration and is pending. No broad APBRA-27 backend or APBRA-133+ item is implemented here. Power BI Desktop, DAX and RLS runtime are NOT_RUN.
+The business workspace starts empty. A user uploads CSV or XLSX data, reviews the detected tables/columns/types/relationships, enters a requirement, answers questions generated for that input, confirms the requirements, and receives a grounded typed ReportDesign. Policy results and source validation precede candidate download. My Runs is browser-session history only.
 
-## Sources and engineering boundary
+## Governed local RAG
 
-Jira APBRA-129/128 and Confluence21.03v2 were read live on2026-09-17. User-authorized Capstone scope admits these exact web paths through a validated APBRA-129 task extension; existing bootstrap and secret controls remain mandatory. The broader proposed product source statuses remain unchanged. Source acceptance checks positively require ACCEPTED or BASELINED for implementation tasks.
+Five fictional policy documents under `knowledge/` form the controlled corpus. The index uses heading boundaries; sections beyond the target are split into roughly 500-token windows with about 50 tokens of overlap. Each chunk retains source, version, heading, stable chunk ID, character/token estimates, and citation. `text-embedding-3-small` embeds chunks and queries. A local in-memory exact cosine index returns top-k evidence for the design call.
 
-React and Vite are MIT-licensed; TypeScript is Apache-2.0. Local tools do not require a paid plan. No purchase, cloud or model service is introduced. Official references: https://vite.dev/guide/ and https://react.dev/versions. Repository license selection remains the owner’s separate decision.
+Administrators can add or replace local Markdown documents and re-index during the browser session. This is a bounded prototype, not enterprise content lifecycle management.
 
-## APBRA-131 curated evidence preview
+## Bounded PBIP compiler
 
-The independent preview reads all eight rules directly from the frozen APBRA-90 corporate standards fixture. The deterministic adapter accepts only `sales-v1`, returns source path, pack/version, authority and per-rule citations, and accepts no external documents or prompt instructions. Mandatory customer rules outrank generic recommendations subject to security/platform controls and confirmed facts; evidence grants no authorization. No general precedence resolver is implemented. APBRA-132 consumes the exact supported evidence in its DesignPlan.
+The compiler accepts the typed ReportDesign contract and detected data structure. It supports embedded CSV data, one or more imported tables, explicit measures using SUM, DISTINCTCOUNT, COUNT, AVERAGE or measure ratios, simple discovered relationships, multiple pages, KPI cards, bar/column/line charts, tables, slicers, and tenant theme colours. It does not execute model-authored DAX, M, SQL or shell content.
 
-`verifyCuratedCitations` checks canonical citation membership and mandatory coverage against this fixed catalog. It does not validate consumer source versions or consumed DesignPlan integrity. The adapter records K=8, result count and ordered evidence IDs; no retrieval quality metric is claimed. Unit evaluation verifies provenance against the fixture and golden design assertion IDs, plus missing/forged citations and unsupported scenarios. This is adapter evidence, not a completed DesignPlan evaluation. APBRA-132 binds this evidence into its plan; APBRA-136 will connect the complete flow. The integrated Knowledge and subsequent workflow stages remain not run; no commercial RAG, model, vector service, cloud or production tenant boundary is introduced.
+Unsupported features, unknown fields, unverified relationships, excessive complexity, missing accessibility metadata, absent grounding, or disabled generation are handled by typed deterministic policy. Human review is a terminal status in this prototype; no approval workflow exists.
 
-## APBRA-132 DesignPlan
+Source validation checks project structure, table files, PBIR references and identifiers, visual count/types, unresolved values, measures, and relationships. It is not Power BI Desktop runtime evidence.
 
-After confirming requirements, choose Create DesignPlan. The deterministic golden-scenario planner consumes a revalidated snapshot and exact curated evidence, with copied source bytes and all citations. It emits tables/relationships, six DAX measure declarations, page/visual/filter intent, theme and explicit no-RLS intent. The strict versioned runtime contract rejects missing/extra fields, altered semantics and stale source bindings; expected-result fixtures are used only by tests. This is not LLM interpretation or DAX runtime validation.
+## Real Foundry evaluation
 
-Inspect the plan or Save DesignPlan JSON for persistence outside browser memory. Editing requirements invalidates the current plan; refresh clears active state. Downloaded JSON is an intermediate design, not a Power BI release. APBRA-133 must consume validateDesignPlan before generation; Power BI compatibility and end-to-end evaluation remain NOT_RUN.
+With the local server running, execute:
 
-## APBRA-133 generated project
+```sh
+node scripts/foundry-smoke.mjs
+```
 
-After confirming requirements and creating DesignPlan, Generate Power BI candidate creates 40 actual source files and an inspection ZIP. Source edits invalidate the candidate and revoke its download URL. The ZIP is explicitly not a governed release; APBRA-134/135 own validation and release gates.
+The opt-in integration harness runs two materially different natural-language requirements and schemas through real interpretation, embedding retrieval, grounded design, policy, compilation and validation. It also sends an unrelated request through real interpretation and verifies that generation never starts. Secret-free evidence and candidate ZIPs are written under ignored `artifacts/local/`.
 
-The only supported input is the exact validated synthetic golden plan. Six tables use embedded synthetic CSV through generated Import M; no external source, credentials or model call. DAX text, five relationships, two pages, nine report visuals, six slicers, three filter fields and initial year2025 are rendered from the plan. M is never executed by the web application. PBIP/PBIR/TMDL are preview formats; extract the whole archive before Desktop use. Desktop open/refresh, DAX numerical results and RLS runtime are NOT_RUN, not implied by schema tests.
+## Claim boundary
 
-Format references (read2026-09-17): [PBIR](https://learn.microsoft.com/en-us/power-bi/developer/projects/projects-report), [semantic model](https://learn.microsoft.com/en-us/power-bi/developer/projects/projects-dataset), [TMDL syntax](https://learn.microsoft.com/en-us/analysis-services/tmdl/tmdl-overview). Public Microsoft JSON schemas are pinned by version in each generated JSON file. Actual validation against17 recursively resolved official schemas passed for23 generated JSON files; ZIP CRC and all40 exact entry bytes independently checked with Python zipfile. This is source-format evidence, not Desktop compatibility. No new dependency, paid service or entitlement required by local rendering; no service publishing configured.
+Implemented locally: CSV/XLSX ingestion, real Azure-hosted inference and embeddings, dynamic clarification, local semantic retrieval with citations, structured grounded design, deterministic guardrails, a bounded generic PBIP compiler, source validation, trace data, downloads, and browser-session run history.
 
-## APBRA-134 source validation and failure
+Prototype/staged: tenant administration, fictional customer standards, in-memory index, API-key local adapter, inferred relationships, and PBIP candidates pending manual Desktop testing.
 
-The independent validator does not call the generator or an LLM. It checks the candidate envelope, exact file set, JSON parsing, DesignPlan, project/model references and five relationships; SHA256 allowlisting limits acceptance to the independently reviewed APBRA-133 source profile. `validationProfile.json` records its origin commit and actual browser ZIP hash. Any changed bytes, including formatting, require revalidation and an independently reviewed profile change; unknown formats fail closed. This intentionally narrow validator is not a general TMDL parser, Desktop loader or numeric DAX evaluator. PASS means declared source-profile checks passed; governance is still required.
-
-Predeclared case MISSING_DATE_RELATIONSHIP_V1 removes the date relationship block from a cloned candidate. Actual validation must produce MISSING_RELATIONSHIP and SOURCE_BYTES_CHANGED, FAIL and HUMAN_ESCALATION. No automatic repair is implemented. The original candidate and every attempt are retained in browser memory and included with exact candidate bytes/digests in the downloadable validation evidence JSON. Save before refreshing; no server persistence is claimed. Input changes invalidate active state; asynchronous results cannot attach to a later source revision. Failed or incomplete checks never imply approval.
-
-## APBRA-135 isolated demo governance
-
-Business requester and trusted-author selections issue explicitly simulated sessions in a local adapter; anyone running this demo can select them. They are not production authentication, real human approvals or tenant isolation. Within this isolated adapter, opaque session objects resolve fixed fixture membership/roles; arbitrary context objects or trusted flags do not authorize anything. Business review requires a distinct eligible reviewer and a nonempty decision reason. Change/decline and resubmission retain prior events; new revisions invalidate old decisions. Membership is rechecked when packaging, including after asynchronous validation/hashing.
-
-Packaging reruns mandatory candidate validation; receipts supplied by callers are never accepted. Failed/stale/revoked/ineligible states deny output. The download includes exact project source, a per-source-file SHA256 manifest, current validation and handover with Desktop/DAX/RLS/deployment NOT_RUN. This is an isolated demo release, not production readiness. Save governance evidence to retain the in-memory audit across refresh. Input/route changes invalidate the active operation and revoke its package link while preserving the audit. No new dependencies, real tenant connection, permission changes or paid service.
-
-APBRA-136 adds a complete execution export after the existing explicit step-by-step flow. Each browser session has a UUID, each observed action has its own artifact/step ID, generation and parent IDs, wall timestamp and measured monotonic processing duration. Original inputs, curated citations, DesignPlan, candidate bytes, all validation attempts and demo governance events are retained. Input edits clear active lineage while preserving historical results; late completions stay historical. RUNNING and ERROR observations never become completed success. COMPLETE means execution returned; inspect the nested validation/governance outcome for PASS/FAIL/eligibility.
-
-Use the three golden answers, confirm, create design, generate, validate, submit, simulate distinct reviewer approval (or use explicitly simulated trusted route), package, then save the complete execution JSON. The same UI exposes the predeclared missing-relationship failure. Save artifacts before refresh; memory retention is not durable storage, and a triggered download is not proof that a file was persisted. Verify the saved file separately. Exported records are editable local evidence, never signed authorization. Model calls/tokens are zero because no model is invoked; provider cost is null, and local/engineering costs are unmeasured. Processing latency excludes user think time; no p95 claim. Power BI runtime and deployment remain NOT_RUN. A roughly90-second guided demonstration is feasible; recording and final acceptance belong to APBRA-94.
+Not implemented: production hosting, persistent multi-tenancy, enterprise identity/RBAC, Azure AI Search, reviewer workflow, production Power BI publishing, arbitrary DAX/M execution, automated deployment, or dynamic handover-document generation.

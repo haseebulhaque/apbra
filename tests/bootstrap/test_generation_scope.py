@@ -17,11 +17,17 @@ class GenerationScopeTests(unittest.TestCase):
     def test_admission_and_negative_authority(self):
         task_path = 'tasks/APBRA-133-powerbi-project.json'
         task = json.loads((ROOT / task_path).read_text())
-        mutations = [None, {'allowed_paths': ['apps/**']}, {'task_id': 'APBRA-999'},
-                     {'assigned_agent': 'APBRA-RAG'}, {'source_ids': ['engineering-structure']},
-                     {'task_mode': 'SPECIFICATION', 'readiness': 'READY_FOR_SPECIFICATION', 'owner_acceptance': 'BOOTSTRAP_ONLY'},
-                     {'owner_acceptance': 'PENDING'}, {'readiness': 'NEEDS_REFINEMENT'}]
-        for mutation in ['valid', *mutations, 'source-status', 'symlink']:
+        mutations = [
+            (None, None),
+            ({'allowed_paths': ['apps/**']}, 'Unexpected Capstone generation scope'),
+            ({'task_id': 'APBRA-999'}, 'Unexpected Capstone generation identity'),
+            ({'assigned_agent': 'APBRA-RAG'}, 'Unexpected Capstone generation identity'),
+            ({'source_ids': ['engineering-structure']}, 'Capstone generation requires its specific accepted source'),
+            ({'task_mode': 'SPECIFICATION', 'readiness': 'READY_FOR_SPECIFICATION', 'owner_acceptance': 'BOOTSTRAP_ONLY'}, 'Capstone generation requires issued implementation acceptance'),
+            ({'owner_acceptance': 'PENDING'}, 'Implementation acceptance is not recorded'),
+            ({'readiness': 'NEEDS_REFINEMENT'}, 'Implementation mode/readiness mismatch'),
+        ]
+        for mutation, expected_error in [('valid', None), *mutations, ('source-status', 'Proposed sources cannot authorize implementation'), ('symlink', 'File outside safe bootstrap scope: apps/web/src/powerbi.ts')]:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 names = {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)}
@@ -46,7 +52,7 @@ class GenerationScopeTests(unittest.TestCase):
                     target.unlink()
                     target.symlink_to(root / 'README.md')
                 errors, _ = c.check(root)
-                if mutation == 'valid':
+                if mutation in ('valid', None):
                     self.assertEqual(errors, [])
                 else:
-                    self.assertTrue(any('safe bootstrap scope: apps/web/src/powerbi.ts' in e for e in errors), errors)
+                    self.assertTrue(any(expected_error in error for error in errors), errors)

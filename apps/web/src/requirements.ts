@@ -53,11 +53,54 @@ export type RequirementsSnapshot = {
 };
 export type Assessment = {status: 'AWAITING_CLARIFICATION' | 'UNSUPPORTED' | 'READY_TO_CONFIRM'; issues: string[]};
 
+type SchemaShape = {
+  tables: Array<{name: string; columns: Array<{name: string; type: string; nullable: boolean}>}>;
+  relationships: Array<{
+    from_table: string;
+    from_column: string;
+    to_table: string;
+    to_column: string;
+    cardinality: string;
+    filter_direction: string;
+    active: boolean;
+  }>;
+};
+
+function ambiguousFactDateRelationship(inputSchema: typeof schema): string | undefined {
+  const candidate = structuredClone(inputSchema) as unknown as SchemaShape;
+  const baseline = schema as unknown as SchemaShape;
+  const candidateFact = candidate.tables.find(table => table.name === 'FactSales');
+  const baselineFact = baseline.tables.find(table => table.name === 'FactSales');
+  const baselineDateRelationship = baseline.relationships.find(relationship =>
+    relationship.from_table === 'FactSales' && relationship.to_table === 'DimDate' && relationship.to_column === 'Date');
+  if (!candidateFact || !baselineFact || !baselineDateRelationship) return undefined;
+
+  const baselineColumnNames = new Set(baselineFact.columns.map(column => column.name));
+  const addedDateColumns = candidateFact.columns.filter(column =>
+    !baselineColumnNames.has(column.name) && column.type === 'date');
+  if (addedDateColumns.length !== 1) return undefined;
+
+  const addedColumn = addedDateColumns[0];
+  const addedRelationships = candidate.relationships
+    .map((relationship, index) => ({relationship, index}))
+    .filter(({relationship}) => relationship.from_column === addedColumn.name
+      && Object.entries(baselineDateRelationship).every(([key, value]) =>
+        key === 'from_column' || relationship[key as keyof typeof relationship] === value));
+  if (addedRelationships.length !== 1) return undefined;
+
+  candidateFact.columns.splice(candidateFact.columns.indexOf(addedColumn), 1);
+  candidate.relationships.splice(addedRelationships[0].index, 1);
+  if (JSON.stringify(candidate) !== JSON.stringify(schema)) return undefined;
+
+  return `Which FactSales date relationship should drive time intelligence: ${baselineDateRelationship.from_column} or ${addedColumn.name}?`;
+}
+
 // Exact fixture matching is intentional: arbitrary prose must never inherit golden semantics.
 export function assessRequirements(input: Submission): Assessment {
   const issues: string[] = [];
   if (input.original_request !== request.original_text) issues.push('Only the unchanged APBRA-90 request is supported. Edited requests require separate interpretation.');
-  if (JSON.stringify(input.original_schema) !== JSON.stringify(schema)) issues.push('Only the complete APBRA-90 schema and 2024–2025 coverage are supported.');
+  const dateRelationshipQuestion = ambiguousFactDateRelationship(input.original_schema);
+  if (JSON.stringify(input.original_schema) !== JSON.stringify(schema) && !dateRelationshipQuestion) issues.push('Only the complete APBRA-90 schema and 2024–2025 coverage are supported.');
   const ids = request.clarifications.map(c => c.id);
   if (Object.keys(input.answers).some(id => !ids.includes(id))) issues.push('Unknown clarification answers are unsupported.');
   for (const c of request.clarifications) {
@@ -65,7 +108,8 @@ export function assessRequirements(input: Submission): Assessment {
   }
   if (issues.length) return {status: 'UNSUPPORTED', issues};
   const missing = request.clarifications.filter(c => !input.answers[c.id]?.trim());
-  if (missing.length) return {status: 'AWAITING_CLARIFICATION', issues: missing.map(c => c.topic)};
+  const clarificationIssues = [...(dateRelationshipQuestion ? [dateRelationshipQuestion] : []), ...missing.map(c => c.topic)];
+  if (clarificationIssues.length) return {status: 'AWAITING_CLARIFICATION', issues: clarificationIssues};
   return {status: 'READY_TO_CONFIRM', issues: []};
 }
 

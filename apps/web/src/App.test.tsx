@@ -1,12 +1,20 @@
-import {it, expect} from 'vitest';
+import {it,expect} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {App} from './App';
-it('renders labelled input and honest unavailable release state', () => {
+import {ReviewPanel} from './EnterpriseApp';
+import type {GuardrailDecision} from './guardrail';
+
+it('renders distinct business and administration navigation',()=>{
   const html=renderToStaticMarkup(<App/>);
-  expect(html).toContain('for="prompt"');
-  for(const id of ['sales-definition','yoy-coverage','region-security']) expect(html).toContain(`for="${id}"`);
-  expect(html.match(/NOT_RUN/g)).toHaveLength(6);
-  expect(html).toContain('Use the isolated demo governance panel for eligibility and package downloads.');
-  expect(html).toContain('disabled="">Production release');
-  expect(html).not.toContain('href=');
+  for(const label of ['Create Report','My Runs','Tenant Settings','AI &amp; Models','Governed Knowledge','Branding &amp; Report Standards','Guardrails &amp; Generation'])expect(html).toContain(label);
+  expect(html).toContain('Create Power BI Report');expect(html).toContain('Upload Excel');expect(html).toContain('Upload CSV');expect(html).toContain('Analyse Requirement');
+});
+it('renders a structured complexity policy outcome as human review with generation not started',()=>{
+  const decision:GuardrailDecision={outcome:'HUMAN_REVIEW_REQUIRED',generation:'NOT_STARTED',evaluations:[{ruleId:'COMPLEXITY-001',category:'complexity',severity:'error',result:'HUMAN_REVIEW_REQUIRED',reason:'The structured design exceeds tenant visual limits.',recommendedAction:'Reduce scope or obtain verification.'}]};const html=renderToStaticMarkup(<ReviewPanel decision={decision}/>);expect(html).toContain('Human Review Required');expect(html).toContain('Generation status:');expect(html).toContain('Not started');expect(html).toContain('COMPLEXITY-001');
+});
+it('renders a typed out-of-scope outcome without starting generation',()=>{
+  const decision:GuardrailDecision={outcome:'OUT_OF_SCOPE',generation:'NOT_STARTED',evaluations:[{ruleId:'SCOPE-001',category:'scope',severity:'error',result:'OUT_OF_SCOPE',reason:'The structured interpretation is outside Power BI reporting.',recommendedAction:'Return to the requester.'}]};const html=renderToStaticMarkup(<ReviewPanel decision={decision}/>);expect(html).toContain('Outside report-generation scope');expect(html).toContain('Not started');expect(html).toContain('SCOPE-001');
+});
+it('keeps course fixtures and built-in demo controls out of the business UX',()=>{
+  const html=renderToStaticMarkup(<App/>);for(const term of ['APBRA-90','ELVTR','golden answer','Try a sample','Scenario','NOT_RUN'])expect(html).not.toContain(term);
 });

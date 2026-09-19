@@ -33,3 +33,25 @@ it('fails closed on arbitrary prose, RLS requests, extra answers and incomplete 
     expect(() => confirmRequirements(input, true)).toThrow();
   }
 });
+it('asks which date path to use when one otherwise unchanged schema adds a plausible fact-date relationship', () => {
+  const input = golden();
+  const fact = input.original_schema.tables.find(table => table.name === 'FactSales')!;
+  fact.columns.push({name: 'DeliveryDate', type: 'date', nullable: false} as never);
+  input.original_schema.relationships.push({...input.original_schema.relationships[0], from_column: 'DeliveryDate'} as never);
+
+  const assessment = assessRequirements(input);
+  expect(assessment.status).toBe('AWAITING_CLARIFICATION');
+  expect(assessment.issues).toEqual([
+    'Which FactSales date relationship should drive time intelligence: SaleDate or DeliveryDate?',
+  ]);
+  expect(() => confirmRequirements(input, true)).toThrow();
+});
+it('keeps unrelated schema changes unsupported even when an additional date relationship is present', () => {
+  const input = golden();
+  const fact = input.original_schema.tables.find(table => table.name === 'FactSales')!;
+  fact.columns.push({name: 'DeliveryDate', type: 'date', nullable: false} as never);
+  input.original_schema.relationships.push({...input.original_schema.relationships[0], from_column: 'DeliveryDate'} as never);
+  input.original_schema.date_coverage.start = '2025-01-01';
+
+  expect(assessRequirements(input).status).toBe('UNSUPPORTED');
+});

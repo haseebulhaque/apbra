@@ -7,7 +7,7 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R3",
-  "objective": "Execute and preserve truthful evaluation of the bounded local Capstone; do not waive unresolved mandatory cases.",
+  "objective": "Evaluate and preserve the owner-approved Capstone enterprise application architecture, real Foundry workflow, governed retrieval, bounded PBIP compilation and truthful runtime evidence without widening into the commercial-product backlog.",
   "requirements": [
     "APBRA-92",
     "APBRA-93",
@@ -20,8 +20,43 @@
     "21.03 v2"
   ],
   "allowed_paths": [
-    "tests/bootstrap/evaluation/**",
-    "tests/bootstrap/test_local_evaluation.py"
+    "apps/web/.env.example",
+    "apps/web/README.md",
+    "apps/web/knowledge/accessibility-standards.md",
+    "apps/web/knowledge/corporate-branding.md",
+    "apps/web/knowledge/deployment-standards.md",
+    "apps/web/knowledge/powerbi-modelling-standards.md",
+    "apps/web/knowledge/report-design-standards.md",
+    "apps/web/package-lock.json",
+    "apps/web/package.json",
+    "apps/web/scripts/foundry-smoke.mjs",
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/App.tsx",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/archive.ts",
+    "apps/web/src/foundry.test.ts",
+    "apps/web/src/foundry.ts",
+    "apps/web/src/genericFoundry.integration.test.ts",
+    "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/genericPowerBI.ts",
+    "apps/web/src/guardrail.test.ts",
+    "apps/web/src/guardrail.ts",
+    "apps/web/src/guardrailPolicy.json",
+    "apps/web/src/main.tsx",
+    "apps/web/src/powerbi.test.ts",
+    "apps/web/src/powerbi.ts",
+    "apps/web/src/rag.test.ts",
+    "apps/web/src/rag.ts",
+    "apps/web/src/raw.d.ts",
+    "apps/web/src/requirements.test.ts",
+    "apps/web/src/requirements.ts",
+    "apps/web/src/schemaIngestion.test.ts",
+    "apps/web/src/schemaIngestion.ts",
+    "apps/web/src/style.css",
+    "apps/web/src/tenant.ts",
+    "apps/web/src/validationProfile.json",
+    "apps/web/src/workflow.ts",
+    "apps/web/vite.config.ts"
   ],
   "restricted_paths": [
     "apps/api/**",
@@ -31,9 +66,10 @@
     ".env*"
   ],
   "acceptance_criteria": [
-    "Actual observations and immutable report reconcile to all24unchanged registry cases.",
-    "Genuine failures and unavailable runtime/human/repair cases remain visible; product readiness not inferred from adapter tests.",
-    "Independent review validates evaluation and bounded NFR evidence."
+    "Business-user report creation and tenant administration remain distinct in the enterprise application shell.",
+    "Real GPT-4.1 interpretation, text-embedding-3-small retrieval, grounded Report Design, deterministic policies and bounded PBIP compilation retain truthful evidence and safe failure behavior.",
+    "The exact SalesPerformance and ServiceDeskOperations candidates pass deterministic validation and owner-reported Windows Power BI Desktop runtime validation.",
+    "Independent review validates the exact head, evaluation and bounded NFR evidence before owner merge."
   ],
   "verification_required": [
     "npm ci --ignore-scripts",
@@ -45,8 +81,9 @@
     "Hosted scanner and separate review"
   ],
   "out_of_scope": [
-    "Application behavior changes or held-out tuning",
-    "Production identity/cloud/deployment and commercial backlog"
+    "Production identity, tenant deployment, publishing and secret-management services",
+    "Application paths outside the exact approved Capstone web allowlist",
+    "Commercial-product backlog including APBRA-27"
   ],
   "escalate_when": [
     "Source contradiction",
@@ -56,14 +93,16 @@
   "readiness": "READY_FOR_IMPLEMENTATION",
   "actual_authenticated_actor": "Codex implementation execution via haseebulhaque authenticated GitHub connection",
   "human_initiator": "Haseeb Ul Haque",
-  "base_commit": "4d16d8d0a2e275c5f93d42efe5d4854b130bed2f",
-  "branch": "agent/APBRA-QA/APBRA-92-evaluation",
+  "base_commit": "d8690da80ba5f1b8e9da084906a4ad11cf79acae",
+  "branch": "agent/APBRA-DEVOPS/APBRA-92-evaluation",
   "source_ids": [
     "capstone-evaluation"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "MVP 0.1 - Capstone",
   "dependencies": [
-    "APBRA-128 implementation merged; actual runtime/human scoring remain separate mandatory gates."
+    "APBRA-128 Capstone dependency chain is merged into main.",
+    "Haseeb reported Windows Power BI Desktop PASS for the exact SalesPerformance and ServiceDeskOperations candidates on 2026-09-19.",
+    "Required hosted CI and independent review remain gates before Haseeb manual merge."
   ]
 }

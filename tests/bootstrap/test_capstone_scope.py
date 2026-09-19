@@ -99,15 +99,15 @@ class RequirementsScopeTests(unittest.TestCase):
         import tempfile
         import shutil
         mutations = [
-            {"allowed_paths": ["apps/**"]},
-            {"task_id": "APBRA-131"},
-            {"assigned_agent": "APBRA-DEV-FE"},
-            {"task_mode": "REVIEW"},
-            {"readiness": "NEEDS_REFINEMENT"},
-            {"owner_acceptance": "PENDING"},
-            {"source_ids": ["engineering-structure"]},
+            ({"allowed_paths": ["apps/**"]}, "Unexpected Capstone requirements scope"),
+            ({"task_id": "APBRA-131"}, "Unexpected Capstone task identity"),
+            ({"assigned_agent": "APBRA-DEV-FE"}, "Unexpected Capstone task identity"),
+            ({"task_mode": "REVIEW"}, "Capstone requirements requires issued implementation acceptance"),
+            ({"readiness": "NEEDS_REFINEMENT"}, "Implementation mode/readiness mismatch"),
+            ({"owner_acceptance": "PENDING"}, "Implementation acceptance is not recorded"),
+            ({"source_ids": ["engineering-structure"]}, "Capstone requirements requires its specific accepted source"),
         ]
-        for mutation in mutations:
+        for mutation, expected_error in mutations:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 root=Path(directory)
                 for file in c.repo_files(ROOT):
@@ -121,4 +121,4 @@ class RequirementsScopeTests(unittest.TestCase):
                 task.update(mutation)
                 (root/"tasks/APBRA-130-requirements-snapshot.json").write_text(json.dumps(task))
                 errors,_=c.check(root)
-                self.assertIn("File outside safe bootstrap scope: apps/web/src/requirements.ts", errors)
+                self.assertIn(expected_error, errors)

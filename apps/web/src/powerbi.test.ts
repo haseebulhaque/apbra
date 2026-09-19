@@ -23,13 +23,17 @@ it('generates actual linked PBIP/PBIR/TMDL with frozen data and design provenanc
  expect(Object.values(f).join('')).not.toMatch(/Sql\.Database|Web\.Contents|File\.Contents/);
  expect(generatePowerBI(p)).toEqual(c);p.model.tables[0].name='mutated';expect(JSON.parse(f['DesignPlan.json']).model.tables[0].name).toBe('DimDate');
 });
-it('emits page/visual/query/filter bindings with explicit year and accessible titles',()=>{
+it('emits one Desktop-native PBIR page with standard cards, chart and slicers',()=>{
  const p=plan(),f=generatePowerBI(p).files;
- const report=JSON.parse(f['SalesPerformance.Report/definition/report.json']);expect(report.filterConfig.filters).toHaveLength(4);
- expect(report.filterConfig.filters[3].filter.Where[0].Condition.In.Values[0][0].Literal.Value).toBe('2025L');
- for(const page of p.pages){const root=`SalesPerformance.Report/definition/pages/${page.id}`;expect(JSON.parse(f[root+'/page.json']).displayName).toBe(page.name);
- for(const v of page.visuals){const visual=JSON.parse(f[root+`/visuals/${v.id}/visual.json`]);expect(visual.visual.visualContainerObjects.general[0].properties.altText.expr.Literal.Value).toBe(`'${v.altText}'`);const text=JSON.stringify(visual.visual.query);for(const id of v.measureIds)expect(text).toContain(p.model.measures.find(m=>m.id===id)!.name);if(v.axis)expect(text).toContain(v.axis);}
- expect(Object.keys(f).filter(k=>k.startsWith(root+'/visuals/slicer-'))).toHaveLength(3);}
+ expect(JSON.parse(f['SalesPerformance.Report/definition/version.json']).version).toBe('2.0.0');
+ const report=JSON.parse(f['SalesPerformance.Report/definition/report.json']);expect(report.$schema).toContain('/report/3.3.0/');expect(report.resourcePackages[0].items[0].path).toBe('SalesPerformanceTheme.json');
+ const pages=JSON.parse(f['SalesPerformance.Report/definition/pages/pages.json']);expect(pages.$schema).toContain('/pagesMetadata/1.1.0/');expect(pages.pageOrder).toHaveLength(1);expect(pages.activePageName).toBe(pages.pageOrder[0]);expect(pages.pageOrder[0]).toMatch(/^[0-9a-f]{20}$/);
+ const root=`SalesPerformance.Report/definition/pages/${pages.activePageName}`;const page=JSON.parse(f[root+'/page.json']);expect(page.$schema).toContain('/page/2.1.0/');expect(page.displayName).toBe('Executive Summary');
+ const visuals=Object.entries(f).filter(([path])=>path.startsWith(root+'/visuals/')).map(([,text])=>JSON.parse(text));expect(visuals).toHaveLength(7);
+ for(const visual of visuals){expect(visual.$schema).toContain('/visualContainer/2.9.0/');expect(visual.name).toMatch(/^[0-9a-f]{20}$/);const projections=Object.values(visual.visual.query.queryState).flatMap((role:any)=>role.projections);expect(projections.every((item:any)=>item.active===true)).toBe(true);}
+ expect(visuals.filter(v=>v.visual.visualType==='cardVisual')).toHaveLength(4);expect(visuals.filter(v=>v.visual.visualType==='barChart')).toHaveLength(1);expect(visuals.filter(v=>v.visual.visualType==='slicer')).toHaveLength(2);
+ for(const card of visuals.filter(v=>v.visual.visualType==='cardVisual'))expect(card.visual.query.queryState.Data.projections).toHaveLength(1);
+ expect(Object.keys(f).some(path=>path.includes('/regional-performance/'))).toBe(false);
 });
 it('rejects raw prompt, missing confirmation and modified plans before output',()=>{
  for(const invalid of [request.original_text,{},null])expect(()=>generatePowerBI(invalid)).toThrow('DESIGN_PLAN_INVALID');
