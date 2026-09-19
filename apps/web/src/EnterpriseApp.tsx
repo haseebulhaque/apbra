@@ -18,15 +18,17 @@ export const deploymentGuideEligible=(candidate:GenericCandidate|null,design:Rep
 export type WorkflowPresentationState={requirementEntered:boolean;dataReady:boolean;interpretationKind?:RequirementInterpretation['request_kind'];requirementsConfirmed:boolean;designReady:boolean;decision?:GuardrailDecision|null;validationStatus?:CandidateValidation['status'];busy?:string};
 export function workflowStages(state:WorkflowPresentationState):Array<{label:string;state:StageState}>{
   const labels=['Requirement','Data','Clarify','Design','Validate','Generate'];
-  let states:StageState[]=['current','waiting','waiting','waiting','waiting','waiting'];
-  if(state.requirementEntered)states=['current',state.dataReady?'completed':'current','waiting','waiting','waiting','waiting'];
-  if(state.interpretationKind==='POWER_BI_REPORT')states=['completed','completed',state.requirementsConfirmed?'completed':'current',state.requirementsConfirmed?'current':'waiting','waiting','waiting'];
-  if(state.interpretationKind==='OUT_OF_SCOPE')states=['attention','completed','waiting','waiting','waiting','waiting'];
-  if(state.requirementsConfirmed&&state.busy==='Applying organisational standards')states=['completed','completed','completed','current','waiting','waiting'];
-  if(state.designReady)states=['completed','completed','completed','completed','current','waiting'];
-  if(state.decision?.generation==='NOT_STARTED')states=['completed','completed','completed','completed','attention','waiting'];
-  if(state.decision?.generation==='AVAILABLE'&&state.validationStatus==='FAIL')states=['completed','completed','completed','completed','attention','waiting'];
-  if(state.decision?.generation==='AVAILABLE'&&state.validationStatus==='PASS')states=['completed','completed','completed','completed','completed','completed'];
+  let states:StageState[];
+  if(state.interpretationKind==='OUT_OF_SCOPE')states=['attention','waiting','waiting','waiting','waiting','waiting'];
+  else if(state.decision?.generation==='NOT_STARTED')states=['completed','completed','completed','completed','attention','waiting'];
+  else if(state.decision?.generation==='AVAILABLE'&&state.validationStatus==='FAIL')states=['completed','completed','completed','completed','attention','waiting'];
+  else if(state.decision?.generation==='AVAILABLE'&&state.validationStatus==='PASS')states=['completed','completed','completed','completed','completed','completed'];
+  else if(state.designReady)states=['completed','completed','completed','completed','current','waiting'];
+  else if(state.requirementsConfirmed&&state.busy==='Applying organisational standards')states=['completed','completed','completed','current','waiting','waiting'];
+  else if(state.interpretationKind==='POWER_BI_REPORT')states=['completed','completed',state.requirementsConfirmed?'completed':'current',state.requirementsConfirmed?'current':'waiting','waiting','waiting'];
+  else if(state.requirementEntered&&!state.dataReady)states=['completed','current','waiting','waiting','waiting','waiting'];
+  else if(state.dataReady)states=['current','completed','waiting','waiting','waiting','waiting'];
+  else states=['current','waiting','waiting','waiting','waiting','waiting'];
   return labels.map((label,index)=>({label,state:states[index]}));
 }
 
