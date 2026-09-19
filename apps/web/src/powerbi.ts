@@ -1,5 +1,6 @@
 import {validateDesignPlan, serializeDesignPlan, type DesignPlan} from './designPlan';
 import date from '../../../tests/bootstrap/fixtures/sales-v1/DimDate.csv?raw';
+import {utf8ToBase64} from './archive';
 import product from '../../../tests/bootstrap/fixtures/sales-v1/DimProduct.csv?raw';
 import region from '../../../tests/bootstrap/fixtures/sales-v1/DimRegion.csv?raw';
 import area from '../../../tests/bootstrap/fixtures/sales-v1/DimBusinessArea.csv?raw';
@@ -45,7 +46,7 @@ export function generatePowerBI(input:unknown):Candidate {
  for(const table of plan.model.tables){
   // Fixed files have simple unquoted values. Csv.Document handles CSV parsing in M.
   const data=csv[table.name];if(!data)throw new Error('GENERATOR_UNSUPPORTED_TABLE');
-  const encoded=btoa(data);const types:Record<string,string>={date:'date',integer:'Int64.Type',decimal:'Currency.Type',text:'text'};
+  const encoded=utf8ToBase64(data);const types:Record<string,string>={date:'date',integer:'Int64.Type',decimal:'Currency.Type',text:'text'};
   const columns=table.columns.map(c=>`\tcolumn ${c.name}\n\t\tdataType: ${{date:'dateTime',integer:'int64',decimal:'decimal',text:'string'}[c.type]}\n\t\tsourceColumn: ${c.name}\n\t\tsummarizeBy: none${c.name===table.primary_key?'\n\t\tisKey':''}${c.type==='date'?'\n\t\tformatString: yyyy-mm-dd':''}\n`).join('\n');
   const measures=table.name==='FactSales'?plan.model.measures.map(v=>`\tmeasure ${quoted(v.name)} = ${v.dax}\n\t\tformatString: ${'"'+v.format.replaceAll('"','""')+'"'}\n`).join('\n'):'';
   files[m+'/definition/tables/'+table.name+'.tmdl']=`table ${table.name}${table.name===plan.model.dateTable?'\n\tdataCategory: Time':''}\n\n${columns}\n${measures}\n\tpartition ${table.name} = m\n\t\tmode: import\n\t\tsource =\n\t\t\tlet\n\t\t\t\tSource = Csv.Document(Binary.FromText("${encoded}", BinaryEncoding.Base64), [Delimiter=",", Encoding=65001, QuoteStyle=QuoteStyle.Csv]),\n\t\t\t\tHeaders = Table.PromoteHeaders(Source, [PromoteAllScalars=true]),\n\t\t\t\tTyped = Table.TransformColumnTypes(Headers, {${table.columns.map(c=>`{"${c.name}", ${types[c.type]==='text'||types[c.type]==='date'?'type ':''}${types[c.type]}}`).join(', ')}}, "en-US")\n\t\t\tin\n\t\t\t\tTyped\n`;

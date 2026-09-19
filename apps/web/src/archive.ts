@@ -1,6 +1,11 @@
 /** Small stored ZIP writer: UTF-8 names, deterministic DOS epoch, no compression.
  * Limits deliberately exclude ZIP64, paths outside the archive and huge inputs. */
 export function crc32(bytes:Uint8Array):number {let crc=0xffffffff;for(const b of bytes){crc^=b;for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
+export function utf8ToBase64(text:string):string {
+ const bytes=new TextEncoder().encode(text);let binary='';
+ for(let offset=0;offset<bytes.length;offset+=0x8000)binary+=String.fromCharCode(...bytes.subarray(offset,offset+0x8000));
+ return btoa(binary);
+}
 export function zipFiles(files:Record<string,string>):Uint8Array<ArrayBuffer> {
  const encoder=new TextEncoder(),entries=Object.entries(files).sort(([a],[b])=>a.localeCompare(b));
  if(!entries.length||entries.length>1000)throw new Error('ARCHIVE_ENTRY_LIMIT');
