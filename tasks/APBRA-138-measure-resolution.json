@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-138",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260919-138",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Correct the generic contract between AI-produced Report Design, deterministic measure resolution, guardrails, PBIP compilation, validation and incremental trace evidence without scenario-specific production logic.",
+  "requirements": [
+    "APBRA-138 Generic Report Design Measure Resolution and PBIP Reference Integrity"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction"
+  ],
+  "architecture_refs": [
+    "21.03 v2"
+  ],
+  "allowed_paths": [
+    "apps/web/src/foundry.ts",
+    "apps/web/src/foundry.test.ts",
+    "apps/web/src/guardrail.ts",
+    "apps/web/src/guardrail.test.ts",
+    "apps/web/src/genericPowerBI.ts",
+    "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/App.test.tsx"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/src/schemaIngestion.ts",
+    "apps/web/src/schemaIngestion.test.ts",
+    "apps/web/src/rag.ts",
+    "apps/web/src/rag.test.ts",
+    "apps/web/knowledge/**",
+    "apps/web/src/deploymentGuide.ts",
+    "apps/web/src/deploymentGuide.test.ts",
+    "apps/web/src/style.css",
+    "apps/web/.env*",
+    "artifacts/**",
+    "manual-testing/**",
+    "output/**",
+    ".env*"
+  ],
+  "acceptance_criteria": [
+    "Every declared and visual-referenced measure has a unique canonical identity and complete supported expression contract before PBIP compilation.",
+    "Ratio and percentage operands resolve deterministically; supported derived measures are normalised without arbitrary free-text DAX.",
+    "Incomplete or unsupported measures stop before compilation with a truthful review or unsupported outcome, context and recommended action.",
+    "No unresolved measure reference survives into candidate generation or deterministic candidate validation.",
+    "Trace evidence is persisted incrementally so completed retrieval, citation and guardrail work remains truthful after a downstream failure.",
+    "The ServiceNow funnel is regression input only; production logic contains no report, measure, filename, KPI or page special case.",
+    "The repaired flow is verified through automated coverage and a real live end-to-end Foundry run before completion is claimed."
+  ],
+  "verification_required": [
+    "Focused measure-resolution, compiler, validation, workflow and RAG regression tests",
+    "Full web test suite and production build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted secret scan and fresh independent review",
+    "Live GPT-4.1, governed RAG, guardrail, compiler and candidate-validation execution",
+    "Haseeb Power BI Desktop validation of any newly generated candidate"
+  ],
+  "out_of_scope": [
+    "Scenario-specific ServiceNow, StagePctOfTotal, report-name, filename, KPI or page logic",
+    "Dependency, schema-ingestion, RAG algorithm, governed corpus, PDF, styling, backend, environment or security-model changes",
+    "Arbitrary DAX generation from free text or silently dropping unsupported measures",
+    "Production deployment or claiming Power BI Desktop success without Haseeb confirmation"
+  ],
+  "escalate_when": [
+    "Source contradiction or implementation scope expansion",
+    "A required path is outside the exact allowlist",
+    "A derived expression cannot be represented and validated by the bounded compiler",
+    "Live Foundry, RAG, build, bootstrap, secret scanning or independent review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "ac9e4fb0810ce26dbebad2d9069a73b6468ffc3f",
+  "branch": "agent/APBRA-DEVOPS/APBRA-138-measure-resolution-authority",
+  "source_ids": [
+    "capstone-governance"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "APBRA-12 Capstone Evaluation & Demonstration parent authority.",
+    "Merged PR #19 final UX baseline at ac9e4fb0810ce26dbebad2d9069a73b6468ffc3f.",
+    "This governance registration must merge before the separate APBRA-138 implementation begins."
+  ]
+}
