@@ -44,11 +44,7 @@ const value=(text:string|undefined,fallback='To be confirmed')=>normalizeDocumen
 const colour=(text:string|undefined,fallback:string)=>/^#[0-9a-f]{6}$/i.test(text??'')?text!:fallback;
 const list=(items:string[])=>items.map(normalizeDocumentText).filter(Boolean);
 const rlsPattern=/\b(?:RLS|row[- ]level security|security role)\b/i;
-
-export function deploymentGuideFilename(reportName:string):string{
- const safe=normalizeDocumentText(reportName).normalize('NFKC').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'-').replace(/[^\p{L}\p{N}._-]+/gu,'-').replace(/-{2,}/g,'-').replace(/^[._-]+|[._-]+$/g,'').slice(0,100);
- return`${safe||'Power-BI-Report'}-Deployment-Guide.pdf`;
-}
+export const DEPLOYMENT_GUIDE_FILENAME='Report-Deployment-Guide.pdf';
 
 export function createDeploymentGuideModel(input:DeploymentGuideInput):DeploymentGuideModel{
  const rlsRequirements=list(input.design.generationRequirements).filter(item=>rlsPattern.test(item));
@@ -108,5 +104,5 @@ export async function generateDeploymentGuide(input:DeploymentGuideInput):Promis
  const model=createDeploymentGuideModel(input);const definition=deploymentGuideDocument(model);
  const bytes=await new Promise<Uint8Array<ArrayBuffer>>((resolve,reject)=>{try{pdfMake.createPdf(definition,undefined,undefined,pdfFonts).getBuffer(buffer=>resolve(new Uint8Array(buffer)))}catch(error){reject(error)}});
  if(bytes.length<8||new TextDecoder('latin1').decode(bytes.slice(0,8)).slice(0,5)!=='%PDF-')throw new Error('DEPLOYMENT_GUIDE_PDF_INVALID');
- return{filename:deploymentGuideFilename(model.reportName),bytes,model};
+ return{filename:DEPLOYMENT_GUIDE_FILENAME,bytes,model};
 }
