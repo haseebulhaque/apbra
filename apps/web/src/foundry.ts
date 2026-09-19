@@ -48,9 +48,11 @@ export function inspectMeasureIntegrity(design:ReportDesign):MeasureIntegrityIss
  for(const id of dependencies.keys())visit(id);
  for(const page of design.pages)for(const visual of page.visuals){
   for(const id of visual.measureIds)if(!byId.has(id))add({code:'UNRESOLVED_VISUAL_MEASURE',measureId:id,reason:`Page '${page.name}' visual '${visual.title}' references unknown measure '${id}'.`,recommendedAction:'Reference an exact declared measure ID.',pageId:page.id,visualId:visual.id});
-  const expected=visual.type==='card'?'exactly 1 measure':(['bar','column','line'] as const).includes(visual.type as 'bar'|'column'|'line')?'at least 1 measure and 1 category':visual.type==='table'?'at least 1 field or measure':visual.type==='slicer'?'exactly 1 field or category and no measures':'';
-  const valid=visual.type==='card'?visual.measureIds.length===1:['bar','column','line'].includes(visual.type)?visual.measureIds.length>=1&&Boolean(visual.categoryField.trim()):visual.type==='table'?visual.fields.length+visual.measureIds.length>=1:visual.type==='slicer'?(visual.measureIds.length===0&&(visual.fields.length===1||(!visual.fields.length&&Boolean(visual.categoryField.trim())))):true;
-  if(!valid)add({code:'INVALID_VISUAL_BINDING_CARDINALITY',measureId:visual.measureIds[0]??'',reason:`Page '${page.name}' visual '${visual.title}' (${visual.type}) expects ${expected}; received ${visual.measureIds.length} measure binding(s) and ${visual.fields.length} field binding(s).`,recommendedAction:'Provide the exact bindings required by the supported visual contract.',pageId:page.id,visualId:visual.id});
+  const slicerBindings=visual.fields.length+(visual.categoryField.trim()?1:0);
+  const expected=visual.type==='card'?'exactly 1 measure':(['bar','column','line'] as const).includes(visual.type as 'bar'|'column'|'line')?'at least 1 measure and 1 category':visual.type==='table'?'at least 1 field or measure':visual.type==='slicer'?'exactly one field or category binding and zero measures':'';
+  const valid=visual.type==='card'?visual.measureIds.length===1:['bar','column','line'].includes(visual.type)?visual.measureIds.length>=1&&Boolean(visual.categoryField.trim()):visual.type==='table'?visual.fields.length+visual.measureIds.length>=1:visual.type==='slicer'?visual.measureIds.length===0&&slicerBindings===1:true;
+  const actual=visual.type==='slicer'?`${slicerBindings} effective field/category binding(s) and ${visual.measureIds.length} measure binding(s)`:`${visual.measureIds.length} measure binding(s) and ${visual.fields.length} field binding(s)`;
+  if(!valid)add({code:'INVALID_VISUAL_BINDING_CARDINALITY',measureId:visual.measureIds[0]??'',reason:`Page '${page.name}' visual '${visual.title}' (${visual.type}) expects ${expected}; received ${actual}.`,recommendedAction:'Provide the exact bindings required by the supported visual contract.',pageId:page.id,visualId:visual.id});
  }
  return issues;
 }
