@@ -6,7 +6,7 @@ import {confirmRequirements} from './requirements';
 import {retrieveCuratedKnowledge} from './knowledge';
 import {createDesignPlan} from './designPlan';
 import {generatePowerBI} from './powerbi';
-import {zipFiles,crc32} from './archive';
+import {zipFiles,crc32,utf8ToBase64} from './archive';
 const plan=()=>createDesignPlan(confirmRequirements({original_request:request.original_text,original_schema:schema,answers:Object.fromEntries(request.clarifications.map(c=>[c.id,c.golden_answer]))},true),retrieveCuratedKnowledge('sales-v1'));
 it('generates actual linked PBIP/PBIR/TMDL with frozen data and design provenance',()=>{
  const p=plan(),c=generatePowerBI(p),f=c.files;
@@ -40,6 +40,7 @@ it('rejects raw prompt, missing confirmation and modified plans before output',(
  const p=plan();p.model.measures[0].dax='malicious';expect(()=>generatePowerBI(p)).toThrow();
 });
 it('writes a deterministic ZIP with valid local and central records and safe limits',()=>{
+ const unicode='Smart “quotes” — café · 日本語';const encoded=utf8ToBase64(unicode);expect(new TextDecoder().decode(Uint8Array.from(atob(encoded),character=>character.charCodeAt(0)))).toBe(unicode);
  expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926);
  const files=generatePowerBI(plan()).files,bytes=zipFiles(files),dv=new DataView(bytes.buffer),decoder=new TextDecoder();let off=0;const seen:Record<string,string>={};
  while(dv.getUint32(off,true)===0x04034b50){expect(dv.getUint16(off+8,true)).toBe(0);const len=dv.getUint32(off+18,true),nl=dv.getUint16(off+26,true),extra=dv.getUint16(off+28,true);const name=decoder.decode(bytes.slice(off+30,off+30+nl)),start=off+30+nl+extra,data=bytes.slice(start,start+len);expect(crc32(data)).toBe(dv.getUint32(off+14,true));seen[name]=decoder.decode(data);off=start+len;}
