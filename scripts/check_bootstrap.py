@@ -29,6 +29,30 @@ CAPSTONE_VALIDATION_PATHS = {'apps/web/README.md', 'apps/web/src/validation.ts',
 CAPSTONE_GENERATION_PATHS = {'apps/web/src/archive.ts', 'apps/web/src/App.test.tsx', 'apps/web/src/raw.d.ts', 'apps/web/src/App.tsx', 'apps/web/src/powerbi.ts', 'apps/web/src/powerbi.test.ts', 'apps/web/README.md'}
 CAPSTONE_DESIGN_PATHS = {'apps/web/src/KnowledgePanel.tsx', 'apps/web/src/knowledge.test.tsx', 'apps/web/README.md', 'apps/web/src/designPlan.ts', 'apps/web/src/App.tsx', 'apps/web/src/designPlan.test.ts'}
 
+CAPSTONE_EVALUATION_PATHS = {
+    'apps/web/.env.example', 'apps/web/README.md',
+    'apps/web/knowledge/accessibility-standards.md',
+    'apps/web/knowledge/corporate-branding.md',
+    'apps/web/knowledge/deployment-standards.md',
+    'apps/web/knowledge/powerbi-modelling-standards.md',
+    'apps/web/knowledge/report-design-standards.md',
+    'apps/web/package-lock.json', 'apps/web/package.json',
+    'apps/web/scripts/foundry-smoke.mjs', 'apps/web/src/App.test.tsx',
+    'apps/web/src/App.tsx', 'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/archive.ts', 'apps/web/src/foundry.test.ts',
+    'apps/web/src/foundry.ts', 'apps/web/src/genericFoundry.integration.test.ts',
+    'apps/web/src/genericPowerBI.test.ts', 'apps/web/src/genericPowerBI.ts',
+    'apps/web/src/guardrail.test.ts', 'apps/web/src/guardrail.ts',
+    'apps/web/src/guardrailPolicy.json', 'apps/web/src/main.tsx',
+    'apps/web/src/powerbi.test.ts', 'apps/web/src/powerbi.ts',
+    'apps/web/src/rag.test.ts', 'apps/web/src/rag.ts', 'apps/web/src/raw.d.ts',
+    'apps/web/src/requirements.test.ts', 'apps/web/src/requirements.ts',
+    'apps/web/src/schemaIngestion.test.ts', 'apps/web/src/schemaIngestion.ts',
+    'apps/web/src/style.css', 'apps/web/src/tenant.ts',
+    'apps/web/src/validationProfile.json', 'apps/web/src/workflow.ts',
+    'apps/web/vite.config.ts',
+}
+
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = (
     'README.md', 'AGENTS.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md',
@@ -355,10 +379,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 orchestration_task = None
+        evaluation_task = None
+        evaluation_path = root / 'tasks/APBRA-92-evaluation.json'
+        if evaluation_path.exists():
+            evaluation_task = load_json(evaluation_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), evaluation_task)
+            if not extension_errors:
+                extension_errors += task_errors(evaluation_task, catalog, sources)
+                if evaluation_task['task_id'] != 'APBRA-92' or evaluation_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone evaluation identity')
+                if set(evaluation_task['allowed_paths']) != CAPSTONE_EVALUATION_PATHS:
+                    extension_errors.append('Unexpected Capstone evaluation scope')
+                if (evaluation_task['task_mode'], evaluation_task['readiness'], evaluation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone evaluation requires issued implementation acceptance')
+                if evaluation_task['source_ids'] != ['capstone-evaluation']:
+                    extension_errors.append('Capstone evaluation requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                evaluation_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

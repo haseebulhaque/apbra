@@ -122,7 +122,7 @@
       "version": "Live Jira92/93/122/123/124 and128 / Confluence21.03v2",
       "status": "ACCEPTED",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-92",
-      "acceptance": "Haseeb authorized bounded autonomous evaluation and gated PRs. Live sources read2026-09-17; PLAN10043. No acceptance, registry or mandatory gate waived."
+      "acceptance": "Haseeb authorized bounded autonomous evaluation and gated PRs. Live sources read2026-09-17; PLAN10043. On2026-09-19 Haseeb explicitly approved the exact PR13 Capstone web architecture for narrow task-contract admission and reported Windows Power BI Desktop PASS for its SalesPerformance and ServiceDeskOperations candidates. No acceptance, registry, secret, independent-review or mandatory gate is waived."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
