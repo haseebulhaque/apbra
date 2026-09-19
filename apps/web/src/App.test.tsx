@@ -1,8 +1,10 @@
 import {it,expect} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {App} from './App';
-import {ReviewPanel} from './EnterpriseApp';
+import {ReviewPanel,deploymentGuideEligible} from './EnterpriseApp';
 import type {GuardrailDecision} from './guardrail';
+import type {ReportDesign} from './foundry';
+import type {CandidateValidation} from './genericPowerBI';
 
 it('renders distinct business and administration navigation',()=>{
   const html=renderToStaticMarkup(<App/>);
@@ -18,3 +20,4 @@ it('renders a typed out-of-scope outcome without starting generation',()=>{
 it('keeps course fixtures and built-in demo controls out of the business UX',()=>{
   const html=renderToStaticMarkup(<App/>);for(const term of ['APBRA-90','ELVTR','golden answer','Try a sample','Scenario','NOT_RUN'])expect(html).not.toContain(term);
 });
+it('offers the deployment guide only for a validated generated candidate',()=>{const candidate={kind:'PowerBICandidate',generatorVersion:'bounded-generic-pbip-1',projectName:'Report',files:{},runtime:{desktop:'NOT_RUN',dax:'NOT_RUN'},release:'NOT_ELIGIBLE'} as const;const design={artifact_kind:'ReportDesign'} as ReportDesign;const pass:CandidateValidation={status:'PASS',checks:[]};const fail:CandidateValidation={status:'FAIL',checks:[]};const available={outcome:'PASS',generation:'AVAILABLE',evaluations:[]} as GuardrailDecision;for(const decision of [{outcome:'BLOCKED',generation:'NOT_STARTED'},{outcome:'OUT_OF_SCOPE',generation:'NOT_STARTED'},{outcome:'HUMAN_REVIEW_REQUIRED',generation:'NOT_STARTED'}] as GuardrailDecision[])expect(deploymentGuideEligible(candidate,design,pass,decision)).toBe(false);expect(deploymentGuideEligible(candidate,design,fail,available)).toBe(false);expect(deploymentGuideEligible(null,design,pass,available)).toBe(false);expect(deploymentGuideEligible(candidate,design,pass,available)).toBe(true);});
