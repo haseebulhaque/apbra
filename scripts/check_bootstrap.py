@@ -36,6 +36,13 @@ DEPLOYMENT_GUIDE_PATHS = {
     'apps/web/package.json',
     'apps/web/package-lock.json',
 }
+CAPSTONE_UX_PATHS = {
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/style.css',
+    'apps/web/src/App.test.tsx',
+    'apps/web/src/EnterpriseUI.tsx',
+    'apps/web/src/EnterpriseUI.test.tsx',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -423,10 +430,28 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 deployment_guide_task = None
+        ux_task = None
+        ux_path = root / 'tasks/APBRA-137-final-capstone-ux.json'
+        if ux_path.exists():
+            ux_task = load_json(ux_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), ux_task)
+            if not extension_errors:
+                extension_errors += task_errors(ux_task, catalog, sources)
+                if ux_task['task_id'] != 'APBRA-137' or ux_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone UX identity')
+                if set(ux_task['allowed_paths']) != CAPSTONE_UX_PATHS:
+                    extension_errors.append('Unexpected Capstone UX scope')
+                if (ux_task['task_mode'], ux_task['readiness'], ux_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone UX requires issued implementation acceptance')
+                if ux_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Capstone UX requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                ux_task = None
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
