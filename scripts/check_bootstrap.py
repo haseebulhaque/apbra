@@ -36,6 +36,13 @@ DEPLOYMENT_GUIDE_PATHS = {
     'apps/web/package.json',
     'apps/web/package-lock.json',
 }
+CAPSTONE_UX_PATHS = {
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/style.css',
+    'apps/web/src/App.test.tsx',
+    'apps/web/src/EnterpriseUI.tsx',
+    'apps/web/src/EnterpriseUI.test.tsx',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -226,7 +233,9 @@ def repo_files(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and not ignored.intersection(p.relative_to(root).parts))
 
 
-def check(root: Path = ROOT) -> tuple[list[str], dict]:
+def check(root: Path = ROOT, *, active_task_id: str | None = None,
+          active_branch: str | None = None,
+          changed_paths: set[str] | None = None) -> tuple[list[str], dict]:
     errors = [f'Missing required file: {name}' for name in REQUIRED if not (root / name).is_file()]
     if errors:
         return errors, {}
@@ -423,10 +432,54 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
             errors += extension_errors
             if extension_errors:
                 deployment_guide_task = None
+        ux_task = None
+        ux_path = root / 'tasks/APBRA-137-final-capstone-ux.json'
+        if ux_path.exists():
+            ux_task = load_json(ux_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), ux_task)
+            if not extension_errors:
+                extension_errors += task_errors(ux_task, catalog, sources)
+                if ux_task['task_id'] != 'APBRA-137' or ux_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected Capstone UX identity')
+                if set(ux_task['allowed_paths']) != CAPSTONE_UX_PATHS:
+                    extension_errors.append('Unexpected Capstone UX scope')
+                if (ux_task['task_mode'], ux_task['readiness'], ux_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Capstone UX requires issued implementation acceptance')
+                if ux_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Capstone UX requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                ux_task = None
+        registered_tasks = {
+            registered['task_id']: registered for registered in (
+                task, shell_task, requirements_task, knowledge_task, design_task,
+                generation_task, validation_task, governance_task,
+                orchestration_task, evaluation_task, deployment_guide_task, ux_task,
+            ) if registered is not None
+        }
+        if changed_paths is not None and changed_paths:
+            active_task = registered_tasks.get(active_task_id or '')
+            if active_task_id is None:
+                errors.append('Active task identity missing for changed paths')
+            elif not re.fullmatch(r'APBRA-[1-9][0-9]*', active_task_id):
+                errors.append('Malformed active task identity: ' + active_task_id)
+            elif active_task is None:
+                errors.append('Unknown or invalid active task authority: ' + active_task_id)
+            if active_branch is None:
+                errors.append('Active task branch identity missing for changed paths')
+            elif active_task is not None and active_task['branch'] != active_branch:
+                errors.append('Active branch conflicts with task authority: ' + active_branch)
+                active_task = None
+            for name in sorted(changed_paths):
+                if not valid_path(name) or not (
+                    path_allowed(name, task, card) or
+                    (active_task is not None and path_allowed(name, active_task, card))
+                ):
+                    errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
@@ -450,6 +503,30 @@ def check(root: Path = ROOT) -> tuple[list[str], dict]:
         return errors, manifest
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         return ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
+
+
+def delivery_context(root: Path = ROOT) -> tuple[str | None, str | None, set[str]]:
+    """Resolve the current branch task and exact Git changes without cumulative authority."""
+    branch = os.getenv('GITHUB_HEAD_REF')
+    if not branch:
+        result = subprocess.run(['git', '-C', str(root), 'branch', '--show-current'], check=True,
+                                capture_output=True, text=True, timeout=10)
+        branch = result.stdout.strip() or None
+    match = re.fullmatch(r'agent/[^/]+/(APBRA-[1-9][0-9]*)-[^/]+', branch or '')
+    active_task_id = match.group(1) if match else None
+    base_name = os.getenv('GITHUB_BASE_REF') or 'main'
+    base_ref = 'origin/' + base_name
+    commands = (
+        ['git', '-C', str(root), 'diff', '--name-only', '--diff-filter=ACDMRTUXB', base_ref + '...HEAD'],
+        ['git', '-C', str(root), 'diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD'],
+        ['git', '-C', str(root), 'diff', '--cached', '--name-only', '--diff-filter=ACDMRTUXB'],
+        ['git', '-C', str(root), 'ls-files', '--others', '--exclude-standard'],
+    )
+    changed = set()
+    for command in commands:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=10)
+        changed.update(line for line in result.stdout.splitlines() if line)
+    return active_task_id, branch, changed
 
 
 def write_report(root: Path, name: str, report: dict) -> None:
@@ -503,7 +580,12 @@ def main() -> int:
     args = parser.parse_args()
     if args.report and (not valid_path(args.report) or not args.report.startswith('artifacts/')):
         parser.error('Report must be a safe relative path under artifacts/')
-    errors, manifest = check()
+    try:
+        active_task_id, active_branch, changed_paths = delivery_context()
+        errors, manifest = check(active_task_id=active_task_id, active_branch=active_branch,
+                                 changed_paths=changed_paths)
+    except subprocess.SubprocessError as exc:
+        errors, manifest = ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
     report = {'scope': 'engineering-bootstrap-only', 'status': 'FAIL' if errors else 'PASS',
               'python': platform.python_version(), 'file_count': len(manifest),
               'file_sha256': manifest, 'findings': errors,

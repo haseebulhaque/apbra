@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-137",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260919-137",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Modernise the final Capstone presentation layer into an accessible, responsive, Microsoft Fluent-inspired business experience without changing the working AI, RAG, PBIP, PDF or security architecture.",
+  "requirements": [
+    "APBRA-137 Final Capstone UX & Product Experience Modernisation"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction"
+  ],
+  "architecture_refs": [
+    "21.03 v2"
+  ],
+  "allowed_paths": [
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/style.css",
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/EnterpriseUI.tsx",
+    "apps/web/src/EnterpriseUI.test.tsx"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/.env*",
+    "artifacts/**",
+    "manual-testing/**",
+    "output/**",
+    ".env*"
+  ],
+  "acceptance_criteria": [
+    "The business workflow and administration areas use a coherent Microsoft Fluent-inspired enterprise presentation that is accessible, responsive and scenario-neutral.",
+    "Business-facing labels and progressive disclosure make the workflow understandable while retaining technical evidence for inspection.",
+    "Successful generation presents the existing Power BI project and fixed-name PDF deployment guide as polished downloadable artefacts.",
+    "Existing GPT-4.1, schema ingestion, governed RAG, Report Design, guardrail, PBIP, validation, PDF and security behaviour remains unchanged."
+  ],
+  "verification_required": [
+    "Focused presentation and accessibility tests",
+    "npm test",
+    "npm run build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted secret scan and separate review",
+    "Manual visual inspection of major business and administration states",
+    "Initial bundle-size comparison"
+  ],
+  "out_of_scope": [
+    "Backend, dependency, configuration or data changes",
+    "Changes to prompts, structured AI contracts, schema parsing, RAG, governed knowledge, guardrails, PBIP compilation, deterministic validation, PDF generation or security",
+    "New product functionality, fake controls or unsupported actions",
+    "Scenario-specific logic or presentation branches"
+  ],
+  "escalate_when": [
+    "Source contradiction or expanded product scope",
+    "A required implementation path is outside the exact allowlist",
+    "The presentation change requires a dependency, backend or functional architecture change",
+    "Tests, build, accessibility checks, visual verification or secret scanning are unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex implementation execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "cf5abd4c236affaa775d8096f58f41ed60119128",
+  "branch": "agent/APBRA-DEVOPS/APBRA-137-ux-authority",
+  "source_ids": [
+    "capstone-governance"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged APBRA-76 deployment guide implementation and existing successful Capstone application architecture.",
+    "This governance registration must merge before the separate APBRA-137 presentation implementation begins."
+  ]
+}
