@@ -34,3 +34,10 @@ it('requires grounded Report Design citations to come from retrieved chunks',asy
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({model:'gpt-4.1',choices:[{message:{content:JSON.stringify(plan)}}],usage:{total_tokens:50}}),{status:200})));
   expect((await generateGroundedReportDesign({}, {},defaultTenantSettings,[{citation:plan.standardsApplied[0].citation,text:'rule'}])).value.standardsApplied).toHaveLength(1);
 });
+it('guides Foundry toward bounded single-binding slicers without relying on the prompt for enforcement',async()=>{
+  const plan=integrityDesign();let requestBody:any;
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async(_path,_init)=>{requestBody=JSON.parse((_init as RequestInit).body as string);return new Response(JSON.stringify({model:'gpt-4.1',choices:[{message:{content:JSON.stringify(plan)}}],usage:{total_tokens:50}}),{status:200})}));
+  await generateGroundedReportDesign({}, {},defaultTenantSettings,[{citation:'standard#1',text:'rule'}]);
+  const system=String(requestBody.messages[0].content);
+  expect(system).toContain('exactly one field or category binding');expect(system).toContain('multiple requested filters as separate slicer visuals');expect(system).toContain('Measure-bound slicers are unsupported');expect(system).toContain('1280 x 720 two-column page grid');expect(system).toContain('at most four visuals');expect(system).toContain('bounded compiler contract');
+});
