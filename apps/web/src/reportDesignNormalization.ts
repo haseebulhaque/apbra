@@ -7,6 +7,8 @@ export type NormalizationAction={code:'NORMALIZED_VISUAL_BINDING';reason:'MULTI_
 export type NormalizationFinding={code:'EMPTY_SLICER_BINDING'|'MEASURE_BOUND_SLICER'|'UNKNOWN_SCHEMA_FIELD'|'LAYOUT_CAPACITY_EXCEEDED';pageId:string;pageName:string;visualId:string;reason:string;recommendedAction:string;requestedResultingVisuals?:number;pageBounds?:{width:1280;height:720};attemptedLayoutSlots?:LayoutSlot[]};
 export type ReportDesignNormalization={status:'UNCHANGED'|'NORMALIZED'|'FAILED';originalReportDesign:ReportDesign;normalizedReportDesign:ReportDesign;originalVisualCount:number;normalizedVisualCount:number;normalizationActions:NormalizationAction[];normalizationFindings:NormalizationFinding[];pageLayouts:PageLayout[]};
 
+export function isLayoutRepairEligible(normalization:ReportDesignNormalization):boolean{return normalization.status==='FAILED'&&normalization.normalizationFindings.length>0&&normalization.normalizationFindings.every(finding=>finding.code==='LAYOUT_CAPACITY_EXCEEDED')}
+
 const PAGE_WIDTH=1280 as const,PAGE_HEIGHT=720 as const;
 const canonical=(value:string)=>value.trim().toLowerCase();
 const hash=(value:string)=>{let result=0x811c9dc5;for(const char of value)result=Math.imul(result^char.charCodeAt(0),16777619)>>>0;return result.toString(16).padStart(8,'0')};

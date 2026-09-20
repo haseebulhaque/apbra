@@ -1,18 +1,19 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {zipFiles} from './archive';
-import {ReportDesignIntegrityError,foundryStatus,generateGroundedReportDesign,interpretRequirement,normalizeMeasureContracts,validateReportDesign,type AIMetrics,type FoundryStatus,type MeasureIntegrityIssue,type MeasureNormalizationAction,type ReportDesign,type RequirementInterpretation} from './foundry';
+import {ReportDesignIntegrityError,foundryStatus,generateGroundedReportDesign,interpretRequirement,normalizeMeasureContracts,repairGroundedReportDesignLayout,validateReportDesign,type AIMetrics,type AIResult,type FoundryStatus,type MeasureIntegrityIssue,type MeasureNormalizationAction,type ReportDesign,type RequirementInterpretation} from './foundry';
 import {compilePowerBI,validateGenericCandidate,type CandidateValidation,type GenericCandidate} from './genericPowerBI';
 import {evaluateGuardrails,type GuardrailDecision} from './guardrail';
 import {chunkDocuments,clearRagIndex,documents as defaultDocuments,retrieveKnowledge,type KnowledgeDocument,type RagRetrieval} from './rag';
 import {parseDataFile,summarizeDataStructure,type DataStructure} from './schemaIngestion';
-import {normalizeReportDesign,type ReportDesignNormalization} from './reportDesignNormalization';
+import {isLayoutRepairEligible,normalizeReportDesign,type ReportDesignNormalization} from './reportDesignNormalization';
 import {defaultTenantSettings,type TenantSettings} from './tenant';
 import {FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper,type StageState} from './EnterpriseUI';
 
 type View='create'|'runs'|'tenant'|'ai'|'knowledge'|'branding'|'guardrails';
 type RequirementsSnapshot={kind:'RequirementsSnapshot';requirement:string;dataStructure:ReturnType<typeof summarizeDataStructure>;interpretation:RequirementInterpretation;questions:RequirementInterpretation['clarifications'];answers:Record<string,string>;confirmedAt:string};
 type RunRecord={runId:string;timestamp:string;requirement:string;fileName:string;status:string;clarificationCount:number;model?:string;tokens?:number|null;latencyMs?:number};
-export type Trace={runId:string;startedAt:string;interpretation?:AIMetrics;clarificationCount:number;embeddingCalls:number|null;documentCount:number;chunkCount:number;retrievalLatencyMs?:number;topK:string[];design?:AIMetrics;citations:string[];normalization?:ReportDesignNormalization;measureNormalizationActions?:MeasureNormalizationAction[];guardrails:GuardrailDecision['evaluations'];compiler?:string;validation?:string;finalStatus:string};
+export type LayoutRepairEvidence={attempted:true;result:'SUCCEEDED'|'UNRESOLVED'|'FAILED';originalReportDesign:ReportDesign;initialNormalization:ReportDesignNormalization;repairedReportDesign?:ReportDesign;metrics?:AIMetrics;reason?:string};
+export type Trace={runId:string;startedAt:string;interpretation?:AIMetrics;clarificationCount:number;embeddingCalls:number|null;documentCount:number;chunkCount:number;retrievalLatencyMs?:number;topK:string[];design?:AIMetrics;citations:string[];normalization?:ReportDesignNormalization;layoutRepair?:LayoutRepairEvidence;measureNormalizationActions?:MeasureNormalizationAction[];guardrails:GuardrailDecision['evaluations'];compiler?:string;validation?:string;finalStatus:string};
 export const mergeTrace=(current:Trace|null,update:Partial<Trace>)=>current?{...current,...update}:current;
 export const retrievalTraceUpdate=(rag:RagRetrieval):Partial<Trace>=>({embeddingCalls:null,chunkCount:rag.chunksIndexed,retrievalLatencyMs:rag.indexMetrics.latencyMs+rag.queryMetrics.latencyMs,topK:rag.retrieved.map(item=>item.citation),finalStatus:'Organisational standards retrieved'});
 export function compileWithTrace(design:ReportDesign,data:DataStructure,tenant:TenantSettings,onTrace:(update:Partial<Trace>)=>void,compiler:typeof compilePowerBI=compilePowerBI,validator:typeof validateGenericCandidate=validateGenericCandidate){onTrace({compiler:'Started'});try{const candidate=compiler(design,data,tenant);onTrace({compiler:'Completed'});const validation=validator(candidate,design,data);onTrace({validation:validation.status});return{candidate,validation,compiler:'Completed'}}catch(reason){const message=reason instanceof Error?reason.message:'Compilation failed';onTrace({compiler:`Failed: ${message}`,finalStatus:'Failed'});throw reason}}
@@ -25,6 +26,21 @@ export function executeReportDesignPipeline(originalReportDesign:ReportDesign,da
   const decision=applyNormalizationIntegrityGate(guardrails(interpretation,normalizedReportDesign,data,tenant),normalization,integrityIssues);onTrace({normalization,measureNormalizationActions:measureNormalization.actions,guardrails:decision.evaluations,finalStatus:decision.generation==='NOT_STARTED'?decision.outcome:'Generation checks passed'});
   const compilation=decision.generation==='AVAILABLE'&&tenant.generation.enabled?compile(normalizedReportDesign,data,tenant,onTrace):null;
   return{originalReportDesign,normalizedReportDesign,normalization,measureNormalizationActions:measureNormalization.actions,integrityIssues,decision,compilation};
+}
+type LayoutRepairContext={confirmedRequirements:unknown;chunks:Array<{citation:string;text:string}>};
+type LayoutRepairService=(snapshot:unknown,schema:unknown,tenant:TenantSettings,chunks:Array<{citation:string;text:string}>,originalReportDesign:ReportDesign,geometryEvidence:unknown)=>Promise<AIResult<ReportDesign>>;
+export async function executeReportDesignPipelineWithLayoutRepair(originalReportDesign:ReportDesign,data:DataStructure,citations:readonly string[],interpretation:RequirementInterpretation,tenant:TenantSettings,repairContext:LayoutRepairContext,onTrace:(update:Partial<Trace>)=>void=()=>{},services:ReportDesignPipelineServices&{repair?:LayoutRepairService}={}){
+  const immutableOriginal=structuredClone(originalReportDesign),first=executeReportDesignPipeline(immutableOriginal,data,citations,interpretation,tenant,onTrace,services);
+  const independentStop=first.decision.evaluations.some(item=>item.ruleId!=='NORMALIZATION-001'&&!['PASS','WARNING'].includes(item.result));
+  if(!isLayoutRepairEligible(first.normalization)||first.integrityIssues.length||independentStop)return{...first,originalReportDesign:immutableOriginal,initialNormalization:first.normalization,layoutRepair:null,repairedReportDesign:null};
+  const repair=services.repair??repairGroundedReportDesignLayout,initialNormalization=structuredClone(first.normalization),evidence:LayoutRepairEvidence={attempted:true,result:'FAILED',originalReportDesign:structuredClone(immutableOriginal),initialNormalization};
+  try{
+    const repaired=await repair(repairContext.confirmedRequirements,data,tenant,repairContext.chunks,structuredClone(immutableOriginal),{normalizationFindings:initialNormalization.normalizationFindings,pageLayouts:initialNormalization.pageLayouts}),repairedReportDesign=structuredClone(repaired.value);
+    evidence.repairedReportDesign=repairedReportDesign;evidence.metrics=repaired.metrics;onTrace({layoutRepair:{...evidence,result:'UNRESOLVED'},finalStatus:'Layout repair received; deterministic checks running'});
+    const second=executeReportDesignPipeline(repairedReportDesign,data,citations,interpretation,tenant,onTrace,services),succeeded=second.decision.generation==='AVAILABLE'&&Boolean(second.compilation?.validation.status==='PASS');
+    const layoutRepair={...evidence,result:succeeded?'SUCCEEDED':'UNRESOLVED'} as LayoutRepairEvidence;onTrace({layoutRepair,finalStatus:succeeded?'Layout repair validated':second.decision.outcome});
+    return{...second,originalReportDesign:immutableOriginal,initialNormalization,layoutRepair,repairedReportDesign};
+  }catch(reason){evidence.reason=reason instanceof Error?reason.message:'Layout repair failed';onTrace({layoutRepair:evidence,finalStatus:'HUMAN_REVIEW_REQUIRED'});return{...first,originalReportDesign:immutableOriginal,initialNormalization,layoutRepair:evidence,repairedReportDesign:evidence.repairedReportDesign??null}}
 }
 const nav:Array<{group:string;items:Array<[View,string,string]>}>=[{group:'Workspace',items:[['create','Create Report','＋'],['runs','My Runs','◷']]},{group:'Administration',items:[['tenant','Tenant Settings','⚙'],['ai','AI & Models','AI'],['knowledge','Governed Knowledge','▤'],['branding','Branding & Report Standards','◆'],['guardrails','Guardrails & Generation','✓']]}];
 const outcomeLabel=(value:string)=>value.replaceAll('_',' ').replace(/\b\w/g,char=>char.toUpperCase());
@@ -70,12 +86,12 @@ function CreateReport({tenant,documents,onIndexed,onRun}:{tenant:TenantSettings;
       const rag=await retrieveKnowledge(query,tenant.rag.topK,undefined,documents);setRetrieval(rag);onIndexed();setTrace(current=>mergeTrace(current,retrievalTraceUpdate(rag)));
       const result=await generateGroundedReportDesign(confirmed,summarizeDataStructure(data),tenant,rag.retrieved.map(item=>({citation:item.citation,text:item.text}))),metrics=result.metrics;
       setTrace(current=>mergeTrace(current,{design:metrics,citations:result.value.standardsApplied.map(item=>item.citation),finalStatus:'Report Design ready'}));
-      const pipeline=executeReportDesignPipeline(result.value,data,rag.retrieved.map(item=>item.citation),interpretation,tenant,update=>setTrace(current=>mergeTrace(current,update))),reportDesign=pipeline.normalizedReportDesign,decision=pipeline.decision;
+      const pipeline=await executeReportDesignPipelineWithLayoutRepair(result.value,data,rag.retrieved.map(item=>item.citation),interpretation,tenant,{confirmedRequirements:confirmed,chunks:rag.retrieved.map(item=>({citation:item.citation,text:item.text}))},update=>setTrace(current=>mergeTrace(current,update))),reportDesign=pipeline.normalizedReportDesign,decision=pipeline.decision;
       setDesign(reportDesign);setDesignMetrics(metrics);setGuardrails(decision);
       let compiled:GenericCandidate|null=pipeline.compilation?.candidate??null,checked:CandidateValidation|null=pipeline.compilation?.validation??null,compiler=pipeline.compilation?.compiler??'Not started';
       if(compiled&&checked){setCandidate(compiled);setValidation(checked)}
       const finalStatus=decision.generation==='NOT_STARTED'?decision.outcome:checked?.status==='PASS'?'Candidate ready':'Validation failed';setTrace(current=>mergeTrace(current,{compiler,validation:checked?.status,finalStatus}));
-      onRun({runId:trace.runId,timestamp:trace.startedAt,requirement,fileName:data.fileName,status:finalStatus,clarificationCount:interpretation.clarifications.length,model:metrics.model,tokens:(interpretMetrics?.totalTokens??0)+(metrics.totalTokens??0),latencyMs:(interpretMetrics?.latencyMs??0)+rag.indexMetrics.latencyMs+rag.queryMetrics.latencyMs+metrics.latencyMs});
+      const repairMetrics=pipeline.layoutRepair?.metrics;onRun({runId:trace.runId,timestamp:trace.startedAt,requirement,fileName:data.fileName,status:finalStatus,clarificationCount:interpretation.clarifications.length,model:repairMetrics?.model??metrics.model,tokens:(interpretMetrics?.totalTokens??0)+(metrics.totalTokens??0)+(repairMetrics?.totalTokens??0),latencyMs:(interpretMetrics?.latencyMs??0)+rag.indexMetrics.latencyMs+rag.queryMetrics.latencyMs+metrics.latencyMs+(repairMetrics?.latencyMs??0)});
     }catch(reason){setError(reason instanceof Error?reason.message:'Report design failed');setTrace(current=>mergeTrace(current,{finalStatus:'Failed'}))}finally{setBusy('')}
   }
   const stages=workflowStages({requirementEntered:Boolean(requirement.trim()),dataReady:Boolean(data),interpretationKind:interpretation?.request_kind,requirementsConfirmed:Boolean(snapshot),designReady:Boolean(design),decision:guardrails,validationStatus:validation?.status,busy});
