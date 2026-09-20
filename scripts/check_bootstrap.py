@@ -77,6 +77,17 @@ CAPSTONE_DOCUMENTATION_REGISTRATION_PATHS = {
     'tasks/APBRA-140-capstone-documentation.json',
     'tests/bootstrap/test_capstone_documentation_scope.py',
 }
+MEASURE_CONTRACT_PIPELINE_PATHS = {
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+}
+MEASURE_CONTRACT_PIPELINE_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-141-measure-contract-pipeline.json',
+    'tests/bootstrap/test_measure_contract_pipeline_scope.py',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -538,13 +549,35 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 capstone_documentation_task = None
+        measure_contract_pipeline_task = None
+        measure_contract_pipeline_path = root / 'tasks/APBRA-141-measure-contract-pipeline.json'
+        if measure_contract_pipeline_path.exists():
+            measure_contract_pipeline_task = load_json(measure_contract_pipeline_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), measure_contract_pipeline_task)
+            if not extension_errors:
+                extension_errors += task_errors(measure_contract_pipeline_task, catalog, sources)
+                if measure_contract_pipeline_task['task_id'] != 'APBRA-141' or measure_contract_pipeline_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected measure contract pipeline identity')
+                if measure_contract_pipeline_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-141-measure-contract-pipeline':
+                    extension_errors.append('Unexpected measure contract pipeline branch')
+                if measure_contract_pipeline_task['base_commit'] != 'efe4e02603817ae4350565184585bee9333633b4':
+                    extension_errors.append('Stale measure contract pipeline base')
+                if set(measure_contract_pipeline_task['allowed_paths']) != MEASURE_CONTRACT_PIPELINE_PATHS:
+                    extension_errors.append('Unexpected measure contract pipeline scope')
+                if (measure_contract_pipeline_task['task_mode'], measure_contract_pipeline_task['readiness'], measure_contract_pipeline_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Measure contract pipeline requires issued implementation acceptance')
+                if measure_contract_pipeline_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Measure contract pipeline requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                measure_contract_pipeline_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
                 generation_task, validation_task, governance_task,
                 orchestration_task, evaluation_task, deployment_guide_task, ux_task,
                 measure_resolution_task, report_design_normalization_task,
-                capstone_documentation_task,
+                capstone_documentation_task, measure_contract_pipeline_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -566,13 +599,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     (active_task is not None and path_allowed(name, active_task, card)) or
                     (active_task_id == 'APBRA-140' and
                      name in CAPSTONE_DOCUMENTATION_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-141' and
+                     name in MEASURE_CONTRACT_PIPELINE_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

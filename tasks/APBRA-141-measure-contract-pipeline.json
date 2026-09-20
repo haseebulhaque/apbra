@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-141",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260920-141",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Restore complete coherent Report Design measure declarations and prove that deterministic normalization precedes integrity validation, guardrails and compilation while preserving original AI evidence.",
+  "requirements": ["APBRA-141 Restore Measure Contract Completeness and Normalized-Design Pipeline Integrity"],
+  "adrs": ["ADR-055 selected React/TypeScript/Vite direction"],
+  "architecture_refs": ["21.03 v2"],
+  "allowed_paths": [
+    "apps/web/src/foundry.ts",
+    "apps/web/src/foundry.test.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/App.test.tsx"
+  ],
+  "restricted_paths": [
+    "apps/web/src/reportDesignNormalization.ts", "apps/web/src/reportDesignNormalization.test.ts",
+    "apps/web/src/genericPowerBI.ts", "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/guardrail.ts", "apps/web/src/guardrail.test.ts",
+    "apps/web/src/rag.ts", "apps/web/src/rag.test.ts", "apps/web/knowledge/**",
+    "apps/web/src/schemaIngestion.ts", "apps/web/src/schemaIngestion.test.ts",
+    "apps/web/src/deploymentGuide.ts", "apps/web/src/deploymentGuide.test.ts",
+    "apps/web/src/style.css", "apps/web/src/EnterpriseUI.tsx", "apps/web/src/EnterpriseUI.test.tsx",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "docs/**", "tests/bootstrap/evaluation/**",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "Every visual measure reference resolves to one unique declared measure ID and every declaration has one coherent aggregation-specific shape.",
+    "Malformed, ambiguous, cyclic, unresolved, duplicate or schema-invalid measures stop safely without inferred business semantics.",
+    "The original AI Report Design remains separate while integrity validation, guardrails and compilation consume the normalized Report Design.",
+    "Duplicate same-field slicer bindings normalize before strict integrity validation without weakening APBRA-138 or APBRA-139 controls.",
+    "Production behavior remains scenario-neutral and introduces no ServiceNow, report, field, KPI, page or filename special cases."
+  ],
+  "verification_required": [
+    "Focused measure-contract, Foundry and workflow integration tests",
+    "Existing APBRA-138 integrity and APBRA-139 normalization regressions",
+    "Full web test suite and production build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted history-aware secret scan and fresh independent review",
+    "Current-head live GPT-4.1 supported happy path through deterministic candidate validation",
+    "Haseeb Power BI Desktop validation of any newly generated candidate"
+  ],
+  "out_of_scope": [
+    "Report Design normalizer, PBIP compiler, guardrail, RAG, schema-ingestion, PDF, styling, dependency, backend, environment or security-model changes",
+    "Inventing missing business measure semantics or silently reinterpreting malformed AI measures",
+    "Scenario-specific ServiceNow, report-name, filename, field, KPI or page logic",
+    "Weakening strict visual, measure, dependency-cycle, citation, compiler or deterministic validation controls",
+    "Production deployment or claiming Power BI Desktop success without Haseeb confirmation"
+  ],
+  "escalate_when": [
+    "A required path is outside the exact allowlist",
+    "Measure semantics cannot be resolved deterministically without inventing business meaning",
+    "Accepted sources conflict or an APBRA-138/APBRA-139 invariant would need weakening",
+    "Live Foundry, build, bootstrap, secret scanning or independent review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "efe4e02603817ae4350565184585bee9333633b4",
+  "branch": "agent/APBRA-DEVOPS/APBRA-141-measure-contract-pipeline",
+  "source_ids": ["capstone-governance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged APBRA-140 documentation reconciliation at efe4e02603817ae4350565184585bee9333633b4.",
+    "Merged APBRA-138 measure/visual integrity and APBRA-139 deterministic normalization controls remain authoritative.",
+    "This governance registration must merge before the separate APBRA-141 implementation begins."
+  ]
+}
