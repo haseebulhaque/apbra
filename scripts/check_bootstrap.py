@@ -101,6 +101,21 @@ LAYOUT_REPAIR_REGISTRATION_PATHS = {
     'tasks/APBRA-142-layout-repair.json',
     'tests/bootstrap/test_layout_repair_scope.py',
 }
+TYPED_CONFIRMED_REQUIREMENTS_PATHS = {
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/confirmedRequirements.ts',
+    'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+    'apps/web/src/reportDesignNormalization.ts',
+    'apps/web/src/reportDesignNormalization.test.ts',
+}
+TYPED_CONFIRMED_REQUIREMENTS_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-143-typed-confirmed-requirements.json',
+    'tests/bootstrap/test_typed_confirmed_requirements_scope.py',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -606,6 +621,28 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 layout_repair_task = None
+        typed_confirmed_requirements_task = None
+        typed_confirmed_requirements_path = root / 'tasks/APBRA-143-typed-confirmed-requirements.json'
+        if typed_confirmed_requirements_path.exists():
+            typed_confirmed_requirements_task = load_json(typed_confirmed_requirements_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), typed_confirmed_requirements_task)
+            if not extension_errors:
+                extension_errors += task_errors(typed_confirmed_requirements_task, catalog, sources)
+                if typed_confirmed_requirements_task['task_id'] != 'APBRA-143' or typed_confirmed_requirements_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected typed confirmed requirements identity')
+                if typed_confirmed_requirements_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-143-typed-confirmed-requirements':
+                    extension_errors.append('Unexpected typed confirmed requirements branch')
+                if typed_confirmed_requirements_task['base_commit'] != 'aac4639f30bc1d785972dd48b704537ee98548d7':
+                    extension_errors.append('Stale typed confirmed requirements base')
+                if set(typed_confirmed_requirements_task['allowed_paths']) != TYPED_CONFIRMED_REQUIREMENTS_PATHS:
+                    extension_errors.append('Unexpected typed confirmed requirements scope')
+                if (typed_confirmed_requirements_task['task_mode'], typed_confirmed_requirements_task['readiness'], typed_confirmed_requirements_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Typed confirmed requirements requires issued implementation acceptance')
+                if typed_confirmed_requirements_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Typed confirmed requirements requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                typed_confirmed_requirements_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -613,7 +650,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 orchestration_task, evaluation_task, deployment_guide_task, ux_task,
                 measure_resolution_task, report_design_normalization_task,
                 capstone_documentation_task, measure_contract_pipeline_task,
-                layout_repair_task,
+                layout_repair_task, typed_confirmed_requirements_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -641,13 +678,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-142' and
                      name in LAYOUT_REPAIR_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-143' and
+                     name in TYPED_CONFIRMED_REQUIREMENTS_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
