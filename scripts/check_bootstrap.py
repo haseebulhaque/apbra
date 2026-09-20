@@ -53,6 +53,14 @@ MEASURE_RESOLUTION_PATHS = {
     'apps/web/src/EnterpriseApp.tsx',
     'apps/web/src/App.test.tsx',
 }
+REPORT_DESIGN_NORMALIZATION_PATHS = {
+    'apps/web/src/reportDesignNormalization.ts',
+    'apps/web/src/reportDesignNormalization.test.ts',
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -478,12 +486,30 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 measure_resolution_task = None
+        report_design_normalization_task = None
+        report_design_normalization_path = root / 'tasks/APBRA-139-report-design-normalization.json'
+        if report_design_normalization_path.exists():
+            report_design_normalization_task = load_json(report_design_normalization_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), report_design_normalization_task)
+            if not extension_errors:
+                extension_errors += task_errors(report_design_normalization_task, catalog, sources)
+                if report_design_normalization_task['task_id'] != 'APBRA-139' or report_design_normalization_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected report design normalization identity')
+                if set(report_design_normalization_task['allowed_paths']) != REPORT_DESIGN_NORMALIZATION_PATHS:
+                    extension_errors.append('Unexpected report design normalization scope')
+                if (report_design_normalization_task['task_mode'], report_design_normalization_task['readiness'], report_design_normalization_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Report design normalization requires issued implementation acceptance')
+                if report_design_normalization_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Report design normalization requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                report_design_normalization_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
                 generation_task, validation_task, governance_task,
                 orchestration_task, evaluation_task, deployment_guide_task, ux_task,
-                measure_resolution_task,
+                measure_resolution_task, report_design_normalization_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -508,7 +534,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
