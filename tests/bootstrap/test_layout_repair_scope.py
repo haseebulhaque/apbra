@@ -44,6 +44,8 @@ class LayoutRepairScopeTests(unittest.TestCase):
         }
         self.assertEqual(c.LAYOUT_REPAIR_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
+        self.assertEqual(self.task["base_commit"], "de6f69766306076b3836e6479d7cd82f2f593465")
+        self.assertTrue(any(self.task["base_commit"] in dependency for dependency in self.task["dependencies"]))
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         prior = json.loads((ROOT / "tasks/APBRA-141-measure-contract-pipeline.json").read_text())
         for path in expected:

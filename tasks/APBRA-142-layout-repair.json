@@ -69,13 +69,13 @@
   "readiness": "READY_FOR_IMPLEMENTATION",
   "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated GitHub connection",
   "human_initiator": "Haseeb Ul Haque",
-  "base_commit": "81e4dd9930831452bd0befe5a8f1494e41fbffaf",
+  "base_commit": "de6f69766306076b3836e6479d7cd82f2f593465",
   "branch": "agent/APBRA-DEVOPS/APBRA-142-layout-repair",
   "source_ids": ["capstone-governance"],
   "owner_acceptance": "RECORDED",
   "effective_release": "MVP 0.1 - Capstone",
   "dependencies": [
-    "APBRA-141 implementation PR #27 must merge before APBRA-142 implementation begins.",
+    "Merged APBRA-141 implementation at de6f69766306076b3836e6479d7cd82f2f593465 remains the required implementation base.",
     "Merged APBRA-138 integrity and APBRA-139 normalization controls remain authoritative.",
     "This APBRA-142 governance registration must merge before the separate implementation begins."
   ]

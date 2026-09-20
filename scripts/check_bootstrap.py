@@ -595,7 +595,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected layout repair identity')
                 if layout_repair_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-142-layout-repair':
                     extension_errors.append('Unexpected layout repair branch')
-                if layout_repair_task['base_commit'] != '81e4dd9930831452bd0befe5a8f1494e41fbffaf':
+                if layout_repair_task['base_commit'] != 'de6f69766306076b3836e6479d7cd82f2f593465':
                     extension_errors.append('Stale layout repair base')
                 if set(layout_repair_task['allowed_paths']) != LAYOUT_REPAIR_PATHS:
                     extension_errors.append('Unexpected layout repair scope')
