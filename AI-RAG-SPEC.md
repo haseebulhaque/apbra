@@ -1,27 +1,37 @@
-# AI and governed retrieval implementation view
+# AI and governed retrieval specification
 
-Sources: ADR-001..019, 07.04, 14.07 v1. Product implementation remains planned.
+This document describes the current in-app Capstone implementation and the separate future production knowledge architecture.
 
-## Authority boundary
+## Current AI profile
 
-Clarification, plan synthesis and bounded repair can use model reasoning. Authentication, tenant selection, policy precedence, workflow transitions, required validation and release eligibility are deterministic application responsibilities. LangGraph subgraphs are invocation-local; PostgreSQL is the durable business system of record. Human waiting uses persisted state, not a live worker.
+The adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. The configured chat deployment is GPT-4.1; live evidence observed `gpt-4.1-2025-04-14`. Embeddings use `text-embedding-3-small` with 1,536 dimensions. Secrets remain server-side in the ignored local environment configuration.
 
-## Evidence eligibility before ranking
+GPT is responsible for requirement interpretation, ambiguity detection, dynamic clarification questions and grounded structured Report Design generation. It is advisory: deterministic code decides reference and measure correctness, compiler compatibility, guardrail outcomes, candidate validity and release eligibility.
 
-Select active approved product sources and authorized customer sources using server-side tenant/ACL/effective-version constraints. Only eligible chunks enter lexical and exact cosine ranking. The selected small-corpus profile combines ranked candidates through RRF with k=60. It does not deploy an external learned reranker or approximate index.
+## Capstone governed RAG
 
-Precedence: hard security/platform controls; confirmed facts/schema; active mandatory customer policy; active customer preferences/reference standards; product guidance; permitted model prior knowledge. This is typed applicability, not a rule allowing user facts to authorize policy violations. Same-authority incompatible mandatory policies block. Missing mandatory evidence cannot silently fall back to model memory or web browsing.
+The governed corpus contains five substantive fictional APBRA policy documents covering corporate branding, semantic modelling, report design and visualisation, accessibility, and deployment/handover.
 
-## Contracts and limits
+Chunking is heading-aware and token-aware. Meaningful sections are preserved; larger sections are split near a 400–600-token target with limited overlap only for continuity. Tiny sections are not padded. Each chunk retains document, version, heading, stable ID, size, content and citation metadata. The current corpus contains 20 chunks.
 
-Model inputs reference exact RequirementVersion, DataSchemaVersion and eligible evidence. Typed outputs must satisfy full application schema and semantic checks, even where the provider supports only a projection of JSON Schema. Reject refusal/truncation/invalid references; persist provenance, not hidden reasoning.
+At runtime APBRA constructs an embedding query from the confirmed requirement, request-specific schema/model intent and clarification answers. `text-embedding-3-small` embeds the query. The browser application compares it with the governed corpus through exact in-memory cosine similarity and returns configurable top-k chunks. Those chunks and their citations ground the GPT-4.1 Report Design call.
 
-14.07 selects three clarification rounds, five questions/round, two repairs, bounded HTTP attempts, input/completion budgets and aggregate spending. These are proposed application policies, not measured provider capabilities. Do not implement scattered numerical defaults or reset usage by creating another worker delivery. Missing rate/permission/processing evidence blocks live inference. No keys are needed for bootstrap checks.
+The uploaded CSV/XLSX schema is request context and is never indexed into tenant-wide governed knowledge. Workbook bytes, secrets, local paths and unrelated environment data are not retrieval content.
 
-## Provider profile
+## Provenance and authority
 
-Azure OpenAI is the first adapter; gpt-5-mini and text-embedding-3-small are candidate selections from 05.07, not evaluated deployments. No automatic provider/model/region fallback. Actual quota, version, structured-output support and data handling require APBRA-97/115 integration evidence. Australia East application hosting does not imply Australian model processing.
+Retrieved evidence retains source document, category, version, heading, chunk ID, similarity and latency. The model cannot activate a policy, authorize a user or approve generation. Retrieved text and model output are untrusted inputs to typed contracts and deterministic validation.
 
-## Evaluation
+The current happy-path run used two embedding calls, 20 indexed chunks, top-k 4, four citations and 454 ms retrieval latency. These are revision-specific observations, not permanent performance claims.
 
-APBRA-42/91 require held-out cases, citation integrity, correct refusal, adversarial content and honest planned/executed denominators. An LLM judge cannot be the sole arithmetic, authorization or file-validity oracle. RAG source activation and tool permission remain outside model discretion.
+## Historical Foundry boundary
+
+The APBRA Capstone does **not** use the old S08 Foundry Knowledge store. APBRA documents were not uploaded to that historical source, and it is not evidence for the current governed corpus.
+
+## Production knowledge gap
+
+The Capstone corpus and exact in-memory index are bounded prototype choices. Production still requires tenant document upload, replacement and deletion; robust extraction; version and chunk lifecycle; stale-chunk cleanup; re-indexing; permissions; durable vector/index infrastructure; tenant isolation; monitoring; retention; and operational recovery. Any future lexical/hybrid retrieval, approximate index or external service requires separate evaluation and accepted architecture authority.
+
+## Evaluation boundary
+
+Retrieval quality, citation provenance, structured output, clarification quality and guardrail behaviour require real recorded executions. An LLM cannot be the sole oracle for arithmetic, authorization, compiler correctness or candidate validity. Historical evaluation evidence remains historical and must not be relabelled as current execution.

@@ -1,31 +1,55 @@
-# Power BI generator and assurance boundary
+# Power BI generation and assurance contract
 
-Sources: ADR-020..029, Confluence 08.06 and 14.07 v1. APBRA-50 and APBRA-110 own actual compatibility evidence.
+APBRA compiles a bounded structured Report Design into an editable PBIP/PBIR candidate. It does not generate Power BI files directly from free-form model text.
 
-## First profile
+## Processing contract
 
-One Import-mode model/report, PBIP packaging, enhanced PBIR report definitions and TMDL semantic model. Generate a bounded star schema, declared dates/keys/measures, standard visuals, theme and ordinary navigation from an exact validated DesignPlan. Safe synthetic CSV M templates use typed configuration. No live production connector, arbitrary M/SQL, DirectQuery/Direct Lake, custom visual or autonomous publishing.
+```text
+Original AI Report Design
+→ deterministic normalization
+→ strict integrity validation
+→ deterministic guardrails
+→ bounded PBIP/PBIR compiler
+→ deterministic candidate validation
+```
 
-The selected first-release ceilings are recorded by 14.07. They are not Power BI limits. Schema-only generation is distinct from a refresh-tested synthetic-data scenario.
+The original AI design remains immutable evidence. The compiler consumes a separate normalized design only after integrity and policy checks pass.
 
-## Capability lifecycle
+## Normalization
 
-A feature starts PLANNED. SUPPORTED requires a recorded exact Desktop build, schema/template versions, supported external-edit boundaries, generator path, validation coverage and real evidence. Never invent a Desktop build, schema URL, undocumented converter or headless Desktop command.
+The normalizer handles supported intent expressed in a compiler-invalid shape. Independent slicer bindings become separate single-binding slicers; identical field/category bindings collapse; distinct supported bindings split safely. Resulting visual IDs are stable, deterministic and collision-safe.
 
-Linux static tests can parse definitions and resolve references. They do not prove Desktop openability, refresh, numeric DAX results, visual usability or RLS behavior. APBRA-111/112/113 require those distinct results; missing tooling is Not Run, never Not Applicable for a mandatory case.
+Normalization does not invent fields or repair zero-binding slicers, measure-bound slicers, unknown fields, ambiguous semantics or layouts that cannot fit. These produce typed findings and stop before guardrails/compiler. Strict APBRA-138 integrity still evaluates the normalized result.
 
-## Candidate contract
+## Integrity rules
 
-Assembly is atomic. A manifest identifies relative paths, digests, generator/compatibility versions and exact plan/input/evidence identities. Safe filenames, bounded files and no symlinks/traversal are mandatory. Reparse stored bytes independently before validating. Any repair creates a new candidate and full required revalidation.
+Deterministic checks enforce canonical unique measure IDs/names, supported aggregations, present and resolved ratio operands, no direct self-reference, no dependency cycles, validity of unused measures, resolved visual measure references, and visual-type cardinality.
 
-## Validation vocabulary
+- Cards require their supported measure binding.
+- Charts require the supported category/field and measure contract.
+- Tables require at least one supported field or measure.
+- Slicers require exactly one field/category binding and zero measures.
 
-Finding severity: BLOCKER, ERROR, WARNING, INFO. Rule result: Pass, Warning, Fail, Not-Applicable. Execution state records completed/error/timed-out/not-run separately. Aggregate technical result: PASS, PASS_WITH_WARNINGS, BLOCKED, INCOMPLETE. Missing mandatory rules and zero-rule accidental passes are forbidden.
+The compiler repeats defensive validation; invalid structures cannot rely solely on upstream checks.
 
-## Governance and handover
+## Supported bounded profile
 
-Business-user release requires an eligible reviewer decision for the exact candidate. A trusted-author route can bypass only the business-user approval gate, not technical validation. Current authorization and policy must be checked at release.
+The current compiler supports common KPI cards, bar/column/line charts, tables, slicers, multiple bounded pages, explicit SUM/DISTINCTCOUNT/COUNT/AVERAGE and supported ratio measures, simple discovered relationships, embedded synthetic CSV data and tenant theme colours.
 
-Required RLS logic that is missing/ambiguous blocks release. Known credential, gateway, target workspace, role-member and refresh setup can remain pending deployment actions in the package. A report slicer is not RLS. A role definition is not a deployed group assignment.
+It does not execute arbitrary model-authored DAX, M, SQL or shell content. Custom visuals, DirectQuery/Direct Lake, predictive services, write-back, automatic RLS inference, gateway configuration, credential setup and production publishing are unsupported unless separately implemented and verified.
 
-The pack contains the candidate, manifest, safe validation/governance evidence, one-page Quick Start, detailed guide and replacement mapping. A .pbip entry file is not a .pbix import. Customer changes produce different bytes and cannot inherit the old digest/approval.
+## Page geometry
+
+Pages are 1,280 × 720. The compiler grid uses x=20 or x=630 and `y = 30 + row × 260`. Cards are 285 × 120; other supported visuals are 580 × 230. Every visual must remain non-negative and satisfy right edge ≤ 1,280 and bottom edge ≤ 720.
+
+Normalization accounts for every existing visual, not only newly expanded slicers. If deterministic placement cannot fit without overlap or leaving the page, `LAYOUT_CAPACITY_EXCEEDED` records the attempted positions and compiler status remains `NOT_STARTED`. The obsolete arbitrary 12-visual threshold is not the current rule.
+
+## Candidate validation
+
+The validator checks the project/package structure, required files, report/model references, supported visual definitions, measures, fields, relationships and generated identifiers. Static PASS does not prove Power BI Desktop openability, rendering, refresh, numeric correctness or RLS behaviour. Those require exact-candidate Desktop evidence.
+
+Any byte change creates a different candidate and requires validation again. Historical Desktop results do not authorize new bytes.
+
+## Handover boundary
+
+A successful run can download the project archive and dynamically generate lazy-loaded `Report-Deployment-Guide.pdf`. The guide explains deployment, configuration and validation actions. It does not publish, configure credentials or prove deployment.

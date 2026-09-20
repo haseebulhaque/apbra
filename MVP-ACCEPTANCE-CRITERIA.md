@@ -1,32 +1,52 @@
-# Evidence-based acceptance
+# Capstone acceptance and evidence status
 
-Sources: 02.06, 08.06, Section 21, 14.07 and APBRA-91/92/110. This is a minimum verification map, not a record of passing tests.
+This is a current evidence map, not a production-readiness claim. Results apply only to the recorded revisions and candidate bytes.
 
-## Engineering bootstrap acceptance
+## Completed Capstone capabilities
 
-B01: branch write and readback succeed without changing main.
-B02: required docs, source references, agent cards and one bounded Task Contract exist.
-B03: engineering schemas reject missing fields, unknown keys, invalid role/card references and excessive authority.
-B04: scope tests reject traversal, restricted paths, empty verification and product files accidentally added under bootstrap-only checks.
-B05: a real PR identifies actual actor, Jira scope and known control gaps; no self-approval.
-B06: hosted CI results are reported for the exact revision or explicitly left pending/blocked.
-B07: actual branch-protection availability is recorded separately from workflow/CODEOWNERS files.
-
-Local and hosted evidence must identify their environment, commands, source manifest and failures. B02-B04 success does not finish APBRA-87's complete future CI implementation.
-
-## Product release acceptance (not yet executed)
-
-| Gate | Required positive result | Required negative result |
+| Gate | Current result | Evidence boundary |
 | --- | --- | --- |
-| Intent/schema | Original input, declared schema, confirmed exact version | Stale confirmation, malformed/oversize schema, foreign object denied |
-| Clarification | Material KPI/date/RLS questions, bounded rounds | Missing security/business definition stops generation |
-| Grounding | Eligible source versions/citations and deterministic precedence | Poisoned content, foreign tenant, mandatory conflict blocked |
-| DesignPlan | Full schema and semantic reference validity | Invented fields, unsupported features and malformed output rejected |
-| Generation | Complete supported candidate and manifest | Partial/tampered/secret-containing files cannot progress |
-| Validation | Every mandatory applicable check completed | Skipped, crashed or missing required check cannot pass |
-| Runtime | Declared Desktop opens/refreshes; numeric and RLS oracles pass | Wrong KPI/filter context and unauthorized row visibility detected |
-| Governance | Business-review and trusted-author cases both succeed correctly | Forged roles, self-review when prohibited and stale approvals denied |
-| Release | Authorized exact package with usable handover | Pending deployment setup not confused with missing security logic |
-| Operations | Bounded recovery/usage and safe telemetry | Retry storm, stale worker, queue saturation and leaks prevented |
+| AI interpretation | PASS | Real GPT-4.1 interpreted the requirement and supplied schema metadata |
+| Dynamic clarification | PASS | Current run generated three input-specific questions |
+| Governed RAG | PASS | Five fictional standards, 20 chunks, two embedding calls, top-k 4 and four citations |
+| Grounded Report Design | PASS | Original structured AI design retained with provenance |
+| Deterministic normalization | PASS | Two identical field/category duplicates collapsed; original and normalized designs remain distinct |
+| Strict integrity | PASS | Zero findings after normalization; measure, dependency, reference and cardinality rules executed |
+| Guardrails | PASS | Generation decision AVAILABLE |
+| PBIP/PBIR compilation | PASS | Compiler COMPLETED for the bounded supported design |
+| Deterministic candidate validation | PASS | Required project and reference checks passed |
+| Page bounds | PASS | Eight visuals over two pages; maximum right 1,210 and bottom 520 inside 1,280 × 720 |
+| Candidate result | PASS | Final status Candidate ready |
 
-No accuracy, cost saving, production SLA or completion percentage is invented. Release requires the declared mandatory executed coverage, not just zero recorded failures. Not Run remains visible. File-generation success is not deployment success.
+Current run: `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa`.
+
+Current candidate SHA-256: `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`.
+
+## Pending Capstone evidence
+
+- **Power BI Desktop validation of the exact current ServiceManagementFunnel candidate: PENDING.**
+- Final unsupported/unrealistic failure-run capture.
+- Attributable cost calculation.
+- Final screenshots, demo recording and nine-slide presentation/evidence pack.
+
+Historical Power BI Desktop PASS results for `SalesPerformance.candidate.zip` and `ServiceDeskOperations.candidate.zip` remain valid only for those exact historical archives.
+
+## Required negative behaviour
+
+Invalid or unsafe input must finish Human Review Required, Unsupported or Blocked. Missing required grounding, invalid measures/references, dependency cycles, invalid visual cardinality, unknown fields and insufficient layout capacity must prevent compilation. Skipped, crashed, timed-out or not-run mandatory validation is incomplete.
+
+The final failure demonstration should use an intentionally unsupported or unrealistic request, such as a 25-page report demanding unsupported custom visuals, predictive forecasting, write-back, workflow approvals, inferred RLS, gateway/credential configuration and direct production publishing. It should not reuse a historical ServiceNow engineering defect as the product failure example.
+
+## Revision-specific engineering evidence
+
+APBRA-139 delivery: 47 focused tests passed; full web 118 passed and 3 skipped; production build, bootstrap, CI policy and hosted secret scan passed; full bootstrap suite 168 passed.
+
+APBRA-140 governance: 8 focused tests passed; 74 historical authority regressions passed; full bootstrap suite 176 passed; tracked-tree validation passed over 162 files; CI policy, hosted required check and secret scan passed.
+
+Test totals are revision-specific and must be refreshed after changes.
+
+## Production acceptance remains open
+
+The prototype does not satisfy production acceptance for identity/RBAC, multitenancy and tenant isolation, durable knowledge lifecycle, managed secrets, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations or commercial operations.
+
+Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
