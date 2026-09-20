@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-140",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260920-140",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile the approved Capstone documentation and durable evidence with the merged implementation and current live run while preserving historical evidence and pending Power BI Desktop verification truthfully.",
+  "requirements": ["APBRA-140 Capstone Documentation and Evidence Reconciliation"],
+  "adrs": ["ADR-055 selected React/TypeScript/Vite direction"],
+  "architecture_refs": ["21.03 v2"],
+  "allowed_paths": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "AI-RAG-SPEC.md",
+    "POWERBI-GENERATION-SPEC.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "apps/web/README.md",
+    "docs/engineering/capstone-evidence.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/web/src/**", "apps/web/knowledge/**", "apps/web/scripts/**",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "tests/bootstrap/evaluation/**", "docs/source-register.json",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "Current Capstone documentation distinguishes the original AI Report Design, deterministic normalization, normalized compiler-safe design, integrity validation, guardrails, compilation and deterministic candidate validation.",
+    "The current live run and candidate digest are recorded without claiming pending Power BI Desktop runtime verification.",
+    "Capstone retrieval is described as in-app governed exact-vector retrieval using text-embedding-3-small rather than the historical S08 Foundry Knowledge store.",
+    "Historical evidence remains identifiable and the intended failure demonstration uses an intentionally unsupported or unrealistic request rather than a past engineering defect.",
+    "No application, dependency, task-contract, evaluation-artifact, source-register, generated-output or secret-bearing file is changed."
+  ],
+  "verification_required": [
+    "Focused APBRA-140 bootstrap authority tests",
+    "Historical active-task authority regression tests",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted history-aware secret scan and fresh independent review"
+  ],
+  "out_of_scope": [
+    "Application source, dependencies, RAG implementation, compiler, guardrails, PDF, styling, backend, environment or generated-output changes",
+    "Candidate archives, historical task contracts, evaluation artefacts or docs/source-register.json",
+    "Deleting historical evidence, fabricating metrics or claiming pending Power BI Desktop validation",
+    "Production document upload/index lifecycle implementation or product changes"
+  ],
+  "escalate_when": [
+    "A required documentation path is outside the exact allowlist",
+    "Accepted sources conflict or evidence cannot be verified",
+    "A documentation correction would require product, historical-contract, source-register or evaluation-artifact changes",
+    "Bootstrap, CI, secret scanning or independent review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "fd3156886e91c882cfc46f80eed2eedc63d4904e",
+  "branch": "agent/APBRA-DEVOPS/APBRA-140-capstone-documentation",
+  "source_ids": ["capstone-governance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged PR #23 APBRA-139 implementation at fd3156886e91c882cfc46f80eed2eedc63d4904e.",
+    "This governance registration must merge before the separate APBRA-140 documentation reconciliation begins."
+  ]
+}
