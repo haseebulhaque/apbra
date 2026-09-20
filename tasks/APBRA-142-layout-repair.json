@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-142",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260920-142",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Add one bounded, scenario-neutral repair attempt for semantically valid Report Designs that exceed deterministic compiler geometry while retaining original and repaired evidence and every strict validation gate.",
+  "requirements": ["APBRA-142 Add bounded layout repair retry for compiler-safe two-page designs"],
+  "adrs": ["ADR-055 selected React/TypeScript/Vite direction"],
+  "architecture_refs": ["21.03 v4"],
+  "allowed_paths": [
+    "apps/web/src/foundry.ts",
+    "apps/web/src/foundry.test.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/reportDesignNormalization.ts",
+    "apps/web/src/reportDesignNormalization.test.ts"
+  ],
+  "restricted_paths": [
+    "apps/web/src/genericPowerBI.ts", "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/guardrail.ts", "apps/web/src/guardrail.test.ts",
+    "apps/web/src/rag.ts", "apps/web/src/rag.test.ts", "apps/web/knowledge/**",
+    "apps/web/src/schemaIngestion.ts", "apps/web/src/schemaIngestion.test.ts",
+    "apps/web/src/deploymentGuide.ts", "apps/web/src/deploymentGuide.test.ts",
+    "apps/web/src/style.css", "apps/web/src/EnterpriseUI.tsx", "apps/web/src/EnterpriseUI.test.tsx",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "docs/**", "tests/bootstrap/evaluation/**",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "The original AI Report Design remains immutable evidence and any repaired design is separately traceable.",
+    "At most one layout repair attempt may use deterministic geometry findings plus the already confirmed requirement and schema; it cannot loop.",
+    "Every repaired candidate is re-normalized and must pass strict integrity, guardrails, compilation and deterministic candidate validation.",
+    "Geometry decisions use actual x, y, width, height and 1280 by 720 bounds rather than an arbitrary visual-count threshold.",
+    "Impossible layouts, malformed measures, unknown fields, unsupported visuals and unresolved references still stop safely.",
+    "Production behavior remains scenario-neutral and introduces no ServiceNow, report, field, KPI, page or filename special cases."
+  ],
+  "verification_required": [
+    "Focused layout-repair, normalization and workflow integration tests",
+    "Existing APBRA-138, APBRA-139 and APBRA-141 regressions",
+    "Full web test suite and production build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted history-aware secret scan and fresh independent review",
+    "Current-head live GPT-4.1 supported happy path through deterministic candidate validation",
+    "Haseeb Power BI Desktop validation of any newly generated candidate"
+  ],
+  "out_of_scope": [
+    "PBIP compiler, guardrail, RAG, schema-ingestion, PDF, styling, dependency, backend, environment or security-model changes",
+    "Deleting required business content, inventing business semantics or repairing malformed measure contracts",
+    "Unbounded regeneration or retry loops",
+    "Scenario-specific ServiceNow, report-name, filename, field, KPI or page logic",
+    "Weakening strict visual, measure, citation, compiler, geometry or deterministic validation controls",
+    "Production deployment or claiming Power BI Desktop success without Haseeb confirmation"
+  ],
+  "escalate_when": [
+    "A required path is outside the exact allowlist",
+    "A layout cannot be repaired without changing confirmed business semantics",
+    "Accepted sources conflict or an APBRA-138, APBRA-139 or APBRA-141 invariant would need weakening",
+    "Live Foundry, build, bootstrap, secret scanning or independent review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated GitHub connection",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "81e4dd9930831452bd0befe5a8f1494e41fbffaf",
+  "branch": "agent/APBRA-DEVOPS/APBRA-142-layout-repair",
+  "source_ids": ["capstone-governance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "APBRA-141 implementation PR #27 must merge before APBRA-142 implementation begins.",
+    "Merged APBRA-138 integrity and APBRA-139 normalization controls remain authoritative.",
+    "This APBRA-142 governance registration must merge before the separate implementation begins."
+  ]
+}
