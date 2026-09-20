@@ -1,31 +1,43 @@
-# MVP requirement-to-delivery map
+# APBRA Capstone requirements and delivery map
 
-Source basis: Confluence Section 02, 14.07 v1 and the current Jira backlog. This is a scoped implementation index, not a full export of every Confluence requirement or a claim of complete test coverage.
+This repository view separates implemented Capstone behaviour, verified evidence and future product requirements. Confluence remains authoritative for requirements and Jira for delivery intent.
 
-| Requirement family | Required behavior | Jira ownership | Required evidence |
-| --- | --- | --- | --- |
-| FR-001..012; DATA-003 | Preserve original intent, structured draft, clarification and status | APBRA-13/31/34/102 | Contract, authorization, history and stale-confirmation tests |
-| FR-020..025 | Declared schema; distinguish confirmed from inferred fields/relationships | APBRA-28/29/30 | JSON/CSV parser and malformed/limit fixtures |
-| FR-030..035; AIR-003..005 | Versioned, grounded structured DesignPlan before files | APBRA-43/46/49 | Schema, reference, provenance and refusal tests |
-| RAGR-020..028; RAGR-040..044 | Tenant-safe governed evidence and explicit precedence | APBRA-35/38/41/42 | Retrieval, conflict, citation and injection cases |
-| PBI-GEN-001..011 | Versioned compatibility and supported generator subset | APBRA-50/51/54/57/58/107 | File, source loading and compatibility fixtures |
-| FR-050..055; PBI-VAL-001..009 | Complete independent validation; no self-certification | APBRA-59/60/63/64/110 | Golden, adversarial, missing-rule and actual runtime evidence |
-| FR-060..068; HITL-001..005 | Server-authoritative routing; trusted path never bypasses validation | APBRA-65/68/71/72 | Role, stale decision and both-route tests |
-| FR-070..075; DATA-021 | Exact-candidate secure package and deployment guidance | APBRA-73/74/75/76 | Eligibility, archive/tamper, download and walkthrough evidence |
-| SEC/IAM/TEN/AUD | Server-side identity, isolation, secret exclusion and accountability | APBRA-77..80/104/114 | Cross-tenant, crash-window, redaction and deletion tests |
-| NFR-REL/PERF/OBS/COST | Durable work, limits, recovery and attributable usage | APBRA-81..84/99/117/119/122 | Failure injection, workload-labelled measurements and traces |
-| NFR-MNT; Section 22 | Bounded engineering, reviewed changes and real provenance | APBRA-18/85..89/125..127 | Exact-revision code/check/review records |
+## Implemented Capstone requirements
 
-Ranges denote source families, not invented requirement numbers. Read the source page to obtain individual requirements. All product evidence above remains planned until linked real results exist.
+| Capability | Implemented behaviour | Current evidence boundary |
+| --- | --- | --- |
+| Requirement discovery | Free-text requirement, real CSV/XLSX schema parsing and GPT-4.1 structured interpretation | Live run produced three dynamic clarification questions |
+| Requirements confirmation | Business-facing summary retains original requirement, schema reference, interpretation, questions, answers and assumptions | Browser workflow and tests |
+| Governed retrieval | Five fictional organisational standards, 20 heading-aware chunks, exact cosine retrieval and citations | Current run: two embedding calls, top-k 4 and four citations |
+| Report Design | GPT-4.1 produces a grounded typed original design | Original design is retained separately from normalized design |
+| Normalization | Supported multi-binding slicer intent becomes stable compiler-safe visuals with bounded layout | Current run: two `DUPLICATE_BINDING_COLLAPSED` actions |
+| Integrity | Measures, ratio operands, cycles, visual references and visual cardinality are checked deterministically | Current run: zero findings and PASS |
+| Guardrails | Structured policies return pass, warning, review, blocked or out-of-scope results | Current happy path PASS; unsupported requests stop safely |
+| Generation | Bounded deterministic PBIP/PBIR compiler supports common model and visual structures | Current compiler result COMPLETED |
+| Candidate validation | Required files and references are checked without trusting compiler success | Current deterministic validation PASS |
+| Handover | Successful runs can generate `Report-Deployment-Guide.pdf` | Dynamic and lazy-loaded; does not mean deployed |
 
-## First release scope
+The runtime order is requirement/schema → interpretation → clarification → governed RAG → original AI Report Design → deterministic normalization → strict integrity → guardrails → compiler → deterministic candidate validation.
 
-Guided form/text, the APBRA JSON schema, optional synthetic CSV and curated Markdown/text are selected for 0.1. Broad Excel, DDL, PBIX and external connector ingestion are later adapters. Both business and trusted-developer routes remain required. One sales scenario is the golden case; a ServiceNow funnel is not silently substituted.
+## Current acceptance evidence
 
-## Reporting rules
+Run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` reached Candidate Ready. Its archive SHA-256 is `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`. All eight visuals fit the 1,280 × 720 page contract, with maximum right edge 1,210 and maximum bottom edge 520.
 
-Use Epic -> Story/Task/Bug -> Sub-task. MVP spans the release, not one enormous sprint. Parent and Sub-task effort is not additive. Documentation completion can finish a specification task, never its unimplemented product capability. No synthetic Bugs are created to populate a board.
+Power BI Desktop validation of this exact candidate remains **PENDING**. Historical Desktop PASS results for SalesPerformance and ServiceDeskOperations cannot be transferred to different candidate bytes.
 
-## Source freshness
+Revision-specific APBRA-139 evidence records 47 focused tests, 118 web tests passing with 3 skipped, build PASS, bootstrap PASS, 168 bootstrap tests, CI policy PASS and hosted secret scan PASS. APBRA-140 governance evidence records 8 focused tests, 74 historical regressions, 176 bootstrap tests, tracked-tree PASS over 162 files, CI policy PASS, hosted required check PASS and secret scan PASS.
 
-Before dispatch, compare live Jira and Confluence revisions with the source register and task inputs. Offline bootstrap validation checks internal consistency only; it cannot certify remote freshness or owner acceptance. Inaccessible or changed mandatory sources require a refreshed context package.
+## Pending Capstone evidence
+
+- Power BI Desktop open/render inspection of the exact current candidate.
+- A final captured unsupported/unrealistic failure demonstration.
+- Attributable cost evidence rather than an estimate presented as measured cost.
+- Final screenshots, 90-second demonstration and nine-slide evidence deck.
+
+The failure demonstration should use an intentionally unsupported or unrealistic request, not a historical ServiceNow defect. It should finish Unsupported, Human Review Required or Blocked without producing a misleading candidate.
+
+## Future product requirements
+
+Production work remains for authentication/RBAC, real multitenancy and tenant isolation; durable knowledge upload/extraction/version/index lifecycle; managed secrets; broader Power BI compatibility; tenant publishing; gateway and credential orchestration; production reviewer workflow; load, resilience and disaster recovery; SLOs, monitoring and on-call; broader evaluation; privacy/compliance operations; and commercial operations.
+
+Generated does not mean validated, approved, released or deployed. Missing or skipped mandatory evidence remains incomplete.

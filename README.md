@@ -1,60 +1,73 @@
 # AI-Powered Power BI Report Automation (APBRA)
 
-Governed report engineering: business intent and a declared schema become a typed BI DesignPlan, an editable Power BI candidate, independent validation evidence and a controlled deployment pack.
+APBRA is a working, bounded Capstone prototype that turns a business requirement and declared CSV/XLSX schema into a governed Report Design and, when supported, a validated editable Power BI Project (PBIP) candidate.
 
-## Current repository state
+## Implemented Capstone flow
 
-The repository is public by owner decision and uses applicable GitHub Free engineering capabilities. This PR branch contains the engineering bootstrap, not a running report builder. Main remains unchanged until Haseeb manually merges after review. No application, Azure deployment, model evaluation or Power BI Desktop verification is claimed here.
-
-The owner configured an active default-branch ruleset and removed all bypass actors. It requires a PR, resolved review threads and a current APBRA Bootstrap Checks result from GitHub Actions. Zero native approving reviews is intentional under the [accepted solo-owner process](docs/decisions/solo-owner-process.md). Separate AI review and Haseeb's manual merge remain process gates; no automatic merge is authorized.
-
-## Start here
-
-1. Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md) and [REQUIREMENTS.md](REQUIREMENTS.md).
-2. Load the relevant specifications, source register, Agent Card and bounded task.
-3. Follow [the Codex handoff](docs/engineering/codex-handoff.md): a fresh review of PR 1 before any application build.
-4. The first future build is [APBRA-27](docs/engineering/APBRA-27-build-contract.md), not the entire MVP. Its JSON is a planning draft until rebound to merged main and accepted source versions.
-
-## Engineering verification
-
-Use Python 3.13 and an isolated environment:
-
-```sh
-python -m venv .venv
-# Activate .venv for your shell.
-python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
-python scripts/check_ci_policy.py
-python scripts/check_bootstrap.py
-python -m unittest discover -s tests/bootstrap -v
-# Linux x64, full non-shallow Git checkout:
-bash scripts/scan_secrets.sh
+```text
+Requirement + schema
+→ GPT-4.1 interpretation
+→ dynamic clarifications
+→ governed in-app RAG
+→ original AI Report Design
+→ deterministic Report Design normalization
+→ strict integrity validation
+→ deterministic guardrails
+→ bounded PBIP/PBIR compiler
+→ deterministic candidate validation
+→ Candidate Ready / Human Review Required / Unsupported / Blocked
 ```
 
-These validate engineering metadata, explicit scope, mandatory workflow shape and selected secret/hygiene checks, not application security or report correctness. Targeted local tests and complete hosted CI evidence are distinguished in [the review record](docs/engineering/review-20260916.md). Consult PR 1's current head/checks for the final run; an earlier successful run does not cover later changes.
+GPT-4.1 interprets requirements, identifies ambiguity, creates clarification questions and proposes a grounded structured Report Design. Deterministic code owns normalization, reference and measure integrity, compiler compatibility, guardrails, candidate validation and whether generation may proceed.
 
-No cloud key or live model call is needed. The original full dependency hash-lock attempt failed due authoring-environment DNS; exact bootstrap package versions are recorded, but full product lock/build verification is APBRA-27 work. Missing tests or dependencies are not a passing result.
+The business workspace and administration plane are distinct. Business users create reports and inspect session runs. Administrators inspect prototype tenant settings, AI models, governed knowledge, branding and generation policies. Authentication, RBAC and real multitenancy are outside the Capstone.
 
-## Public content and cost controls
+## Run locally
 
-Never publish credentials, private keys, customer data, confidential documents, raw authenticated URLs, private transcripts or unredacted logs. Ignore rules cannot remove tracked content or history. [SECURITY.md](SECURITY.md) explains safe reporting and credential revocation/rotation before coordinated cleanup.
+Use synthetic data only. Copy `apps/web/.env.example` to the ignored `apps/web/.env.local` and populate the existing Azure AI Foundry configuration without committing credentials.
 
-The pinned standalone Gitleaks CLI scans the tracked tree and fetched-reference history. It is bounded detection evidence, not proof that every possible secret, external clone or native alert was audited. Native secret-scanning settings must be checked through an authorized owner interface.
+```sh
+cd apps/web
+npm ci
+npm test
+npm run build
+npm run dev
+```
 
-Research each platform's entitlement, usage limits, integration permissions and costs BEFORE implementation. GitHub public availability does not grant free Azure inference, Power BI sharing or unlimited Codex usage. No paid upgrade, larger runner, live service or additional credits are authorized automatically.
+The default Vite URL is `http://127.0.0.1:5173/`. Foundry-dependent stages fail visibly when the configured endpoint is unavailable.
 
-## Sources and decisions
+## Current evidence
 
-Confluence owns architecture, Jira owns work intent and GitHub owns implementation/evidence. Public repository specifications are curated implementation views; access-controlled references do not authorize bulk exporting private content.
+The current live happy path is run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa`. It completed interpretation, three dynamic clarifications, governed retrieval, normalization, integrity checks, guardrails, compilation and deterministic validation. The resulting candidate is:
 
-- [Source versions](docs/source-register.json)
-- [Implementation baseline](docs/decisions/implementation-baseline.md)
-- [Verified repository controls and limits](docs/engineering/repository-controls.md)
-- [Confluence governance 22.05](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391060)
-- [Jira APBRA-85](https://arkitektz.atlassian.net/browse/APBRA-85)
-- [Jira APBRA-27](https://arkitektz.atlassian.net/browse/APBRA-27)
+- `ServiceManagementFunnel.d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa.candidate.zip`
+- SHA-256 `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`
+- Power BI Desktop validation for this exact candidate: **PENDING**
 
-The detailed product baseline still retains its recorded Proposed source status until acceptance is reconciled before application dispatch. Documented technology choices are not tested cloud/model/runtime capabilities.
+Historical Desktop evidence remains valid for the earlier `SalesPerformance.candidate.zip` and `ServiceDeskOperations.candidate.zip` candidates; it does not validate the current candidate. See the [Capstone evidence index](docs/engineering/capstone-evidence.md).
+
+## Product boundary
+
+APBRA does not claim universal Power BI generation or production readiness. The bounded compiler supports common cards, charts, tables and slicers within an explicit layout and model contract. Unsupported or unsafe designs stop before compilation.
+
+Production gaps include identity/RBAC, tenant isolation, durable knowledge ingestion and indexing, secure managed configuration, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations.
+
+The successful flow can generate the lazy-loaded `Report-Deployment-Guide.pdf`. The guide contains handover and deployment instructions; its generation does not mean the report was deployed. APBRA does not autonomously publish to production.
+
+## Documentation
+
+- [Architecture](ARCHITECTURE.md)
+- [Requirements and delivery evidence](REQUIREMENTS.md)
+- [AI and governed RAG](AI-RAG-SPEC.md)
+- [Power BI generation contract](POWERBI-GENERATION-SPEC.md)
+- [MVP acceptance status](MVP-ACCEPTANCE-CRITERIA.md)
+- [Web application](apps/web/README.md)
+- [Capstone evidence index](docs/engineering/capstone-evidence.md)
+- [Current engineering handoff](docs/engineering/codex-handoff.md)
+- [Security policy](SECURITY.md)
+
+Confluence owns architecture and requirements, Jira owns delivery intent, and GitHub owns code and durable engineering evidence. The repository remains public by owner decision. Do not publish credentials, customer data, private transcripts or secret-bearing URLs.
 
 ## License
 
-Public visibility is intentional; no open-source license has been selected. License selection is a separate owner decision, not something an implementation agent silently adds.
+Public visibility is intentional; no open-source license has been selected.
