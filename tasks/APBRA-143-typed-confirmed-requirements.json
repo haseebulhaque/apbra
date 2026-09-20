@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-143",
+  "work_item_system": "jira",
+  "execution_id": "CAPSTONE-20260921-143",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Introduce a versioned typed confirmed-requirement contract between clarification and governed retrieval so deterministic software can validate downstream Report Design coverage without parsing arbitrary free text.",
+  "requirements": [
+    "APBRA-143 Typed Confirmed Requirement Contract and Deterministic Coverage Obligations",
+    "FR-003 retain original input separately from interpretations",
+    "FR-005 capture structured material report requirements",
+    "FR-009 retain clarification questions and answers as evidence",
+    "FR-030 create a machine-readable BI design input contract",
+    "FR-035 generation consumes validated structured inputs",
+    "FR-055 the generator model is not sole validation authority",
+    "RULE-001 preserve original input as immutable evidence",
+    "RULE-007 missing business definitions cannot be fabricated"
+  ],
+  "adrs": [
+    "ADR-055 selected React/TypeScript/Vite direction",
+    "AI is advisory; deterministic software owns validation and release policy"
+  ],
+  "architecture_refs": [
+    "02.01 v2",
+    "03.03 v2",
+    "08.01 v3",
+    "21.02 v4",
+    "21.03 v4"
+  ],
+  "allowed_paths": [
+    "apps/web/src/foundry.ts",
+    "apps/web/src/foundry.test.ts",
+    "apps/web/src/confirmedRequirements.ts",
+    "apps/web/src/confirmedRequirements.test.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/App.test.tsx",
+    "apps/web/src/reportDesignNormalization.ts",
+    "apps/web/src/reportDesignNormalization.test.ts"
+  ],
+  "restricted_paths": [
+    "apps/web/src/genericPowerBI.ts", "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/guardrail.ts", "apps/web/src/guardrail.test.ts",
+    "apps/web/src/rag.ts", "apps/web/src/rag.test.ts", "apps/web/knowledge/**",
+    "apps/web/src/schemaIngestion.ts", "apps/web/src/schemaIngestion.test.ts",
+    "apps/web/src/deploymentGuide.ts", "apps/web/src/deploymentGuide.test.ts",
+    "apps/web/src/style.css", "apps/web/src/EnterpriseUI.tsx", "apps/web/src/EnterpriseUI.test.tsx",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "docs/**", "tests/bootstrap/evaluation/**",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "A schema-versioned immutable ConfirmedRequirementContract is deterministically materialized after explicit clarification selection and before governed retrieval or Report Design generation.",
+    "Original requirement, schema identity, AI interpretation, questions, displayed answers or selections, confirmation and source versions remain separate immutable provenance rather than downstream semantic authority.",
+    "Every material blocking clarification offers stable typed options whose effects reference only declared schema fields, obligation IDs and supported semantic types; exactly one selected option is required unless the clarification explicitly supports a bounded multi-select.",
+    "Free text may be retained as provenance but cannot create or alter measure, filter, lifecycle, trend, page, field, business-question or presentation obligations through downstream parsing.",
+    "Required measures and KPIs have stable IDs and supported structured semantics including aggregation and source field or operands, typed filter predicates, context field and format where applicable.",
+    "The contract represents exact Table.Column fields and dimensions, filters, lifecycle or status membership, time field and supported grain, required pages, business-question mappings, and required versus optional presentation obligations with minimum representation cardinality where applicable.",
+    "The contract validator rejects duplicate or unresolved IDs, unknown schema fields or options, missing required selections, unsupported aggregation, predicate or time-grain semantics, contradictory obligations and incomplete provenance before retrieval begins.",
+    "Deterministic coverage consumes only the validated confirmed contract and Report Design structure and proves required KPI, filter, trend, lifecycle, page, dimension or field, business-question and minimum-presentation obligations.",
+    "Optional or redundant presentations may be removed only when all required obligations remain covered; visual titles and the repair model are never semantic authority.",
+    "Original and repaired Report Designs remain distinct evidence and every changed candidate is revalidated by APBRA-138, APBRA-139, APBRA-141 and APBRA-142 controls.",
+    "Production behavior remains scenario-neutral and contains no ServiceNow, report, filename, field, KPI, page or prompt-string special case.",
+    "The retained APBRA-142 failed live run remains immutable evidence and is not overwritten."
+  ],
+  "verification_required": [
+    "Focused typed-clarification and confirmed-contract positive and negative tests",
+    "Deterministic coverage tests for KPI, filter, trend, lifecycle, page, dimension, field, business-question and presentation cardinality obligations",
+    "Existing APBRA-138, APBRA-139, APBRA-141 and APBRA-142 regressions",
+    "Full web test suite and production build",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "Hosted history-aware secret scan and fresh exact-head independent AI review",
+    "Current-head approved synthetic GPT-4.1 happy path through deterministic candidate validation after implementation",
+    "Haseeb Power BI Desktop validation of any newly generated candidate"
+  ],
+  "out_of_scope": [
+    "Downstream heuristic or arbitrary-language parsing of clarification free text",
+    "Allowing the interpretation, design or repair model to validate its own semantic preservation",
+    "PBIP compiler, guardrail, RAG algorithm or corpus, schema-ingestion, PDF, styling, dependency, backend, infrastructure, environment or security-model changes",
+    "Weakening APBRA-138 measure integrity, APBRA-139 normalization, APBRA-141 pipeline ordering, APBRA-142 coverage or one-attempt geometry controls",
+    "Scenario-specific ServiceNow, report-name, filename, field, KPI, page or prompt-string logic",
+    "Production deployment, automatic merge or claiming Power BI Desktop success without Haseeb confirmation"
+  ],
+  "escalate_when": [
+    "A required path is outside the exact eight-file allowlist",
+    "A material clarification answer cannot be expressed using the supported typed option and obligation vocabulary",
+    "Accepted sources conflict or an APBRA-138, APBRA-139, APBRA-141 or APBRA-142 invariant would need weakening",
+    "Implementation would require heuristic interpretation of arbitrary answer text or visual titles",
+    "Live Foundry, build, bootstrap, hosted secret scanning or fresh independent review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated Jira and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "aac4639f30bc1d785972dd48b704537ee98548d7",
+  "branch": "agent/APBRA-DEVOPS/APBRA-143-typed-confirmed-requirements",
+  "source_ids": ["capstone-governance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "MVP 0.1 - Capstone",
+  "dependencies": [
+    "Merged APBRA-142 implementation at aac4639f30bc1d785972dd48b704537ee98548d7 remains the exact implementation base.",
+    "APBRA-143 blocks APBRA-142 completion until the typed contract is implemented and the approved synthetic live path is rerun.",
+    "Merged APBRA-138 integrity, APBRA-139 normalization, APBRA-141 pipeline and APBRA-142 coverage and bounded-repair controls remain authoritative.",
+    "This APBRA-143 governance registration must pass fresh independent review, hosted CI and Haseeb manual merge before any application implementation begins."
+  ]
+}
