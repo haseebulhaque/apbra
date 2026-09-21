@@ -132,6 +132,20 @@ AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS = {
     'tasks/APBRA-144-ai-native-iterative-clarification.json',
     'tests/bootstrap/test_ai_native_clarification_scope.py',
 }
+GENERIC_TIME_GRAIN_PATHS = {
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/reportDesignNormalization.ts',
+    'apps/web/src/reportDesignNormalization.test.ts',
+    'apps/web/src/genericPowerBI.ts',
+    'apps/web/src/genericPowerBI.test.ts',
+    'apps/web/src/tenant.ts',
+}
+GENERIC_TIME_GRAIN_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-145-generic-time-grain-support.json',
+    'tests/bootstrap/test_generic_time_grain_scope.py',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -681,6 +695,28 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 ai_native_clarification_task = None
+        generic_time_grain_task = None
+        generic_time_grain_path = root / 'tasks/APBRA-145-generic-time-grain-support.json'
+        if generic_time_grain_path.exists():
+            generic_time_grain_task = load_json(generic_time_grain_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), generic_time_grain_task)
+            if not extension_errors:
+                extension_errors += task_errors(generic_time_grain_task, catalog, sources)
+                if generic_time_grain_task['task_id'] != 'APBRA-145' or generic_time_grain_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected generic time-grain identity')
+                if generic_time_grain_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-145-generic-time-grain-support':
+                    extension_errors.append('Unexpected generic time-grain branch')
+                if generic_time_grain_task['base_commit'] != 'f25c3caca0ec3364d56be5303dae543bf502a4e1':
+                    extension_errors.append('Stale generic time-grain base')
+                if set(generic_time_grain_task['allowed_paths']) != GENERIC_TIME_GRAIN_PATHS:
+                    extension_errors.append('Unexpected generic time-grain scope')
+                if (generic_time_grain_task['task_mode'], generic_time_grain_task['readiness'], generic_time_grain_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Generic time-grain support requires issued implementation acceptance')
+                if generic_time_grain_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('Generic time-grain support requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                generic_time_grain_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -689,7 +725,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 measure_resolution_task, report_design_normalization_task,
                 capstone_documentation_task, measure_contract_pipeline_task,
                 layout_repair_task, typed_confirmed_requirements_task,
-                ai_native_clarification_task,
+                ai_native_clarification_task, generic_time_grain_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -723,13 +759,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-144' and
                      name in AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-145' and
+                     name in GENERIC_TIME_GRAIN_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
