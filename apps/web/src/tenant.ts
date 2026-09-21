@@ -1,10 +1,13 @@
+export type SupportedTrendGrain='DAY'|'MONTH'|'QUARTER'|'YEAR';
+export const supportedTrendGrains:readonly SupportedTrendGrain[]=['DAY','MONTH','QUARTER','YEAR'];
+
 export type TenantSettings={
   organisation:{name:string;displayName:string;locale:string;timezone:string};
   ai:{provider:'Azure AI Foundry';authentication:'API key'|'Entra ID'};
   rag:{enabled:boolean;topK:number;chunkTargetTokens:number;overlapStrategy:string;indexType:string;strategy:string};
   clarification:{defaultMode:'BUSINESS'|'ADVANCED';maxRounds:number;maxQuestionsPerRound:number;maxAnswerCharacters:number};
   governance:{requireKnowledge:boolean;requireAccessibility:boolean;requireValidation:boolean;maxVisualsPerPage:number;maxPages:number;humanReviewAtVisuals:number};
-  generation:{enabled:boolean;supportedCapabilities:string[];validationRequired:boolean;policy:string};
+  generation:{enabled:boolean;supportedCapabilities:string[];supportedTrendGrains:SupportedTrendGrain[];validationRequired:boolean;policy:string};
   branding:{primary:string;accent:string;reportNaming:string;pageNaming:string;executiveConvention:string;themeName:string};
 };
 
@@ -14,6 +17,6 @@ export const defaultTenantSettings:TenantSettings={
   rag:{enabled:true,topK:4,chunkTargetTokens:500,overlapStrategy:'Heading-aware; overlap only when a section is split',indexType:'In-memory exact cosine index',strategy:'Heading-aware and token-aware policy chunks'},
   clarification:{defaultMode:'BUSINESS',maxRounds:3,maxQuestionsPerRound:5,maxAnswerCharacters:2000},
   governance:{requireKnowledge:true,requireAccessibility:true,requireValidation:true,maxVisualsPerPage:20,maxPages:5,humanReviewAtVisuals:15},
-  generation:{enabled:true,supportedCapabilities:['KPI cards','Bar and column charts','Line charts','Tables','Slicers','Multiple pages','Explicit measures','Simple star-schema relationships','Theme colours'],validationRequired:true,policy:'Compile supported designs; route unsupported capabilities to human review.'},
+  generation:{enabled:true,supportedCapabilities:['KPI cards','Bar and column charts','Line charts','Tables','Slicers','Multiple pages','Explicit measures','Calendar day, month, quarter and year trend grouping','Simple star-schema relationships','Theme colours'],supportedTrendGrains:[...supportedTrendGrains],validationRequired:true,policy:'Compile supported designs; route unsupported capabilities to human review.'},
   branding:{primary:'#005A9C',accent:'#2D7D9A',reportNaming:'PascalCase project names',pageNaming:'Short audience-oriented page names',executiveConvention:'Headline KPIs first; focused pages; clear filters',themeName:'Contoso Executive'},
 };
