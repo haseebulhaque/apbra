@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-146",
+  "work_item_system": "jira",
+  "execution_id": "MVP-20260921-146",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile Jira, Confluence and durable GitHub documentation after the submitted Capstone to establish an evidence-backed post-Capstone MVP continuation baseline without changing application behaviour.",
+  "requirements": [
+    "APBRA-146 Post-Capstone MVP Baseline Reconciliation",
+    "Current main at 65d7281d1132ce5b4eca6d3cd89fd30e95f5c342 is the canonical implementation baseline",
+    "Capstone completed and submitted; MVP and product development continue",
+    "APBRA is a working bounded MVP/prototype with a demonstrated Candidate Ready happy path and is not production-ready"
+  ],
+  "adrs": [
+    "GPT-4.1 reasons, the human clarifies and confirms, the typed contract freezes confirmed meaning, and deterministic software validates safety and preservation",
+    "AI remains the ordinary BI Report Design authority within the supported capability profile",
+    "The bounded compiler supports DAY, MONTH, QUARTER and YEAR trend grains; WEEK remains unsupported and must stop semantically",
+    "Historical failures and candidates remain evidence and are not relabelled as the current happy path"
+  ],
+  "architecture_refs": [
+    "21.01 Capstone Problem Statement & MVP Scope v2",
+    "21.02 Demo Scenario, Personas, Dataset & Schema v4",
+    "21.03 Capstone Architecture, Decisions & Trade-offs v4",
+    "21.04 Evaluation Results, Test Evidence & Failure Example v4",
+    "21.05 Cost, Production Readiness & Lessons Learned v4",
+    "21.06 Final Presentation, Demo Script & Evidence Pack v4",
+    "APBRA-141 through APBRA-145 merged implementation history"
+  ],
+  "allowed_paths": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "AI-RAG-SPEC.md",
+    "POWERBI-GENERATION-SPEC.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "apps/web/README.md",
+    "docs/engineering/capstone-evidence.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/web/src/**", "apps/web/knowledge/**", "apps/web/scripts/**",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "tests/bootstrap/evaluation/**", "docs/source-register.json",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "The nine authorized durable documents accurately describe the merged APBRA-141 through APBRA-145 architecture without changing application behaviour.",
+    "The durable baseline states that Business Mode uses bounded AI-native iterative clarification, humans confirm material business meaning, ConfirmedRequirementContract freezes confirmed meaning, and deterministic obligation coverage preserves it downstream.",
+    "The durable baseline distinguishes governed in-app RAG, GPT Report Design authority, deterministic normalization and validation, one bounded structured correction attempt, measure/reference integrity, bounded layout repair, guardrails, compiler and candidate validation.",
+    "DAY, MONTH, QUARTER and YEAR are documented as genuinely represented by the current bounded compiler contract; WEEK is documented as unsupported and routed to a semantic stop rather than falsely represented.",
+    "Candidate Ready, Human Review Required, Unsupported and Blocked remain distinct outcomes.",
+    "The final recorded simple SalesPerformance acceptance is the current Candidate Ready happy path and is described only with durable evidence; no missing run ID, candidate digest, token count, cost or Desktop result is invented.",
+    "The historical ServiceManagementFunnel run d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa and prior measure, reference, layout, clarification-limit, citation, coverage and time-grain failures remain identifiable as historical engineering evidence rather than the current happy path.",
+    "The canonical status is that APBRA is a working bounded MVP/prototype with a demonstrated Candidate Ready happy path and is not production-ready; Capstone completion/submission is separate from continuing MVP/product development.",
+    "No claim of universal Power BI compatibility, autonomous production deployment, production tenant isolation or RBAC, complete reviewer workflow, complete publishing/gateway/credential automation, production-scale RAG, or exact-candidate Desktop PASS is introduced without evidence.",
+    "docs/engineering/codex-handoff.md becomes the post-Capstone MVP engineering baseline without an unnecessary rename, and stale APBRA-140/current-Capstone/presentation-pending language is removed where no longer true.",
+    "No application source, prompt, validator, dependency, configuration, generated output, candidate archive, runtime evidence, task contract, source register or unrelated future-production backlog is changed during documentation implementation."
+  ],
+  "verification_required": [
+    "Focused APBRA-146 bootstrap authority tests",
+    "Historical APBRA-140 and active-task authority regression tests",
+    "Search changed durable documents for stale current references to d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa and APBRA-140",
+    "Search changed durable documents for stale presentation, final demo, screenshot, failure-capture or Capstone-submission pending claims",
+    "Verify APBRA-141 through APBRA-145 are represented as merged implementation history and APBRA-146 as the current reconciliation task",
+    "Verify no unsupported production-readiness or exact-candidate Desktop claims were introduced",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "git diff --check and changed-content sensitive-pattern scan",
+    "Fresh independent exact-head documentation/evidence review, hosted CI and fetched-history secret scan"
+  ],
+  "out_of_scope": [
+    "Application source, prompts, validators, dependencies, configuration, schemas, fixtures or runtime behaviour",
+    "Generated candidates, candidate ZIPs, runtime evidence, evaluation artefacts, docs/source-register.json or historical task-contract changes",
+    "Confluence updates on the governance-registration branch or before the APBRA-146 task contract is manually merged",
+    "Invented run identifiers, candidate digests, token usage, costs, Desktop results, approvals or completion evidence",
+    "Production readiness, universal Power BI support, production tenant isolation or RBAC, production publishing, gateway or credential automation, production-scale RAG, deployment or the next MVP feature",
+    "Deleting or rewriting historical failure evidence merely to present a cleaner current narrative",
+    "Automatic merge, direct main writes, Jira completion or unsupported future-production backlog implementation"
+  ],
+  "escalate_when": [
+    "A required documentation path is outside the exact nine-file allowlist",
+    "Accepted Jira, Confluence, GitHub or durable evidence sources conflict or cannot substantiate a claim",
+    "A reconciliation requires application, prompt, validator, dependency, configuration, generated-output, task-contract, source-register or evaluation-artifact changes",
+    "The exact final SalesPerformance run identifier, candidate digest, token/cost data or Desktop result is unavailable and a document would otherwise imply it",
+    "Bootstrap, CI, fetched-history secret scanning or fresh independent exact-head review is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated Jira and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "65d7281d1132ce5b4eca6d3cd89fd30e95f5c342",
+  "branch": "agent/APBRA-DEVOPS/APBRA-146-post-capstone-mvp-baseline-reconciliation",
+  "source_ids": ["capstone-governance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Post-Capstone MVP baseline",
+  "dependencies": [
+    "PR #40 / APBRA-145 is merged at exact base 65d7281d1132ce5b4eca6d3cd89fd30e95f5c342.",
+    "Jira APBRA-141 through APBRA-145 are Done and APBRA-146 is the controlling In Progress reconciliation task.",
+    "The final recorded simple SalesPerformance acceptance reached Candidate Ready on the APBRA-145 merged baseline; unavailable identifiers or digests must remain explicitly unavailable.",
+    "This governance registration must pass fresh independent review, hosted CI, fetched-history secret scanning and Haseeb manual merge before documentation or Confluence reconciliation begins."
+  ]
+}
