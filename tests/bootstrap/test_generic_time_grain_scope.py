@@ -40,8 +40,9 @@ class GenericTimeGrainScopeTests(unittest.TestCase):
             changed_paths={path},
         )[0]
 
-    def test_exact_seven_implementation_paths_pass_only_with_apbra_145(self):
+    def test_exact_eight_implementation_paths_pass_only_with_apbra_145(self):
         expected = {
+            "apps/web/src/App.test.tsx",
             "apps/web/src/foundry.ts",
             "apps/web/src/foundry.test.ts",
             "apps/web/src/reportDesignNormalization.ts",
@@ -58,6 +59,7 @@ class GenericTimeGrainScopeTests(unittest.TestCase):
         )
         self.assertNotIn("apps/web/src/confirmedRequirements.ts", expected)
         self.assertNotIn("apps/web/src/confirmedRequirements.test.ts", expected)
+        self.assertNotIn("apps/web/src/App.test.tsx", self.task["restricted_paths"])
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         prior = json.loads((ROOT / "tasks/APBRA-144-ai-native-iterative-clarification.json").read_text())
         for path in expected:
@@ -191,6 +193,9 @@ class GenericTimeGrainScopeTests(unittest.TestCase):
             "second invalid Report Design fails closed",
             "APBRA-143 confirmation",
             "APBRA-144 iterative clarification",
+            "timeGrain: 'DAY'",
+            "timeGrain: 'NONE'",
+            "fixture business semantics, expected behavior, assertions, production logic and test strength may not change",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, criteria)

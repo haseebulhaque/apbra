@@ -31,6 +31,7 @@
     "APBRA-144 AI-Native Iterative Clarification and Generic SaaS Report Architecture"
   ],
   "allowed_paths": [
+    "apps/web/src/App.test.tsx",
     "apps/web/src/foundry.ts",
     "apps/web/src/foundry.test.ts",
     "apps/web/src/reportDesignNormalization.ts",
@@ -42,7 +43,7 @@
   "restricted_paths": [
     "apps/web/src/clarification.ts", "apps/web/src/clarification.test.ts",
     "apps/web/src/confirmedRequirements.ts", "apps/web/src/confirmedRequirements.test.ts",
-    "apps/web/src/EnterpriseApp.tsx", "apps/web/src/App.test.tsx",
+    "apps/web/src/EnterpriseApp.tsx",
     "apps/web/src/rag.ts", "apps/web/src/rag.test.ts", "apps/web/knowledge/**",
     "apps/web/src/guardrail.ts", "apps/web/src/guardrail.test.ts",
     "apps/web/src/schemaIngestion.ts", "apps/web/src/schemaIngestion.test.ts",
@@ -71,6 +72,7 @@
     "Regression tests reject wrong grain, wrong temporal field, wrong measure, missing trend, raw-date false positives, altered confirmation semantics and incomplete business-question coverage.",
     "Production prompts and logic contain no branching, recipes or assumptions for Sales, Revenue, Sales_Data, Region, Product_Category, ServiceNow, Ticket, Stage, fixture names or any other business domain.",
     "All APBRA-138, APBRA-139, APBRA-141, APBRA-142, APBRA-143 and APBRA-144 controls and regressions remain effective.",
+    "apps/web/src/App.test.tsx authority is limited to adding timeGrain: 'DAY' where an existing legacy fixture already represents a day-grain trend and timeGrain: 'NONE' where an existing legacy fixture is already non-trend; fixture business semantics, expected behavior, assertions, production logic and test strength may not change.",
     "No application behavior, fixture, generated candidate or live acceptance run is created on the APBRA-145 governance branch."
   ],
   "verification_required": [
@@ -93,13 +95,13 @@
     "Changing ConfirmedRequirementContract business semantics, APBRA-143 confirmation authority or APBRA-144 clarification state architecture",
     "A universal date intelligence framework, every fiscal calendar, custom periods, ISO-week policy, locale-specific calendar policy or universal Power BI compatibility",
     "A deterministic rule selecting line, column, table or any other visual solely from a time grain",
-    "Scenario-specific production logic, prompts, field or KPI rules, report recipes, golden report implementations or fixture changes",
+    "Scenario-specific production logic, prompts, field or KPI rules, report recipes, golden report implementations or fixture changes other than the explicitly authorized App.test.tsx legacy timeGrain alignment",
     "RAG algorithm or corpus, guardrail, schema-ingestion, styling, UI, dependency, backend, infrastructure, environment, deployment or security-model changes",
     "Production multitenancy, full tenant administration, production deployment orchestration, broad semantic-model ingestion or complete observability/SRE",
     "New AI provider, unverified paid capability, autonomous production publishing, automatic merge, Jira completion or final documentation reconciliation"
   ],
   "escalate_when": [
-    "A required implementation path is outside the exact seven-file allowlist",
+    "A required implementation path is outside the exact eight-file allowlist",
     "A claimed Power BI time-grain structure cannot be verified from the generated PBIP representation and bounded candidate validation",
     "Supporting a grain requires an unaccepted calendar, locale, fiscal-period or week-definition product policy",
     "Implementation would infer grain or business meaning from prose, titles, field names, report names or scenario fixtures",
