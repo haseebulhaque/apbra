@@ -133,6 +133,7 @@ AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS = {
     'tests/bootstrap/test_ai_native_clarification_scope.py',
 }
 GENERIC_TIME_GRAIN_PATHS = {
+    'apps/web/src/App.test.tsx',
     'apps/web/src/foundry.ts',
     'apps/web/src/foundry.test.ts',
     'apps/web/src/reportDesignNormalization.ts',
