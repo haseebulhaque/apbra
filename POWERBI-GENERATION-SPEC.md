@@ -5,15 +5,19 @@ APBRA compiles a bounded structured Report Design into an editable PBIP/PBIR can
 ## Processing contract
 
 ```text
-Original AI Report Design
+ConfirmedRequirementContract v2
+→ Original AI Report Design
+→ deterministic typed-obligation coverage
 → deterministic normalization
 → strict integrity validation
+→ one bounded correction with exact findings and complete revalidation when eligible
+→ bounded layout repair when eligible
 → deterministic guardrails
 → bounded PBIP/PBIR compiler
 → deterministic candidate validation
 ```
 
-The original AI design remains immutable evidence. The compiler consumes a separate normalized design only after integrity and policy checks pass.
+The original AI design remains immutable evidence. Corrected/repaired designs remain separately traceable. Correction cannot introduce unconfirmed measures or change confirmed business meaning. The compiler consumes only a fully revalidated supported design.
 
 ## Normalization
 
@@ -34,7 +38,9 @@ The compiler repeats defensive validation; invalid structures cannot rely solely
 
 ## Supported bounded profile
 
-The current compiler supports common KPI cards, bar/column/line charts, tables, slicers, multiple bounded pages, explicit SUM/DISTINCTCOUNT/COUNT/AVERAGE and supported ratio measures, simple discovered relationships, embedded synthetic CSV data and tenant theme colours.
+The current compiler supports common KPI cards, bar/column/line charts, tables, slicers, multiple bounded pages, explicit SUM/DISTINCTCOUNT/COUNT/AVERAGE and supported ratio measures, simple discovered relationships, embedded synthetic CSV data and tenant theme colours. GPT selects ordinary supported presentation; deterministic validation proves confirmed meaning remains covered.
+
+DAY binds the raw date. MONTH, QUARTER and YEAR use generated columns based on `Date.StartOfMonth`, `Date.StartOfQuarter` and `Date.StartOfYear`; compiler and candidate validation check collisions, generated semantic columns and visual binding. A raw Date cannot prove a non-DAY grain. WEEK, fiscal/custom calendars and locale-specific calendar policies remain unsupported before confirmation.
 
 It does not execute arbitrary model-authored DAX, M, SQL or shell content. Custom visuals, DirectQuery/Direct Lake, predictive services, write-back, automatic RLS inference, gateway configuration, credential setup and production publishing are unsupported unless separately implemented and verified.
 
@@ -46,7 +52,7 @@ Normalization accounts for every existing visual, not only newly expanded slicer
 
 ## Candidate validation
 
-The validator checks the project/package structure, required files, report/model references, supported visual definitions, measures, fields, relationships and generated identifiers. Static PASS does not prove Power BI Desktop openability, rendering, refresh, numeric correctness or RLS behaviour. Those require exact-candidate Desktop evidence.
+The validator checks `MEASURE_INTEGRITY`, project/table/page structure, PBIR/visual identifiers, visual count/types, unresolved identifiers, measure/relationship references and supported time-grain representation. Static PASS does not prove Power BI Desktop openability, rendering, refresh, numeric correctness or RLS behaviour. Those require exact-candidate Desktop evidence.
 
 Any byte change creates a different candidate and requires validation again. Historical Desktop results do not authorize new bytes.
 

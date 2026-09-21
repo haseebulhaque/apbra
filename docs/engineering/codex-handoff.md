@@ -1,31 +1,28 @@
-# APBRA Capstone engineering handoff
+# APBRA post-Capstone MVP engineering baseline
 
 ## Current merged state
 
-- APBRA-137 final enterprise UX: done and merged.
-- APBRA-138 Report Design measure/reference integrity: done and merged.
-- APBRA-139 deterministic Report Design normalization and bounded layout: done and merged.
-- APBRA-140 documentation/evidence reconciliation: current task.
+- Capstone: complete/submitted.
+- Working bounded MVP baseline: established.
+- Product development: continuing.
+- APBRA-141 through APBRA-145: merged implementation history.
+- APBRA-146: current documentation/baseline reconciliation task.
+- Canonical implementation baseline: `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`.
+- Post-governance documentation base: `39ab131643c77d87359dd3fdb28909021f0e9ba9`.
 
-The application is beyond bootstrap. It is a working bounded Capstone prototype with real GPT-4.1 interpretation, dynamic clarification, in-app governed RAG, original and normalized Report Designs, strict integrity, deterministic guardrails, PBIP/PBIR compilation, deterministic validation and a generated deployment guide.
+The application is a working bounded MVP/prototype, not production-ready. GPT-4.1 owns ambiguity reasoning and ordinary supported BI design; humans confirm material meaning; ConfirmedRequirementContract v2 freezes authority; deterministic coverage, integrity, normalization, bounded correction/repair, guardrails, compiler and candidate validation enforce the boundary.
 
-## Current happy-path evidence
+## Current evidence
 
-Run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` reached Candidate Ready. The exact archive is `ServiceManagementFunnel.d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa.candidate.zip`, SHA-256 `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`.
+Canonical success `8042cc44-620f-4457-828d-0770749a653f` reached Candidate Ready for SalesPerformance after human confirmation; compiler completed and deterministic validation passed. No exact final candidate digest or Desktop PASS is durably recorded.
 
-It recorded three clarifications, two embedding calls, top-k 4/four citations, two duplicate-binding collapses, zero integrity findings, guardrails PASS, compiler COMPLETED and deterministic validation PASS. All eight visuals fit inside the bounded pages.
+Fail-closed run `0927fd18-1c61-4610-8167-de86933a1de1` rejected missing monthly trend/business-question coverage with no candidate. Comparative Sales clarification reached Human Review Required with no contract/candidate; the known Ready-for-Confirmation lifecycle inconsistency remains visible. Historical ServiceNow run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` remains historical only.
 
-Power BI Desktop validation for these exact current bytes remains **PENDING**. Do not transfer the historical SalesPerformance or ServiceDeskOperations Desktop results to this candidate.
+## Capability handoff
 
-## Remaining Capstone work
+Business Mode is default; Advanced/BI Mode accepts optional preferences. Governed RAG is the five-document, approximately 20-chunk, `text-embedding-3-small` exact-cosine implementation, not S08 Foundry Knowledge. DAY, MONTH, QUARTER and YEAR are supported; WEEK, fiscal/custom calendars and locale-specific calendar policies are not.
 
-1. Open and inspect the exact current candidate in Windows Power BI Desktop.
-2. Capture a final unsupported/unrealistic failure run that safely stops without a candidate.
-3. Record attributable cost evidence.
-4. Capture final screenshots and a 90-second demonstration.
-5. Complete the nine-slide deck aligned with Confluence 21.02–21.06.
-
-The intended failure request should exceed the bounded product contract through unsupported capabilities such as custom visuals, forecasting, write-back, inferred RLS, gateway/credential setup and direct production publishing. Historical ServiceNow implementation defects are regression evidence, not the final failure story.
+APBRA-146 deliberately does not select the next MVP feature.
 
 ## Operating boundaries
 

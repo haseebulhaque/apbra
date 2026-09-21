@@ -1,6 +1,8 @@
-# APBRA Capstone architecture
+# APBRA bounded MVP architecture
 
-This document describes the merged bounded Capstone implementation and separates it from the future production architecture. It aligns with Confluence 21.03 and the accepted implementation decisions recorded in the repository.
+This document describes the post-Capstone implementation through APBRA-145 and separates it from future production architecture. Capstone is complete/submitted; product development continues.
+
+> **GPT-4.1 reasons. The human clarifies and confirms. The typed contract freezes confirmed meaning. Deterministic software validates safety and preservation.**
 
 ## Application planes
 
@@ -16,23 +18,29 @@ The separation represents the intended responsibility boundary. The Capstone doe
 ```text
 Requirement + request-specific CSV/XLSX schema
 → Azure AI Foundry GPT-4.1 interpretation
-→ dynamic clarification questions and answers
-→ confirmed requirements
+→ bounded iterative clarification with immutable raw-answer provenance
+→ READY_FOR_CONFIRMATION and explicit human confirmation
+→ ConfirmedRequirementContract v2
 → APBRA in-app governed retrieval
 → original AI Report Design
-→ deterministic Report Design normalization
-→ strict Report Design integrity validation
+→ deterministic obligation coverage, normalization and integrity validation
+→ one bounded structured correction and complete revalidation when eligible
+→ bounded layout repair when eligible
 → deterministic guardrails
 → bounded PBIP/PBIR compiler
 → deterministic candidate validation
 → terminal status
 ```
 
-Terminal statuses are Candidate Ready, Human Review Required, Unsupported and Blocked. Generation does not start after a normalization, integrity or policy safe-stop.
+Terminal statuses include Candidate Ready, Human Review Required, Unsupported, Out of Scope and Blocked. Technical provider/infrastructure failure remains separate. Generation does not start after a semantic, coverage, integrity, capability or policy safe-stop.
 
 ### AI boundary
 
-The current adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. Live evidence observed `gpt-4.1-2025-04-14`; embeddings use `text-embedding-3-small` with 1,536 dimensions. GPT interprets requirements, detects ambiguity, creates clarifications and proposes a grounded structured Report Design. It cannot approve guardrails, establish measure correctness, select release authority or certify candidate validity.
+The current adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. Live evidence observed `gpt-4.1-2025-04-14`; embeddings use `text-embedding-3-small` with 1,536 dimensions. GPT detects material ambiguity, interprets natural-language answers and proposes confirmed meaning and a grounded ReportDesign. Business Mode is default; Advanced/BI Mode accepts optional technical preferences. GPT chooses ordinary supported BI presentation but cannot approve guardrails, establish measure correctness, select release authority or certify candidate validity.
+
+### Confirmation boundary
+
+Raw requirements, questions and answers remain immutable provenance. Only human-confirmed structured meaning enters ConfirmedRequirementContract v2. Deterministic TypeScript does not infer business meaning from arbitrary prose. Coverage later proves exact typed obligations, business-question mappings, measures, fields, page scope and time semantics remain represented.
 
 ### Request schema boundary
 
@@ -48,7 +56,7 @@ This Capstone implementation does **not** use the historical S08 Foundry Knowled
 
 The original AI Report Design is retained as evidence. A separate deterministic normalizer converts safely expressible intent into the strict compiler contract before validation. Examples include splitting independent slicer fields into separate slicers and collapsing an identical field/category duplicate.
 
-Normalization uses stable deterministic IDs, deterministic compiler-aligned placement and page-bound checks. It does not repair zero-binding or measure-bound slicers, unknown fields, ambiguous semantics or layouts without capacity. Those cases create a typed finding and stop before compilation. APBRA-139 therefore complements rather than weakens APBRA-138 integrity.
+Normalization uses stable deterministic IDs, compiler-aligned placement and page-bound checks. One bounded ReportDesign correction may receive exact domain-neutral findings; it cannot alter confirmed measures/business meaning and corrected output is fully revalidated. Bounded layout repair preserves original and repaired designs separately. Unsupported ambiguity or capacity creates a typed finding and stops.
 
 ## Strict integrity boundary
 
@@ -60,7 +68,11 @@ The deterministic compiler consumes only the normalized, validated Report Design
 
 Every visual must satisfy `x ≥ 0`, `y ≥ 0`, `x + width ≤ 1280`, and `y + height ≤ 720`. Existing and expanded visuals both consume capacity. If placement cannot fit, `LAYOUT_CAPACITY_EXCEEDED` records the attempted layout and compilation remains `NOT_STARTED`.
 
-The supported subset includes common KPI cards, bar/column/line charts, tables, slicers, multiple bounded pages, explicit supported measures, simple relationships and tenant theme colours. Unsupported visuals, arbitrary model-authored DAX/M/SQL, DirectQuery/Direct Lake, autonomous publishing and production credential configuration are not silently substituted.
+The supported subset includes common KPI cards, bar/column/line charts, tables, slicers, multiple bounded pages, explicit supported measures, simple relationships and tenant theme colours. GPT chooses among supported visual types; deterministic code does not impose universal KPI/card or trend/line preferences.
+
+DAY uses the raw temporal binding. MONTH, QUARTER and YEAR use generated grouping columns based on `Date.StartOfMonth`, `Date.StartOfQuarter` and `Date.StartOfYear`; generated names are collision-checked and candidate validation proves both grouping and visual binding. A raw Date binding cannot falsely prove a non-DAY grain. WEEK, fiscal/custom calendars and locale-specific policies remain unsupported.
+
+Unsupported visuals, arbitrary model-authored DAX/M/SQL, DirectQuery/Direct Lake, write-back, inferred RLS, autonomous publishing and production credential configuration are not silently substituted.
 
 ## Validation and handover
 

@@ -1,47 +1,40 @@
-# Capstone acceptance and evidence status
+# MVP acceptance and evidence status
 
-This is a current evidence map, not a production-readiness claim. Results apply only to the recorded revisions and candidate bytes.
+Capstone is complete/submitted. The bounded MVP baseline is working and product development continues. This is not a production-readiness claim.
 
 ## Completed Capstone capabilities
 
 | Gate | Current result | Evidence boundary |
 | --- | --- | --- |
 | AI interpretation | PASS | Real GPT-4.1 interpreted the requirement and supplied schema metadata |
-| Dynamic clarification | PASS | Current run generated three input-specific questions |
-| Governed RAG | PASS | Five fictional standards, 20 chunks, two embedding calls, top-k 4 and four citations |
+| Iterative clarification | PASS | Business-language clarification and natural-language answers |
+| Human confirmation | PASS | Confirmation preceded ConfirmedRequirementContract v2 |
+| Governed RAG | PASS | Five fictional standards; citations `CB-001`, `PM-002`, `RD-004`, `RD-001` |
 | Grounded Report Design | PASS | Original structured AI design retained with provenance |
-| Deterministic normalization | PASS | Two identical field/category duplicates collapsed; original and normalized designs remain distinct |
-| Strict integrity | PASS | Zero findings after normalization; measure, dependency, reference and cardinality rules executed |
+| Semantic preservation | PASS | Typed obligation coverage and exact schema/measure checks |
+| Deterministic normalization/integrity | PASS | Original and validated designs remain traceable |
 | Guardrails | PASS | Generation decision AVAILABLE |
 | PBIP/PBIR compilation | PASS | Compiler COMPLETED for the bounded supported design |
 | Deterministic candidate validation | PASS | Required project and reference checks passed |
-| Page bounds | PASS | Eight visuals over two pages; maximum right 1,210 and bottom 520 inside 1,280 × 720 |
 | Candidate result | PASS | Final status Candidate ready |
 
-Current run: `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa`.
+Canonical run: `8042cc44-620f-4457-828d-0770749a653f`. The confirmed SalesPerformance design contained `Total Sales = SUM(Sales_Data.Revenue)`, an Executive Summary, Total Sales card, regional bar chart and Region slicer.
 
-Current candidate SHA-256: `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`.
+Interpretation tokens: 8,608 prompt, 1,207 completion, 9,815 total. ReportDesign tokens: 6,430 prompt, 964 completion, 7,394 total. Both used `gpt-4.1-2025-04-14`. `embeddingCalls = null`; no embedding count/cost is claimed.
 
-## Pending Capstone evidence
+## Runtime and claim boundary
 
-- **Power BI Desktop validation of the exact current ServiceManagementFunnel candidate: PENDING.**
-- Final unsupported/unrealistic failure-run capture.
-- Attributable cost calculation.
-- Final screenshots, demo recording and nine-slide presentation/evidence pack.
-
-Historical Power BI Desktop PASS results for `SalesPerformance.candidate.zip` and `ServiceDeskOperations.candidate.zip` remain valid only for those exact historical archives.
+No durable digest or exact-candidate Power BI Desktop PASS exists for the canonical run. Deterministic validation PASS is the highest verified claim. Desktop/runtime validation remains future engineering evidence, not a pending Capstone submission blocker.
 
 ## Required negative behaviour
 
 Invalid or unsafe input must finish Human Review Required, Unsupported or Blocked. Missing required grounding, invalid measures/references, dependency cycles, invalid visual cardinality, unknown fields and insufficient layout capacity must prevent compilation. Skipped, crashed, timed-out or not-run mandatory validation is incomplete.
 
-The final failure demonstration should use an intentionally unsupported or unrealistic request, such as a 25-page report demanding unsupported custom visuals, predictive forecasting, write-back, workflow approvals, inferred RLS, gateway/credential configuration and direct production publishing. It should not reuse a historical ServiceNow engineering defect as the product failure example.
+Run `0927fd18-1c61-4610-8167-de86933a1de1` proved fail-closed trend coverage: confirmed monthly intent, `REPORT_DESIGN_COVERAGE_INVALID`, no candidate. A comparative Sales scenario exhausted clarification/correction and reached Human Review Required without a contract/candidate; the known Ready-for-Confirmation transition inconsistency remains documented.
 
 ## Revision-specific engineering evidence
 
-APBRA-139 delivery: 47 focused tests passed; full web 118 passed and 3 skipped; production build, bootstrap, CI policy and hosted secret scan passed; full bootstrap suite 168 passed.
-
-APBRA-140 governance: 8 focused tests passed; 74 historical authority regressions passed; full bootstrap suite 176 passed; tracked-tree validation passed over 162 files; CI policy, hosted required check and secret scan passed.
+APBRA-141 through APBRA-145 are merged implementation history. DAY, MONTH, QUARTER and YEAR have genuine supported representations; WEEK remains unsupported. Historical APBRA-139/APBRA-140 and ServiceNow evidence remains available but is not the current acceptance baseline.
 
 Test totals are revision-specific and must be refreshed after changes.
 

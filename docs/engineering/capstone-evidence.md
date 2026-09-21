@@ -1,41 +1,34 @@
-# APBRA Capstone evidence index
+# APBRA final Capstone evidence record
 
-Evidence is revision- and candidate-specific. Historical results are retained but never transferred to different bytes.
+Capstone is complete/submitted. The canonical implementation baseline before documentation governance is `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`; APBRA-146 governance merged at `39ab131643c77d87359dd3fdb28909021f0e9ba9`. Historical results remain revision- and candidate-specific.
 
-## Current live happy path
+## Canonical successful acceptance
 
 | Evidence | Observed result |
 | --- | --- |
-| Run ID | `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` |
-| Chat model | GPT-4.1; observed `gpt-4.1-2025-04-14` |
-| Clarifications | 3 dynamic questions |
-| Embeddings | 2 calls using `text-embedding-3-small`, 1,536 dimensions |
-| Governed corpus | 5 fictional documents, 20 indexed chunks |
-| Retrieval | top-k 4, four citations, 454 ms |
-| Original Report Design | 8 visuals |
-| Normalized Report Design | 8 visuals |
-| Normalization | 2 `DUPLICATE_BINDING_COLLAPSED` actions |
-| Integrity | 0 findings; PASS |
-| Guardrails | PASS; generation AVAILABLE |
+| Run ID | `8042cc44-620f-4457-828d-0770749a653f` |
+| Scenario | Simple synthetic SalesPerformance, Business Mode |
+| Confirmed meaning | Total Sales = sum Revenue; all data; Sales Managers |
+| Contract | ConfirmedRequirementContract v2 after explicit confirmation |
+| Model | `gpt-4.1-2025-04-14` |
+| Retrieval | `CB-001`, `PM-002`, `RD-004`, `RD-001`; `embeddingCalls = null` |
+| ReportDesign | Executive Summary; Total Sales card; regional bar; Region slicer |
+| Measure | `Total Sales = SUM(Sales_Data.Revenue)` |
+| Guardrails | Recorded checks PASS |
 | Compiler | COMPLETED |
 | Deterministic validation | PASS |
 | Final status | Candidate ready |
 
-The evidence sequence is original AI Report Design → deterministic normalization → normalized compiler-safe design → strict integrity validation → guardrails → compiler → deterministic candidate validation. The original design is preserved separately from the normalized design.
+Interpretation used 8,608 prompt + 1,207 completion = 9,815 tokens. ReportDesign used 6,430 prompt + 964 completion = 7,394 tokens. No precise embedding cost is claimed.
 
-## Current candidate
+Recorded PASS checks: `MEASURE_INTEGRITY`, `PROJECT_STRUCTURE`, `TABLE_FILES`, `PAGE_REFERENCES`, `PBIR_IDENTIFIERS`, `VISUAL_IDENTIFIERS`, `VISUAL_COUNT`, `VISUAL_TYPES`, `NO_UNRESOLVED_IDENTIFIERS`, `MEASURE_REFERENCES`, `RELATIONSHIP_REFERENCES`.
 
-- File: `ServiceManagementFunnel.d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa.candidate.zip`
-- Size: 227,770 bytes
-- SHA-256: `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`
-- Contains `ServiceManagementFunnel.pbip` and `ReportDesign.json`
-- Power BI Desktop open/render validation: **PENDING**
+No durable candidate digest or exact-candidate Power BI Desktop PASS is recorded. Candidate Ready means generated and deterministically validated—not Desktop verified, deployed or production-ready.
 
-The archive is evidence referenced by name and digest; candidate ZIPs are not committed to the repository.
+## Fail-closed and HITL evidence
 
-## Layout evidence
-
-The candidate has two report pages and eight visuals. Maximum right edge is 1,210 and maximum bottom edge is 520. Every reviewed visual is within the 1,280 × 720 page bounds, and no overlap was found in the reviewed layout. This is deterministic structural/layout evidence, not Desktop rendering evidence.
+- `0927fd18-1c61-4610-8167-de86933a1de1`: monthly Total Sales was confirmed; GPT ReportDesign failed exact trend/business-question coverage with `REPORT_DESIGN_COVERAGE_INVALID`; no candidate. This proves fail-closed preservation, not lack of MONTH support.
+- Comparative Sales clarification exhausted configured limits and routed to Human Review Required with no contract/candidate. Known prototype limitation: the UI could show Ready for Confirmation immediately before confirmation subsequently routed to Human Review.
 
 ## Historical evidence
 
@@ -46,23 +39,17 @@ The candidate has two report pages and eight visuals. Maximum right edge is 1,21
 
 **HISTORICAL — defect discovery and regression evidence**
 
-Earlier ServiceNow executions exposed an unresolved ratio measure, invalid multi-binding slicers and off-page normalized layout. Those defects drove APBRA-138 integrity controls and APBRA-139 normalization/layout work. They are engineering history, not the current product outcome.
+Earlier ServiceNow/Sales executions exposed measure/reference defects, invalid multi-binding slicers, layout overflow, clarification limits, citation/coverage failures and the monthly-grain mismatch that led to APBRA-145. Run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` and its ServiceManagementFunnel candidate remain historical, not current.
 
 ## Test and CI evidence
 
-**APBRA-139 delivery revision:** 47 focused tests passed; full web suite 118 passed and 3 skipped; build PASS; bootstrap PASS; full bootstrap suite 168 passed; CI policy PASS; hosted secret scan PASS.
-
-**APBRA-140 governance revision:** 8 focused tests passed; 74 historical authority regressions passed; full bootstrap suite 176 passed; tracked-tree validation PASS over 162 files; CI policy PASS; hosted required check PASS; secret scan PASS.
+APBRA-141 through APBRA-145 are merged implementation history covering measure contracts, layout repair, typed confirmation, AI-native clarification and generic time-grain/correction alignment.
 
 Counts are revision-specific and must not be presented as permanent totals.
 
-## Remaining evidence tasks
+## Post-Capstone boundary
 
-1. Validate the exact current candidate in Windows Power BI Desktop and record open/render results.
-2. Capture a final failure run using an intentionally unsupported/unrealistic requirement. Do not use a corrected ServiceNow defect as the failure demonstration.
-3. Record attributable model/embedding cost evidence.
-4. Capture final screenshots and the 90-second demonstration.
-5. Complete the nine-slide presentation/evidence pack.
+Desktop/runtime validation may be collected as future engineering evidence but is not a pending Capstone submission task. The demonstrated thesis is: GPT reasons, the human confirms, the typed contract freezes meaning, deterministic controls preserve it, and supported generation can reach Candidate Ready while unsafe/incomplete intent fails closed.
 
 ## Deployment-guide boundary
 
