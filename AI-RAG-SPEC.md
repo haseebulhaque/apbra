@@ -6,7 +6,9 @@ This document describes the current in-app Capstone implementation and the separ
 
 The adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. The configured chat deployment is GPT-4.1; live evidence observed `gpt-4.1-2025-04-14`. Embeddings use `text-embedding-3-small` with 1,536 dimensions. Secrets remain server-side in the ignored local environment configuration.
 
-GPT is responsible for requirement interpretation, ambiguity detection, dynamic clarification questions and grounded structured Report Design generation. It is advisory: deterministic code decides reference and measure correctness, compiler compatibility, guardrail outcomes, candidate validity and release eligibility.
+GPT is responsible for domain-neutral requirement interpretation, material-ambiguity detection, bounded iterative clarification, natural-language answer interpretation and grounded ReportDesign. Business Mode is default; Advanced/BI Mode accepts optional preferences. Human confirmation creates the authority boundary; deterministic code decides state validity, obligation preservation, references, measures, capability, guardrails, compiler validity and candidate validity.
+
+Raw requests, questions and answers remain immutable provenance. Only confirmed structured meaning enters ConfirmedRequirementContract v2; deterministic downstream code does not reinterpret arbitrary prose. One bounded ReportDesign correction may receive exact findings, but cannot invent or alter confirmed measures and must pass complete revalidation.
 
 ## Capstone governed RAG
 
@@ -14,7 +16,7 @@ The governed corpus contains five substantive fictional APBRA policy documents c
 
 Chunking is heading-aware and token-aware. Meaningful sections are preserved; larger sections are split near a 400–600-token target with limited overlap only for continuity. Tiny sections are not padded. Each chunk retains document, version, heading, stable ID, size, content and citation metadata. The current corpus contains 20 chunks.
 
-At runtime APBRA constructs an embedding query from the confirmed requirement, request-specific schema/model intent and clarification answers. `text-embedding-3-small` embeds the query. The browser application compares it with the governed corpus through exact in-memory cosine similarity and returns configurable top-k chunks. Those chunks and their citations ground the GPT-4.1 Report Design call.
+At runtime APBRA retrieves relevant context during clarification where useful and again for detailed ReportDesign. `text-embedding-3-small` embeds the query; exact in-memory cosine similarity returns configurable top-k chunks. Retrieval cannot authorize or silently override confirmed requirements; conflicts surface for clarification/review.
 
 The uploaded CSV/XLSX schema is request context and is never indexed into tenant-wide governed knowledge. Workbook bytes, secrets, local paths and unrelated environment data are not retrieval content.
 
@@ -22,7 +24,7 @@ The uploaded CSV/XLSX schema is request context and is never indexed into tenant
 
 Retrieved evidence retains source document, category, version, heading, chunk ID, similarity and latency. The model cannot activate a policy, authorize a user or approve generation. Retrieved text and model output are untrusted inputs to typed contracts and deterministic validation.
 
-The current happy-path run used two embedding calls, 20 indexed chunks, top-k 4, four citations and 454 ms retrieval latency. These are revision-specific observations, not permanent performance claims.
+The canonical Sales run recorded citations `CB-001`, `PM-002`, `RD-004`, `RD-001`. Its `embeddingCalls` value is null; no embedding-call count or precise embedding cost is claimed.
 
 ## Historical Foundry boundary
 

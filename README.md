@@ -1,24 +1,27 @@
 # AI-Powered Power BI Report Automation (APBRA)
 
-APBRA is a working, bounded Capstone prototype that turns a business requirement and declared CSV/XLSX schema into a governed Report Design and, when supported, a validated editable Power BI Project (PBIP) candidate.
+APBRA is a working bounded MVP/prototype with a demonstrated Candidate Ready happy path. It is not production-ready. The Capstone is complete/submitted; MVP and product development continue.
 
-## Implemented Capstone flow
+## Implemented bounded MVP flow
 
 ```text
 Requirement + schema
 → GPT-4.1 interpretation
-→ dynamic clarifications
+→ bounded iterative clarification in Business Mode (default) or Advanced/BI Mode
+→ explicit human confirmation of material business meaning
+→ ConfirmedRequirementContract v2
 → governed in-app RAG
 → original AI Report Design
-→ deterministic Report Design normalization
-→ strict integrity validation
+→ deterministic obligation coverage, normalization and strict integrity validation
+→ one bounded ReportDesign correction and complete revalidation when eligible
+→ bounded layout repair when eligible
 → deterministic guardrails
 → bounded PBIP/PBIR compiler
 → deterministic candidate validation
-→ Candidate Ready / Human Review Required / Unsupported / Blocked
+→ Candidate Ready / Human Review Required / Unsupported / Out of Scope / Blocked
 ```
 
-GPT-4.1 interprets requirements, identifies ambiguity, creates clarification questions and proposes a grounded structured Report Design. Deterministic code owns normalization, reference and measure integrity, compiler compatibility, guardrails, candidate validation and whether generation may proceed.
+GPT-4.1 reasons under ambiguity and makes ordinary supported BI design choices. The human confirms material business meaning. The typed contract freezes that meaning. Deterministic software owns semantic preservation, supported capability, safety, compilation and artifact validation. Raw answers remain provenance and are not deterministically reinterpreted downstream.
 
 The business workspace and administration plane are distinct. Business users create reports and inspect session runs. Administrators inspect prototype tenant settings, AI models, governed knowledge, branding and generation policies. Authentication, RBAC and real multitenancy are outside the Capstone.
 
@@ -38,17 +41,13 @@ The default Vite URL is `http://127.0.0.1:5173/`. Foundry-dependent stages fail 
 
 ## Current evidence
 
-The current live happy path is run `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa`. It completed interpretation, three dynamic clarifications, governed retrieval, normalization, integrity checks, guardrails, compilation and deterministic validation. The resulting candidate is:
+The canonical successful run is `8042cc44-620f-4457-828d-0770749a653f`. After clarification and human confirmation, it generated `SalesPerformance`: `Total Sales = SUM(Sales_Data.Revenue)`, an Executive Summary, a Total Sales card, Total Sales by Region bar chart and Region slicer. Governed citations were `CB-001`, `PM-002`, `RD-004`, `RD-001`; compiler and deterministic candidate validation passed; final state was Candidate Ready.
 
-- `ServiceManagementFunnel.d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa.candidate.zip`
-- SHA-256 `833dff4ba7de7045e23ff6b42ce1e48e73b33534f1f910e7420753a1c5eab0f3`
-- Power BI Desktop validation for this exact candidate: **PENDING**
-
-Historical Desktop evidence remains valid for the earlier `SalesPerformance.candidate.zip` and `ServiceDeskOperations.candidate.zip` candidates; it does not validate the current candidate. See the [Capstone evidence index](docs/engineering/capstone-evidence.md).
+No durable run-specific candidate digest or exact-candidate Power BI Desktop PASS is recorded. Generation and deterministic validation PASS are the highest verified claims. Run `0927fd18-1c61-4610-8167-de86933a1de1` is the complex fail-closed example: confirmed monthly intent was rejected at `REPORT_DESIGN_COVERAGE_INVALID` and produced no candidate. `d6884abb-f587-4caa-bc1c-d0cfb2bcb1fa` remains historical ServiceNow evidence, not the current baseline.
 
 ## Product boundary
 
-APBRA does not claim universal Power BI generation or production readiness. The bounded compiler supports common cards, charts, tables and slicers within an explicit layout and model contract. Unsupported or unsafe designs stop before compilation.
+APBRA does not claim universal Power BI generation or production readiness. The bounded compiler supports common cards, charts, tables and slicers within an explicit layout/model contract. DAY, MONTH, QUARTER and YEAR trend grains have genuine representations; WEEK, fiscal/custom calendars and locale-specific policies remain unsupported. Unsupported or unsafe designs stop rather than being approximated.
 
 Production gaps include identity/RBAC, tenant isolation, durable knowledge ingestion and indexing, secure managed configuration, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations.
 

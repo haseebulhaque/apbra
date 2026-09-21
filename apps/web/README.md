@@ -1,10 +1,10 @@
-# APBRA Capstone web application
+# APBRA bounded MVP web application
 
 This React/Vite application is a working bounded enterprise Power BI automation prototype. It separates the business workspace from tenant administration.
 
 ## User experience
 
-Business users use **Create Report** and **My Runs**. A run accepts a free-text Power BI requirement plus a synthetic CSV/XLSX data structure, shows detected schema metadata, asks GPT-4.1-generated clarification questions, presents a Requirements Summary and applies tenant governed standards automatically.
+Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
 
 Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These are local prototype settings, not production identity or tenant controls. My Runs is browser-session history and does not imply durable persistence.
 
@@ -13,18 +13,19 @@ Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Brandin
 ```text
 requirement + parsed schema
 → GPT-4.1 interpretation
-→ dynamic clarifications
+→ bounded iterative clarification + immutable raw provenance
+→ human confirmation → ConfirmedRequirementContract v2
 → governed in-app RAG
 → original grounded Report Design
-→ deterministic normalization
-→ strict integrity validation
+→ deterministic obligation coverage, normalization and integrity
+→ bounded correction/layout repair when eligible, with full revalidation
 → deterministic guardrails
 → bounded PBIP/PBIR compiler
 → deterministic validation
 → candidate or truthful safe-stop
 ```
 
-The original AI design is retained. The normalizer creates a separate compiler-safe design using stable IDs and compiler-aligned page placement. It can split independent slicer bindings or collapse exact duplicates. Zero-binding, measure-bound, unknown, ambiguous or out-of-capacity designs stop rather than being silently changed.
+The original AI design is retained. Correction cannot add unconfirmed measures or business meaning. Zero-binding, measure-bound, unknown, ambiguous, unsupported or out-of-capacity designs stop rather than being silently changed. Human Review Required, Unsupported, Out of Scope and technical failure remain distinct.
 
 ## Run locally
 
@@ -47,7 +48,7 @@ This is APBRA's in-app retrieval implementation, not the historical S08 Foundry 
 
 ## Compiler, validation and downloads
 
-The bounded compiler supports common cards, bar/column/line charts, tables, slicers, supported measures, simple relationships, multiple pages and tenant theme colours. It does not execute arbitrary model-authored DAX/M/SQL or publish to Power BI.
+The bounded compiler supports common cards, bar/column/line charts, tables, slicers, supported measures, simple relationships, multiple pages and tenant theme colours. DAY, MONTH, QUARTER and YEAR trends have genuine representations; WEEK remains unsupported. It does not execute arbitrary model-authored DAX/M/SQL or publish to Power BI.
 
 Strict integrity checks cover measure identity and operands, dependency cycles, visual references and visual cardinality. Pages use a 1,280 × 720 bounded grid; a layout without deterministic capacity stops before compilation.
 
