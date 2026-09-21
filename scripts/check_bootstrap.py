@@ -116,6 +116,22 @@ TYPED_CONFIRMED_REQUIREMENTS_REGISTRATION_PATHS = {
     'tasks/APBRA-143-typed-confirmed-requirements.json',
     'tests/bootstrap/test_typed_confirmed_requirements_scope.py',
 }
+AI_NATIVE_CLARIFICATION_PATHS = {
+    'apps/web/src/clarification.ts',
+    'apps/web/src/clarification.test.ts',
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/confirmedRequirements.ts',
+    'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+    'apps/web/src/tenant.ts',
+}
+AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-144-ai-native-iterative-clarification.json',
+    'tests/bootstrap/test_ai_native_clarification_scope.py',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -643,6 +659,28 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 typed_confirmed_requirements_task = None
+        ai_native_clarification_task = None
+        ai_native_clarification_path = root / 'tasks/APBRA-144-ai-native-iterative-clarification.json'
+        if ai_native_clarification_path.exists():
+            ai_native_clarification_task = load_json(ai_native_clarification_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), ai_native_clarification_task)
+            if not extension_errors:
+                extension_errors += task_errors(ai_native_clarification_task, catalog, sources)
+                if ai_native_clarification_task['task_id'] != 'APBRA-144' or ai_native_clarification_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected AI-native clarification identity')
+                if ai_native_clarification_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-144-ai-native-iterative-clarification':
+                    extension_errors.append('Unexpected AI-native clarification branch')
+                if ai_native_clarification_task['base_commit'] != '3e9d2f9c06c4e19046068923687af9d9defcdbf5':
+                    extension_errors.append('Stale AI-native clarification base')
+                if set(ai_native_clarification_task['allowed_paths']) != AI_NATIVE_CLARIFICATION_PATHS:
+                    extension_errors.append('Unexpected AI-native clarification scope')
+                if (ai_native_clarification_task['task_mode'], ai_native_clarification_task['readiness'], ai_native_clarification_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('AI-native clarification requires issued implementation acceptance')
+                if ai_native_clarification_task['source_ids'] != ['capstone-governance']:
+                    extension_errors.append('AI-native clarification requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                ai_native_clarification_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -651,6 +689,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 measure_resolution_task, report_design_normalization_task,
                 capstone_documentation_task, measure_contract_pipeline_task,
                 layout_repair_task, typed_confirmed_requirements_task,
+                ai_native_clarification_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -681,13 +720,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-143' and
                      name in TYPED_CONFIRMED_REQUIREMENTS_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-144' and
+                     name in AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card))):
+            if file.is_symlink() or not (path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
