@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-159",
+  "work_item_system": "jira",
+  "execution_id": "PRODUCT-20260922-159",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile the residual DATA-MODEL.md and engineering-handoff documentation with the verified post-Capstone product baseline, current implementation vocabulary and accepted source models without changing application behaviour or introducing implementation authority.",
+  "requirements": [
+    "APBRA-159 Residual data-model documentation reconciliation",
+    "APBRA-148 remains the controlling overall post-Capstone reconciliation and stays In Progress until its full criteria are met",
+    "APBRA-PRODUCT-2026-09-22 remains accepted target product intent rather than proof of implemented production capability",
+    "Current implementation, planned durable logical concepts, historical names and historical evidence remain explicitly distinct"
+  ],
+  "adrs": [
+    "ConfirmedRequirementContract is authoritative for explicitly accepted material business meaning; AI-produced ReportDesign is subordinate, and original submissions, proposals, acceptance and AI design remain distinct",
+    "Logical data concepts describe responsibilities and lineage without mandating new tables, APIs, technologies, persistence implementation or source-code changes",
+    "Changed candidate bytes require fresh applicable mandatory validation and candidate-bound governance; changed material meaning additionally requires new explicit acceptance",
+    "Runtime evidence depends on the applicable capability profile, release requirement and claim and is not a universal Power BI Desktop-testing requirement",
+    "The architecture remains domain-independent; scenario-specific entities, KPI recipes, workflows and report templates are evidence or fixtures, never mandatory platform entities"
+  ],
+  "architecture_refs": [
+    "11.01 Data Models v4",
+    "11.02 Data Dictionary and Lineage v3",
+    "02.01 Business and Functional Requirements v4",
+    "02.05 Data, Integration, Identity and Audit Requirements v3",
+    "02.06 Requirements Traceability Matrix v6",
+    "20.05 Post-Capstone Product Baseline Reconciliation Ledger v31",
+    "14.03 Codex Operating Instructions and Architecture Guardrails v4",
+    "22.06 Agent Task Contract and Context Packaging v4",
+    "22.07 Multi-Agent Review and Quality Gates v2"
+  ],
+  "allowed_paths": [
+    "DATA-MODEL.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "tests/**", "scripts/**", "docs/source-register.json",
+    "contracts/**", "agents/**", ".github/**", "requirements-bootstrap.txt",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "**/.env*"
+  ],
+  "acceptance_criteria": [
+    "The two authorized documents distinguish actual implemented contracts, planned durable logical concepts and historical names, based on inspection of current source rather than claiming every historical type name has disappeared.",
+    "ConfirmedRequirementContract is identified as authority for explicitly accepted material business meaning; AI-produced ReportDesign is subordinate, while original submissions, proposed interpretations, explicit acceptance and AI design remain separate records and events.",
+    "The logical model describes generic company, case and optional-project responsibilities; qualified evidence; accepted and declined alternatives; expert assignment and actual continuation; and independently versioned report outputs.",
+    "The documents preserve requirement, design, attempt, candidate, validation, review, release and deployment lineage; current private-resource access requirements; approved retention and deletion; state and audit consistency; and aggregate budget boundaries.",
+    "Logical concepts do not mandate new database tables, APIs, technologies or source-code changes, and planned production controls are not presented as current bounded-prototype implementation.",
+    "Changed candidate bytes require fresh applicable mandatory validation and candidate-bound governance; changed material meaning requires new explicit acceptance; runtime evidence is required only when applicable profiles, release requirements or compatibility/runtime claims require it, without a universal Desktop-testing rule.",
+    "The architecture remains domain-independent with no mandatory Sales, ServiceNow, Contoso or other scenario-specific entities, KPI recipes, workflows or report templates; historical examples and fixtures remain evidence only.",
+    "The engineering handoff records PR #44's actual merge checkpoint and the residual APBRA-159 task without falsely claiming this registration PR is merged, APBRA-148 is Done or future functionality is implemented.",
+    "Compatible DATA requirement identifiers, historical evidence and delivery references are preserved, and planned persistence and security work is accurately qualified.",
+    "Registration and documentation phases remain disjoint; this contract's original base records provenance, while the later documentation phase must refresh and record the actual registration-merge execution base separately.",
+    "APBRA-148 remains In Progress, APBRA-147 remains on planning hold, and Haseeb remains sole manual merge authority."
+  ],
+  "verification_required": [
+    "Focused APBRA-159 registration, authority, positive admission and fail-closed scope tests",
+    "APBRA-148, APBRA-146 and APBRA-140 independent historical-authority regressions",
+    "Reject missing, malformed or mismatched task identity; wrong branch, base, role, source or acceptance; wildcard, extra or unsafe paths; mixed registration and documentation changes; historical-authority expansion; sensitive content and symlink escapes",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "git diff --check and changed-content sensitive-pattern scan",
+    "Supported committed-tree and fetched-history secret scanning",
+    "Genuine independent exact-base and exact-final-head review, hosted CI, remote-head verification and hosted history-aware secret scan"
+  ],
+  "out_of_scope": [
+    "Any documentation file other than DATA-MODEL.md and docs/engineering/codex-handoff.md during the later separately authorized phase",
+    "Application code, model prompts, validators, compiler behaviour, product schemas, database tables, migrations, fixtures, dependencies, configuration, workflows or native repository permissions",
+    "Introduction or renaming of application types, persistence implementation, scenario templates or reuse or expansion of APBRA-140, APBRA-146 or APBRA-148 authority",
+    "Paid model calls, customer-data processing, provisioning, publishing, deployment or Power BI runtime testing",
+    "A new feature, milestone, stack, provider, region, pricing, staffing, SLA or numerical-limit decision",
+    "Weakened tests, hidden scan findings, invented evidence, automatic merge, direct main writes or premature Jira completion"
+  ],
+  "escalate_when": [
+    "Any required registration change is outside the exact four registration paths, or any later documentation correction is outside the exact two-document allowlist",
+    "Registration and documentation changes would be mixed, historical authority would need alteration, or the verified main no longer contains the reviewed PR #44 result",
+    "A claim cannot be substantiated by current Jira, Confluence, GitHub or revision-bound repository evidence",
+    "A required test, supported scan, hosted check, exact-head independent review, publication approval or manual merge gate is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated Jira and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "d71c02d84105d4f2be9316778dccaadbc5ef6814",
+  "branch": "agent/APBRA-DEVOPS/APBRA-159-data-model-documentation-reconciliation",
+  "source_ids": ["post-capstone-data-model-reconciliation"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-PRODUCT-2026-09-22 residual data-model documentation reconciliation",
+  "dependencies": [
+    "PR #44 / APBRA-148 is merged at the exact provenance base d71c02d84105d4f2be9316778dccaadbc5ef6814 and contains reviewed documentation head 0479bffc021237e83751aa94de8111edac6567ba.",
+    "The registration-only change is restricted to its four explicit governance paths and must pass required checks, scans and genuine independent exact-head review.",
+    "Haseeb must manually merge this registration PR before DATA-MODEL.md or docs/engineering/codex-handoff.md changes.",
+    "A separate explicit instruction must authorize the documentation phase, which must refresh origin/main and record the actual registration merge as its execution base without rewriting this historical provenance base.",
+    "Historical task authority cannot authorize additional files; APBRA-148 remains In Progress and APBRA-147 remains on planning hold."
+  ]
+}
