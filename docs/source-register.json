@@ -132,6 +132,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-148",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized the APBRA-148 registration-only governance mission on 2026-09-22. Live APBRA-148 and comment 10167, Product Vision 3965201 v4, Business and Functional Requirements 3932362 v4, RTM 3932382 v6 and Reconciliation Ledger 6422580 v28 were read before execution. Acceptance is limited to the four registration paths and the later exact eleven-document reconciliation scope; it does not authorize application changes, feature implementation, automatic merge or reuse of historical Capstone authority."
+    },
+    {
+      "id": "post-capstone-data-model-reconciliation",
+      "content_id": "APBRA-159",
+      "version": "Jira APBRA-159 scope comment 10176 and execution PLAN comment 10178; Data Models v4; Data Dictionary and Lineage v3; Requirements v4; Data, Identity and Integration Requirements v3; RTM v6; Ledger v31",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-159 residual data-model documentation reconciliation",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-159",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized the APBRA-159 registration-only governance mission on 2026-09-22. Live APBRA-159 and comment 10176, APBRA-148 evidence through comment 10177, Data Models 3932664 v4, Data Dictionary and Lineage 3965422 v3, Business and Functional Requirements 3932362 v4, Data, Integration, Identity and Audit Requirements 4063348 v3, RTM 3932382 v6 and Reconciliation Ledger 6422580 v31 were read before execution. Acceptance is limited to the four registration paths and a later separately authorized two-document reconciliation; it does not authorize application or data-model implementation, automatic merge or reuse of historical task authority."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
