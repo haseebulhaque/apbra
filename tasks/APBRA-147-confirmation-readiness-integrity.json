@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-147",
+  "work_item_system": "jira",
+  "execution_id": "PRODUCT-20260923-147",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Implement the bounded post-reconciliation slice for consistent clarification readiness and exact-version human confirmation, preserving current semantic, budget, safety and downstream validation boundaries.",
+  "requirements": [
+    "APBRA-147 owner-selected clarification and confirmation readiness integrity slice",
+    "PC26-FR-005 and PC26-FR-006 exact material proposal presentation and acceptance",
+    "APBRA-31, APBRA-33, APBRA-34 and APBRA-103 coordination without completing their broader persistence, recovery or inspection scope",
+    "APBRA-150 remains planned authority for real BI-expert takeover rather than simulated success"
+  ],
+  "adrs": [
+    "AI interprets ambiguity, humans accept exact visible material meaning, ConfirmedRequirementContract freezes that accepted meaning, and deterministic software enforces lifecycle and safety",
+    "READY_FOR_CONFIRMATION uses the deterministic prerequisites available before acceptance but does not guarantee later ReportDesign, compiler, runtime or deployment success",
+    "Confirmation binds the exact current interpretation and material request, schema and configuration context; stale or duplicate work cannot authorize unseen meaning or duplicate generation",
+    "Original requests, raw answers, analysis provenance and prior accepted contracts remain evidence when later work fails or is superseded, without transferring authority to changed meaning",
+    "Configured aggregate limits and strict semantic, schema, measure, policy, coverage and candidate validation remain unchanged"
+  ],
+  "architecture_refs": [
+    "01.01 Product Vision v4",
+    "02.01 Business and Functional Requirements v4",
+    "02.06 Requirements Traceability Matrix v6",
+    "03.03 Conversational UX and Clarification Design v5",
+    "03.04 Screen, Form and Interaction Specifications v4",
+    "20.05 Post-Capstone Product Baseline Reconciliation Ledger v39",
+    "DATA-MODEL.md at 9ca65a53c4282d3a7fa3c91732c8c31d809fecce",
+    "docs/engineering/codex-handoff.md at 9ca65a53c4282d3a7fa3c91732c8c31d809fecce"
+  ],
+  "allowed_paths": [
+    "apps/web/src/clarification.ts",
+    "apps/web/src/clarification.test.ts",
+    "apps/web/src/confirmedRequirements.ts",
+    "apps/web/src/confirmedRequirements.test.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/App.test.tsx",
+    "apps/web/README.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/web/src/foundry.ts", "apps/web/src/foundry.test.ts", "apps/web/src/tenant.ts",
+    "apps/web/src/genericPowerBI.ts", "apps/web/src/reportDesignNormalization.ts",
+    "apps/web/package.json", "apps/web/package-lock.json", ".github/**",
+    "contracts/**", "agents/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "tests/bootstrap/**", "scripts/**", "docs/source-register.json",
+    "output/**", "artifacts/**", "manual-testing/**", "*.zip", "**/*.zip", ".env*", "**/.env*"
+  ],
+  "acceptance_criteria": [
+    "The displayed READY_FOR_CONFIRMATION state and actual confirmation operation share the existing deterministic prerequisites that can be evaluated before acceptance; no authoritative contract or ReportDesign is created before explicit confirmation.",
+    "Confirmation is bound to the exact visible interpretation and material request, schema and applicable configuration context, and tampered, incomplete, stale or superseded confirmation provenance fails closed.",
+    "Late analysis responses cannot replace a newer legitimate session, and changed request, schema or interpretation invalidates stale readiness without erasing retained provenance.",
+    "Repeated answer, correction and confirmation actions are idempotently rejected or ignored so one human decision cannot create duplicate contracts or launch duplicate generation.",
+    "Provider or technical failures preserve recoverable request, raw-answer and analysis context and remain distinct from business ambiguity, unsupported intent and human-review states.",
+    "A legitimate material downstream design conflict may return to analysis and fresh acceptance while retaining the previous accepted contract as history; structural technical correction does not become invented business ambiguity.",
+    "Existing question, round, answer, retry, cost and time limits retain their configured aggregate effect; the historical shared-budget observation is not represented as a reproduced root cause.",
+    "Four unrelated synthetic domains and renamed input fields exercise the same production lifecycle with no scenario, KPI, table, column, fixture or filename branching in production code.",
+    "Existing ConfirmedRequirementContract versions remain compatible and APBRA-143/APBRA-144 semantic and confirmation boundaries plus downstream safety regressions remain strict.",
+    "Unavailable BI-expert service is described honestly; no queue, takeover, collaboration, release, runtime or deployment success is fabricated.",
+    "The broader APBRA-147 recovery and expert roadmap plus completion of APBRA-31, APBRA-33, APBRA-34, APBRA-103 and APBRA-150 remain outside this bounded acceptance; APBRA-149 through APBRA-158 remain unselected."
+  ],
+  "verification_required": [
+    "Deterministic offline before-and-after reproduction through actual clarification transitions and UI handlers for readiness mismatch, stale async work and duplicate confirmation where applicable",
+    "Focused lifecycle tests for complete input, pre-confirmation invalidity, exact visible acceptance, changed context, late response, duplicate actions, correction, downstream conflict, provider failure, budget exhaustion and tampered provenance",
+    "Four unrelated synthetic domains and renamed fields through the same production path",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -p 'test_confirmation_readiness_integrity_scope.py' -v",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "npm --prefix apps/web ci --ignore-scripts",
+    "npm --prefix apps/web test",
+    "npm --prefix apps/web run build",
+    "git diff --check plus exact-scope, link, genericity and sensitive-content checks",
+    "Required changed-content, committed-tree and fetched-history secret scans",
+    "Genuine independent exact-base and exact-final-head review, hosted CI, remote-head verification and hosted history-aware secret scan"
+  ],
+  "out_of_scope": [
+    "APBRA-147's broader supported-rescoping and staffed BI-expert continuation roadmap",
+    "Authentication, tenant isolation, durable persistence, collaboration, billing, customer Azure provisioning, publishing, gateway, credentials or production deployment",
+    "Compiler or visual expansion, WEEK or fiscal/custom-calendar support, prompt/model/provider/retrieval architecture changes or new operating limits",
+    "Production branches for Sales, ServiceNow, Contoso or any fixture, prompt, filename, KPI, table, column or visual arrangement",
+    "Paid or live model calls, customer data, Power BI runtime claims, dependency/workflow changes, new spending or selection of APBRA-149 through APBRA-158",
+    "Weakened semantic, schema, measure, policy, security, coverage, compiler or candidate validation"
+  ],
+  "escalate_when": [
+    "A necessary implementation change is outside the exact eight-path allowlist or requires a prompt, provider, compiler, validator outside that scope, dependency, workflow or configuration change",
+    "Investigation finds no reproducible defect and no safe bounded improvement, or contradicts an accepted source or existing compatibility contract",
+    "A required check, scan, independent review, hosted gate or SHA-bound protected merge cannot be completed",
+    "Concurrent work changes the pinned base, branch, task authority or durable delegated-merge count"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Jira, Confluence and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "9ca65a53c4282d3a7fa3c91732c8c31d809fecce",
+  "branch": "agent/APBRA-DEVOPS/APBRA-147-confirmation-readiness-integrity",
+  "source_ids": ["post-capstone-confirmation-readiness-integrity"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-PRODUCT-2026-09-22 clarification and confirmation readiness integrity slice",
+  "dependencies": [
+    "APBRA-159 and APBRA-148 reconciliation are verified Done on main 9ca65a53c4282d3a7fa3c91732c8c31d809fecce before registration.",
+    "The registration-only PR must change exactly its four paths and be merged before implementation changes begin.",
+    "After registration merge, implementation records its actual execution base separately while this provenance base remains unchanged.",
+    "APBRA-31, APBRA-33, APBRA-34, APBRA-103 and APBRA-150 remain separate broader delivery authority and are not completed by this slice.",
+    "Temporary merge delegation APBRA-DELEGATED-MERGE-20260923-02 authorizes only qualifying gated merges and does not broaden file or product scope."
+  ]
+}
