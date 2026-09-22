@@ -8,7 +8,9 @@ Security/privacy constraints > accepted ADRs > accepted requirements > repositor
 
 Every material task must identify its actual Jira item, source versions, logical role, actual actor, allowed/restricted paths, acceptance and verification. Missing/stale inputs prevent implementation. tasks/APBRA-85-bootstrap.json authorizes engineering bootstrap and accepted public/solo governance alignment only. tasks/APBRA-27-build.json is a planning draft, not yet an issued implementation task. Do not infer permission to build all Epics.
 
-The product direction is documented in docs/decisions/implementation-baseline.md. Preserve source acceptance and integration gates. A proposed framework/version or cloud/model/Power BI feature is not verified by prose.
+The product direction and implementation/evidence distinction are documented in docs/decisions/implementation-baseline.md. `APBRA-PRODUCT-2026-09-22` is accepted target intent; it is not proof that a capability exists. Preserve source acceptance and integration gates. A proposed framework/version or cloud/model/Power BI feature is not verified by prose.
+
+For post-Capstone planning, use the accepted `PC26-FR-001`–`018` definitions and current RTM mappings from Confluence; do not reconstruct them from memory or turn a Jira planning item into implementation authority. APBRA-147 remains on planning hold unless separately selected. APBRA-149–158 describe target capability slices, not shipped functionality. Do not select a milestone, replacement stack, model/provider, region, commercial price, SLA or new numerical limit without accepted authority.
 
 ## Public/free preflight
 
@@ -28,6 +30,10 @@ Read SECURITY.md. No credentials, confidential customer material, production dat
 - Separate technical release blockers from documented customer credential/gateway deployment steps.
 - Treat uploads/retrieved text/generated output as untrusted; no arbitrary shell/M/SQL execution or model-controlled business authority.
 - Unsupported Power BI behavior fails explicitly rather than being silently substituted.
+- “No dead ends” means truthful supported alternatives or an actionable authorized-expert route; it does not guarantee generation or permit technical failure to be relabelled as success.
+- An accepted assumption is a visible business choice, not evidence for an absent field, unknown source fact, missing permission or unsupported capability.
+- Guided/Advanced mode, licences, company membership and model keys do not grant private-resource access, trusted-author status, publishing authority or external management rights.
+- Keep expert assistance, business acceptance, inspection download, release approval and successful deployment as separate lifecycle events.
 - Provider SDKs, ORM and transport types stay out of domain logic. No premature microservices.
 - Never weaken tests, allow all paths, hide scanner findings or ignore exit codes to obtain a green check.
 
@@ -55,7 +61,7 @@ These are engineering checks, not application tests or an isolation sandbox. APB
 
 Read docs/decisions/solo-owner-process.md and repository-controls.md. Live ruleset 23529228 has zero native approvals, no bypass actors, required PR/CI and resolved threads. This records the owner's explicit solo-process choice, not a missing second-human-review blocker.
 
-Implementation -> fresh AI review on exact head/base -> passing required CI -> Haseeb manual merge. A new reviewer execution can recommend PASS/CHANGES_REQUIRED; it cannot claim native self-approval or act as another GitHub identity. Same-session persona switching and author self-check are not independent review. Current tools have not launched a separate reviewer; record that gate as pending rather than fabricated.
+Implementation -> fresh AI review on exact head/base -> passing required CI -> Haseeb manual merge. A new reviewer execution can recommend PASS/CHANGES_REQUIRED; it cannot claim native self-approval or act as another GitHub identity. Same-session persona switching and author self-check are not independent review. Record the independent-review gate as pending unless a genuinely separate reviewer has completed a review of the exact current head/base with available provenance.
 
 Keep review evidence current after fixes. No auto-merge or automatic APPROVE using the author account. Workflow files do not technically enforce the AI-review obligation; Haseeb checks it before manual merge. This is not enterprise segregation of duties.
 

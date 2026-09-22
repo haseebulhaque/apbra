@@ -1,6 +1,6 @@
 # AI and governed retrieval specification
 
-This document describes the current in-app Capstone implementation and the separate future production knowledge architecture.
+This document describes the current in-app Capstone implementation and the accepted, separately unimplemented `APBRA-PRODUCT-2026-09-22` AI/knowledge target.
 
 ## Current AI profile
 
@@ -34,6 +34,28 @@ The APBRA Capstone does **not** use the old S08 Foundry Knowledge store. APBRA d
 
 The Capstone corpus and exact in-memory index are bounded prototype choices. Production still requires tenant document upload, replacement and deletion; robust extraction; version and chunk lifecycle; stale-chunk cleanup; re-indexing; permissions; durable vector/index infrastructure; tenant isolation; monitoring; retention; and operational recovery. Any future lexical/hybrid retrieval, approximate index or external service requires separate evaluation and accepted architecture authority.
 
+## Accepted target AI and knowledge model — planned
+
+Guided and Advanced experiences will use the same reasoning/assurance engine. The target accepts conversation-first requirements, optional qualified uploads and plain-language source descriptions. Schema/data screenshots and report/sketch references are different evidence classes: AI may use them to identify uncertainty or inform design, but neither can silently establish missing source truth, measures, permissions or authority.
+
+Tenant-governed terminology, KPI definitions, branding, accessibility and reporting standards should be reusable during clarification and ReportDesign. Explicit user meaning remains authoritative within policy; a conflict with mandatory tenant policy must be surfaced for acceptance or review. Durable production RAG requires tenant isolation, authorization-aware ingestion and retrieval, replacement/deletion, versioned citations, retention and evaluation. Demo fixtures remain classified separately and never become universal policy.
+
+### Planned activation, permission and policy controls
+
+These controls describe the accepted target and are **planned**, not capabilities already implemented by the bounded prototype:
+
+- Knowledge becomes eligible for activation only after both required source approval and successful required ingestion/index verification. Approval alone is insufficient.
+- Current company and private case/project/source permissions apply before retrieval eligibility, ranking and model context. They are rechecked before protected work is resumed; an earlier permitted retrieval does not grant continuing access.
+- A citation must substantively support the associated claim using eligible, versioned evidence. Merely appearing in a retrieved result list is not sufficient support.
+- Mandatory-policy coverage cannot depend only on similarity top-k. Failure to retrieve a mandatory policy is not permission to proceed without it.
+- A compliant revised business approach requires explicit acceptance of its material meaning. User acceptance or BI-expert assignment cannot waive mandatory policy; unresolved policy authority is referred to the authorised policy owner.
+
+The target supports qualified APBRA-managed and customer-managed model profiles, including approved private/local profiles where feasible. Each profile requires explicit provider/model/capability, data-handling, identity, quota, cost and failure-mode qualification. Separately consented customer Azure provisioning is a future management capability; a model inference key, company membership or UI mode grants no such authority.
+
+Cross-cutting controls include prompt-injection and retrieval safety, structured-output evaluation, red teaming, traceability, reliability and cost visibility. No provider, model, region, routing rule, price, SLA or numerical limit is selected merely by documenting the target.
+
 ## Evaluation boundary
 
 Retrieval quality, citation provenance, structured output, clarification quality and guardrail behaviour require real recorded executions. An LLM cannot be the sole oracle for arithmetic, authorization, compiler correctness or candidate validity. Historical evaluation evidence remains historical and must not be relabelled as current execution.
+
+“No dead ends” requires useful supported alternatives or an actionable authorized-expert route. It never permits the AI to invent missing evidence, hide omissions, bypass explicit acceptance or recast a technical failure as a semantic success.
