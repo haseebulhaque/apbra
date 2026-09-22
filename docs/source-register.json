@@ -123,6 +123,15 @@
       "status": "ACCEPTED",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-92",
       "acceptance": "Haseeb authorized bounded autonomous evaluation and gated PRs. Live sources read2026-09-17; PLAN10043. On2026-09-19 Haseeb explicitly approved the exact PR13 Capstone web architecture for narrow task-contract admission and reported Windows Power BI Desktop PASS for its SalesPerformance and ServiceDeskOperations candidates. No acceptance, registry, secret, independent-review or mandatory gate is waived."
+    },
+    {
+      "id": "post-capstone-product-reconciliation",
+      "content_id": "APBRA-148",
+      "version": "Jira updated 2026-09-22T19:52:41.261+1000; Product Vision v4; Requirements v4; RTM v6; Ledger v28",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-148 comment 10167",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-148",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized the APBRA-148 registration-only governance mission on 2026-09-22. Live APBRA-148 and comment 10167, Product Vision 3965201 v4, Business and Functional Requirements 3932362 v4, RTM 3932382 v6 and Reconciliation Ledger 6422580 v28 were read before execution. Acceptance is limited to the four registration paths and the later exact eleven-document reconciliation scope; it does not authorize application changes, feature implementation, automatic merge or reuse of historical Capstone authority."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

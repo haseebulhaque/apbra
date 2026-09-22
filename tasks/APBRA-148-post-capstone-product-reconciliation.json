@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-148",
+  "work_item_system": "jira",
+  "execution_id": "PRODUCT-20260922-148",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile the durable GitHub product and engineering documentation with APBRA-PRODUCT-2026-09-22 while preserving the bounded implemented prototype, historical evidence and all independent task authorities; make no application-behaviour change.",
+  "requirements": [
+    "APBRA-148 Reconcile post-Capstone product vision, architecture and delivery documentation",
+    "APBRA-PRODUCT-2026-09-22 is accepted target product intent, not proof of implementation",
+    "Current implementation, target SaaS capabilities and historical proposals or evidence remain explicitly distinct",
+    "PC26-FR-001 through PC26-FR-018 and APBRA-149 through APBRA-158 remain target delivery rather than implemented or verified features"
+  ],
+  "adrs": [
+    "Humans explicitly accept exact material business meaning in ConfirmedRequirementContract; AI creates subordinate typed ReportDesign and selects ordinary supported design mechanics; deterministic software preserves meaning and compiles native files",
+    "A target conversation may start without a file or project, but data-bound generation requires sufficiently evidenced supported bindings; screenshots and sketches cannot prove hidden schema, data, KPI meaning or permission",
+    "Material supported alternatives require new exact acceptance; declined alternatives do not authorize generation; expert assistance, continuation, business acceptance, release review and deployment remain separate events",
+    "Mandatory checks must complete successfully; changed candidate bytes require fresh validation and applicable candidate-bound governance, and changed material meaning also requires new acceptance",
+    "DAY, MONTH, QUARTER and YEAR compiler support is distinct from unsupported WEEK and separately evidenced Desktop or runtime compatibility"
+  ],
+  "architecture_refs": [
+    "01.01 Product Vision v4 / APBRA-PRODUCT-2026-09-22",
+    "02.01 Business and Functional Requirements v4",
+    "02.06 Requirements Traceability Matrix v6",
+    "20.05 Post-Capstone Product Baseline Reconciliation Ledger v28",
+    "14.03 Codex Operating Instructions and Architecture Guardrails v4",
+    "22.06 Agent Task Contract and Context Packaging v4",
+    "22.05 GitHub Agent Branch, Commit and PR Governance v7",
+    "22.07 Multi-Agent Review and Quality Gates v2"
+  ],
+  "allowed_paths": [
+    "AGENTS.md",
+    "docs/decisions/implementation-baseline.md",
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "AI-RAG-SPEC.md",
+    "POWERBI-GENERATION-SPEC.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "apps/web/README.md",
+    "docs/engineering/capstone-evidence.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/web/src/**", "apps/web/knowledge/**", "apps/web/scripts/**",
+    "apps/web/package.json", "apps/web/package-lock.json", "apps/web/vite.config.ts",
+    "apps/api/**", "packages/**", "workers/**", "infrastructure/**",
+    "tasks/**", "tests/**", "scripts/**", "docs/source-register.json",
+    "contracts/**", "agents/**", ".github/**", "requirements-bootstrap.txt",
+    "artifacts/**", "manual-testing/**", "output/**", "*.zip", "**/*.zip",
+    ".env*", "apps/web/.env*"
+  ],
+  "acceptance_criteria": [
+    "The eleven authorized durable documents reconcile current product intent without changing application behaviour, the current stack, model, CSV/XLSX support, compiler profile or operating limits through prose.",
+    "The documents distinguish target SaaS capabilities, current bounded prototype behaviour and historical proposals or evidence, preserving original requirements, ADRs, completed task history and failed runs.",
+    "The authority thesis remains: humans explicitly accept material business meaning in an exact ConfirmedRequirementContract, AI produces subordinate typed ReportDesign and ordinary supported design choices, and deterministic software preserves accepted meaning and compiles supported native files; arbitrary AI-written DAX, M or SQL is not authoritative implementation.",
+    "Target conversation-first intake may begin without a file or project, while data-bound generation still requires evidenced supported bindings and visual references cannot establish hidden fields, data, KPI semantics or permissions.",
+    "Material alternatives require explicit new exact acceptance, declined alternatives do not authorize generation, and expert help, assignment, actual continuation, business acceptance, release review and deployment remain separate.",
+    "Current company and private-resource permissions are required before protected reads, retrieval, ranking, model context, resumed work and downloads; modes, licences, titles and inference keys do not grant authorization.",
+    "Knowledge activation requires approved sources and successful required ingestion and index checks; citations substantively support claims and mandatory policy coverage is not controlled only by similarity ranking.",
+    "Every applicable mandatory check must complete; missing, skipped, crashed or timed-out checks are not PASS or unjustified Not-Applicable; changed candidate bytes require fresh validation and candidate-bound governance, and changed material meaning requires new acceptance.",
+    "A policy-eligible trusted author may omit only separate human release review; inspection download, eligible release package and successful deployment remain distinct.",
+    "Canonical success 8042cc44-620f-4457-828d-0770749a653f, monthly fail-closed run 0927fd18-1c61-4610-8167-de86933a1de1 and comparative-Sales HITL evidence remain accurate historical evidence; the HITL budget observation is not presented as a reproduced root cause.",
+    "No exact-candidate Desktop PASS, deployment, unavailable digest, approval, token or cost result, or embedding count is invented; embeddingCalls remains unknown or null where recorded.",
+    "DAY, MONTH, QUARTER and YEAR compiler support remains distinct from unsupported WEEK and separately evidenced Desktop or runtime compatibility.",
+    "PC26-FR-001 through PC26-FR-018 and APBRA-149 through APBRA-158 remain target delivery; APBRA-147 remains on planning hold; no price, staffing, SLA, provider, region, infrastructure, numerical limit or milestone order is selected.",
+    "Haseeb manually merges every change; historical autonomous permissions, completed task contracts and author-maintained green checks do not provide current authority or independent review."
+  ],
+  "verification_required": [
+    "Focused APBRA-148 authority, registration and mutation tests",
+    "APBRA-146 and APBRA-140 independent historical-authority regressions",
+    "Reject mixed registration and eleven-document implementation changes",
+    "python scripts/check_ci_policy.py",
+    "python scripts/check_bootstrap.py",
+    "python -m unittest discover -s tests/bootstrap -v",
+    "git diff --check and changed-content sensitive-pattern scan",
+    "Supported committed-tree and fetched-history secret scanning",
+    "Genuine independent exact-base and exact-final-head review, hosted CI, remote-head verification and hosted history-aware secret scan"
+  ],
+  "out_of_scope": [
+    "Application code, prompts, validators, compiler behaviour, schemas, fixtures, dependencies, configuration, workflows or native repository settings",
+    "Runtime evidence, generated output, candidate archives, credentials, model calls, source ingestion, deployment or production access",
+    "Changes to existing task contracts, source entries, historical acceptance or independently valid APBRA-140 and APBRA-146 scopes",
+    "Product feature implementation, APBRA-147 implementation, selection of the next milestone, provider, region, infrastructure, price, staffing, SLA, numerical limit or roadmap order",
+    "Invented Desktop, deployment, digest, approval, token, cost, embedding, test, review, scan or completion evidence",
+    "Automatic merge, direct main writes, Jira completion or claims that cross-system reconciliation is complete before the separate documentation change is merged and verified"
+  ],
+  "escalate_when": [
+    "Any required change is outside the exact eleven-document implementation allowlist or conflicts with an accepted source",
+    "Registration and documentation implementation changes are mixed, or historical authority would need to be broadened or rewritten",
+    "A claim cannot be substantiated by current Jira, Confluence, GitHub or durable revision-bound evidence",
+    "A required test, supported scan, hosted check, exact-head independent review, public-push approval or manual merge gate is unavailable"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex governance execution via haseebulhaque authenticated Jira and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "d072870fea8b8ae8caedc5e553653a433b697f11",
+  "branch": "agent/APBRA-DEVOPS/APBRA-148-post-capstone-product-reconciliation",
+  "source_ids": ["post-capstone-product-reconciliation"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-PRODUCT-2026-09-22 documentation reconciliation",
+  "dependencies": [
+    "PR #42 / APBRA-146 is merged at the exact baseline d072870fea8b8ae8caedc5e553653a433b697f11.",
+    "The registration-only change is restricted to its four explicit governance paths and must pass required checks, scans and genuine independent exact-head review.",
+    "Haseeb must manually merge the registration PR before any of the eleven documentation files change.",
+    "The later documentation execution must refresh origin/main, live sources and the registration merge ancestry rather than treating this historical base field as proof of currency.",
+    "APBRA-148 remains In Progress and APBRA-147 remains on planning hold until separately authorized."
+  ]
+}
