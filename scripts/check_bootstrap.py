@@ -181,6 +181,22 @@ DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS = {
     'tests/bootstrap/test_data_model_documentation_reconciliation_scope.py',
     'docs/source-register.json',
 }
+CONFIRMATION_READINESS_INTEGRITY_PATHS = {
+    'apps/web/src/clarification.ts',
+    'apps/web/src/clarification.test.ts',
+    'apps/web/src/confirmedRequirements.ts',
+    'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+    'apps/web/README.md',
+    'docs/engineering/codex-handoff.md',
+}
+CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-147-confirmation-readiness-integrity.json',
+    'tests/bootstrap/test_confirmation_readiness_integrity_scope.py',
+    'docs/source-register.json',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -818,6 +834,28 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 data_model_documentation_reconciliation_task = None
+        confirmation_readiness_integrity_task = None
+        confirmation_readiness_integrity_path = root / 'tasks/APBRA-147-confirmation-readiness-integrity.json'
+        if confirmation_readiness_integrity_path.exists():
+            confirmation_readiness_integrity_task = load_json(confirmation_readiness_integrity_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), confirmation_readiness_integrity_task)
+            if not extension_errors:
+                extension_errors += task_errors(confirmation_readiness_integrity_task, catalog, sources)
+                if confirmation_readiness_integrity_task['task_id'] != 'APBRA-147' or confirmation_readiness_integrity_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected confirmation readiness integrity identity')
+                if confirmation_readiness_integrity_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-147-confirmation-readiness-integrity':
+                    extension_errors.append('Unexpected confirmation readiness integrity branch')
+                if confirmation_readiness_integrity_task['base_commit'] != '9ca65a53c4282d3a7fa3c91732c8c31d809fecce':
+                    extension_errors.append('Stale confirmation readiness integrity base')
+                if set(confirmation_readiness_integrity_task['allowed_paths']) != CONFIRMATION_READINESS_INTEGRITY_PATHS:
+                    extension_errors.append('Unexpected confirmation readiness integrity scope')
+                if (confirmation_readiness_integrity_task['task_mode'], confirmation_readiness_integrity_task['readiness'], confirmation_readiness_integrity_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Confirmation readiness integrity requires issued implementation acceptance')
+                if confirmation_readiness_integrity_task['source_ids'] != ['post-capstone-confirmation-readiness-integrity']:
+                    extension_errors.append('Confirmation readiness integrity requires its specific accepted source')
+            errors += extension_errors
+            if extension_errors:
+                confirmation_readiness_integrity_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -830,6 +868,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 post_capstone_mvp_baseline_task,
                 post_capstone_product_reconciliation_task,
                 data_model_documentation_reconciliation_task,
+                confirmation_readiness_integrity_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -854,6 +893,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS) and
                     changed_paths.intersection(DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS)):
                 errors.append('APBRA-159 registration and documentation implementation changes must remain separate')
+            if (active_task_id == 'APBRA-147' and
+                    changed_paths.intersection(CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS) and
+                    changed_paths.intersection(CONFIRMATION_READINESS_INTEGRITY_PATHS)):
+                errors.append('APBRA-147 registration and implementation changes must remain separate')
             for name in sorted(changed_paths):
                 if not valid_path(name) or not (
                     (active_task is not None and path_allowed(name, active_task, card)) or
@@ -883,13 +926,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-159' and
                      name in DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-147' and
+                     name in CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not ((data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
+            if file.is_symlink() or not ((confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

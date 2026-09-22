@@ -141,6 +141,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-159",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized the APBRA-159 registration-only governance mission on 2026-09-22. Live APBRA-159 and comment 10176, APBRA-148 evidence through comment 10177, Data Models 3932664 v4, Data Dictionary and Lineage 3965422 v3, Business and Functional Requirements 3932362 v4, Data, Integration, Identity and Audit Requirements 4063348 v3, RTM 3932382 v6 and Reconciliation Ledger 6422580 v31 were read before execution. Acceptance is limited to the four registration paths and a later separately authorized two-document reconciliation; it does not authorize application or data-model implementation, automatic merge or reuse of historical task authority."
+    },
+    {
+      "id": "post-capstone-confirmation-readiness-integrity",
+      "content_id": "APBRA-147",
+      "version": "Owner dispatch comment 10201; Product Vision v4; Requirements v4; RTM v6; Conversational UX v5; Screen and Interaction Specifications v4; Ledger v39",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-147 bounded clarification and confirmation readiness slice",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-147",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly selected and authorized the bounded APBRA-147 consistent clarification readiness and exact-version confirmation slice on 2026-09-23. Live APBRA-147, APBRA-31, APBRA-33, APBRA-34, APBRA-103 and APBRA-150 plus Product Vision 3965201 v4, Business and Functional Requirements 3932362 v4, RTM 3932382 v6, Conversational UX 3932422 v5, Screen and Interaction Specifications 4063368 v4 and Reconciliation Ledger 6422580 v39 were refreshed before registration. Acceptance is limited to the exact four registration paths and later exact eight-path maximum implementation allowlist; it preserves current budgets and excludes the broader expert, persistence, identity, publishing, compiler and product backlog scope."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
