@@ -4,7 +4,7 @@ This file distinguishes three different authorities that must not be collapsed i
 
 | Layer | Authority | Meaning |
 | --- | --- | --- |
-| Current product intent | `APBRA-PRODUCT-2026-09-22`, Confluence 01.01 v4, 02.01 v4 and 02.02 v6 | Accepted direction for post-Capstone product planning; not proof of implementation |
+| Current product intent | `APBRA-PRODUCT-2026-09-22`, Confluence 01.01 v4, 02.01 v4 and 02.06 v6 | Accepted direction for post-Capstone product planning; not proof of implementation |
 | Verified implementation | GitHub main plus revision-bound tests and evidence | The working bounded React/Vite MVP/prototype delivered through APBRA-145 |
 | Historical architecture proposal | `APBRA-IMPL-0.1`, [05.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4653067) and [14.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4751362) | Proposed production architecture retained for traceability; not the current stack or an implementation mandate |
 

@@ -61,7 +61,7 @@ These are engineering checks, not application tests or an isolation sandbox. APB
 
 Read docs/decisions/solo-owner-process.md and repository-controls.md. Live ruleset 23529228 has zero native approvals, no bypass actors, required PR/CI and resolved threads. This records the owner's explicit solo-process choice, not a missing second-human-review blocker.
 
-Implementation -> fresh AI review on exact head/base -> passing required CI -> Haseeb manual merge. A new reviewer execution can recommend PASS/CHANGES_REQUIRED; it cannot claim native self-approval or act as another GitHub identity. Same-session persona switching and author self-check are not independent review. Current tools have not launched a separate reviewer; record that gate as pending rather than fabricated.
+Implementation -> fresh AI review on exact head/base -> passing required CI -> Haseeb manual merge. A new reviewer execution can recommend PASS/CHANGES_REQUIRED; it cannot claim native self-approval or act as another GitHub identity. Same-session persona switching and author self-check are not independent review. Record the independent-review gate as pending unless a genuinely separate reviewer has completed a review of the exact current head/base with available provenance.
 
 Keep review evidence current after fixes. No auto-merge or automatic APPROVE using the author account. Workflow files do not technically enforce the AI-review obligation; Haseeb checks it before manual merge. This is not enterprise segregation of duties.
 

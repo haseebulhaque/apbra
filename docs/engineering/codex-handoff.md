@@ -26,7 +26,7 @@ Fail-closed run `0927fd18-1c61-4610-8167-de86933a1de1` rejected missing monthly 
 
 Business Mode is default; Advanced/BI Mode accepts optional preferences. Governed RAG is the five-document, approximately 20-chunk, `text-embedding-3-small` exact-cosine implementation, not S08 Foundry Knowledge. DAY, MONTH, QUARTER and YEAR are supported; WEEK, fiscal/custom calendars and locale-specific calendar policies are not.
 
-The accepted product intent is `APBRA-PRODUCT-2026-09-22`, backed by Product Vision 01.01 v4, Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.02 v6 at reconciliation time. It is target scope, not current implementation evidence. All eighteen `PC26-FR` mappings are maintained in [REQUIREMENTS.md](../../REQUIREMENTS.md).
+The accepted product intent is `APBRA-PRODUCT-2026-09-22`, backed by Product Vision 01.01 v4, Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 at reconciliation time. It is target scope, not current implementation evidence. All eighteen `PC26-FR` mappings are maintained in [REQUIREMENTS.md](../../REQUIREMENTS.md).
 
 The target adds one-engine Guided/Advanced experiences, conversation-first intake, qualified multimodal evidence, transparent alternatives/rescoping, authorized expert continuation, company identity/membership, optional projects/collaboration/history, entitlements/usage, tenant standards, qualified model profiles, separately consented Azure provisioning, connected Power BI delivery, optional data-architecture advice, and cross-cutting assurance. No next feature, milestone, replacement stack, provider, region, price, SLA or numerical limit is selected by this reconciliation.
 

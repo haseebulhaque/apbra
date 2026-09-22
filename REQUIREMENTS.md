@@ -35,7 +35,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 
 ## Accepted post-Capstone product requirements
 
-`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below summarize Business and Functional Requirements 02.01 v4 and the Jira links reproduce Requirements Traceability Matrix 02.02 v6. Every row is **TARGET / PLANNED unless separately proven in the implemented table above**. A Jira item or target requirement is not implementation evidence.
+`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below summarize Business and Functional Requirements 02.01 v4 and the Jira links reproduce Requirements Traceability Matrix 02.06 v6. Every row is **TARGET / PLANNED unless separately proven in the implemented table above**. A Jira item or target requirement is not implementation evidence.
 
 | Requirement | Accepted target outcome | Existing Jira delivery coverage | Repository documentation home |
 | --- | --- | --- | --- |
@@ -63,5 +63,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 The accepted target includes company identity and membership, tenant isolation, optional projects and collaboration, licensing/usage visibility, durable governed knowledge, qualified model profiles, separately consented Azure provisioning, broader Power BI discovery/delivery, review/release workflow, reliability/FinOps and privacy/compliance operations. None is marked implemented merely because it appears above.
 
 The target does not select a delivery milestone, replacement stack, model/provider, region, price, SLA or new numerical limit. Licences, modes, company membership and model keys do not grant private-resource access, trusted-author status or external management authority. Expert assistance, business acceptance, inspection download, release approval and successful deployment remain separate events.
+
+A future policy-eligible trusted author may omit only a separate human release-review step where an accepted policy explicitly permits it. Trusted-author eligibility does not collapse business acceptance, inspection download, creation of an eligible release package or successful deployment into one event, and it never grants source, tenant or external-management access by itself.
 
 Generated does not mean validated, approved, released or deployed. Missing or skipped mandatory evidence remains incomplete.
