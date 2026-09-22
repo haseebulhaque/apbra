@@ -1,6 +1,6 @@
 # APBRA final Capstone evidence record
 
-Capstone is complete/submitted. The canonical implementation baseline before documentation governance is `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`; APBRA-146 governance merged at `39ab131643c77d87359dd3fdb28909021f0e9ba9`. Historical results remain revision- and candidate-specific.
+Capstone is complete/submitted. The canonical implementation baseline before documentation governance is `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`; APBRA-146 governance merged at `39ab131643c77d87359dd3fdb28909021f0e9ba9`. The APBRA-148 task contract retains provenance base `d072870fea8b8ae8caedc5e553653a433b697f11`; its registration merged into documentation execution base `c466dcbd928b0b07b5631c61c57b7ca90ce7f965`. These later documentation/governance revisions do not change the recorded Capstone runtime evidence. Historical results remain revision- and candidate-specific.
 
 ## Canonical successful acceptance
 
@@ -50,6 +50,10 @@ Counts are revision-specific and must not be presented as permanent totals.
 ## Post-Capstone boundary
 
 Desktop/runtime validation may be collected as future engineering evidence but is not a pending Capstone submission task. The demonstrated thesis is: GPT reasons, the human confirms, the typed contract freezes meaning, deterministic controls preserve it, and supported generation can reach Candidate Ready while unsafe/incomplete intent fails closed.
+
+`APBRA-PRODUCT-2026-09-22` defines accepted future product scope. It does not retroactively add company identity, projects, collaboration, licensing, durable tenant RAG, model profiles, Azure provisioning, connected publishing, expert continuation or data-architecture advice to the Capstone evidence. APBRA-149–158 are planning coverage. APBRA-147 remains on planning hold.
+
+The comparative Sales HITL and known Ready-for-Confirmation lifecycle inconsistency remain product evidence to address; they are not a reproduced root-cause diagnosis. The current in-app governed corpus remains distinct from the historical S08 assignment architecture. `embeddingCalls` remains null/unknown where recorded.
 
 ## Deployment-guide boundary
 

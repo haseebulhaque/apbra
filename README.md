@@ -2,6 +2,8 @@
 
 APBRA is a working bounded MVP/prototype with a demonstrated Candidate Ready happy path. It is not production-ready. The Capstone is complete/submitted; MVP and product development continue.
 
+`APBRA-PRODUCT-2026-09-22` is the accepted post-Capstone product-intent baseline. It describes what APBRA is intended to become; the implemented flow and evidence below describe what exists today. See [REQUIREMENTS.md](REQUIREMENTS.md) for all eighteen `PC26-FR` requirements and their Jira mappings.
+
 ## Implemented bounded MVP flow
 
 ```text
@@ -24,6 +26,16 @@ Requirement + schema
 GPT-4.1 reasons under ambiguity and makes ordinary supported BI design choices. The human confirms material business meaning. The typed contract freezes that meaning. Deterministic software owns semantic preservation, supported capability, safety, compilation and artifact validation. Raw answers remain provenance and are not deterministically reinterpreted downstream.
 
 The business workspace and administration plane are distinct. Business users create reports and inspect session runs. Administrators inspect prototype tenant settings, AI models, governed knowledge, branding and generation policies. Authentication, RBAC and real multitenancy are outside the Capstone.
+
+## Target product direction — not yet implemented
+
+APBRA is intended to grow into a generic SaaS product without becoming a collection of domain-specific report templates. Guided and Advanced experiences will share one engine. Conversation-first intake will not require an upload or project; qualified schema/data uploads, plain-language source descriptions, screenshots and report/sketch references may contribute evidence with explicit limitations. Material rescoping will require visible acceptance, while ordinary supported BI design remains the AI Report Architect's responsibility.
+
+The accepted target also includes authorized BI-expert continuation of the same case; company registration and membership; optional projects, collaboration and linked requirement/report history; commercial entitlements and usage visibility without an invented price model; tenant branding, terminology and governed standards; qualified APBRA-managed and customer-managed model profiles; and separately consented customer Azure provisioning.
+
+PBIP delivery and deployment guidance remain the first delivery boundary. Connected-source discovery, Power BI/Fabric publishing, connections, gateways, refresh and applicable security configuration are separately qualified future capabilities. Optional advanced data-architecture advice and reviewable scripts remain separate from ordinary report generation and never authorize automatic source-schema changes. Privacy, guardrails, evaluation, red teaming, tracing, reliability and cost control are cross-cutting product obligations.
+
+“No dead ends” means truthful supported alternatives or meaningful expert continuation. It does not guarantee generation, turn an unsupported request into a success, or relabel technical failure. APBRA-147 remains on planning hold; APBRA-149 through APBRA-158 are planning items rather than implemented features.
 
 ## Run locally
 
@@ -51,11 +63,14 @@ APBRA does not claim universal Power BI generation or production readiness. The 
 
 Production gaps include identity/RBAC, tenant isolation, durable knowledge ingestion and indexing, secure managed configuration, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations.
 
+Modes, licences, company membership and model keys do not themselves authorize private-resource access, trusted-author status, publishing or external management. Expert assistance, business confirmation, candidate inspection, release approval and successful deployment remain distinct states.
+
 The successful flow can generate the lazy-loaded `Report-Deployment-Guide.pdf`. The guide contains handover and deployment instructions; its generation does not mean the report was deployed. APBRA does not autonomously publish to production.
 
 ## Documentation
 
 - [Architecture](ARCHITECTURE.md)
+- [Implementation and product baseline](docs/decisions/implementation-baseline.md)
 - [Requirements and delivery evidence](REQUIREMENTS.md)
 - [AI and governed RAG](AI-RAG-SPEC.md)
 - [Power BI generation contract](POWERBI-GENERATION-SPEC.md)

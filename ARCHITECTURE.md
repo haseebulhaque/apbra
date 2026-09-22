@@ -1,6 +1,6 @@
 # APBRA bounded MVP architecture
 
-This document describes the post-Capstone implementation through APBRA-145 and separates it from future production architecture. Capstone is complete/submitted; product development continues.
+This document describes the post-Capstone implementation through APBRA-145 and separates it from the accepted `APBRA-PRODUCT-2026-09-22` target architecture. Capstone is complete/submitted; product development continues.
 
 > **GPT-4.1 reasons. The human clarifies and confirms. The typed contract freezes confirmed meaning. Deterministic software validates safety and preservation.**
 
@@ -12,6 +12,18 @@ The React/Vite prototype has two clearly separated areas:
 - **Administration:** Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation.
 
 The separation represents the intended responsibility boundary. The Capstone does not implement authentication, RBAC, durable tenants or a production administration service.
+
+## Accepted target architecture — planned, not implemented
+
+The product target keeps a single reasoning and assurance engine behind Guided and Advanced experiences. Intake becomes conversation-first and may begin without a file or project. Plain-language source descriptions, qualified schema/data uploads, screenshots and report/sketch references are distinct evidence classes: visual evidence can inform questions and design, but cannot prove an absent field, source fact, permission or measure definition.
+
+The case becomes the durable unit of continuation. It may later be assigned to an authorized BI expert without losing the conversation, evidence, accepted decisions or deterministic findings. Optional projects, collaboration and linked requirement/report/candidate/deployment histories sit around that case. Company registration, membership, sign-in profiles, subscriptions and usage visibility are product controls; they do not automatically grant access to customer tenants, private sources, trusted-author status or external management operations.
+
+Tenant configuration is intended to cover branding, terminology, governed standards, model profiles and policy. APBRA-managed and customer-managed model profiles—including separately approved private/local options—must be qualified. Customer Azure provisioning is a separate, explicit-consent management operation; possession of an inference key is not provisioning authority.
+
+PBIP delivery and deployment guidance remain the first delivery boundary. Connected-source discovery, Power BI/Fabric publishing, connections, gateways, refresh and applicable security configuration require separately qualified permissions and evidence. Optional data-architecture assessment and reviewable scripts are a separate advanced capability and must never modify a source schema automatically.
+
+The target architecture adds production identity and tenant isolation, durable persistence and knowledge lifecycle, controlled sharing/review/release, observability, evaluation/red teaming, reliability and FinOps. It does not select a replacement stack, provider, region, commercial price, SLA or numerical limit. APBRA-149–158 describe planning slices; they are not proof that these services exist.
 
 ## Implemented processing pipeline
 
@@ -41,6 +53,8 @@ The current adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. L
 ### Confirmation boundary
 
 Raw requirements, questions and answers remain immutable provenance. Only human-confirmed structured meaning enters ConfirmedRequirementContract v2. Deterministic TypeScript does not infer business meaning from arbitrary prose. Coverage later proves exact typed obligations, business-question mappings, measures, fields, page scope and time semantics remain represented.
+
+An accepted assumption is a visible business decision, not evidence for an absent field, unknown source fact, missing permission or unsupported capability. Any material rescope must return to explicit acceptance and retain the earlier confirmation as provenance.
 
 ### Request schema boundary
 
@@ -83,3 +97,5 @@ Successful candidates expose a Power BI project archive and lazy-loaded `Report-
 ## Production architecture gap
 
 The Capstone is a local bounded prototype. A production system still needs server-side identity and authorization, durable tenant state, isolated storage/indexes, managed secrets, durable orchestration, production publishing APIs, gateway/credential workflows, reviewer lifecycle, observability/SLOs, resilience/DR, broader compatibility/evaluation and privacy/compliance operations. The modular-monolith and port/adapter direction remains the intended production decomposition; the browser prototype is not evidence those services already exist.
+
+The target “no dead ends” behaviour is truthful recovery: a supported alternative that makes every material change visible, or continuation by an authorized expert. It is not guaranteed generation and cannot convert a provider failure, unsupported capability or missing authority into success. Expert assistance, business acceptance, candidate inspection, release approval and successful deployment remain separate lifecycle events.

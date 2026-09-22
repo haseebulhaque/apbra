@@ -2,6 +2,8 @@
 
 APBRA compiles a bounded structured Report Design into an editable PBIP/PBIR candidate. It does not generate Power BI files directly from free-form model text.
 
+This document first states the verified compiler contract, then the accepted `APBRA-PRODUCT-2026-09-22` delivery direction. Target capabilities are not current compiler claims.
+
 ## Processing contract
 
 ```text
@@ -59,3 +61,13 @@ Any byte change creates a different candidate and requires validation again. His
 ## Handover boundary
 
 A successful run can download the project archive and dynamically generate lazy-loaded `Report-Deployment-Guide.pdf`. The guide explains deployment, configuration and validation actions. It does not publish, configure credentials or prove deployment.
+
+## Accepted delivery direction — planned
+
+PBIP delivery and deployment guidance remain the initial product boundary. Future connected-source discovery and Power BI/Fabric deployment profiles may cover publishing, connections, gateways, refresh and applicable security configuration only after the customer resource, identity, permission, tenant, credential and runtime evidence is qualified. Business confirmation, candidate inspection, release approval and successful deployment remain separate states.
+
+When a confirmed request exceeds the supported profile, APBRA may propose a supported alternative with retained intent, changed scope, assumptions, omissions, limitations and evidence needs made explicit. A material rescope must be accepted before generation and preserved as new provenance. “No dead ends” does not mean silent approximation or guaranteed generation; Unsupported, Human Review Required and technical failure remain legitimate outcomes.
+
+Optional advanced data-architecture assessment may later produce advice and reviewable scripts. It is separate from ordinary report creation, must be explicitly requested and governed, and cannot automatically execute against or modify a source schema. Report/sketch screenshots may influence presentation; schema/data screenshots remain qualified evidence and cannot prove source fields or calculations by themselves.
+
+The target does not claim universal Power BI compatibility or select a publishing provider, region, gateway topology, credential model, SLA or delivery milestone. Changed candidate bytes still require fresh validation, and changed material meaning requires fresh explicit acceptance.

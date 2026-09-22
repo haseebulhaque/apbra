@@ -2,11 +2,23 @@
 
 This React/Vite application is a working bounded enterprise Power BI automation prototype. It separates the business workspace from tenant administration.
 
+It is not the complete `APBRA-PRODUCT-2026-09-22` experience. The current UI and the accepted target are distinguished below.
+
 ## User experience
 
 Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
 
 Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These are local prototype settings, not production identity or tenant controls. My Runs is browser-session history and does not imply durable persistence.
+
+## Accepted product experience — planned
+
+Guided and Advanced experiences will share this reasoning and assurance engine. The target starts with conversation and does not require a file or project. A user may describe a source in business language and may later provide qualified schema/data uploads, screenshots or report/sketch references. The UI must state what each item can establish: a design reference is not data truth, and an accepted assumption cannot prove a missing field, source fact or permission.
+
+The target keeps material business decisions understandable and explicit while leaving ordinary supported BI design to AI. Supported alternatives must disclose retained intent, changed scope, assumptions, omissions, limitations and evidence needs; material rescoping requires acceptance before generation. “No dead ends” means a useful supported alternative or authorized-expert continuation, not guaranteed generation.
+
+Future case and account UX covers authorized BI-expert takeover of the same conversation/evidence, company registration and membership, optional projects, controlled collaboration, linked histories, licensing/seat entitlement and usage visibility, and tenant branding/terminology/standards. Company membership, a mode, licence or model key does not itself grant private-source, tenant-management, release or deployment authority.
+
+Qualified model profiles, separately consented Azure provisioning, connected Power BI delivery and optional advanced data-architecture advice remain future capabilities. The current local administration screens do not prove any of them. APBRA-149–158 are planning items, not implemented UI.
 
 ## Implemented workflow
 

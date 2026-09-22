@@ -42,4 +42,21 @@ Test totals are revision-specific and must be refreshed after changes.
 
 The prototype does not satisfy production acceptance for identity/RBAC, multitenancy and tenant isolation, durable knowledge lifecycle, managed secrets, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations or commercial operations.
 
+## Post-Capstone product acceptance direction — not current PASS
+
+Future product increments must trace to `PC26-FR-001`–`018` and prove their own implementation. The accepted target adds, without presuming completion:
+
+- one engine behind Guided and Advanced experiences, conversation-first intake, selectable suggestions/free text and optional projects;
+- qualified natural-language source descriptions, schema/data uploads, screenshots and report/sketch references, with provenance and evidence limits;
+- transparent alternatives, assumptions, omissions and limitations, plus explicit acceptance of material rescoping;
+- authorized expert continuation of the same case and linked requirement/report/candidate/deployment history;
+- company identity/membership, tenant isolation, controlled collaboration, entitlements and usage visibility;
+- tenant branding/terminology/standards, durable governed knowledge and qualified managed/customer model profiles;
+- separately consented customer Azure provisioning and separately qualified Power BI/Fabric discovery, publishing, connections, gateways, refresh and applicable security configuration;
+- optional governed data-architecture advice/reviewable scripts and cross-cutting privacy, evaluation, red teaming, tracing, reliability and cost controls.
+
+Acceptance of those capabilities requires evidence for authority, isolation, persistence, recovery, security and runtime behaviour as applicable. A mode, licence, membership or key cannot substitute for permission. An accepted assumption is a visible business choice, not proof of missing data or access. “No dead ends” passes only when a truthful supported alternative or actionable expert route is available; it does not require generation or disguise technical failure.
+
+APBRA-147 remains on planning hold. APBRA-149–158 are planning coverage and do not make any row above a PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
+
 Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
