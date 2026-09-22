@@ -7,8 +7,8 @@
 - Product development: continuing.
 - APBRA-141 through APBRA-145: merged implementation history.
 - APBRA-146: completed post-Capstone MVP documentation baseline.
-- APBRA-148: current overall product-intent/documentation reconciliation task; keep In Progress until the remaining separately governed reconciliation is merged, its actual resulting main is verified and cross-system closure evidence is reviewed.
-- APBRA-159: current residual data-model documentation reconciliation task. Its proposed two-document correction must not be described as merged or verified until its PR actually reaches `main` and the resulting content is read back.
+- APBRA-148: current overall product-intent/documentation reconciliation task. Its repository correction is merged; keep it In Progress pending Haseeb's final cross-system closure review.
+- APBRA-159: residual data-model documentation correction merged through PR #46 and verified on its exact resulting `main`; keep it In Progress pending Haseeb's closure review.
 - APBRA-147: planning hold; do not select or start it implicitly.
 - APBRA-149 through APBRA-158: target-product planning items, not implemented capabilities.
 - Canonical bounded implementation baseline from APBRA-145: `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`.
@@ -16,6 +16,7 @@
 - APBRA-148 post-registration documentation execution base: `c466dcbd928b0b07b5631c61c57b7ca90ce7f965`.
 - APBRA-148 documentation PR #44 merge: `d71c02d84105d4f2be9316778dccaadbc5ef6814`.
 - APBRA-159 registration PR #45 merge and documentation execution base: `dcc9102f9868e00267e247b369df6a8533a3c7c6`.
+- APBRA-159 documentation PR #46 merge and verified post-merge baseline: `c1e522e7c4ec3dd203aba1a8cc86b6b22a807b5f`.
 
 The application is a working bounded MVP/prototype, not production-ready. GPT-4.1 owns ambiguity reasoning and ordinary supported BI design; humans confirm material meaning; ConfirmedRequirementContract v2 freezes authority; deterministic coverage, integrity, normalization, bounded correction/repair, guardrails, compiler and candidate validation enforce the boundary.
 
@@ -52,9 +53,9 @@ The target adds one-engine Guided/Advanced experiences, conversation-first intak
 
 Production work remains for auth/RBAC, real tenant isolation, durable knowledge ingestion/index lifecycle, managed secrets/configuration, broader Power BI compatibility, publishing and gateway/credential orchestration, reviewer workflow, load/performance, resilience/DR, SLOs/monitoring/on-call, broader evaluation, privacy/compliance operations and commercial operations.
 
-The data-model defect recorded during APBRA-148 is now being corrected under APBRA-159's separate two-file authority. [DATA-MODEL.md](../../DATA-MODEL.md) distinguishes actual bounded-prototype contracts from planned durable logical responsibilities and historical names. `ConfirmedRequirementContract` is the authority for explicitly accepted material business meaning; AI-produced `ReportDesign` is subordinate. Legacy `RequirementsSnapshot` and `DesignPlan` types still present in historical fixture paths are not silently relabelled as aliases or a competing semantic authority.
+The data-model defect recorded during APBRA-148 was corrected under APBRA-159's separate two-file authority and verified after PR #46 merged. [DATA-MODEL.md](../../DATA-MODEL.md) distinguishes actual bounded-prototype contracts from planned durable logical responsibilities and historical names. `ConfirmedRequirementContract` is the authority for explicitly accepted material business meaning; AI-produced `ReportDesign` is subordinate. Legacy `RequirementsSnapshot` and `DesignPlan` types still present in historical fixture paths are not silently relabelled as aliases or a competing semantic authority.
 
-Until the APBRA-159 documentation PR is merged and its exact resulting `main` is verified, that correction is proposed work rather than a merged baseline. These remain separate gates: the already merged APBRA-148 eleven-document reconciliation; verification of its actual PR #44 result; APBRA-159 correction and post-merge readback; resolution or explicit disposition of any other material cross-system conflict; and Haseeb's final closure review for APBRA-159 and APBRA-148. A delegated mechanical merge does not itself certify either task Done.
+PR #44 reconciliation, PR #46 correction and exact resulting-main readback are complete. A fresh cross-system read confirmed Product Vision v4, Business/Functional Requirements v4, Data/Integration/Identity/Audit v3, RTM v6, Data Models v4 and Data Dictionary/Lineage v3 remained the controlling source versions, with APBRA-159 and APBRA-148 still In Progress and APBRA-147 on planning hold. Haseeb's final closure review remains separate: a delegated mechanical merge and technical consistency check do not themselves certify either task Done or select the next product milestone.
 
 Do not infer production capabilities from accepted Jira stories, Confluence target requirements, local administration screens or the historical `APBRA-IMPL-0.1` proposal. Read [the implementation and product baseline](../decisions/implementation-baseline.md) before planning.
 
