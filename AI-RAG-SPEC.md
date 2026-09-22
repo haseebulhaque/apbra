@@ -40,6 +40,16 @@ Guided and Advanced experiences will use the same reasoning/assurance engine. Th
 
 Tenant-governed terminology, KPI definitions, branding, accessibility and reporting standards should be reusable during clarification and ReportDesign. Explicit user meaning remains authoritative within policy; a conflict with mandatory tenant policy must be surfaced for acceptance or review. Durable production RAG requires tenant isolation, authorization-aware ingestion and retrieval, replacement/deletion, versioned citations, retention and evaluation. Demo fixtures remain classified separately and never become universal policy.
 
+### Planned activation, permission and policy controls
+
+These controls describe the accepted target and are **planned**, not capabilities already implemented by the bounded prototype:
+
+- Knowledge becomes eligible for activation only after both required source approval and successful required ingestion/index verification. Approval alone is insufficient.
+- Current company and private case/project/source permissions apply before retrieval eligibility, ranking and model context. They are rechecked before protected work is resumed; an earlier permitted retrieval does not grant continuing access.
+- A citation must substantively support the associated claim using eligible, versioned evidence. Merely appearing in a retrieved result list is not sufficient support.
+- Mandatory-policy coverage cannot depend only on similarity top-k. Failure to retrieve a mandatory policy is not permission to proceed without it.
+- A compliant revised business approach requires explicit acceptance of its material meaning. User acceptance or BI-expert assignment cannot waive mandatory policy; unresolved policy authority is referred to the authorised policy owner.
+
 The target supports qualified APBRA-managed and customer-managed model profiles, including approved private/local profiles where feasible. Each profile requires explicit provider/model/capability, data-handling, identity, quota, cost and failure-mode qualification. Separately consented customer Azure provisioning is a future management capability; a model inference key, company membership or UI mode grants no such authority.
 
 Cross-cutting controls include prompt-injection and retrieval safety, structured-output evaluation, red teaming, traceability, reliability and cost visibility. No provider, model, region, routing rule, price, SLA or numerical limit is selected merely by documenting the target.

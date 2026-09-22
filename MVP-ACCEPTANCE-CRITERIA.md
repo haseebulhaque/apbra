@@ -18,7 +18,7 @@ Capstone is complete/submitted. The bounded MVP baseline is working and product 
 | Deterministic candidate validation | PASS | Required project and reference checks passed |
 | Candidate result | PASS | Final status Candidate ready |
 
-Canonical run: `8042cc44-620f-4457-828d-0770749a653f`. The confirmed SalesPerformance design contained `Total Sales = SUM(Sales_Data.Revenue)`, an Executive Summary, Total Sales card, regional bar chart and Region slicer.
+Canonical run: `8042cc44-620f-4457-828d-0770749a653f`. The human-confirmed business meaning was `Total Sales = SUM(Sales_Data.Revenue)`, all available data and an audience of Sales Managers. The subsequent AI ReportDesign selected an Executive Summary, Total Sales card, regional bar chart and Region slicer; those ordinary design choices were not a separate user-approved design contract.
 
 Interpretation tokens: 8,608 prompt, 1,207 completion, 9,815 total. ReportDesign tokens: 6,430 prompt, 964 completion, 7,394 total. Both used `gpt-4.1-2025-04-14`. `embeddingCalls = null`; no embedding count/cost is claimed.
 
@@ -56,6 +56,8 @@ Future product increments must trace to `PC26-FR-001`–`018` and prove their ow
 - optional governed data-architecture advice/reviewable scripts and cross-cutting privacy, evaluation, red teaming, tracing, reliability and cost controls.
 
 Acceptance of those capabilities requires evidence for authority, isolation, persistence, recovery, security and runtime behaviour as applicable. A mode, licence, membership or key cannot substitute for permission. An accepted assumption is a visible business choice, not proof of missing data or access. “No dead ends” passes only when a truthful supported alternative or actionable expert route is available; it does not require generation or disguise technical failure.
+
+For planned governed knowledge, activation requires both required source approval and successful required ingestion/index verification. Current private-resource permissions must be enforced before retrieval eligibility, ranking and model context and rechecked for resumed protected work. Citations must substantively support their associated claims, mandatory-policy coverage cannot rely only on similarity ranking, and neither user acceptance nor BI-expert assignment can waive mandatory policy. Any compliant revised business approach requires explicit material acceptance; unresolved policy authority belongs with the authorised policy owner.
 
 APBRA-147 remains on planning hold. APBRA-149–158 are planning coverage and do not make any row above a PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
 
