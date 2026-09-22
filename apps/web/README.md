@@ -6,7 +6,7 @@ It is not the complete `APBRA-PRODUCT-2026-09-22` experience. The current UI and
 
 ## User experience
 
-Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
+Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Readiness and confirmation use the same deterministic semantic prerequisites and are bound to the exact interpretation and material input context shown to the user. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
 
 Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These are local prototype settings, not production identity or tenant controls. My Runs is browser-session history and does not imply durable persistence.
 
@@ -38,6 +38,8 @@ requirement + parsed schema
 ```
 
 The original AI design is retained. Correction cannot add unconfirmed measures or business meaning. Zero-binding, measure-bound, unknown, ambiguous, unsupported or out-of-capacity designs stop rather than being silently changed. Human Review Required, Unsupported, Out of Scope and technical failure remain distinct.
+
+Changing the request, parsed schema, governed context or interpretation invalidates earlier readiness. Late asynchronous results and duplicate actions cannot confirm or start generation for superseded meaning. A provider interruption preserves the current request, answers and accepted contract where one exists, and exposes a retry for the affected stage without resetting the configured clarification budget. `READY_FOR_CONFIRMATION` proves only that the displayed business meaning is eligible for acceptance; it does not guarantee later Report Design coverage, compilation, runtime compatibility or deployment.
 
 ## Run locally
 
