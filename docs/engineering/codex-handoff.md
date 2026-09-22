@@ -7,12 +7,15 @@
 - Product development: continuing.
 - APBRA-141 through APBRA-145: merged implementation history.
 - APBRA-146: completed post-Capstone MVP documentation baseline.
-- APBRA-148: current product-intent/documentation reconciliation task; keep In Progress until its bounded documentation PR is merged, its actual resulting main is verified, and the remaining material cross-system conflicts recorded below are resolved under separate authority.
+- APBRA-148: current overall product-intent/documentation reconciliation task; keep In Progress until the remaining separately governed reconciliation is merged, its actual resulting main is verified and cross-system closure evidence is reviewed.
+- APBRA-159: current residual data-model documentation reconciliation task. Its proposed two-document correction must not be described as merged or verified until its PR actually reaches `main` and the resulting content is read back.
 - APBRA-147: planning hold; do not select or start it implicitly.
 - APBRA-149 through APBRA-158: target-product planning items, not implemented capabilities.
-- Canonical implementation baseline: `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`.
+- Canonical bounded implementation baseline from APBRA-145: `65d7281d1132ce5b4eca6d3cd89fd30e95f5c342`.
 - APBRA-148 contract provenance base: `d072870fea8b8ae8caedc5e553653a433b697f11`.
 - APBRA-148 post-registration documentation execution base: `c466dcbd928b0b07b5631c61c57b7ca90ce7f965`.
+- APBRA-148 documentation PR #44 merge: `d71c02d84105d4f2be9316778dccaadbc5ef6814`.
+- APBRA-159 registration PR #45 merge and documentation execution base: `dcc9102f9868e00267e247b369df6a8533a3c7c6`.
 
 The application is a working bounded MVP/prototype, not production-ready. GPT-4.1 owns ambiguity reasoning and ordinary supported BI design; humans confirm material meaning; ConfirmedRequirementContract v2 freezes authority; deterministic coverage, integrity, normalization, bounded correction/repair, guardrails, compiler and candidate validation enforce the boundary.
 
@@ -43,15 +46,15 @@ The target adds one-engine Guided/Advanced experiences, conversation-first intak
 - Expert assistance, business acceptance, inspection download, release approval and successful deployment are separate events.
 - Every changed candidate byte set requires fresh applicable mandatory validation and candidate-bound governance. Desktop/runtime evidence is required where the selected capability profile, release requirement or compatibility/runtime claim requires it; a runtime result for one byte set never transfers to different candidate bytes. This does not invent a Desktop PASS for the canonical Capstone candidate or make Desktop validation a newly pending Capstone test.
 - Any changed material business meaning requires a new explicit acceptance while preserving earlier provenance.
-- Implementation → fresh exact-head AI review → required hosted checks → Haseeb manual merge remains the accepted process.
+- Implementation → fresh exact-base/exact-head independent AI review → required hosted checks → Haseeb manual merge remains the enduring default process. The temporary owner delegation `APBRA-DELEGATED-MERGE-20260923-01` is a bounded exception recorded in Jira and the reconciliation ledger: it changes only the mechanical merge actor for a qualifying, fully verified reconciliation PR, expires under its recorded time/count/completion limits, grants no additional file authority or bypass, and does not become standing autonomous authority.
 
 ## Production gaps
 
 Production work remains for auth/RBAC, real tenant isolation, durable knowledge ingestion/index lifecycle, managed secrets/configuration, broader Power BI compatibility, publishing and gateway/credential orchestration, reviewer workflow, load/performance, resilience/DR, SLOs/monitoring/on-call, broader evaluation, privacy/compliance operations and commercial operations.
 
-`DATA-MODEL.md` remains a known, separately governed reconciliation gap: it presents historical `DesignPlanVersion / DesignPlan` and older source references as current implementation vocabulary. The current authority boundary is the exact `ConfirmedRequirementContract`, with AI-produced `ReportDesign` subordinate to that confirmed meaning; the stale document must not be read as creating a competing contract or as an implementation instruction. It was intentionally not edited by APBRA-148 because it is outside the registered eleven-file scope.
+The data-model defect recorded during APBRA-148 is now being corrected under APBRA-159's separate two-file authority. [DATA-MODEL.md](../../DATA-MODEL.md) distinguishes actual bounded-prototype contracts from planned durable logical responsibilities and historical names. `ConfirmedRequirementContract` is the authority for explicitly accepted material business meaning; AI-produced `ReportDesign` is subordinate. Legacy `RequirementsSnapshot` and `DesignPlan` types still present in historical fixture paths are not silently relabelled as aliases or a competing semantic authority.
 
-These are separate gates: completing and merging the bounded eleven-document PR; verifying the actual resulting `main`; resolving the remaining material cross-system conflicts, including `DATA-MODEL.md`, under separately governed authority; and only then assessing overall APBRA-148 closure. Merging the documentation PR and reading back `main` do not by themselves clear the recorded data-model gap or complete APBRA-148.
+Until the APBRA-159 documentation PR is merged and its exact resulting `main` is verified, that correction is proposed work rather than a merged baseline. These remain separate gates: the already merged APBRA-148 eleven-document reconciliation; verification of its actual PR #44 result; APBRA-159 correction and post-merge readback; resolution or explicit disposition of any other material cross-system conflict; and Haseeb's final closure review for APBRA-159 and APBRA-148. A delegated mechanical merge does not itself certify either task Done.
 
 Do not infer production capabilities from accepted Jira stories, Confluence target requirements, local administration screens or the historical `APBRA-IMPL-0.1` proposal. Read [the implementation and product baseline](../decisions/implementation-baseline.md) before planning.
 
