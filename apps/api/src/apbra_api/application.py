@@ -213,8 +213,8 @@ class InvitationService:
         row = store.invitation(digest, lock=True)
         if row is None or not hmac.compare_digest(row.token_digest, digest):
             raise InvitationInvalid()
-        existing = store.membership(row.company_id, identity.id)
         if row.consumed_at is not None:
+            existing = store.membership(row.company_id, identity.id)
             if row.consumed_by_identity_id == identity.id and existing is not None:
                 return existing
             raise InvitationInvalid()
@@ -226,6 +226,7 @@ class InvitationService:
         active_membership = store.active_identity_membership(identity.id)
         if active_membership is not None and active_membership.company_id != row.company_id:
             raise Conflict()
+        existing = store.membership(row.company_id, identity.id)
         if existing is not None:
             raise Conflict()
         return store.accept_invitation(row, identity)
