@@ -43,6 +43,8 @@
     "22.07 Multi-Agent Review and Quality Gates v2",
     "APBRA-160 plan comment 10209 and decision checkpoint comment 10212",
     "APBRA-161 accepted decision comment 10211",
+    "APBRA-162 narrow owner-authorized scope amendment comment 10220",
+    "Governance amendment execution base beba0295bb4aba4047ef3a79a9cdaa6dc4cc1e63; original contract provenance base remains unchanged",
     "GitHub main 02d14e9e2e023661fb0d0d3a20627094d74b8f70"
   ],
   "allowed_paths": [
@@ -92,12 +94,12 @@
     "compose.yaml",
     ".github/workflows/bootstrap.yml",
     "scripts/check_ci_policy.py",
+    "tests/bootstrap/test_bootstrap.py",
     "README.md"
   ],
   "restricted_paths": [
     "scripts/check_bootstrap.py",
     "tasks/**",
-    "tests/bootstrap/**",
     "docs/source-register.json",
     "agents/**",
     "contracts/**",
@@ -154,6 +156,7 @@
     "The signed-in shell, invite acceptance, case list, create and resume flows plus forbidden, expired-session and recoverable-conflict states are tested through component paths, and one browser test exercises the real UI to API to PostgreSQL journey rather than a mocked service.",
     "No object storage, upload, PBIP persistence or download, report-generation API, expert assignment, project sharing, public registration, billing, cloud provisioning, hosted exposure, social login, compiler change or production RAG capability is implemented or presented as complete.",
     "All dependencies are exact-locked and reviewed; runtime families are FastAPI, Pydantic and pydantic-settings, SQLAlchemy 2.x, Alembic, psycopg 3, Authlib with cryptography and Uvicorn, with pytest, HTTPX, Ruff, mypy and Playwright used only where justified; changing the driver or OIDC/JWT family requires renewed authority and review.",
+    "The sole bootstrap-test implementation permission is tests/bootstrap/test_bootstrap.py and is limited to changing p.parent.mkdir(parents=True) to p.parent.mkdir(parents=True, exist_ok=True) inside test_product_file_is_not_bootstrap; its rejection assertion and every other test behavior remain unchanged, and every other tests/bootstrap file remains outside implementation authority.",
     "Haseeb remains manual merge authority; registration and implementation are separate, and no application implementation begins until the registration PR is manually merged and current main is refreshed."
   ],
   "verification_required": [
@@ -202,13 +205,15 @@
   "base_commit": "02d14e9e2e023661fb0d0d3a20627094d74b8f70",
   "branch": "agent/APBRA-DEVOPS/APBRA-162-invited-private-case-foundation",
   "source_ids": [
-    "mvp1-invited-private-case-foundation"
+    "mvp1-invited-private-case-foundation",
+    "mvp1-invited-private-case-foundation-scope-amendment"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / MVP-1 invited identity and durable private-case foundation",
   "dependencies": [
     "APBRA-161 is Done with Haseeb's accepted platform decision recorded in Jira comment 10211 before registration.",
     "The APBRA-162 registration-only PR must change exactly four governance files and be manually merged by Haseeb before any implementation path changes.",
+    "The narrow APBRA-162 scope-amendment PR must change exactly the same four governance files and be manually merged by Haseeb before tests/bootstrap/test_bootstrap.py or the preserved implementation WIP is changed or published.",
     "After registration merge, current main and the implementation execution base must be refreshed and recorded separately while this original provenance base remains unchanged.",
     "PostgreSQL 17 and Docker must be available for mandatory persistence and migration integration evidence; SQLite and in-memory stores are not substitutes.",
     "Package implementation remains local and CI only at AUD 0 using synthetic data and deterministic offline identity/provider substitutes.",
