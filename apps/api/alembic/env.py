@@ -9,8 +9,11 @@ from apbra_api.persistence import Base
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
-if database_url := os.environ.get("APBRA_DATABASE_URL"):
+explicit_database_url = config.get_main_option("sqlalchemy.url").strip()
+if not explicit_database_url and (database_url := os.environ.get("APBRA_DATABASE_URL")):
     config.set_main_option("sqlalchemy.url", database_url)
+if not config.get_main_option("sqlalchemy.url").strip():
+    raise RuntimeError("Alembic requires an explicit database URL or APBRA_DATABASE_URL.")
 target_metadata = Base.metadata
 
 

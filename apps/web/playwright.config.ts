@@ -4,11 +4,14 @@ const ci=Boolean(process.env.CI);
 const apiPort=18000,webPort=15173;
 const databaseUrl=process.env.APBRA_E2E_DATABASE_URL;
 const sessionSecret=process.env.APBRA_E2E_SESSION_SECRET;
+const inheritedTargetVariables=['PGHOST','PGHOSTADDR','PGPORT','PGDATABASE','PGSERVICE','PGSERVICEFILE','PGSYSCONFDIR'].filter((name)=>process.env[name]);
 if(!databaseUrl)throw new Error('APBRA_E2E_DATABASE_URL must name an isolated disposable PostgreSQL database.');
+if(!databaseUrl.startsWith('postgresql+psycopg://'))throw new Error('APBRA_E2E_DATABASE_URL must use the locked postgresql+psycopg driver.');
 if(databaseUrl===process.env.APBRA_DATABASE_URL||databaseUrl===process.env.APBRA_TEST_DATABASE_URL)throw new Error('The Playwright database must be separate from preview and backend-test databases.');
+if(inheritedTargetVariables.length)throw new Error(`Playwright rejects inherited libpq target settings: ${inheritedTargetVariables.join(', ')}.`);
 let databaseTarget:URL;
 try{databaseTarget=new URL(databaseUrl.replace(/^postgresql\+psycopg:/,'postgresql:'))}catch{throw new Error('APBRA_E2E_DATABASE_URL must be a valid PostgreSQL URL.');}
-if(databaseTarget.protocol!=='postgresql:'||!['127.0.0.1','localhost'].includes(databaseTarget.hostname)||databaseTarget.pathname!=='/apbra_e2e')throw new Error('Playwright may reset only the loopback PostgreSQL database named apbra_e2e.');
+if(databaseTarget.protocol!=='postgresql:'||!['127.0.0.1','localhost'].includes(databaseTarget.hostname)||!databaseTarget.port||databaseTarget.pathname!=='/apbra_e2e'||databaseTarget.searchParams.size>0||databaseTarget.hash)throw new Error('Playwright may reset only an explicit loopback PostgreSQL database named apbra_e2e, without connection query options.');
 if(!sessionSecret)throw new Error('APBRA_E2E_SESSION_SECRET must be provided for the isolated browser-test stack.');
 
 export default defineConfig({

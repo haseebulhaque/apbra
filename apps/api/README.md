@@ -58,7 +58,11 @@ The bounded compatibility path has deterministic offline coverage using controll
 
 Use the committed lock and a real PostgreSQL 17 database. SQLite and in-memory persistence are not substitutes for these tests.
 
+Backend tests reset only a dedicated loopback database named `apbra_test`. It must be distinct from both the manual preview database (`apbra`) and the browser database (`apbra_e2e`). Target-changing libpq environment variables and connection query options are rejected before Alembic can connect or run DDL.
+
 ```sh
+docker compose exec postgres createdb -U apbra apbra_test
+export APBRA_TEST_DATABASE_URL="postgresql+psycopg://apbra:${APBRA_POSTGRES_PASSWORD}@127.0.0.1:54321/apbra_test"
 uv --directory apps/api lock --check
 uv --directory apps/api sync --frozen --python 3.13
 uv --directory apps/api run --frozen ruff check .

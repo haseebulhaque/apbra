@@ -6,10 +6,10 @@ import {ApiError,authApi,casesApi,invitationsApi} from './api';
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
 const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
-const inspectPlaywrightConfig=(databaseUrl:string)=>spawnSync(process.execPath,[playwrightCli,'test','--list'],{
+const inspectPlaywrightConfig=(databaseUrl:string,environment:Record<string,string|undefined>={})=>spawnSync(process.execPath,[playwrightCli,'test','--list'],{
   cwd:fileURLToPath(new URL('..',import.meta.url)),
   encoding:'utf8',
-  env:{...process.env,APBRA_E2E_DATABASE_URL:databaseUrl,APBRA_E2E_SESSION_SECRET:'synthetic-config-validation-material',APBRA_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra',APBRA_TEST_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test'},
+  env:{...process.env,PGHOST:undefined,PGHOSTADDR:undefined,PGPORT:undefined,PGDATABASE:undefined,PGSERVICE:undefined,PGSERVICEFILE:undefined,PGSYSCONFDIR:undefined,APBRA_E2E_DATABASE_URL:databaseUrl,APBRA_E2E_SESSION_SECRET:'synthetic-config-validation-material',APBRA_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra',APBRA_TEST_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test',...environment},
 });
 
 describe('APBRA isolated browser-test configuration',()=>{
@@ -17,8 +17,16 @@ describe('APBRA isolated browser-test configuration',()=>{
   it.each([
     'postgresql+psycopg://apbra:unused@localhost:54321/apbra',
     'postgresql+psycopg://apbra:unused@database.internal:5432/apbra_e2e',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?host=127.0.0.1',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?hostaddr=127.0.0.1',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?dbname=apbra_e2e',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?port=54322',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?service=preview',
+    'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e?host=one&host=two',
+    'postgresql+psycopg://apbra:unused@127.0.0.1/apbra_e2e',
     'sqlite:///apbra_e2e',
-  ])('rejects an unsafe reset target before a browser server starts: %s',(databaseUrl)=>{const result=inspectPlaywrightConfig(databaseUrl),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toContain('Playwright may reset only the loopback PostgreSQL database named apbra_e2e.')});
+  ])('rejects an unsafe reset target before a browser server starts: %s',(databaseUrl)=>{const result=inspectPlaywrightConfig(databaseUrl),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toMatch(/locked postgresql\+psycopg driver|explicit loopback PostgreSQL database named apbra_e2e/)});
+  it.each(['PGHOST','PGHOSTADDR','PGPORT','PGDATABASE','PGSERVICE','PGSERVICEFILE','PGSYSCONFDIR'])('rejects inherited %s before a browser server starts',(name)=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e',{[name]:'preview'}),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toContain(`Playwright rejects inherited libpq target settings: ${name}.`) });
 });
 
 describe('APBRA API client',()=>{

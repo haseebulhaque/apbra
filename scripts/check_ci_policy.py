@@ -25,13 +25,23 @@ API_CHECK = (
     'uv --directory apps/api run --frozen ruff check .\n'
     'uv --directory apps/api run --frozen mypy\n'
     'uv --directory apps/api run --frozen alembic upgrade head\n'
-    'uv --directory apps/api run --frozen pytest'
+    'uv --directory apps/api run --frozen pytest\n'
+    'uv --directory apps/api run --frozen python -c '
+    '"import psycopg; connection=psycopg.connect('
+    "'postgresql://postgres@127.0.0.1:5432/apbra'); "
+    "row=connection.execute('SELECT value FROM backend_test_isolation_sentinel').fetchone(); "
+    "assert row == ('preserved',), row; connection.close()\""
 )
-E2E_DATABASE = (
+ISOLATED_TEST_DATABASES = (
     'uv --directory apps/api run --frozen python -c '
     '"import psycopg; connection=psycopg.connect('
     "'postgresql://postgres@127.0.0.1:5432/postgres', autocommit=True); "
-    "connection.execute('CREATE DATABASE apbra_e2e'); connection.close()\""
+    "connection.execute('CREATE DATABASE apbra_test'); "
+    "connection.execute('CREATE DATABASE apbra_e2e'); connection.close(); "
+    "sentinel=psycopg.connect('postgresql://postgres@127.0.0.1:5432/apbra', "
+    "autocommit=True); sentinel.execute('CREATE TABLE backend_test_isolation_sentinel "
+    "(value text NOT NULL)'); sentinel.execute(\\\"INSERT INTO "
+    "backend_test_isolation_sentinel VALUES ('preserved')\\\"); sentinel.close()\""
 )
 WEB_COMMAND = (
     'npm --prefix apps/web ci --ignore-scripts\n'
@@ -93,7 +103,7 @@ def validate(text: str) -> list[str]:
             'PR_HEAD_SHA': '${{ github.event.pull_request.head.sha }}',
             'APBRA_PROFILE': 'test',
             'APBRA_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
-            'APBRA_TEST_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
+            'APBRA_TEST_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra_test',
             'APBRA_E2E_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra_e2e',
             'APBRA_E2E_SESSION_SECRET': 'ci-only-browser-test-session-material',
             'APBRA_PUBLIC_ORIGIN': 'http://127.0.0.1:5173',
@@ -143,7 +153,17 @@ def validate(text: str) -> list[str]:
                     errors.append('Unapproved action configuration')
             else:
                 errors.append('Step must be a known command or pinned action')
-        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, API_INSTALL, API_CHECK, E2E_DATABASE, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
+        expected = [
+            'actions/checkout',
+            'actions/setup-python',
+            *COMMANDS,
+            API_INSTALL,
+            ISOLATED_TEST_DATABASES,
+            API_CHECK,
+            'actions/setup-node',
+            WEB_COMMAND,
+            'actions/upload-artifact',
+        ]
         if sequence != expected:
             errors.append('Mandatory steps missing, duplicated, reordered or replaced')
         return errors

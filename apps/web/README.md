@@ -62,7 +62,7 @@ Vite normally serves `http://127.0.0.1:5173/`. AI-dependent stages show an unava
 
 ### Isolated browser tests
 
-Playwright never reuses the manual preview on ports 5173/8000. It starts a test-only web/API pair on ports 15173/18000 and requires a separate disposable PostgreSQL database. Each run downgrades and reapplies migrations only in that explicitly named browser-test database, so never point `APBRA_E2E_DATABASE_URL` at preview or backend-test data.
+Playwright never reuses the manual preview on ports 5173/8000. It starts a test-only web/API pair on ports 15173/18000 and requires a separate disposable PostgreSQL database. Each run downgrades and reapplies migrations only in that explicitly named browser-test database, so never point `APBRA_E2E_DATABASE_URL` at preview or backend-test data. The URL must explicitly name loopback host, port and database and cannot contain connection query options; target-changing libpq environment variables are rejected before either test server starts.
 
 Create the isolated database once inside the committed Compose PostgreSQL service, supply a locally generated test-session value, then run the suite. These commands reuse the already-required local `APBRA_POSTGRES_PASSWORD` environment variable without printing it:
 

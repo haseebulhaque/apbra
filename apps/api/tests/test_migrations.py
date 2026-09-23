@@ -1,10 +1,11 @@
 from uuid import uuid4
 
 import pytest
-from alembic.config import Config
-from conftest import csrf, sign_in
+from conftest import csrf, disposable_alembic_config, sign_in, validate_disposable_database_url
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from alembic import command
@@ -17,20 +18,72 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     assert {"companies", "memberships", "reporting_cases", "case_request_versions"}.issubset(
         set(inspector.get_table_names())
     )
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
 
 
 def test_first_migration_downgrades_and_reapplies_explicit_schema(
     settings: Settings, database: Database
 ) -> None:
-    config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "base")
     assert "reporting_cases" not in inspect(database.engine).get_table_names()
     command.upgrade(config, "head")
     assert "reporting_cases" in inspect(database.engine).get_table_names()
+
+
+@pytest.mark.parametrize(
+    "unsafe_url",
+    [
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra",
+        "postgresql+psycopg://apbra:unused@database.internal:5432/apbra_test",
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test?host=preview",
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test?service=preview",
+        "postgresql+psycopg://apbra:unused@127.0.0.1/apbra_test",
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test?host=one&host=two",
+        "sqlite:///apbra_test",
+    ],
+)
+def test_backend_reset_target_rejected_before_alembic_config(unsafe_url: str) -> None:
+    with pytest.raises(pytest.UsageError):
+        disposable_alembic_config(unsafe_url)
+
+
+def test_backend_reset_target_rejects_inherited_libpq_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PGSERVICE", "preview")
+    with pytest.raises(pytest.UsageError, match="PGSERVICE"):
+        validate_disposable_database_url(
+            "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test"
+        )
+
+
+def test_explicit_disposable_target_wins_over_application_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_url = "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test"
+    monkeypatch.setenv(
+        "APBRA_DATABASE_URL",
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra",
+    )
+    config = disposable_alembic_config(test_url)
+    assert config.get_main_option("sqlalchemy.url") == test_url
+
+
+def test_locked_psycopg_dialect_receives_only_the_validated_target() -> None:
+    test_url = validate_disposable_database_url(
+        "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test"
+    )
+    args, kwargs = postgresql.psycopg.dialect().create_connect_args(make_url(test_url))
+    assert args == []
+    assert kwargs == {
+        "dbname": "apbra_test",
+        "user": "apbra",
+        "password": "unused",
+        "host": "127.0.0.1",
+        "port": 54322,
+    }
 
 
 def test_request_versions_are_database_immutable(client: TestClient, database: Database) -> None:
