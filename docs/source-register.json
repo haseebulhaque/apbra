@@ -159,6 +159,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-162",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized the APBRA-161 decision resolution and APBRA-162 registration-first implementation mission on 2026-09-23. The accepted APBRA-161 profile selects an Entra External ID-compatible OIDC boundary, APBRA-authoritative membership and private-resource authorization, one FastAPI modular-monolith API, PostgreSQL 17 with SQLAlchemy 2 and Alembic, and a local/CI-only APBRA-162 execution boundary with synthetic data and AUD 0 cloud spend. Registration is limited to exactly four governance paths and a later exact finite implementation allowlist. It does not authorize live Entra or Azure resources, object storage, paid model calls, customer data, hosted exposure, automatic merge or implementation before Haseeb manually merges the registration PR."
+    },
+    {
+      "id": "mvp1-invited-private-case-foundation-scope-amendment",
+      "content_id": "APBRA-162",
+      "version": "Owner authorization recorded in Jira comment 10220 on 2026-09-23; amendment execution base beba0295bb4aba4047ef3a79a9cdaa6dc4cc1e63",
+      "section": "APBRA-162 narrow governance amendment for the historical bootstrap fixture setup",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-162",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized a governance-only APBRA-162 amendment that preserves the original contract provenance and adds exactly tests/bootstrap/test_bootstrap.py as the forty-eighth future implementation path. That file authority is limited to adding exist_ok=True to the existing parent-directory mkdir in test_product_file_is_not_bootstrap so the rejection assertion can run when apps/api already exists. Every other bootstrap test remains outside APBRA-162 implementation authority. The amendment itself changes only the established four governance files, does not apply or publish the preserved implementation WIP, and still requires Haseeb's manual merge before implementation continues."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

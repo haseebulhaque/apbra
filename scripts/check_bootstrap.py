@@ -244,6 +244,7 @@ INVITED_PRIVATE_CASE_FOUNDATION_PATHS = {
     'compose.yaml',
     '.github/workflows/bootstrap.yml',
     'scripts/check_ci_policy.py',
+    'tests/bootstrap/test_bootstrap.py',
     'README.md',
 }
 INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS = {
@@ -252,8 +253,10 @@ INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256 = '39af90d3df4d2e625233bb6ee073a2a450af7358fd23d89058f527726d4827fc'
+INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256 = '7acc6d58d90cdd99e2fded77223d6dcc1e80e6d275042f34254d299a3cbaf702'
 INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256 = '067467b5557cf3fa1f381056622b014f3d96cd84a076252f917fcbc186ca23e2'
+INVITED_PRIVATE_CASE_FOUNDATION_AMENDMENT_SOURCE_SHA256 = '8f01e0e8b4833c744734e0a872dfe3238c2aae8c6da1b415272608dff49000fa'
+INVITED_PRIVATE_CASE_FOUNDATION_BOOTSTRAP_FIX_SHA256 = '5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -935,7 +938,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected invited private-case foundation scope')
                 if (invited_private_case_foundation_task['task_mode'], invited_private_case_foundation_task['readiness'], invited_private_case_foundation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Invited private-case foundation requires issued implementation acceptance')
-                if invited_private_case_foundation_task['source_ids'] != ['mvp1-invited-private-case-foundation']:
+                if invited_private_case_foundation_task['source_ids'] != [
+                        'mvp1-invited-private-case-foundation',
+                        'mvp1-invited-private-case-foundation-scope-amendment']:
                     extension_errors.append('Invited private-case foundation requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 invited_source = source_map.get('mvp1-invited-private-case-foundation')
@@ -945,6 +950,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(invited_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256:
                         extension_errors.append('Invited private-case foundation source differs from accepted provenance')
+                amendment_source = source_map.get('mvp1-invited-private-case-foundation-scope-amendment')
+                if amendment_source is None:
+                    extension_errors.append('Invited private-case foundation amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != INVITED_PRIVATE_CASE_FOUNDATION_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('Invited private-case foundation amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 invited_private_case_foundation_task = None
@@ -998,6 +1010,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS) and
                     changed_paths != INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS):
                 errors.append('APBRA-162 registration must change exactly its four governance files')
+            if (active_task_id == 'APBRA-162' and
+                    'tests/bootstrap/test_bootstrap.py' in changed_paths):
+                bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
+                if (not bootstrap_fix.is_file() or bootstrap_fix.is_symlink() or
+                        hashlib.sha256(bootstrap_fix.read_bytes()).hexdigest() !=
+                        INVITED_PRIVATE_CASE_FOUNDATION_BOOTSTRAP_FIX_SHA256):
+                    errors.append('APBRA-162 permits only the accepted test_product_file_is_not_bootstrap fixture correction')
             for name in sorted(changed_paths):
                 if not valid_path(name) or not (
                     (active_task is not None and path_allowed(name, active_task, card)) or
