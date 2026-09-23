@@ -197,6 +197,63 @@ CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS = {
     'tests/bootstrap/test_confirmation_readiness_integrity_scope.py',
     'docs/source-register.json',
 }
+INVITED_PRIVATE_CASE_FOUNDATION_PATHS = {
+    'apps/api/.dockerignore',
+    'apps/api/.env.example',
+    'apps/api/Dockerfile',
+    'apps/api/README.md',
+    'apps/api/pyproject.toml',
+    'apps/api/uv.lock',
+    'apps/api/alembic.ini',
+    'apps/api/alembic/env.py',
+    'apps/api/alembic/script.py.mako',
+    'apps/api/alembic/versions/20260923_01_invited_private_case_foundation.py',
+    'apps/api/src/apbra_api/__init__.py',
+    'apps/api/src/apbra_api/config.py',
+    'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/auth_boundary.py',
+    'apps/api/src/apbra_api/oidc_adapter.py',
+    'apps/api/src/apbra_api/authorization.py',
+    'apps/api/src/apbra_api/persistence.py',
+    'apps/api/src/apbra_api/bootstrap.py',
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/main.py',
+    'apps/api/tests/conftest.py',
+    'apps/api/tests/test_authentication.py',
+    'apps/api/tests/test_authorization.py',
+    'apps/api/tests/test_invitations.py',
+    'apps/api/tests/test_cases.py',
+    'apps/api/tests/test_api.py',
+    'apps/api/tests/test_migrations.py',
+    'apps/api/tests/test_bootstrap.py',
+    'apps/web/.env.example',
+    'apps/web/README.md',
+    'apps/web/package.json',
+    'apps/web/package-lock.json',
+    'apps/web/vite.config.ts',
+    'apps/web/playwright.config.ts',
+    'apps/web/e2e/private-case.spec.ts',
+    'apps/web/src/api.ts',
+    'apps/web/src/api.test.ts',
+    'apps/web/src/privateCases.tsx',
+    'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/App.test.tsx',
+    'apps/web/src/style.css',
+    'compose.yaml',
+    '.github/workflows/bootstrap.yml',
+    'scripts/check_ci_policy.py',
+    'README.md',
+}
+INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-162-invited-private-case-foundation.json',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256 = '39af90d3df4d2e625233bb6ee073a2a450af7358fd23d89058f527726d4827fc'
+INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256 = '067467b5557cf3fa1f381056622b014f3d96cd84a076252f917fcbc186ca23e2'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -856,6 +913,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 confirmation_readiness_integrity_task = None
+        invited_private_case_foundation_task = None
+        invited_private_case_foundation_path = root / 'tasks/APBRA-162-invited-private-case-foundation.json'
+        if invited_private_case_foundation_path.exists():
+            invited_private_case_foundation_task = load_json(invited_private_case_foundation_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), invited_private_case_foundation_task)
+            if not extension_errors:
+                extension_errors += task_errors(invited_private_case_foundation_task, catalog, sources)
+                canonical_task = json.dumps(invited_private_case_foundation_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256:
+                    extension_errors.append('Invited private-case foundation contract differs from accepted authority')
+                if invited_private_case_foundation_task['task_id'] != 'APBRA-162' or invited_private_case_foundation_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected invited private-case foundation identity')
+                if invited_private_case_foundation_task['agent_card_version'] != '0.1':
+                    extension_errors.append('Stale invited private-case foundation agent card version')
+                if invited_private_case_foundation_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-162-invited-private-case-foundation':
+                    extension_errors.append('Unexpected invited private-case foundation branch')
+                if invited_private_case_foundation_task['base_commit'] != '02d14e9e2e023661fb0d0d3a20627094d74b8f70':
+                    extension_errors.append('Stale invited private-case foundation base')
+                if set(invited_private_case_foundation_task['allowed_paths']) != INVITED_PRIVATE_CASE_FOUNDATION_PATHS:
+                    extension_errors.append('Unexpected invited private-case foundation scope')
+                if (invited_private_case_foundation_task['task_mode'], invited_private_case_foundation_task['readiness'], invited_private_case_foundation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Invited private-case foundation requires issued implementation acceptance')
+                if invited_private_case_foundation_task['source_ids'] != ['mvp1-invited-private-case-foundation']:
+                    extension_errors.append('Invited private-case foundation requires its specific accepted source')
+                source_map = {source['id']: source for source in sources['sources']}
+                invited_source = source_map.get('mvp1-invited-private-case-foundation')
+                if invited_source is None:
+                    extension_errors.append('Invited private-case foundation accepted source is missing')
+                else:
+                    canonical_source = json.dumps(invited_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256:
+                        extension_errors.append('Invited private-case foundation source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                invited_private_case_foundation_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -869,6 +961,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 post_capstone_product_reconciliation_task,
                 data_model_documentation_reconciliation_task,
                 confirmation_readiness_integrity_task,
+                invited_private_case_foundation_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -897,6 +990,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS) and
                     changed_paths.intersection(CONFIRMATION_READINESS_INTEGRITY_PATHS)):
                 errors.append('APBRA-147 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-162' and
+                    changed_paths.intersection(INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS) and
+                    changed_paths.intersection(INVITED_PRIVATE_CASE_FOUNDATION_PATHS)):
+                errors.append('APBRA-162 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-162' and
+                    changed_paths.intersection(INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS) and
+                    changed_paths != INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS):
+                errors.append('APBRA-162 registration must change exactly its four governance files')
             for name in sorted(changed_paths):
                 if not valid_path(name) or not (
                     (active_task is not None and path_allowed(name, active_task, card)) or
@@ -929,13 +1030,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-147' and
                      name in CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-162' and
+                     name in INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not ((confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
+            if file.is_symlink() or not ((invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

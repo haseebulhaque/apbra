@@ -150,6 +150,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-147",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly selected and authorized the bounded APBRA-147 consistent clarification readiness and exact-version confirmation slice on 2026-09-23. Live APBRA-147, APBRA-31, APBRA-33, APBRA-34, APBRA-103 and APBRA-150 plus Product Vision 3965201 v4, Business and Functional Requirements 3932362 v4, RTM 3932382 v6, Conversational UX 3932422 v5, Screen and Interaction Specifications 4063368 v4 and Reconciliation Ledger 6422580 v39 were refreshed before registration. Acceptance is limited to the exact four registration paths and later exact eight-path maximum implementation allowlist; it preserves current budgets and excludes the broader expert, persistence, identity, publishing, compiler and product backlog scope."
+    },
+    {
+      "id": "mvp1-invited-private-case-foundation",
+      "content_id": "APBRA-162",
+      "version": "APBRA-161 accepted decision comment 10211; APBRA-160 PLAN comment 10209 and decision checkpoint comment 10212; Product Vision v4; MVP Scope v3; Requirements v4; RTM v6; Conversational UX v5; Data, Identity and Integration Requirements v3; Data Models v4; Data Dictionary and Lineage v3; Ledger v43",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-162 invited identity and durable private-case foundation",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-162",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized the APBRA-161 decision resolution and APBRA-162 registration-first implementation mission on 2026-09-23. The accepted APBRA-161 profile selects an Entra External ID-compatible OIDC boundary, APBRA-authoritative membership and private-resource authorization, one FastAPI modular-monolith API, PostgreSQL 17 with SQLAlchemy 2 and Alembic, and a local/CI-only APBRA-162 execution boundary with synthetic data and AUD 0 cloud spend. Registration is limited to exactly four governance paths and a later exact finite implementation allowlist. It does not authorize live Entra or Azure resources, object storage, paid model calls, customer data, hosted exposure, automatic merge or implementation before Haseeb manually merges the registration PR."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
