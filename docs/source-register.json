@@ -168,6 +168,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-162",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized a governance-only APBRA-162 amendment that preserves the original contract provenance and adds exactly tests/bootstrap/test_bootstrap.py as the forty-eighth future implementation path. That file authority is limited to adding exist_ok=True to the existing parent-directory mkdir in test_product_file_is_not_bootstrap so the rejection assertion can run when apps/api already exists. Every other bootstrap test remains outside APBRA-162 implementation authority. The amendment itself changes only the established four governance files, does not apply or publish the preserved implementation WIP, and still requires Haseeb's manual merge before implementation continues."
+    },
+    {
+      "id": "mvp1-durable-conversation-evidence-acceptance",
+      "content_id": "APBRA-163",
+      "version": "Owner six-hour MVP-1 mission activated in APBRA-160/APBRA-162 comments 10234/10233; APBRA-162 merge checkpoint comments 10239/10240; owner-approved fifth registration path recorded in APBRA-163 comment 10242; Product Vision v4; MVP Scope v3; Requirements v4; RTM v6; Conversational UX v5; Data, Identity and Integration Requirements v3; Data Models v4; Data Dictionary and Lineage v3; Ledger v47",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-163 durable conversation, evidence and exact acceptance",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorised Package B of the six-hour MVP-1 mission on 2026-09-24 after APBRA-162: durable project-free conversation, protected CSV/XLSX evidence added later, supported alternatives and exact durable acceptance into the canonical ConfirmedRequirementContract. The package remains local/CI-only, synthetic-data-only and AUD 0, reuses the TypeScript semantic engine through a bounded internal bridge, and excludes report generation, output history, expert takeover, optional projects, cloud resources, paid model calls and hosted exposure. Registration is limited to exactly five governance files: the four standard registration files plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append the new accepted source ID to APBRA-162's unchanged exact source-history assertion. The later implementation allowlist remains the exact 53 literal paths in the APBRA-163 contract."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
