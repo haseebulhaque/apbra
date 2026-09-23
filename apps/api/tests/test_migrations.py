@@ -71,6 +71,34 @@ def test_explicit_disposable_target_wins_over_application_environment(
     assert config.get_main_option("sqlalchemy.url") == test_url
 
 
+@pytest.mark.parametrize(
+    "application_url, expected",
+    [
+        (
+            "postgresql://apbra:unused@127.0.0.1:54322/apbra_test",
+            "must be distinct",
+        ),
+        (
+            "postgresql://apbra:unused@database.internal:6432/apbra_test",
+            "must be distinct",
+        ),
+        (
+            "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra"
+            "?dbname=apbra_test",
+            "must expose an unambiguous",
+        ),
+    ],
+)
+def test_backend_reset_rejects_ambiguous_or_equivalent_application_targets(
+    monkeypatch: pytest.MonkeyPatch, application_url: str, expected: str
+) -> None:
+    monkeypatch.setenv("APBRA_DATABASE_URL", application_url)
+    with pytest.raises(pytest.UsageError, match=expected):
+        validate_disposable_database_url(
+            "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test"
+        )
+
+
 def test_locked_psycopg_dialect_receives_only_the_validated_target() -> None:
     test_url = validate_disposable_database_url(
         "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test"

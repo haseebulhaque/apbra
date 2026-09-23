@@ -27,6 +27,12 @@ describe('APBRA isolated browser-test configuration',()=>{
     'sqlite:///apbra_e2e',
   ])('rejects an unsafe reset target before a browser server starts: %s',(databaseUrl)=>{const result=inspectPlaywrightConfig(databaseUrl),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toMatch(/locked postgresql\+psycopg driver|explicit loopback PostgreSQL database named apbra_e2e/)});
   it.each(['PGHOST','PGHOSTADDR','PGPORT','PGDATABASE','PGSERVICE','PGSERVICEFILE','PGSYSCONFDIR'])('rejects inherited %s before a browser server starts',(name)=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e',{[name]:'preview'}),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toContain(`Playwright rejects inherited libpq target settings: ${name}.`) });
+  it.each([
+    ['APBRA_DATABASE_URL','postgresql://apbra:unused@127.0.0.1:54322/apbra_e2e','must be separate'],
+    ['APBRA_DATABASE_URL','postgresql://apbra:unused@database.internal:6432/apbra_e2e','must be separate'],
+    ['APBRA_DATABASE_URL','postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra?dbname=apbra_e2e','must expose an unambiguous'],
+    ['APBRA_TEST_DATABASE_URL','postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test?host=preview','must expose an unambiguous'],
+  ])('rejects an ambiguous or equivalent %s before a browser server starts',(name,value,expected)=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e',{[name]:value}),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toContain(expected)});
 });
 
 describe('APBRA API client',()=>{

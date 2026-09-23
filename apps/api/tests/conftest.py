@@ -28,10 +28,10 @@ _TARGET_CHANGING_LIBPQ_ENV = (
 )
 
 
-def _database_target(url: URL) -> tuple[str, str, int, str]:
+def _database_target(url: URL) -> tuple[str, int, str]:
     assert url.host is not None and url.port is not None and url.database is not None
     host = "127.0.0.1" if url.host == "localhost" else url.host
-    return (url.drivername, host, url.port, url.database)
+    return (host, url.port, url.database)
 
 
 def validate_disposable_database_url(raw_url: str) -> str:
@@ -65,12 +65,19 @@ def validate_disposable_database_url(raw_url: str) -> str:
         if not candidate:
             continue
         try:
-            if _database_target(make_url(candidate)) == test_target:
-                raise pytest.UsageError(
-                    f"APBRA_TEST_DATABASE_URL must be distinct from {name}."
-                )
-        except (AssertionError, TypeError, ValueError):
-            continue
+            candidate_url = make_url(candidate)
+            if candidate_url.query:
+                raise ValueError("connection query options are ambiguous")
+            candidate_target = _database_target(candidate_url)
+        except Exception as error:
+            raise pytest.UsageError(
+                f"{name} must expose an unambiguous host, port, and database "
+                "while destructive backend tests run."
+            ) from error
+        if candidate_url.database == "apbra_test" or candidate_target == test_target:
+            raise pytest.UsageError(
+                f"APBRA_TEST_DATABASE_URL must be distinct from {name}."
+            )
     return raw_url
 
 

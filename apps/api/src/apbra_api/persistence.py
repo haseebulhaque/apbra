@@ -556,6 +556,15 @@ class ApplicationSession(Session):
             )
         )
 
+    def lock_identity_for_membership(self, identity_id: UUID) -> None:
+        identity = self.scalar(
+            select(ExternalIdentityRow)
+            .where(ExternalIdentityRow.id == identity_id)
+            .with_for_update()
+        )
+        if identity is None:
+            raise RuntimeError("Invitation identity disappeared during acceptance.")
+
     def accept_invitation(
         self, row: InvitationRecord, identity: IdentityRecord
     ) -> MembershipRow:

@@ -9,7 +9,13 @@ from sqlalchemy import select
 
 from apbra_api.api import create_app
 from apbra_api.config import Settings
-from apbra_api.persistence import Database, InvitationRow
+from apbra_api.persistence import (
+    AuditEventRow,
+    Database,
+    ExternalIdentityRow,
+    InvitationRow,
+    MembershipRow,
+)
 
 
 def test_single_use_digest_only_invitation_acceptance(
@@ -140,3 +146,74 @@ def test_active_member_cannot_accept_cross_company_membership(
     assert sign_in(TestClient(create_app(settings=settings, database=database)), "foreign")[
         "actor"
     ]
+
+
+def test_concurrent_cross_company_acceptance_creates_one_active_membership(
+    settings: Settings, database: Database
+) -> None:
+    owner = TestClient(create_app(settings=settings, database=database))
+    foreign = TestClient(create_app(settings=settings, database=database))
+    owner_session = sign_in(owner, "owner")
+    foreign_session = sign_in(foreign, "foreign")
+    invitations = [
+        owner.post(
+            "/api/invitations",
+            json={"subject": "dev-uninvited", "role": "MEMBER"},
+            headers=csrf(owner_session),
+        ).json(),
+        foreign.post(
+            "/api/invitations",
+            json={"subject": "dev-uninvited", "role": "MEMBER"},
+            headers=csrf(foreign_session),
+        ).json(),
+    ]
+    clients = [TestClient(create_app(settings=settings, database=database)) for _ in range(2)]
+    sessions = [sign_in(client, "uninvited") for client in clients]
+    barrier = Barrier(2)
+
+    def accept(index: int) -> int:
+        barrier.wait()
+        return clients[index].post(
+            "/api/invitations/accept",
+            json={"token": invitations[index]["token"]},
+            headers=csrf(sessions[index]),
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        statuses = list(pool.map(accept, range(2)))
+    assert sorted(statuses) == [200, 409]
+
+    with database.session() as db:
+        identity = db.scalar(
+            select(ExternalIdentityRow).where(ExternalIdentityRow.subject == "dev-uninvited")
+        )
+        assert identity is not None
+        memberships = list(
+            db.scalars(
+                select(MembershipRow).where(
+                    MembershipRow.identity_id == identity.id,
+                    MembershipRow.active.is_(True),
+                )
+            )
+        )
+        rows = list(
+            db.scalars(
+                select(InvitationRow).where(
+                    InvitationRow.id.in_(
+                        [UUID(item["invitation"]["id"]) for item in invitations]
+                    )
+                )
+            )
+        )
+        audits = list(
+            db.scalars(
+                select(AuditEventRow).where(
+                    AuditEventRow.event_type == "INVITATION_ACCEPTED",
+                    AuditEventRow.resource_id.in_([row.id for row in rows]),
+                )
+            )
+        )
+        assert len(memberships) == 1
+        assert sum(row.consumed_at is not None for row in rows) == 1
+        assert len(audits) == 1
+        assert audits[0].resource_id == next(row.id for row in rows if row.consumed_at is not None)
