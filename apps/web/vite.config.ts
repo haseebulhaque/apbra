@@ -22,4 +22,4 @@ function azureAdapter(env:Record<string,string>):Plugin{
   }
   return {name:'local-azure-ai-adapter',configureServer(server){server.middlewares.use(handle)},configurePreviewServer(server){server.middlewares.use(handle)}};
 }
-export default defineConfig(({mode})=>{const env=loadEnv(mode,process.cwd(),'AZURE_AI_');return {plugins:[azureAdapter(env)]}});
+export default defineConfig(({mode})=>{const env=loadEnv(mode,process.cwd(),''),apiTarget=env.APBRA_API_URL||'http://127.0.0.1:8000',proxy={target:apiTarget,changeOrigin:false};return {plugins:[azureAdapter(env)],server:{proxy:{'/api/auth':proxy,'/api/cases':proxy,'/api/invitations':proxy,'/api/memberships':proxy,'/api/health':proxy}},preview:{proxy:{'/api/auth':proxy,'/api/cases':proxy,'/api/invitations':proxy,'/api/memberships':proxy,'/api/health':proxy}}}});

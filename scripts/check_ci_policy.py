@@ -16,7 +16,24 @@ COMMANDS = (
     'python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json',
     'python -m unittest discover -s tests/bootstrap -v',
 )
-WEB_COMMAND = 'npm --prefix apps/web ci --ignore-scripts\nnpm --prefix apps/web test\nnpm --prefix apps/web run build'
+API_INSTALL = (
+    'python -m pip install uv==0.12.3\n'
+    'uv --directory apps/api lock --check\n'
+    'uv --directory apps/api sync --frozen --python 3.13'
+)
+API_CHECK = (
+    'uv --directory apps/api run --frozen ruff check .\n'
+    'uv --directory apps/api run --frozen mypy\n'
+    'uv --directory apps/api run --frozen alembic upgrade head\n'
+    'uv --directory apps/api run --frozen pytest'
+)
+WEB_COMMAND = (
+    'npm --prefix apps/web ci --ignore-scripts\n'
+    'npm --prefix apps/web test\n'
+    'npm --prefix apps/web run build\n'
+    'npm --prefix apps/web exec playwright install --with-deps chromium\n'
+    'npm --prefix apps/web run test:e2e'
+)
 OPTIONS = {
     'actions/setup-node': {'node-version': '24.19.0'},
     'actions/checkout': {'persist-credentials': 'false', 'fetch-depth': '0'},
@@ -62,12 +79,36 @@ def validate(text: str) -> list[str]:
         if not isinstance(doc['jobs'], dict) or set(doc['jobs']) != {'bootstrap'}:
             return errors + ['Unexpected job set']
         job = doc['jobs']['bootstrap']
-        if not isinstance(job, dict) or set(job) != {'name', 'runs-on', 'timeout-minutes', 'env', 'steps'}:
+        if not isinstance(job, dict) or set(job) != {'name', 'runs-on', 'timeout-minutes', 'env', 'services', 'steps'}:
             return errors + ['Unexpected job options; skipping or error suppression is forbidden']
         if job['name'] != 'APBRA Bootstrap Checks' or job['runs-on'] != 'ubuntu-24.04' or job['timeout-minutes'] != '10':
             errors.append('Unexpected required check, runner or timeout')
-        if job['env'] != {'PR_HEAD_SHA': '${{ github.event.pull_request.head.sha }}'}:
+        expected_env = {
+            'PR_HEAD_SHA': '${{ github.event.pull_request.head.sha }}',
+            'APBRA_PROFILE': 'test',
+            'APBRA_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
+            'APBRA_TEST_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
+            'APBRA_PUBLIC_ORIGIN': 'http://127.0.0.1:5173',
+            'APBRA_API_ORIGIN': 'http://127.0.0.1:8000',
+            'APBRA_SESSION_SECRET': 'ci-only-generated-context-session-material',
+            'APBRA_BOOTSTRAP_ENABLED': 'true',
+        }
+        if job['env'] != expected_env:
             errors.append('Unexpected job environment')
+        expected_service = {
+            'postgres': {
+                'image': 'postgres:17.11-bookworm',
+                'env': {
+                    'POSTGRES_DB': 'apbra',
+                    'POSTGRES_USER': 'postgres',
+                    'POSTGRES_HOST_AUTH_METHOD': 'trust',
+                },
+                'ports': ['5432:5432'],
+                'options': '--health-cmd "pg_isready -U postgres -d apbra" --health-interval 2s --health-timeout 3s --health-retries 30',
+            }
+        }
+        if job['services'] != expected_service:
+            errors.append('Unexpected PostgreSQL service configuration')
         if not isinstance(job['steps'], list):
             return errors + ['Steps must be a list']
         sequence = []
@@ -94,7 +135,7 @@ def validate(text: str) -> list[str]:
                     errors.append('Unapproved action configuration')
             else:
                 errors.append('Step must be a known command or pinned action')
-        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
+        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, API_INSTALL, API_CHECK, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
         if sequence != expected:
             errors.append('Mandatory steps missing, duplicated, reordered or replaced')
         return errors

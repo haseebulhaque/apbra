@@ -1,0 +1,51 @@
+name: apbra-mvp1
+
+services:
+  postgres:
+    image: postgres:17.11-bookworm
+    environment:
+      POSTGRES_DB: apbra
+      POSTGRES_USER: apbra
+      POSTGRES_PASSWORD: ${APBRA_POSTGRES_PASSWORD:?Set APBRA_POSTGRES_PASSWORD for this local stack}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apbra -d apbra"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:54321:5432"
+    volumes:
+      - apbra_postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./apps/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APBRA_PROFILE: development
+      APBRA_DATABASE_URL: postgresql+psycopg://apbra:${APBRA_POSTGRES_PASSWORD}@postgres:5432/apbra
+      APBRA_PUBLIC_ORIGIN: http://127.0.0.1:5173
+      APBRA_API_ORIGIN: http://127.0.0.1:8000
+      APBRA_SESSION_SECRET: ${APBRA_SESSION_SECRET:?Set APBRA_SESSION_SECRET for this local stack}
+      APBRA_BOOTSTRAP_ENABLED: "true"
+      APBRA_INVITATION_TTL_DAYS: "7"
+    command:
+      - /bin/sh
+      - -ec
+      - alembic upgrade head && python -m apbra_api.bootstrap && exec uvicorn apbra_api.main:app --host 0.0.0.0 --port 8000 --no-access-log
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:8000:8000"
+
+volumes:
+  apbra_postgres_data:
