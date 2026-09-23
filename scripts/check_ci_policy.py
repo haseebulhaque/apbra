@@ -27,6 +27,12 @@ API_CHECK = (
     'uv --directory apps/api run --frozen alembic upgrade head\n'
     'uv --directory apps/api run --frozen pytest'
 )
+E2E_DATABASE = (
+    'uv --directory apps/api run --frozen python -c '
+    '"import psycopg; connection=psycopg.connect('
+    "'postgresql://postgres@127.0.0.1:5432/postgres', autocommit=True); "
+    "connection.execute('CREATE DATABASE apbra_e2e'); connection.close()\""
+)
 WEB_COMMAND = (
     'npm --prefix apps/web ci --ignore-scripts\n'
     'npm --prefix apps/web test\n'
@@ -88,6 +94,8 @@ def validate(text: str) -> list[str]:
             'APBRA_PROFILE': 'test',
             'APBRA_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
             'APBRA_TEST_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra',
+            'APBRA_E2E_DATABASE_URL': 'postgresql+psycopg://postgres@127.0.0.1:5432/apbra_e2e',
+            'APBRA_E2E_SESSION_SECRET': 'ci-only-browser-test-session-material',
             'APBRA_PUBLIC_ORIGIN': 'http://127.0.0.1:5173',
             'APBRA_API_ORIGIN': 'http://127.0.0.1:8000',
             'APBRA_SESSION_SECRET': 'ci-only-generated-context-session-material',
@@ -135,7 +143,7 @@ def validate(text: str) -> list[str]:
                     errors.append('Unapproved action configuration')
             else:
                 errors.append('Step must be a known command or pinned action')
-        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, API_INSTALL, API_CHECK, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
+        expected = ['actions/checkout', 'actions/setup-python', *COMMANDS, API_INSTALL, API_CHECK, E2E_DATABASE, 'actions/setup-node', WEB_COMMAND, 'actions/upload-artifact']
         if sequence != expected:
             errors.append('Mandatory steps missing, duplicated, reordered or replaced')
         return errors

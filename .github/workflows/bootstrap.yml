@@ -18,6 +18,8 @@ jobs:
       APBRA_PROFILE: test
       APBRA_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra
       APBRA_TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra
+      APBRA_E2E_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra_e2e
+      APBRA_E2E_SESSION_SECRET: ci-only-browser-test-session-material
       APBRA_PUBLIC_ORIGIN: http://127.0.0.1:5173
       APBRA_API_ORIGIN: http://127.0.0.1:8000
       APBRA_SESSION_SECRET: ci-only-generated-context-session-material
@@ -66,6 +68,9 @@ jobs:
           uv --directory apps/api run --frozen mypy
           uv --directory apps/api run --frozen alembic upgrade head
           uv --directory apps/api run --frozen pytest
+      - name: Create isolated browser-test database
+        run: |
+          uv --directory apps/api run --frozen python -c "import psycopg; connection=psycopg.connect('postgresql://postgres@127.0.0.1:5432/postgres', autocommit=True); connection.execute('CREATE DATABASE apbra_e2e'); connection.close()"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24.19.0'

@@ -60,6 +60,21 @@ npm run dev
 
 Vite normally serves `http://127.0.0.1:5173/`. AI-dependent stages show an unavailable/error state if the configured endpoint cannot be reached.
 
+### Isolated browser tests
+
+Playwright never reuses the manual preview on ports 5173/8000. It starts a test-only web/API pair on ports 15173/18000 and requires a separate disposable PostgreSQL database. Each run downgrades and reapplies migrations only in that explicitly named browser-test database, so never point `APBRA_E2E_DATABASE_URL` at preview or backend-test data.
+
+Create the isolated database once, supply a locally generated test-session value, then run the suite. The example assumes the documented local PostgreSQL container and deliberately omits any credential value:
+
+```sh
+docker exec apbra162-test-postgres createdb -U apbra apbra_e2e
+export APBRA_E2E_DATABASE_URL='postgresql+psycopg://apbra:<local-test-password>@127.0.0.1:54322/apbra_e2e'
+export APBRA_E2E_SESSION_SECRET="$(openssl rand -hex 32)"
+npm run test:e2e
+```
+
+Test traces are written outside the repository under `/tmp/apbra-162-playwright-output` by default. Set `APBRA_E2E_OUTPUT_DIR` to another disposable location when needed. These tests may reset only the isolated E2E database; they do not stop, reuse or alter the manual preview database.
+
 ## AI and governed knowledge
 
 The chat adapter uses GPT-4.1 through an Azure AI Foundry/Azure OpenAI-compatible endpoint; live evidence observed `gpt-4.1-2025-04-14`. Five fictional Markdown standards under `knowledge/` form a 20-chunk heading-aware governed corpus. `text-embedding-3-small` produces 1,536-dimensional embeddings, and an in-memory exact cosine index returns configurable top-k citations.
