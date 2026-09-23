@@ -1,8 +1,25 @@
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {ApiError,authApi,casesApi,invitationsApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
+const inspectPlaywrightConfig=(databaseUrl:string)=>spawnSync(process.execPath,[playwrightCli,'test','--list'],{
+  cwd:fileURLToPath(new URL('..',import.meta.url)),
+  encoding:'utf8',
+  env:{...process.env,APBRA_E2E_DATABASE_URL:databaseUrl,APBRA_E2E_SESSION_SECRET:'synthetic-config-validation-material',APBRA_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra',APBRA_TEST_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test'},
+});
+
+describe('APBRA isolated browser-test configuration',()=>{
+  it('admits only the exact loopback apbra_e2e database target',()=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e');expect(result.status,`${result.stdout}\n${result.stderr}`).toBe(0);expect(result.stdout).toContain('Total: 5 tests')});
+  it.each([
+    'postgresql+psycopg://apbra:unused@localhost:54321/apbra',
+    'postgresql+psycopg://apbra:unused@database.internal:5432/apbra_e2e',
+    'sqlite:///apbra_e2e',
+  ])('rejects an unsafe reset target before a browser server starts: %s',(databaseUrl)=>{const result=inspectPlaywrightConfig(databaseUrl),output=`${result.stdout}\n${result.stderr}`;expect(result.status).not.toBe(0);expect(output).toContain('Playwright may reset only the loopback PostgreSQL database named apbra_e2e.')});
+});
 
 describe('APBRA API client',()=>{
   it('derives identity only from the server session and includes same-origin credentials',async()=>{const fetch=vi.fn(async()=>response({authenticated:true,actor:{identity_id:'i',membership_id:'m',company_id:'c',display_name:'Member',role:'MEMBER'},csrf_token:'csrf'}));vi.stubGlobal('fetch',fetch);await expect(authApi.session()).resolves.toMatchObject({authenticated:true,actor:{company_id:'c'}});expect(fetch).toHaveBeenCalledWith('/api/auth/session',expect.objectContaining({credentials:'same-origin'}))});

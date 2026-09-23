@@ -64,11 +64,11 @@ Vite normally serves `http://127.0.0.1:5173/`. AI-dependent stages show an unava
 
 Playwright never reuses the manual preview on ports 5173/8000. It starts a test-only web/API pair on ports 15173/18000 and requires a separate disposable PostgreSQL database. Each run downgrades and reapplies migrations only in that explicitly named browser-test database, so never point `APBRA_E2E_DATABASE_URL` at preview or backend-test data.
 
-Create the isolated database once, supply a locally generated test-session value, then run the suite. The example assumes the documented local PostgreSQL container and deliberately omits any credential value:
+Create the isolated database once inside the committed Compose PostgreSQL service, supply a locally generated test-session value, then run the suite. These commands reuse the already-required local `APBRA_POSTGRES_PASSWORD` environment variable without printing it:
 
 ```sh
-docker exec apbra162-test-postgres createdb -U apbra apbra_e2e
-export APBRA_E2E_DATABASE_URL='postgresql+psycopg://apbra:<local-test-password>@127.0.0.1:54322/apbra_e2e'
+docker compose exec postgres createdb -U apbra apbra_e2e
+export APBRA_E2E_DATABASE_URL="postgresql+psycopg://apbra:${APBRA_POSTGRES_PASSWORD}@127.0.0.1:54321/apbra_e2e"
 export APBRA_E2E_SESSION_SECRET="$(openssl rand -hex 32)"
 npm run test:e2e
 ```

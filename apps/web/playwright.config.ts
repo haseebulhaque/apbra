@@ -6,6 +6,9 @@ const databaseUrl=process.env.APBRA_E2E_DATABASE_URL;
 const sessionSecret=process.env.APBRA_E2E_SESSION_SECRET;
 if(!databaseUrl)throw new Error('APBRA_E2E_DATABASE_URL must name an isolated disposable PostgreSQL database.');
 if(databaseUrl===process.env.APBRA_DATABASE_URL||databaseUrl===process.env.APBRA_TEST_DATABASE_URL)throw new Error('The Playwright database must be separate from preview and backend-test databases.');
+let databaseTarget:URL;
+try{databaseTarget=new URL(databaseUrl.replace(/^postgresql\+psycopg:/,'postgresql:'))}catch{throw new Error('APBRA_E2E_DATABASE_URL must be a valid PostgreSQL URL.');}
+if(databaseTarget.protocol!=='postgresql:'||!['127.0.0.1','localhost'].includes(databaseTarget.hostname)||databaseTarget.pathname!=='/apbra_e2e')throw new Error('Playwright may reset only the loopback PostgreSQL database named apbra_e2e.');
 if(!sessionSecret)throw new Error('APBRA_E2E_SESSION_SECRET must be provided for the isolated browser-test stack.');
 
 export default defineConfig({
