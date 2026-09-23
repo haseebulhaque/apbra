@@ -257,6 +257,42 @@ INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256 = '7acc6d58d90cdd99e2fded77223d6dcc1
 INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256 = '067467b5557cf3fa1f381056622b014f3d96cd84a076252f917fcbc186ca23e2'
 INVITED_PRIVATE_CASE_FOUNDATION_AMENDMENT_SOURCE_SHA256 = '8f01e0e8b4833c744734e0a872dfe3238c2aae8c6da1b415272608dff49000fa'
 INVITED_PRIVATE_CASE_FOUNDATION_BOOTSTRAP_FIX_SHA256 = '5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS = {
+    '.github/workflows/bootstrap.yml', 'README.md', 'compose.yaml',
+    'apps/api/.dockerignore', 'apps/api/.env.example', 'apps/api/Dockerfile',
+    'apps/api/README.md', 'apps/api/pyproject.toml', 'apps/api/uv.lock',
+    'apps/api/alembic/versions/20260924_02_durable_conversation_evidence_acceptance.py',
+    'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/authorization.py', 'apps/api/src/apbra_api/config.py',
+    'apps/api/src/apbra_api/domain.py', 'apps/api/src/apbra_api/evidence.py',
+    'apps/api/src/apbra_api/main.py', 'apps/api/src/apbra_api/persistence.py',
+    'apps/api/src/apbra_api/semantic_bridge.py', 'apps/api/tests/conftest.py',
+    'apps/api/tests/test_acceptance.py', 'apps/api/tests/test_api.py',
+    'apps/api/tests/test_authorization.py', 'apps/api/tests/test_cases.py',
+    'apps/api/tests/test_conversations.py', 'apps/api/tests/test_evidence.py',
+    'apps/api/tests/test_migrations.py', 'apps/api/tests/test_semantic_bridge.py',
+    'apps/web/README.md', 'apps/web/e2e/durable-conversation.spec.ts',
+    'apps/web/e2e/private-case.spec.ts', 'apps/web/package-lock.json',
+    'apps/web/package.json', 'apps/web/playwright.config.ts',
+    'apps/web/scripts/semantic-bridge.ts', 'apps/web/src/App.test.tsx',
+    'apps/web/src/EnterpriseApp.tsx', 'apps/web/src/api.test.ts',
+    'apps/web/src/api.ts', 'apps/web/src/clarification.test.ts',
+    'apps/web/src/clarification.ts', 'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/confirmedRequirements.ts', 'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableConversation.tsx', 'apps/web/src/foundry.test.ts',
+    'apps/web/src/foundry.ts', 'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/privateCases.tsx', 'apps/web/src/schemaIngestion.test.ts',
+    'apps/web/src/schemaIngestion.ts', 'apps/web/src/style.css', 'apps/web/vite.config.ts',
+}
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-163-durable-conversation-evidence-acceptance.json',
+    'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = 'b6c727dc95087131939d479064db49efd0378a341a373d97d146712155c15137'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -960,6 +996,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 invited_private_case_foundation_task = None
+        durable_conversation_evidence_acceptance_task = None
+        durable_conversation_evidence_acceptance_path = root / 'tasks/APBRA-163-durable-conversation-evidence-acceptance.json'
+        if durable_conversation_evidence_acceptance_path.exists():
+            durable_conversation_evidence_acceptance_task = load_json(durable_conversation_evidence_acceptance_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), durable_conversation_evidence_acceptance_task)
+            if not extension_errors:
+                extension_errors += task_errors(durable_conversation_evidence_acceptance_task, catalog, sources)
+                canonical_task = json.dumps(durable_conversation_evidence_acceptance_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256:
+                    extension_errors.append('Durable conversation evidence acceptance contract differs from accepted authority')
+                if durable_conversation_evidence_acceptance_task['task_id'] != 'APBRA-163' or durable_conversation_evidence_acceptance_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected durable conversation evidence acceptance identity')
+                if durable_conversation_evidence_acceptance_task['agent_card_version'] != '0.1':
+                    extension_errors.append('Stale durable conversation evidence acceptance agent card version')
+                if durable_conversation_evidence_acceptance_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acceptance':
+                    extension_errors.append('Unexpected durable conversation evidence acceptance branch')
+                if durable_conversation_evidence_acceptance_task['base_commit'] != '8b39b9e3199acdbfcaf5ce75f3cc99ef4371138e':
+                    extension_errors.append('Stale durable conversation evidence acceptance base')
+                if set(durable_conversation_evidence_acceptance_task['allowed_paths']) != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS:
+                    extension_errors.append('Unexpected durable conversation evidence acceptance scope')
+                if (durable_conversation_evidence_acceptance_task['task_mode'], durable_conversation_evidence_acceptance_task['readiness'], durable_conversation_evidence_acceptance_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Durable conversation evidence acceptance requires issued implementation acceptance')
+                if durable_conversation_evidence_acceptance_task['source_ids'] != ['mvp1-durable-conversation-evidence-acceptance']:
+                    extension_errors.append('Durable conversation evidence acceptance requires its specific accepted source')
+                source_map = {source['id']: source for source in sources['sources']}
+                package_source = source_map.get('mvp1-durable-conversation-evidence-acceptance')
+                if package_source is None:
+                    extension_errors.append('Durable conversation evidence acceptance source is missing')
+                else:
+                    canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256:
+                        extension_errors.append('Durable conversation evidence acceptance source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                durable_conversation_evidence_acceptance_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -974,6 +1045,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 data_model_documentation_reconciliation_task,
                 confirmation_readiness_integrity_task,
                 invited_private_case_foundation_task,
+                durable_conversation_evidence_acceptance_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -1010,6 +1082,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS) and
                     changed_paths != INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS):
                 errors.append('APBRA-162 registration must change exactly its four governance files')
+            if (active_task_id == 'APBRA-163' and
+                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
+                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS)):
+                errors.append('APBRA-163 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-163' and
+                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
+                    changed_paths != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS):
+                errors.append('APBRA-163 registration must change exactly its five governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1052,13 +1132,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-162' and
                      name in INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-163' and
+                     name in DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not ((invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
+            if file.is_symlink() or not ((durable_conversation_evidence_acceptance_task is not None and path_allowed(name, durable_conversation_evidence_acceptance_task, card)) or (invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()
