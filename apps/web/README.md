@@ -1,4 +1,10 @@
-# APBRA bounded MVP web application
+# APBRA MVP-1 web application
+
+APBRA-162 adds an invite-only, authenticated reporting-case shell backed by the local FastAPI and PostgreSQL services. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, or private-case permission claims.
+
+An active invited member can create a case without a project or file, list only authorized cases, resume a case after a restart, save a new request version with optimistic concurrency, and inspect request history returned by the API. Selecting a case initializes the existing clarification experience from its persisted current request. The workflow is keyed to the case's current request-version identity, so a saved or reloaded version resets transient clarification, confirmation, design, and generation state.
+
+Invitation bearer secrets are accepted only from the URL fragment of an original `/invite#token=...` link, removed from the address immediately, and sent in the body of fixed-path POST requests. A signed-out browser does not persist or forward the token through login; the user must sign in and reopen the original invitation link.
 
 This React/Vite application is a working bounded enterprise Power BI automation prototype. It separates the business workspace from tenant administration.
 
@@ -8,7 +14,7 @@ It is not the complete `APBRA-PRODUCT-2026-09-22` experience. The current UI and
 
 Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Readiness and confirmation use the same deterministic semantic prerequisites and are bound to the exact interpretation and material input context shown to the user. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
 
-Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These are local prototype settings, not production identity or tenant controls. My Runs is browser-session history and does not imply durable persistence.
+Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These remain local prototype settings, not production tenant controls. Reporting cases and their request versions are durable; the separate historical **My Runs** view remains browser-session-only evidence.
 
 ## Accepted product experience — planned
 
@@ -16,7 +22,7 @@ Guided and Advanced experiences will share this reasoning and assurance engine. 
 
 The target keeps material business decisions understandable and explicit while leaving ordinary supported BI design to AI. Supported alternatives must disclose retained intent, changed scope, assumptions, omissions, limitations and evidence needs; material rescoping requires acceptance before generation. “No dead ends” means a useful supported alternative or authorized-expert continuation, not guaranteed generation.
 
-Future case and account UX covers authorized BI-expert takeover of the same conversation/evidence, company registration and membership, optional projects, controlled collaboration, linked histories, licensing/seat entitlement and usage visibility, and tenant branding/terminology/standards. Company membership, a mode, licence or model key does not itself grant private-source, tenant-management, release or deployment authority.
+Later account UX still covers public company registration, authorized BI-expert takeover, optional projects, controlled collaboration, report/output histories, licensing/seat entitlement and usage visibility. APBRA-162 implements only invite-bound membership and private reporting cases. Company membership, a mode, licence or model key does not itself grant private-source, tenant-management, release or deployment authority.
 
 Qualified model profiles, separately consented Azure provisioning, connected Power BI delivery and optional advanced data-architecture advice remain future capabilities. The current local administration screens do not prove any of them. APBRA-149–158 are planning items, not implemented UI.
 
@@ -43,7 +49,7 @@ Changing the request, parsed schema, governed context or interpretation invalida
 
 ## Run locally
 
-Copy `.env.example` to ignored `.env.local` and provide the existing Azure AI Foundry configuration. The browser never displays the API key.
+Start the local API and PostgreSQL services as described in the repository README. Copy `.env.example` to ignored `.env.local`; `APBRA_API_URL` is a non-secret local proxy target. Existing optional Azure AI configuration remains server-side and is not required for case persistence tests. The browser never displays an API key.
 
 ```sh
 npm ci
@@ -53,6 +59,21 @@ npm run dev
 ```
 
 Vite normally serves `http://127.0.0.1:5173/`. AI-dependent stages show an unavailable/error state if the configured endpoint cannot be reached.
+
+### Isolated browser tests
+
+Playwright never reuses the manual preview on ports 5173/8000. It starts a test-only web/API pair on ports 15173/18000 and requires a separate disposable PostgreSQL database. Each run downgrades and reapplies migrations only in that explicitly named browser-test database, so never point `APBRA_E2E_DATABASE_URL` at preview or backend-test data. The URL must explicitly name loopback host, port and database and cannot contain connection query options; target-changing libpq environment variables are rejected before either test server starts.
+
+Create the isolated database once inside the committed Compose PostgreSQL service, supply a locally generated test-session value, then run the suite. These commands reuse the already-required local `APBRA_POSTGRES_PASSWORD` environment variable without printing it:
+
+```sh
+docker compose exec postgres createdb -U apbra apbra_e2e
+export APBRA_E2E_DATABASE_URL="postgresql+psycopg://apbra:${APBRA_POSTGRES_PASSWORD}@127.0.0.1:54321/apbra_e2e"
+export APBRA_E2E_SESSION_SECRET="$(openssl rand -hex 32)"
+npm run test:e2e
+```
+
+Test traces are written outside the repository under `/tmp/apbra-162-playwright-output` by default. Set `APBRA_E2E_OUTPUT_DIR` to another disposable location when needed. These tests may reset only the isolated E2E database; they do not stop, reuse or alter the manual preview database.
 
 ## AI and governed knowledge
 
@@ -77,4 +98,4 @@ The PDF does not mean deployment occurred. Production publishing, credentials an
 
 Expandable technical evidence records run ID, model, latency/tokens, embedding calls, retrieval/citations, original and normalized visual counts, normalization actions, integrity findings, guardrails, compiler, validation and final status.
 
-Implemented locally does not mean production ready. Identity/RBAC, real multitenancy, durable knowledge ingestion/indexing, managed secrets, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.
+Implemented locally does not mean production ready. Live Entra qualification, hosted multitenancy, durable knowledge ingestion/indexing, managed secrets, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.

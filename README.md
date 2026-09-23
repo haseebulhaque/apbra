@@ -39,17 +39,24 @@ PBIP delivery and deployment guidance remain the first delivery boundary. Connec
 
 ## Run locally
 
-Use synthetic data only. Copy `apps/web/.env.example` to the ignored `apps/web/.env.local` and populate the existing Azure AI Foundry configuration without committing credentials.
+APBRA-162 adds a local/CI invite-only reporting-case foundation. It uses a FastAPI API, PostgreSQL 17, and a development-only OIDC issuer. Use synthetic data only. Generate local secrets in the shell and keep them out of files, logs and commits.
 
 ```sh
-cd apps/web
-npm ci
-npm test
-npm run build
-npm run dev
+export APBRA_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+export APBRA_SESSION_SECRET="$(openssl rand -hex 32)"
+docker compose up --build postgres api
 ```
 
-The default Vite URL is `http://127.0.0.1:5173/`. Foundry-dependent stages fail visibly when the configured endpoint is unavailable.
+In another shell:
+
+```sh
+npm --prefix apps/web ci --ignore-scripts
+npm --prefix apps/web run dev
+```
+
+Open `http://127.0.0.1:5173/`; the API health endpoint is `http://127.0.0.1:8000/api/health`. The local identity choices exercise the OIDC redirect and server-side APBRA authorization path. Creating a case requires neither a project nor a file. PostgreSQL retains the original request, current pointer, immutable request versions, private access, concurrency state and audit evidence across browser, frontend and API restarts.
+
+See [the API runbook](apps/api/README.md) and [web application guide](apps/web/README.md) for the bounded preview, synthetic identities, restart behaviour and limitations. Do not use `docker compose down --volumes` unless deliberately deleting synthetic local data. Existing optional Azure AI configuration remains server-side and is not required for case persistence; AI-dependent stages fail visibly when it is unavailable.
 
 ## Current evidence
 
@@ -61,7 +68,7 @@ No durable run-specific candidate digest or exact-candidate Power BI Desktop PAS
 
 APBRA does not claim universal Power BI generation or production readiness. The bounded compiler supports common cards, charts, tables and slicers within an explicit layout/model contract. DAY, MONTH, QUARTER and YEAR trend grains have genuine representations; WEEK, fiscal/custom calendars and locale-specific policies remain unsupported. Unsupported or unsafe designs stop rather than being approximated.
 
-Production gaps include identity/RBAC, tenant isolation, durable knowledge ingestion and indexing, secure managed configuration, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations.
+APBRA-162 provides a bounded local/CI identity, membership and private-case authorization foundation. Live Entra qualification, hosted tenant isolation and operations, durable knowledge ingestion and indexing, managed configuration, protected artifact storage, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations remain gaps.
 
 Modes, licences, company membership and model keys do not themselves authorize private-resource access, trusted-author status, publishing or external management. Expert assistance, business confirmation, candidate inspection, release approval and successful deployment remain distinct states.
 

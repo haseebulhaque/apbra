@@ -145,7 +145,7 @@ class BootstrapTests(unittest.TestCase):
             dest = Path(tmp) / 'repo'
             shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns('artifacts', '__pycache__', '.git', '.venv'))
             p = dest / 'apps/api/main.py'
-            p.parent.mkdir(parents=True)
+            p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text('print(1)')
             errors, _ = c.check(dest)
             self.assertTrue(any('outside safe bootstrap scope' in e for e in errors))

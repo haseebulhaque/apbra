@@ -1,0 +1,11 @@
+import {expect,it} from 'vitest';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {ApiError,type CaseRecord} from './api';
+import {CaseEditor,CaseList,SignedOut,protectedErrorMessage} from './privateCases';
+
+const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
+
+it('renders a truthful signed-out boundary without company or role inputs',()=>{const html=renderToStaticMarkup(<SignedOut/>);expect(html).toContain('Sign in to continue');expect(html).toContain('checks active company membership and private-case access');expect(html).not.toMatch(/company id|select role/i)});
+it('renders only supplied authorized case summaries and supports durable resume',()=>{const html=renderToStaticMarkup(<CaseList items={[record]} activeId="case-1" onOpen={()=>{}}/>);expect(html).toContain('Updated business request');expect(html).toContain('version 2');expect(html).toContain('Only cases your current membership and private access permit are shown')});
+it('renders immutable request history separately from the editable current request',()=>{const html=renderToStaticMarkup(<CaseEditor record={record} versions={[{id:'request-1',sequence:1,request_text:'Original business request',created_at:'2026-09-23T00:00:00Z'},record.current_request]} requestText={record.current_request.request_text} onRequestText={()=>{}} onSave={()=>{}} onRefresh={()=>{}} busy={false}/>);expect(html).toContain('Original business request');expect(html).toContain('Updated business request');expect(html).toContain('2 immutable versions');expect(html).not.toContain('expected_version')});
+it('does not disclose whether a protected foreign or private case exists',()=>{expect(protectedErrorMessage(new ApiError(404,'CASE_NOT_FOUND','hidden'))).toBe('That case is unavailable or you no longer have access.');expect(protectedErrorMessage(new ApiError(401,'AUTH_REQUIRED','expired'))).toContain('session has expired');expect(protectedErrorMessage(new ApiError(409,'STALE_VERSION','stale'))).toContain('changed in another session')});

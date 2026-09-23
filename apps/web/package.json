@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run src",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "pdfmake": "0.2.23",
@@ -18,6 +19,7 @@
     "read-excel-file": "^9.3.10"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.20.3",
     "@types/pdfmake": "0.2.13",
     "@types/react": "19.2.2",
