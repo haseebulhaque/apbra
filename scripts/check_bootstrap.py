@@ -306,9 +306,10 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS = (
         'tests/bootstrap/test_ci_policy.py',
     }
 )
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '27677ce5c0478c63ad11bb58f34eaa15d51638916327605d179a9ad263587f35'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '613490d5ecf7eca776b89c340bbe657dda3d64ad6b37dcd0d7ed7f16b834ecf1'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256 = '5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_HISTORICAL_FIX_SOURCE_SHA256 = '77b1008cac35b06213ce4acfa5fd2f7950f03d84ec33810f6460cbceb45c24c4'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256 = 'c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
 
 CAPSTONE_EVALUATION_PATHS = {
@@ -1043,7 +1044,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Durable conversation evidence acceptance requires issued implementation acceptance')
                 if durable_conversation_evidence_acceptance_task['source_ids'] != [
                         'mvp1-durable-conversation-evidence-acceptance',
-                        'mvp1-durable-conversation-evidence-acceptance-ci-amendment']:
+                        'mvp1-durable-conversation-evidence-acceptance-ci-amendment',
+                        'mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture']:
                     extension_errors.append('Durable conversation evidence acceptance requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get('mvp1-durable-conversation-evidence-acceptance')
@@ -1060,6 +1062,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_amendment_source).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256:
                         extension_errors.append('Durable conversation evidence acceptance CI amendment source differs from accepted provenance')
+                historical_fix_source = source_map.get('mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture')
+                if historical_fix_source is None:
+                    extension_errors.append('Durable conversation evidence acceptance historical capacity fixture source is missing')
+                else:
+                    canonical_historical_fix_source = json.dumps(historical_fix_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_historical_fix_source).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_HISTORICAL_FIX_SOURCE_SHA256:
+                        extension_errors.append('Durable conversation evidence acceptance historical capacity fixture source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 durable_conversation_evidence_acceptance_task = None

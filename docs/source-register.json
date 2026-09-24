@@ -186,6 +186,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized adding only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py to APBRA-163 implementation authority. Their use is limited to making hosted CI set up Node and build the existing canonical TypeScript semantic bridge before backend pytest, plus exact policy and mutation tests enforcing that order. Existing pinned actions, secret and history scans, PostgreSQL isolation, CI ordering, fail-closed behavior and all unrelated policy assertions remain mandatory; no second semantic implementation, unrelated workflow refactor or delegation extension is authorized."
+    },
+    {
+      "id": "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture",
+      "content_id": "APBRA-163",
+      "version": "Owner authorization recorded 2026-09-24; amendment execution base acbaf728f31b31f31cb86085f6bd1ac53fca10ea; Jira PLAN comment 10256",
+      "section": "APBRA-163 historical capacity-amendment fixture correction",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized a separate governance-only amendment correcting the APBRA-163 capacity regression test so it reconstructs the exact immutable timeout-only workflow accepted at that historical checkpoint instead of copying mutable current HEAD. The correction must preserve the existing historical workflow digest and assertion, prove that mutation of the reconstructed workflow still fails, make no current workflow or CI behavior change, and leave Package B implementation untouched. The amendment changes only the four standard APBRA-163 governance paths plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append this source ID to its otherwise unchanged historical accepted-source list."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

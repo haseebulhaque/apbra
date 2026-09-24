@@ -1,4 +1,5 @@
 """Exact APBRA-163 registration, authority and fail-closed scope checks."""
+import base64
 import copy
 import hashlib
 import importlib.util
@@ -7,11 +8,18 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+import zlib
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("bootstrap_apbra_163", ROOT / "scripts/check_bootstrap.py")
 c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
+
+# Exact 4,470-byte timeout-only workflow accepted by the capacity amendment,
+# stored independently of mutable HEAD and checked against the historical digest.
+HISTORICAL_CAPACITY_WORKFLOW = zlib.decompress(base64.b64decode(
+    "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"
+))
 
 
 class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
@@ -108,9 +116,16 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
-            self.assertEqual(self.check(root, expected), [])
             workflow = root / ".github/workflows/bootstrap.yml"
-            workflow.write_text(workflow.read_text().replace("timeout-minutes: 20", "timeout-minutes: 19"))
+            self.assertEqual(
+                hashlib.sha256(HISTORICAL_CAPACITY_WORKFLOW).hexdigest(),
+                c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256,
+            )
+            workflow.write_bytes(HISTORICAL_CAPACITY_WORKFLOW)
+            self.assertEqual(self.check(root, expected), [])
+            mutated = workflow.read_bytes().replace(b"timeout-minutes: 20", b"timeout-minutes: 19")
+            self.assertNotEqual(mutated, HISTORICAL_CAPACITY_WORKFLOW)
+            workflow.write_bytes(mutated)
             self.assertIn(
                 "APBRA-163 capacity amendment permits only the accepted 20-minute workflow",
                 self.check(root, expected),
@@ -171,6 +186,16 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
             (root / "docs/source-register.json").write_text(json.dumps(sources))
             self.assertIn(
                 "Durable conversation evidence acceptance CI amendment source differs from accepted provenance",
+                self.check(root, {"apps/api/src/apbra_api/evidence.py"}),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            next(item for item in sources["sources"] if item["id"] == "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture")["acceptance"] += " broadened"
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Durable conversation evidence acceptance historical capacity fixture source differs from accepted provenance",
                 self.check(root, {"apps/api/src/apbra_api/evidence.py"}),
             )
 
