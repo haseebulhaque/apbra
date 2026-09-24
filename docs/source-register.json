@@ -177,6 +177,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorised Package B of the six-hour MVP-1 mission on 2026-09-24 after APBRA-162: durable project-free conversation, protected CSV/XLSX evidence added later, supported alternatives and exact durable acceptance into the canonical ConfirmedRequirementContract. The package remains local/CI-only, synthetic-data-only and AUD 0, reuses the TypeScript semantic engine through a bounded internal bridge, and excludes report generation, output history, expert takeover, optional projects, cloud resources, paid model calls and hosted exposure. Registration is limited to exactly five governance files: the four standard registration files plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append the new accepted source ID to APBRA-162's unchanged exact source-history assertion. The later implementation allowlist remains the exact 53 literal paths in the APBRA-163 contract."
+    },
+    {
+      "id": "mvp1-durable-conversation-evidence-acceptance-ci-amendment",
+      "content_id": "APBRA-163",
+      "version": "Owner authorization recorded 2026-09-24; amendment execution base 9d0c4defcba5fa6749a34b49de760401ecf3f78d",
+      "section": "APBRA-163 narrow hosted-CI semantic-bridge ordering amendment",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized adding only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py to APBRA-163 implementation authority. Their use is limited to making hosted CI set up Node and build the existing canonical TypeScript semantic bridge before backend pytest, plus exact policy and mutation tests enforcing that order. Existing pinned actions, secret and history scans, PostgreSQL isolation, CI ordering, fail-closed behavior and all unrelated policy assertions remain mandatory; no second semantic implementation, unrelated workflow refactor or delegation extension is authorized."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

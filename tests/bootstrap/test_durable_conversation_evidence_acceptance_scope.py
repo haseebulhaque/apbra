@@ -43,7 +43,7 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
     def test_exact_finite_implementation_scope_is_registered(self):
         expected = set(self.task["allowed_paths"])
         self.assertEqual(c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS, expected)
-        self.assertEqual(len(expected), 53)
+        self.assertEqual(len(expected), 55)
         self.assertTrue(all("*" not in path for path in expected))
         canonical = json.dumps(self.task, sort_keys=True, separators=(",", ":")).encode()
         self.assertEqual(hashlib.sha256(canonical).hexdigest(), c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256)
@@ -78,6 +78,25 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
             self.copy_repository(root)
             errors = self.check(root, {"scripts/check_bootstrap.py", "apps/api/src/apbra_api/evidence.py"})
             self.assertIn("APBRA-163 registration and implementation changes must remain separate", errors)
+
+    def test_narrow_ci_amendment_is_exact_and_disjoint(self):
+        expected = {
+            "scripts/check_bootstrap.py",
+            self.task_path,
+            "tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py",
+            "tests/bootstrap/test_invited_private_case_foundation_scope.py",
+            "docs/source-register.json",
+        }
+        self.assertEqual(c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS, expected)
+        self.assertTrue(expected.isdisjoint(c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, expected), [])
+            for omitted in expected:
+                with self.subTest(omitted=omitted):
+                    errors = self.check(root, expected - {omitted})
+                    self.assertIn("APBRA-163 registration must change exactly its five governance files", errors)
 
     def test_wrong_identity_branch_base_source_and_broadened_scope_fail(self):
         mutations = (
@@ -120,6 +139,16 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
             (root / "docs/source-register.json").write_text(json.dumps(sources))
             self.assertIn(
                 "Durable conversation evidence acceptance source differs from accepted provenance",
+                self.check(root, {"apps/api/src/apbra_api/evidence.py"}),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            next(item for item in sources["sources"] if item["id"] == "mvp1-durable-conversation-evidence-acceptance-ci-amendment")["acceptance"] += " broadened"
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Durable conversation evidence acceptance CI amendment source differs from accepted provenance",
                 self.check(root, {"apps/api/src/apbra_api/evidence.py"}),
             )
 
@@ -172,6 +201,18 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
                 ),
                 [],
             )
+            self.assertEqual(self.check(root, {"scripts/check_ci_policy.py"}), [])
+            self.assertEqual(self.check(root, {"tests/bootstrap/test_ci_policy.py"}), [])
+
+        catalog = json.loads((ROOT / "agents/catalog.json").read_text())
+        card = next(item for item in catalog["cards"] if item["agent_id"] == "APBRA-DEVOPS")
+        exempt_registration_paths = c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS
+        for candidate in sorted((ROOT / "tests/bootstrap").glob("test_*.py")):
+            path = candidate.relative_to(ROOT).as_posix()
+            if path == "tests/bootstrap/test_ci_policy.py" or path in exempt_registration_paths:
+                continue
+            with self.subTest(bootstrap_path=path):
+                self.assertFalse(c.path_allowed(path, self.task, card))
 
     def test_secret_and_symlink_protections_remain_active(self):
         with tempfile.TemporaryDirectory() as directory:
