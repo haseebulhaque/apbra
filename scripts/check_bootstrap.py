@@ -283,6 +283,7 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS = {
     'apps/web/src/foundry.ts', 'apps/web/src/privateCases.test.tsx',
     'apps/web/src/privateCases.tsx', 'apps/web/src/schemaIngestion.test.ts',
     'apps/web/src/schemaIngestion.ts', 'apps/web/src/style.css', 'apps/web/vite.config.ts',
+    'scripts/check_ci_policy.py', 'tests/bootstrap/test_ci_policy.py',
 }
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
@@ -291,8 +292,24 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = 'b6c727dc95087131939d479064db49efd0378a341a373d97d146712155c15137'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-163-durable-conversation-evidence-acceptance.json',
+    'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS = (
+    DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS | {
+        '.github/workflows/bootstrap.yml',
+        'scripts/check_ci_policy.py',
+        'tests/bootstrap/test_ci_policy.py',
+    }
+)
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '27677ce5c0478c63ad11bb58f34eaa15d51638916327605d179a9ad263587f35'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256 = '5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256 = 'c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -372,7 +389,13 @@ def matches(path: str, pattern: str) -> bool:
 
 
 def path_allowed(path: str, task: dict, card: dict) -> bool:
-    return valid_path(path) and not any(matches(path, p) for p in task['restricted_paths']) and (
+    restricted = any(matches(path, p) for p in task['restricted_paths'])
+    exact_apbra_163_ci_policy_test = (
+        task.get('task_id') == 'APBRA-163' and
+        path == 'tests/bootstrap/test_ci_policy.py' and
+        path in task['allowed_paths']
+    )
+    return valid_path(path) and (not restricted or exact_apbra_163_ci_policy_test) and (
         any(matches(path, p) for p in task['allowed_paths']) and
         any(matches(path, p) for p in card['allowed_paths'])
     )
@@ -456,7 +479,7 @@ def workflow_errors(text: str) -> list[str]:
     if set(jobs) != {'bootstrap'}:
         errors.append('Unexpected job: review bootstrap CI scope')
     for job in jobs.values():
-        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '10':
+        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '20':
             errors.append('Unexpected runner or unbounded job')
         if 'permissions' in job:
             errors.append('Job permission override prohibited')
@@ -1018,7 +1041,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected durable conversation evidence acceptance scope')
                 if (durable_conversation_evidence_acceptance_task['task_mode'], durable_conversation_evidence_acceptance_task['readiness'], durable_conversation_evidence_acceptance_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Durable conversation evidence acceptance requires issued implementation acceptance')
-                if durable_conversation_evidence_acceptance_task['source_ids'] != ['mvp1-durable-conversation-evidence-acceptance']:
+                if durable_conversation_evidence_acceptance_task['source_ids'] != [
+                        'mvp1-durable-conversation-evidence-acceptance',
+                        'mvp1-durable-conversation-evidence-acceptance-ci-amendment']:
                     extension_errors.append('Durable conversation evidence acceptance requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get('mvp1-durable-conversation-evidence-acceptance')
@@ -1028,6 +1053,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256:
                         extension_errors.append('Durable conversation evidence acceptance source differs from accepted provenance')
+                amendment_source = source_map.get('mvp1-durable-conversation-evidence-acceptance-ci-amendment')
+                if amendment_source is None:
+                    extension_errors.append('Durable conversation evidence acceptance CI amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('Durable conversation evidence acceptance CI amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 durable_conversation_evidence_acceptance_task = None
@@ -1084,12 +1116,23 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-162 registration must change exactly its four governance files')
             if (active_task_id == 'APBRA-163' and
                     changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
-                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS)):
+                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS) and
+                    changed_paths != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS):
                 errors.append('APBRA-163 registration and implementation changes must remain separate')
             if (active_task_id == 'APBRA-163' and
                     changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
-                    changed_paths != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS):
+                    changed_paths not in (
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS,
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS,
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS)):
                 errors.append('APBRA-163 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-163' and
+                    changed_paths == DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS):
+                workflow = root / '.github/workflows/bootstrap.yml'
+                if (not workflow.is_file() or workflow.is_symlink() or
+                        hashlib.sha256(workflow.read_bytes()).hexdigest() !=
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256):
+                    errors.append('APBRA-163 capacity amendment permits only the accepted 20-minute workflow')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'

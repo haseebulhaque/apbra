@@ -93,7 +93,9 @@
     "apps/web/src/schemaIngestion.ts",
     "apps/web/src/style.css",
     "apps/web/vite.config.ts",
-    "compose.yaml"
+    "compose.yaml",
+    "scripts/check_ci_policy.py",
+    "tests/bootstrap/test_ci_policy.py"
   ],
   "restricted_paths": [
     "scripts/check_bootstrap.py",
@@ -182,7 +184,8 @@
   "base_commit": "8b39b9e3199acdbfcaf5ce75f3cc99ef4371138e",
   "branch": "agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acceptance",
   "source_ids": [
-    "mvp1-durable-conversation-evidence-acceptance"
+    "mvp1-durable-conversation-evidence-acceptance",
+    "mvp1-durable-conversation-evidence-acceptance-ci-amendment"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / MVP-1 durable conversation, protected evidence and exact acceptance",
@@ -191,6 +194,8 @@
     "The APBRA-163 registration-only PR must change exactly five governance files: the four standard registration files plus the owner-approved APBRA-162 historical source-list expectation update only; it must pass exact-head review and hosted gates and be merged under the active owner delegation before implementation begins.",
     "After registration merge, actual main and the implementation execution base are refreshed separately while this contract provenance base remains unchanged.",
     "PostgreSQL 17, isolated private local storage and the existing TypeScript semantic engine are mandatory evidence boundaries; SQLite, browser-only storage and client validity claims are not substitutes.",
-    "APBRA-31, APBRA-34, APBRA-79, APBRA-99, APBRA-104, APBRA-150 and APBRA-152 retain their broader independent scope and are not completed by this package."
+    "APBRA-31, APBRA-34, APBRA-79, APBRA-99, APBRA-104, APBRA-150 and APBRA-152 retain their broader independent scope and are not completed by this package.",
+    "Haseeb's 2026-09-24 narrow CI amendment authorizes only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py beyond the original 53 implementation paths, solely to require Node setup and the existing canonical TypeScript semantic-bridge build before backend pytest while preserving all other bootstrap-test exclusions and CI controls.",
+    "Haseeb's post-delegation CI-capacity correction authorizes changing only the existing bootstrap job timeout from 10 to 20 minutes and pinning that exact value in the existing CI policy and mutation tests; every mandatory step, action pin, failure behavior, database isolation control and scan remains unchanged."
   ]
 }
