@@ -98,6 +98,28 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
                     errors = self.check(root, expected - {omitted})
                     self.assertIn("APBRA-163 registration must change exactly its five governance files", errors)
 
+    def test_capacity_amendment_is_exact_and_hash_bound(self):
+        expected = c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS | {
+            ".github/workflows/bootstrap.yml",
+            "scripts/check_ci_policy.py",
+            "tests/bootstrap/test_ci_policy.py",
+        }
+        self.assertEqual(c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS, expected)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, expected), [])
+            workflow = root / ".github/workflows/bootstrap.yml"
+            workflow.write_text(workflow.read_text().replace("timeout-minutes: 20", "timeout-minutes: 19"))
+            self.assertIn(
+                "APBRA-163 capacity amendment permits only the accepted 20-minute workflow",
+                self.check(root, expected),
+            )
+            for omitted in expected:
+                with self.subTest(omitted=omitted):
+                    errors = self.check(root, expected - {omitted})
+                    self.assertTrue(errors)
+
     def test_wrong_identity_branch_base_source_and_broadened_scope_fail(self):
         mutations = (
             ({"task_id": "APBRA-999"}, "Unexpected durable conversation evidence acceptance identity"),

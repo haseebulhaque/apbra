@@ -299,9 +299,17 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '7cc190c5ef3d3ad61f5eaaefb5de359ea67b3de4d131d9d379e8494e79f61893'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS = (
+    DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS | {
+        '.github/workflows/bootstrap.yml',
+        'scripts/check_ci_policy.py',
+        'tests/bootstrap/test_ci_policy.py',
+    }
+)
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '27677ce5c0478c63ad11bb58f34eaa15d51638916327605d179a9ad263587f35'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256 = '5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256 = 'c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -471,7 +479,7 @@ def workflow_errors(text: str) -> list[str]:
     if set(jobs) != {'bootstrap'}:
         errors.append('Unexpected job: review bootstrap CI scope')
     for job in jobs.values():
-        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '10':
+        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '20':
             errors.append('Unexpected runner or unbounded job')
         if 'permissions' in job:
             errors.append('Job permission override prohibited')
@@ -1108,14 +1116,23 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-162 registration must change exactly its four governance files')
             if (active_task_id == 'APBRA-163' and
                     changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
-                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS)):
+                    changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS) and
+                    changed_paths != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS):
                 errors.append('APBRA-163 registration and implementation changes must remain separate')
             if (active_task_id == 'APBRA-163' and
                     changed_paths.intersection(DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS) and
                     changed_paths not in (
                         DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS,
-                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS)):
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS,
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS)):
                 errors.append('APBRA-163 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-163' and
+                    changed_paths == DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS):
+                workflow = root / '.github/workflows/bootstrap.yml'
+                if (not workflow.is_file() or workflow.is_symlink() or
+                        hashlib.sha256(workflow.read_bytes()).hexdigest() !=
+                        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256):
+                    errors.append('APBRA-163 capacity amendment permits only the accepted 20-minute workflow')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'

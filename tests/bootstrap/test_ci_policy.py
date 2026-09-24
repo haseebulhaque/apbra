@@ -38,6 +38,12 @@ class CiPolicyTests(unittest.TestCase):
         next(s for s in self.job['steps'] if s.get('uses', '').startswith('actions/setup-node@'))['with']['node-version'] = '19'
         self.rejected()
 
+    def test_timeout_is_exact_capacity_boundary(self):
+        for timeout in ('10', '19', '21'):
+            with self.subTest(timeout=timeout):
+                self.job['timeout-minutes'] = timeout
+                self.rejected()
+
     def test_missing_scanner(self):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run') != c.COMMANDS[0]]
         self.rejected()

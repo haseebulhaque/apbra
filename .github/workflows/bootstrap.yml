@@ -12,7 +12,7 @@ jobs:
   bootstrap:
     name: APBRA Bootstrap Checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       APBRA_PROFILE: test

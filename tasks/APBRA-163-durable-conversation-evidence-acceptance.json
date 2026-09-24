@@ -195,6 +195,7 @@
     "After registration merge, actual main and the implementation execution base are refreshed separately while this contract provenance base remains unchanged.",
     "PostgreSQL 17, isolated private local storage and the existing TypeScript semantic engine are mandatory evidence boundaries; SQLite, browser-only storage and client validity claims are not substitutes.",
     "APBRA-31, APBRA-34, APBRA-79, APBRA-99, APBRA-104, APBRA-150 and APBRA-152 retain their broader independent scope and are not completed by this package.",
-    "Haseeb's 2026-09-24 narrow CI amendment authorizes only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py beyond the original 53 implementation paths, solely to require Node setup and the existing canonical TypeScript semantic-bridge build before backend pytest while preserving all other bootstrap-test exclusions and CI controls."
+    "Haseeb's 2026-09-24 narrow CI amendment authorizes only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py beyond the original 53 implementation paths, solely to require Node setup and the existing canonical TypeScript semantic-bridge build before backend pytest while preserving all other bootstrap-test exclusions and CI controls.",
+    "Haseeb's post-delegation CI-capacity correction authorizes changing only the existing bootstrap job timeout from 10 to 20 minutes and pinning that exact value in the existing CI policy and mutation tests; every mandatory step, action pin, failure behavior, database isolation control and scan remains unchanged."
   ]
 }
