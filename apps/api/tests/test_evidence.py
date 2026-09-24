@@ -385,6 +385,23 @@ def test_xlsx_rejects_defined_name_and_unreferenced_worksheet_formulas() -> None
         parse_evidence(orphan.getvalue(), "orphan-formula.xlsx")
 
 
+@pytest.mark.parametrize("formula_element", ["formula", "formula1", "formula2"])
+def test_xlsx_rejects_validation_and_conditional_formula_forms(
+    formula_element: str,
+) -> None:
+    sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '</row><row r="2"><c r="A2"><v>42</v></c></row></sheetData>'
+        '<dataValidations count="1"><dataValidation type="custom" sqref="A2">'
+        f'<{formula_element}>WEBSERVICE("https://example.invalid/value")'
+        f'</{formula_element}>'
+        '</dataValidation></dataValidations></worksheet>'
+    )
+    with pytest.raises(EvidenceError, match="formulas are unsupported"):
+        parse_evidence(workbook_with_sheet(sheet), f"{formula_element}.xlsx")
+
+
 @pytest.mark.parametrize(
     "cells",
     [
@@ -561,6 +578,23 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     )
     assert defined_name.status_code == 422
     assert defined_name.json()["error"]["code"] == "EVIDENCE_INVALID"
+
+    validation_sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '</row><row r="2"><c r="A2"><v>42</v></c></row></sheetData>'
+        '<dataValidations count="1"><dataValidation type="custom" sqref="A2">'
+        '<formula1>WEBSERVICE("https://example.invalid/value")</formula1>'
+        '</dataValidation></dataValidations></worksheet>'
+    )
+    validation_formula = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "validation-formula.xlsx", "expected_context_version": context_version},
+        content=workbook_with_sheet(validation_sheet),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert validation_formula.status_code == 422
+    assert validation_formula.json()["error"]["code"] == "EVIDENCE_INVALID"
     listed = client.get(f"/api/cases/{case['id']}/evidence")
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["items"]] == [

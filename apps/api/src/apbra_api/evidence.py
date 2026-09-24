@@ -242,13 +242,17 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
         formula_parts = {
             name
             for name in names
-            if name == "xl/workbook.xml"
-            or (
-                name.lower().endswith(".xml")
-                and name.lower().startswith(("xl/worksheets/", "xl/tables/"))
-            )
+            if name.lower().endswith(".xml") and name.lower().startswith("xl/")
         }
-        formula_element_names = {"f", "definedname", "calculatedcolumnformula", "totalsrowformula"}
+        formula_element_names = {
+            "f",
+            "formula",
+            "formula1",
+            "formula2",
+            "definedname",
+            "calculatedcolumnformula",
+            "totalsrowformula",
+        }
         for formula_part in sorted(formula_parts):
             formula_root = _xml(archive.read(formula_part))
             if any(
