@@ -85,6 +85,8 @@ def _table(name: str, rows: list[list[str]]) -> dict[str, Any]:
         raise EvidenceError("Evidence headers are missing or exceed the supported limit.")
     if len(set(headers)) != len(headers):
         raise EvidenceError("Evidence headers must be unique.")
+    if any(any(cell.strip() for cell in row[len(headers) :]) for row in rows[1:]):
+        raise EvidenceError("Evidence contains populated cells without corresponding headers.")
     data = [row[: len(headers)] + [""] * max(0, len(headers) - len(row)) for row in rows[1:]]
     if len(data) > MAX_ROWS:
         raise EvidenceError("Evidence exceeds the supported row limit.")

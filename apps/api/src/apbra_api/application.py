@@ -20,6 +20,7 @@ from .domain import (
     Forbidden,
     IdempotencyConflict,
     IdentityRecord,
+    InterpretationRecord,
     InvitationInvalid,
     InvitationRecord,
     MembershipRecord,
@@ -644,6 +645,33 @@ class AcceptanceService:
         )
         return structure, binding, evidence
 
+    def _validated_interpretation_context(
+        self,
+        store: ApplicationPersistence,
+        case: CaseRecord,
+        interpretation: InterpretationRecord,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Re-prove current evidence and the exact context shown to the accepter."""
+        schema, current_context_binding, _evidence = self._current_context(store, case)
+        try:
+            session = json.loads(interpretation.session_json)
+        except json.JSONDecodeError as exc:
+            raise SemanticValidationFailed() from exc
+        if not isinstance(session, dict):
+            raise SemanticValidationFailed()
+        context_binding = session.get("contextBinding")
+        readiness_binding = session.get("readinessBinding")
+        if (
+            not isinstance(context_binding, str)
+            or not isinstance(readiness_binding, str)
+            or not hmac.compare_digest(
+                sha256_text(readiness_binding), interpretation.readiness_binding_digest
+            )
+            or not hmac.compare_digest(context_binding, current_context_binding)
+        ):
+            raise SemanticValidationFailed()
+        return schema, session
+
     def create_interpretation(
         self,
         db: object,
@@ -750,7 +778,7 @@ class AcceptanceService:
         )
         if current:
             try:
-                self._current_context(store, case)
+                self._validated_interpretation_context(store, case, row)
             except SemanticValidationFailed:
                 current = False
         return {
@@ -807,6 +835,7 @@ class AcceptanceService:
             or interpretation.evidence_id is None
         ):
             raise StaleVersion()
+        schema, session = self._validated_interpretation_context(store, case, interpretation)
         existing = store.confirmed_contract(interpretation.id)
         if existing is not None:
             return {
@@ -817,19 +846,10 @@ class AcceptanceService:
                 "contract": json.loads(existing.contract_json),
                 "current": True,
             }
-        schema, current_context_binding, _evidence = self._current_context(store, case)
-        session = json.loads(interpretation.session_json)
         context_binding = session.get("contextBinding")
         readiness_binding = session.get("readinessBinding")
-        if (
-            not isinstance(context_binding, str)
-            or not isinstance(readiness_binding, str)
-            or not hmac.compare_digest(
-                sha256_text(readiness_binding), interpretation.readiness_binding_digest
-            )
-            or not hmac.compare_digest(context_binding, current_context_binding)
-        ):
-            raise SemanticValidationFailed()
+        assert isinstance(context_binding, str)
+        assert isinstance(readiness_binding, str)
         result = self.bridge.confirm(
             session,
             schema,

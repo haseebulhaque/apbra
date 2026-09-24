@@ -24,6 +24,19 @@ def test_csv_schema_is_observed_without_inventing_rows() -> None:
     ]
 
 
+def test_csv_rejects_populated_cells_without_headers_and_preserves_valid_rows() -> None:
+    with pytest.raises(EvidenceError, match="without corresponding headers"):
+        parse_evidence(b'Division,Amount\nNorth,12,"unheaded value"\n', "unsafe.csv")
+
+    parsed = parse_evidence(
+        b'Division,Description,Amount\nNorth,"quoted, value",12\nSouth,,\nWest\n',
+        "valid.csv",
+    )
+    table = parsed.observed_schema["tables"][0]
+    assert table["rowCount"] == 3
+    assert table["columns"][1]["sampleValues"] == ["quoted, value"]
+
+
 def test_xlsx_archive_rejects_traversal_and_external_content() -> None:
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
@@ -297,6 +310,19 @@ def test_xlsx_sparse_cells_preserve_their_declared_columns() -> None:
     assert columns[1]["sampleValues"] == ["North", "South"]
 
 
+def test_xlsx_rejects_populated_position_beyond_header_columns() -> None:
+    sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>Division</t></is></c></row>'
+        '<row r="2"><c r="A2"><v>12</v></c>'
+        '<c r="C2" t="inlineStr"><is><t>unheaded value</t></is></c></row>'
+        "</sheetData></worksheet>"
+    )
+    with pytest.raises(EvidenceError, match="without corresponding headers"):
+        parse_evidence(workbook_with_sheet(sheet), "unsafe.xlsx")
+
+
 @pytest.mark.parametrize(
     "cells",
     [
@@ -383,6 +409,42 @@ def test_failed_evidence_record_does_not_leave_an_eligible_orphan(
             headers={**csrf(session), "Content-Type": "application/octet-stream"},
         )
     assert {path for path in settings.evidence_root.rglob("*.bin")} == before
+
+
+def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
+    client: TestClient,
+) -> None:
+    session = sign_in(client, "member")
+    case = client.post(
+        "/api/cases",
+        json={"request_text": "Inspect a bounded evidence write."},
+        headers={**csrf(session), "Idempotency-Key": "unheaded-upload-case"},
+    ).json()["case"]
+    valid = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "valid.csv", "expected_context_version": 1},
+        content=b"Category,Value\nOne,1\n",
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert valid.status_code == 200
+    context_version = valid.json()["evidence"]["semantic_context_version"]
+
+    rejected = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "unsafe.csv", "expected_context_version": context_version},
+        content=b"Category,Value\nTwo,2,unheaded\n",
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["code"] == "EVIDENCE_INVALID"
+    listed = client.get(f"/api/cases/{case['id']}/evidence")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()["items"]] == [
+        valid.json()["evidence"]["id"]
+    ]
+    assert client.get(f"/api/cases/{case['id']}").json()["case"][
+        "semantic_context_version"
+    ] == context_version
 
 
 def test_upload_stream_rejects_actual_bytes_beyond_limit_despite_small_header(

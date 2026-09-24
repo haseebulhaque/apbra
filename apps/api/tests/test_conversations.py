@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from apbra_api.api import create_app
 from apbra_api.config import Settings
-from apbra_api.persistence import Database
+from apbra_api.persistence import (
+    ApplicationSession,
+    AuditEventRow,
+    ConfirmedContractRow,
+    Database,
+    EvidenceRow,
+)
 
 
 def create_case(client: TestClient, session: dict[str, object]) -> dict[str, object]:
@@ -56,7 +64,9 @@ def prepare_ambiguous_case(
     )
 
 
-def test_durable_conversation_evidence_and_exact_acceptance(client: TestClient) -> None:
+def test_durable_conversation_evidence_and_exact_acceptance(
+    client: TestClient, database: Database
+) -> None:
     session = sign_in(client, "owner")
     case = create_case(client, session)
     case_id = case["id"]
@@ -117,6 +127,23 @@ def test_durable_conversation_evidence_and_exact_acceptance(client: TestClient) 
     )
     assert repeated.status_code == 200
     assert repeated.json()["confirmed_contract"]["id"] == contract["id"]
+    assert repeated.json()["confirmed_contract"]["contract"] == contract["contract"]
+    assert repeated.json()["confirmed_contract"]["accepted_at"] == contract["accepted_at"]
+
+    with database.session() as db:
+        contract_count = db.scalar(
+            select(func.count()).select_from(ConfirmedContractRow).where(
+                ConfirmedContractRow.interpretation_id == UUID(interpretation_json["id"])
+            )
+        )
+        audit_count = db.scalar(
+            select(func.count()).select_from(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case_id)),
+                AuditEventRow.event_type == "REQUIREMENTS_CONFIRMED",
+            )
+        )
+    assert contract_count == 1
+    assert audit_count == 1
 
     transcript = client.get(f"/api/cases/{case_id}/conversation")
     assert transcript.status_code == 200
@@ -515,6 +542,16 @@ def test_reload_hides_unavailable_evidence_and_exact_reupload_restores_it(
     stale_state = client.get(f"/api/cases/{case['id']}/acceptance").json()
     assert stale_state["interpretation"]["current"] is False
     assert stale_state["confirmed_contract"]["current"] is False
+    replay = client.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation["id"],
+            "expected_context_version": uploaded["semantic_context_version"],
+        },
+        headers=csrf(session),
+    )
+    assert replay.status_code == 422
+    assert replay.json()["error"]["code"] == "SEMANTIC_VALIDATION_FAILED"
 
     restored = client.post(
         f"/api/cases/{case['id']}/evidence",
@@ -531,6 +568,168 @@ def test_reload_hides_unavailable_evidence_and_exact_reupload_restores_it(
     recovered_state = client.get(f"/api/cases/{case['id']}/acceptance").json()
     assert recovered_state["interpretation"]["current"] is True
     assert recovered_state["confirmed_contract"]["current"] is True
+
+
+@pytest.mark.parametrize(
+    "damage", ["missing-primary", "tampered-secondary", "ineligible-secondary"]
+)
+def test_confirmation_replay_requalifies_the_complete_evidence_set(
+    client: TestClient,
+    settings: Settings,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    damage: str,
+) -> None:
+    session = sign_in(client, "member")
+    case = create_case(client, session)
+    uploaded: list[dict[str, object]] = []
+    context_version = 1
+    for filename, content in (
+        ("amounts.csv", b"Amount,Division\n12,North\n"),
+        ("targets.csv", b"Target,Team\n20,Operations\n"),
+    ):
+        response = client.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": filename, "expected_context_version": context_version},
+            content=content,
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        )
+        assert response.status_code == 200, response.text
+        record = cast(dict[str, object], response.json()["evidence"])
+        uploaded.append(record)
+        context_version = cast(int, record["semantic_context_version"])
+    interpretation = client.post(
+        f"/api/cases/{case['id']}/interpretations",
+        json={"expected_context_version": context_version},
+        headers=csrf(session),
+    ).json()["interpretation"]
+    first = client.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation["id"],
+            "expected_context_version": context_version,
+        },
+        headers=csrf(session),
+    )
+    assert first.status_code == 200, first.text
+    historical = first.json()["confirmed_contract"]
+
+    affected = uploaded[0] if damage == "missing-primary" else uploaded[1]
+    if damage == "ineligible-secondary":
+        original_evidence_items = ApplicationSession.evidence_items
+
+        def eligible_items(
+            store: ApplicationSession, case_id: UUID
+        ) -> list[EvidenceRow]:
+            return [
+                row
+                for row in original_evidence_items(store, case_id)
+                if row.id != UUID(str(affected["id"]))
+            ]
+
+        monkeypatch.setattr(ApplicationSession, "evidence_items", eligible_items)
+    else:
+        object_path = next(
+            path
+            for path in settings.evidence_root.rglob("*.bin")
+            if path.parent.name == case["id"]
+            and hashlib.sha256(path.read_bytes()).hexdigest() == affected["content_digest"]
+        )
+        if damage == "missing-primary":
+            object_path.unlink()
+        else:
+            object_path.write_bytes(b"Target,Team\n999,Tampered\n")
+
+    state = client.get(f"/api/cases/{case['id']}/acceptance")
+    assert state.status_code == 200
+    assert state.json()["interpretation"]["current"] is False
+    assert state.json()["confirmed_contract"]["current"] is False
+    replay = client.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation["id"],
+            "expected_context_version": context_version,
+        },
+        headers=csrf(session),
+    )
+    assert replay.status_code == 422
+    assert replay.json()["error"]["code"] == "SEMANTIC_VALIDATION_FAILED"
+
+    with database.session() as db:
+        retained = db.scalar(
+            select(ConfirmedContractRow).where(
+                ConfirmedContractRow.id == UUID(historical["id"])
+            )
+        )
+        audit_count = db.scalar(
+            select(func.count()).select_from(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "REQUIREMENTS_CONFIRMED",
+            )
+        )
+    assert retained is not None
+    assert retained.contract_json == json.dumps(
+        historical["contract"], sort_keys=True, separators=(",", ":")
+    )
+    assert audit_count == 1
+
+
+def test_revoked_private_access_blocks_confirmation_replay_and_state(
+    settings: Settings, database: Database
+) -> None:
+    owner = TestClient(create_app(settings=settings, database=database))
+    owner_session = sign_in(owner, "owner")
+    case = create_case(owner, owner_session)
+    member_id = next(
+        item["id"]
+        for item in owner.get("/api/memberships").json()["items"]
+        if item["subject"] == "dev-member"
+    )
+    granted = owner.post(
+        f"/api/cases/{case['id']}/access",
+        json={"membership_id": member_id, "access_level": "EDITOR"},
+        headers=csrf(owner_session),
+    )
+    assert granted.status_code == 200
+
+    member = TestClient(create_app(settings=settings, database=database))
+    member_session = sign_in(member, "member")
+    uploaded = member.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "qualified.csv", "expected_context_version": 1},
+        content=b"Amount,Division\n12,North\n",
+        headers={**csrf(member_session), "Content-Type": "application/octet-stream"},
+    ).json()["evidence"]
+    interpretation = member.post(
+        f"/api/cases/{case['id']}/interpretations",
+        json={"expected_context_version": uploaded["semantic_context_version"]},
+        headers=csrf(member_session),
+    ).json()["interpretation"]
+    confirmed = member.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation["id"],
+            "expected_context_version": uploaded["semantic_context_version"],
+        },
+        headers=csrf(member_session),
+    )
+    assert confirmed.status_code == 200
+
+    revoked = owner.post(
+        f"/api/cases/{case['id']}/access/{member_id}/revoke",
+        headers=csrf(owner_session),
+    )
+    assert revoked.status_code == 200
+    replay = member.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation["id"],
+            "expected_context_version": uploaded["semantic_context_version"],
+        },
+        headers=csrf(member_session),
+    )
+    assert replay.status_code == 404
+    assert member.get(f"/api/cases/{case['id']}/acceptance").status_code == 404
 
 
 def test_accepted_choice_is_normalized_and_decline_cannot_authorize_meaning(
