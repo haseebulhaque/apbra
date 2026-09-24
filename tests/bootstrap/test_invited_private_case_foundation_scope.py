@@ -319,6 +319,7 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "mvp1-invited-private-case-foundation-scope-amendment",
             "mvp1-durable-conversation-evidence-acceptance",
             "mvp1-durable-conversation-evidence-acceptance-ci-amendment",
+            "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture",
         ]
         self.assertEqual([source["id"] for source in self.sources["sources"]], expected_ids)
         source_map = {source["id"]: source for source in self.sources["sources"]}

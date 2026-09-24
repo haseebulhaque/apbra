@@ -185,7 +185,8 @@
   "branch": "agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acceptance",
   "source_ids": [
     "mvp1-durable-conversation-evidence-acceptance",
-    "mvp1-durable-conversation-evidence-acceptance-ci-amendment"
+    "mvp1-durable-conversation-evidence-acceptance-ci-amendment",
+    "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / MVP-1 durable conversation, protected evidence and exact acceptance",
@@ -196,6 +197,7 @@
     "PostgreSQL 17, isolated private local storage and the existing TypeScript semantic engine are mandatory evidence boundaries; SQLite, browser-only storage and client validity claims are not substitutes.",
     "APBRA-31, APBRA-34, APBRA-79, APBRA-99, APBRA-104, APBRA-150 and APBRA-152 retain their broader independent scope and are not completed by this package.",
     "Haseeb's 2026-09-24 narrow CI amendment authorizes only scripts/check_ci_policy.py and tests/bootstrap/test_ci_policy.py beyond the original 53 implementation paths, solely to require Node setup and the existing canonical TypeScript semantic-bridge build before backend pytest while preserving all other bootstrap-test exclusions and CI controls.",
-    "Haseeb's post-delegation CI-capacity correction authorizes changing only the existing bootstrap job timeout from 10 to 20 minutes and pinning that exact value in the existing CI policy and mutation tests; every mandatory step, action pin, failure behavior, database isolation control and scan remains unchanged."
+    "Haseeb's post-delegation CI-capacity correction authorizes changing only the existing bootstrap job timeout from 10 to 20 minutes and pinning that exact value in the existing CI policy and mutation tests; every mandatory step, action pin, failure behavior, database isolation control and scan remains unchanged.",
+    "Haseeb's 2026-09-24 historical-fixture correction authorizes only the five governance paths needed to reconstruct the exact accepted timeout-only capacity workflow in the APBRA-163 regression test instead of copying mutable current HEAD; the fixed historical digest and mutation rejection remain authoritative, and no current workflow, CI behavior or Package B application path may change."
   ]
 }
