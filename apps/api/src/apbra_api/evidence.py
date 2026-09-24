@@ -239,6 +239,26 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
         if not required_parts.issubset(names):
             raise EvidenceError("Workbook structure is incomplete or malformed.")
 
+        formula_parts = {
+            name
+            for name in names
+            if name == "xl/workbook.xml"
+            or (
+                name.lower().endswith(".xml")
+                and name.lower().startswith(("xl/worksheets/", "xl/tables/"))
+            )
+        }
+        formula_element_names = {"f", "definedname", "calculatedcolumnformula", "totalsrowformula"}
+        for formula_part in sorted(formula_parts):
+            formula_root = _xml(archive.read(formula_part))
+            if any(
+                node.tag.rsplit("}", 1)[-1].lower() in formula_element_names
+                for node in formula_root.iter()
+            ):
+                raise EvidenceError(
+                    "Workbook formulas are unsupported as observed evidence."
+                )
+
         for relationship_name in (name for name in names if name.lower().endswith(".rels")):
             relationship_root = _xml(archive.read(relationship_name))
             for relationship in relationship_root.findall("{*}Relationship"):
@@ -312,10 +332,6 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
                 row: list[str] = []
                 previous_column = -1
                 for cell, reference in zip(cells, references, strict=True):
-                    if cell.find("{*}f") is not None:
-                        raise EvidenceError(
-                            "Workbook formulas are unsupported as observed evidence."
-                        )
                     if reference is None:
                         column_index = previous_column + 1
                     else:

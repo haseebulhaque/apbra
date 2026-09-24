@@ -344,6 +344,47 @@ def test_xlsx_rejects_formula_cells_instead_of_trusting_cached_values() -> None:
         parse_evidence(workbook_with_sheet(sheet), "formula.xlsx")
 
 
+def test_xlsx_rejects_defined_name_and_unreferenced_worksheet_formulas() -> None:
+    static_sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '</row><row r="2"><c r="A2"><v>42</v></c></row></sheetData></worksheet>'
+    )
+    base = workbook_with_sheet(static_sheet)
+
+    defined_name = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(base)) as source, zipfile.ZipFile(
+        defined_name, "w"
+    ) as target:
+        for item in source.infolist():
+            if item.filename != "xl/workbook.xml":
+                target.writestr(item, source.read(item.filename))
+        target.writestr(
+            "xl/workbook.xml",
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<definedNames><definedName name="ExternalValue">'
+            'WEBSERVICE("https://example.invalid/value")</definedName></definedNames>'
+            '<sheets><sheet name="Observed" sheetId="1" r:id="rId1"/></sheets>'
+            "</workbook>",
+        )
+    with pytest.raises(EvidenceError, match="formulas are unsupported"):
+        parse_evidence(defined_name.getvalue(), "defined-name.xlsx")
+
+    orphan = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(base)) as source, zipfile.ZipFile(orphan, "w") as target:
+        for item in source.infolist():
+            target.writestr(item, source.read(item.filename))
+        target.writestr(
+            "xl/worksheets/orphan.xml",
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="1"><c r="A1"><f>SUM(40,2)</f><v>42</v></c></row>'
+            "</sheetData></worksheet>",
+        )
+    with pytest.raises(EvidenceError, match="formulas are unsupported"):
+        parse_evidence(orphan.getvalue(), "orphan-formula.xlsx")
+
+
 @pytest.mark.parametrize(
     "cells",
     [
@@ -490,6 +531,36 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     )
     assert formula.status_code == 422
     assert formula.json()["error"]["code"] == "EVIDENCE_INVALID"
+
+    static_workbook = workbook_with_sheet(
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '</row><row r="2"><c r="A2"><v>42</v></c></row></sheetData></worksheet>'
+    )
+    defined_name_workbook = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(static_workbook)) as source, zipfile.ZipFile(
+        defined_name_workbook, "w"
+    ) as target:
+        for item in source.infolist():
+            if item.filename != "xl/workbook.xml":
+                target.writestr(item, source.read(item.filename))
+        target.writestr(
+            "xl/workbook.xml",
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<definedNames><definedName name="ExternalValue">'
+            'WEBSERVICE("https://example.invalid/value")</definedName></definedNames>'
+            '<sheets><sheet name="Observed" sheetId="1" r:id="rId1"/></sheets>'
+            "</workbook>",
+        )
+    defined_name = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "defined-name.xlsx", "expected_context_version": context_version},
+        content=defined_name_workbook.getvalue(),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert defined_name.status_code == 422
+    assert defined_name.json()["error"]["code"] == "EVIDENCE_INVALID"
     listed = client.get(f"/api/cases/{case['id']}/evidence")
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["items"]] == [
