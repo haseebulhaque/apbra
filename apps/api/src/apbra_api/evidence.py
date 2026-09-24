@@ -231,10 +231,13 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
                 )
             )
         }
-        if forbidden or "xl/workbook.xml" not in names:
+        if forbidden:
             raise EvidenceError(
                 "Macros, executable content, or external workbook links are unsupported."
             )
+        required_parts = {"xl/workbook.xml", "xl/_rels/workbook.xml.rels"}
+        if not required_parts.issubset(names):
+            raise EvidenceError("Workbook structure is incomplete or malformed.")
 
         for relationship_name in (name for name in names if name.lower().endswith(".rels")):
             relationship_root = _xml(archive.read(relationship_name))

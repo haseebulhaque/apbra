@@ -46,6 +46,14 @@ def test_xlsx_archive_rejects_traversal_and_external_content() -> None:
         parse_evidence(output.getvalue(), "unsafe.xlsx")
 
 
+def test_xlsx_missing_workbook_relationships_is_a_controlled_rejection() -> None:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+    with pytest.raises(EvidenceError, match="incomplete or malformed"):
+        parse_evidence(output.getvalue(), "missing-relationships.xlsx")
+
+
 def test_supported_xlsx_schema_is_observed() -> None:
     output = io.BytesIO()
     workbook = (

@@ -688,13 +688,14 @@ class AcceptanceService:
         current_request = store.request_version(case.current_request_version_id)
         if current_request is None:
             raise SemanticValidationFailed()
-        # Re-qualify the retained evidence object before reusing even an
-        # idempotently prepared interpretation. Persisted metadata alone is
-        # not proof that the protected bytes remain available and intact.
-        schema, context_binding, evidence = self._current_context(store, case)
         existing = store.interpretation_for_context(case_id, case.semantic_context_version)
         if existing is not None:
-            existing_session = json.loads(existing.session_json)
+            # Reuse is safe only while the exact evidence/context originally
+            # shown remains current. A reduced eligible set must not revive an
+            # interpretation prepared from a different evidence set.
+            _schema, existing_session = self._validated_interpretation_context(
+                store, case, existing
+            )
             return {
                 "id": str(existing.id),
                 "state": existing.state,
@@ -708,6 +709,10 @@ class AcceptanceService:
                 "unresolved_ambiguities": existing_session.get("unresolvedAmbiguities", []),
                 "simulation": "LOCAL_DETERMINISTIC_NO_MODEL_CALL",
             }
+        # Re-qualify every retained evidence object before preparing a new
+        # interpretation. Persisted metadata alone is not proof that the
+        # protected bytes remain available and intact.
+        schema, context_binding, evidence = self._current_context(store, case)
         session = self.bridge.simulate(
             session_id=f"case-{case.id}-context-{case.semantic_context_version}",
             original_request=current_request.request_text,

@@ -644,6 +644,13 @@ def test_confirmation_replay_requalifies_the_complete_evidence_set(
     assert state.status_code == 200
     assert state.json()["interpretation"]["current"] is False
     assert state.json()["confirmed_contract"]["current"] is False
+    repeated_preparation = client.post(
+        f"/api/cases/{case['id']}/interpretations",
+        json={"expected_context_version": context_version},
+        headers=csrf(session),
+    )
+    assert repeated_preparation.status_code == 422
+    assert repeated_preparation.json()["error"]["code"] == "SEMANTIC_VALIDATION_FAILED"
     replay = client.post(
         f"/api/cases/{case['id']}/confirm",
         json={
