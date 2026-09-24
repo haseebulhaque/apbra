@@ -257,6 +257,10 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
             formula_root = _xml(archive.read(formula_part))
             if any(
                 node.tag.rsplit("}", 1)[-1].lower() in formula_element_names
+                or any(
+                    attribute.rsplit("}", 1)[-1].lower() in formula_element_names
+                    for attribute in node.attrib
+                )
                 for node in formula_root.iter()
             ):
                 raise EvidenceError(

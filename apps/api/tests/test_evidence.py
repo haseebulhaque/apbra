@@ -299,6 +299,35 @@ def workbook_with_sheet(sheet: str) -> bytes:
     return output.getvalue()
 
 
+def workbook_with_formula_attribute() -> bytes:
+    sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '</row><row r="2"><c r="A2"><v>42</v></c></row></sheetData></worksheet>'
+    )
+    base = workbook_with_sheet(sheet)
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(base)) as source, zipfile.ZipFile(output, "w") as target:
+        for item in source.infolist():
+            if item.filename != "xl/_rels/workbook.xml.rels":
+                target.writestr(item, source.read(item.filename))
+        relationships = source.read("xl/_rels/workbook.xml.rels").decode().replace(
+            "</Relationships>",
+            '<Relationship Id="rIdPivot" Target="pivotCache/pivotCacheDefinition1.xml" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+            'pivotCacheDefinition"/></Relationships>',
+        )
+        target.writestr("xl/_rels/workbook.xml.rels", relationships)
+        target.writestr(
+            "xl/pivotCache/pivotCacheDefinition1.xml",
+            '<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/'
+            'spreadsheetml/2006/main"><cacheFields count="1"><cacheField '
+            'name="Calculated" formula="WEBSERVICE(&quot;https://example.invalid/value&quot;)"/>'
+            "</cacheFields></pivotCacheDefinition>",
+        )
+    return output.getvalue()
+
+
 def test_xlsx_sparse_cells_preserve_their_declared_columns() -> None:
     sheet = (
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -400,6 +429,11 @@ def test_xlsx_rejects_validation_and_conditional_formula_forms(
     )
     with pytest.raises(EvidenceError, match="formulas are unsupported"):
         parse_evidence(workbook_with_sheet(sheet), f"{formula_element}.xlsx")
+
+
+def test_xlsx_rejects_formula_bearing_attributes_in_reachable_parts() -> None:
+    with pytest.raises(EvidenceError, match="formulas are unsupported"):
+        parse_evidence(workbook_with_formula_attribute(), "pivot-formula.xlsx")
 
 
 @pytest.mark.parametrize(
@@ -595,6 +629,14 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     )
     assert validation_formula.status_code == 422
     assert validation_formula.json()["error"]["code"] == "EVIDENCE_INVALID"
+    attribute_formula = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "pivot-formula.xlsx", "expected_context_version": context_version},
+        content=workbook_with_formula_attribute(),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert attribute_formula.status_code == 422
+    assert attribute_formula.json()["error"]["code"] == "EVIDENCE_INVALID"
     listed = client.get(f"/api/cases/{case['id']}/evidence")
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["items"]] == [
