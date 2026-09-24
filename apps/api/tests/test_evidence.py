@@ -331,6 +331,19 @@ def test_xlsx_rejects_populated_position_beyond_header_columns() -> None:
         parse_evidence(workbook_with_sheet(sheet), "unsafe.xlsx")
 
 
+def test_xlsx_rejects_formula_cells_instead_of_trusting_cached_values() -> None:
+    sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>Division</t></is></c></row>'
+        '<row r="2"><c r="A2"><f>WEBSERVICE("https://example.invalid/value")</f>'
+        '<v>42</v></c><c r="B2" t="inlineStr"><is><t>North</t></is></c></row>'
+        "</sheetData></worksheet>"
+    )
+    with pytest.raises(EvidenceError, match="formulas are unsupported"):
+        parse_evidence(workbook_with_sheet(sheet), "formula.xlsx")
+
+
 @pytest.mark.parametrize(
     "cells",
     [
@@ -460,6 +473,23 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     )
     assert malformed.status_code == 422
     assert malformed.json()["error"]["code"] == "EVIDENCE_INVALID"
+
+    formula_sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>Division</t></is></c></row>'
+        '<row r="2"><c r="A2"><f>SUM(40,2)</f><v>42</v></c>'
+        '<c r="B2" t="inlineStr"><is><t>North</t></is></c></row>'
+        "</sheetData></worksheet>"
+    )
+    formula = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "formula.xlsx", "expected_context_version": context_version},
+        content=workbook_with_sheet(formula_sheet),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert formula.status_code == 422
+    assert formula.json()["error"]["code"] == "EVIDENCE_INVALID"
     listed = client.get(f"/api/cases/{case['id']}/evidence")
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["items"]] == [

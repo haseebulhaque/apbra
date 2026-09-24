@@ -312,6 +312,10 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
                 row: list[str] = []
                 previous_column = -1
                 for cell, reference in zip(cells, references, strict=True):
+                    if cell.find("{*}f") is not None:
+                        raise EvidenceError(
+                            "Workbook formulas are unsupported as observed evidence."
+                        )
                     if reference is None:
                         column_index = previous_column + 1
                     else:
