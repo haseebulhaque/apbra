@@ -200,6 +200,20 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
             self.assertTrue(target.is_file())
             self.assertFalse(target.is_symlink())
 
+    def test_new_authority_cannot_mask_invalid_historical_authority(self):
+        historical_task_path = "tasks/APBRA-76-deployment-guide.json"
+        protected_path = "apps/web/src/deploymentGuide.ts"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            historical_task = json.loads((root / historical_task_path).read_text())
+            historical_task["owner_acceptance"] = "PENDING"
+            (root / historical_task_path).write_text(json.dumps(historical_task))
+            errors, _ = c.check(root)
+            self.assertIn(
+                f"File outside safe bootstrap scope: {protected_path}", errors
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
