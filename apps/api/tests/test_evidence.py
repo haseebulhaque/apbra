@@ -445,6 +445,21 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     )
     assert rejected.status_code == 422
     assert rejected.json()["error"]["code"] == "EVIDENCE_INVALID"
+
+    malformed_workbook = io.BytesIO()
+    with zipfile.ZipFile(malformed_workbook, "w") as archive:
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+    malformed = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={
+            "filename": "missing-relationships.xlsx",
+            "expected_context_version": context_version,
+        },
+        content=malformed_workbook.getvalue(),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert malformed.status_code == 422
+    assert malformed.json()["error"]["code"] == "EVIDENCE_INVALID"
     listed = client.get(f"/api/cases/{case['id']}/evidence")
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["items"]] == [
