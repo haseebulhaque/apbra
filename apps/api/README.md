@@ -1,4 +1,4 @@
-# APBRA local API — APBRA-162
+# APBRA local API — APBRA-162 foundation + APBRA-163 Package B
 
 This FastAPI service is the local/CI invited-identity and private reporting-case foundation. It uses PostgreSQL 17 for durable state and an OIDC-compatible browser redirect boundary. The bundled issuer and synthetic identities exist only in the `development` and `test` profiles; the hosted profile cannot enable either the issuer or the bootstrap.
 
@@ -26,7 +26,7 @@ Expected response:
 {"status":"ok","database":"ok"}
 ```
 
-The persistent Compose volume is `apbra_postgres_data`. A normal stop/restart retains cases and request versions:
+The persistent Compose volumes are `apbra_postgres_data` and `apbra_evidence_data`. A normal stop/restart retains cases, request versions, conversation, qualified evidence, interpretations and confirmed contracts:
 
 ```sh
 docker compose stop
@@ -71,4 +71,4 @@ uv --directory apps/api run --frozen alembic upgrade head
 uv --directory apps/api run --frozen pytest
 ```
 
-APBRA-162 does not add upload storage, report-generation orchestration, candidate downloads, projects, expert takeover, billing, live Entra qualification, Azure provisioning, or hosted deployment.
+APBRA-163 adds only private local/CI CSV/XLSX evidence storage and durable business acceptance. Its local deterministic interpretation uses the canonical TypeScript semantic engine and is clearly labelled as no-model simulation. It does not add report-generation orchestration, candidate downloads, projects, expert takeover, billing, live Entra qualification, Azure provisioning, or hosted deployment.

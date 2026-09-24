@@ -30,6 +30,17 @@ class CiPolicyTests(unittest.TestCase):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run', '').strip() != c.WEB_COMMAND]
         self.rejected()
 
+    def test_semantic_bridge_must_be_built_before_backend_tests(self):
+        bridge = next(s for s in self.job['steps'] if s.get('run', '').strip() == c.SEMANTIC_BRIDGE_BUILD)
+        self.job['steps'].remove(bridge)
+        api_index = next(index for index,step in enumerate(self.job['steps']) if step.get('run','').strip() == c.API_CHECK)
+        self.job['steps'].insert(api_index+1,bridge)
+        self.rejected()
+
+    def test_backend_bridge_path_is_fixed(self):
+        self.job['env']['APBRA_TEST_SEMANTIC_BRIDGE'] = '/tmp/other.mjs'
+        self.rejected()
+
     def test_frontend_failure_not_hidden(self):
         next(s for s in self.job['steps'] if s.get('run', '').strip() == c.WEB_COMMAND)['run'] += ' || true'
         self.rejected()

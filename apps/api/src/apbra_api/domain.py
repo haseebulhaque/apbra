@@ -88,6 +88,7 @@ class CaseRecord(Protocol):
     creator_membership_id: UUID
     current_request_version_id: UUID
     version: int
+    semantic_context_version: int
     created_at: datetime
     updated_at: datetime
 
@@ -112,6 +113,52 @@ class AccessRecord(Protocol):
 class IdempotencyRecord(Protocol):
     payload_digest: str
     resource_id: UUID
+
+
+class ConversationEventRecord(Protocol):
+    id: UUID
+    case_id: UUID
+    sequence: int
+    kind: str
+    payload_json: str
+    command_key: str
+    payload_digest: str
+    created_at: datetime
+
+
+class EvidenceRecord(Protocol):
+    id: UUID
+    case_id: UUID
+    request_version_id: UUID
+    filename: str
+    format: str
+    content_digest: str
+    storage_key: str
+    observed_schema_json: str
+    schema_digest: str
+    eligible: bool
+    created_at: datetime
+
+
+class InterpretationRecord(Protocol):
+    id: UUID
+    case_id: UUID
+    request_version_id: UUID
+    evidence_id: UUID | None
+    context_version: int
+    session_json: str
+    confirmation_summary_json: str
+    readiness_binding_digest: str
+    state: str
+    created_at: datetime
+
+
+class ConfirmedContractRecord(Protocol):
+    id: UUID
+    interpretation_id: UUID
+    contract_json: str
+    schema_version: int
+    accepted_at: datetime
 
 
 class ApplicationPersistence(Protocol):
@@ -205,6 +252,69 @@ class ApplicationPersistence(Protocol):
 
     def lock_case_access(self, case_id: UUID, membership_id: UUID) -> AccessRecord | None: ...
 
+    def append_conversation_event(
+        self, actor: Actor, case_id: UUID, kind: str, payload_json: str,
+        command_key: str, payload_digest: str,
+    ) -> ConversationEventRecord: ...
+
+    def conversation_event_by_command(
+        self, case_id: UUID, membership_id: UUID, command_key: str
+    ) -> ConversationEventRecord | None: ...
+
+    def conversation_events(self, case_id: UUID) -> list[ConversationEventRecord]: ...
+
+    def add_evidence(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        request_version_id: UUID,
+        filename: str,
+        format_name: str,
+        content_digest: str,
+        storage_key: str,
+        observed_schema_json: str,
+        schema_digest: str,
+    ) -> EvidenceRecord: ...
+
+    def evidence_items(self, case_id: UUID) -> list[EvidenceRecord]: ...
+
+    def evidence_item(self, case_id: UUID, evidence_id: UUID) -> EvidenceRecord | None: ...
+
+    def evidence_by_digest(
+        self, case_id: UUID, request_version_id: UUID, content_digest: str
+    ) -> EvidenceRecord | None: ...
+
+    def add_interpretation(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        request_version_id: UUID,
+        evidence_id: UUID | None,
+        context_version: int,
+        session_json: str,
+        confirmation_summary_json: str,
+        readiness_binding_digest: str,
+        state: str,
+    ) -> InterpretationRecord: ...
+
+    def interpretation(
+        self, case_id: UUID, interpretation_id: UUID
+    ) -> InterpretationRecord | None: ...
+
+    def latest_interpretation(self, case_id: UUID) -> InterpretationRecord | None: ...
+
+    def interpretation_for_context(
+        self, case_id: UUID, context_version: int
+    ) -> InterpretationRecord | None: ...
+
+    def confirmed_contract(self, interpretation_id: UUID) -> ConfirmedContractRecord | None: ...
+
+    def accept_interpretation(
+        self, actor: Actor, row: InterpretationRecord, contract_json: str
+    ) -> ConfirmedContractRecord: ...
+
+    def advance_semantic_context(self, row: CaseRecord) -> None: ...
+
 
 class ApplicationError(Exception):
     status_code = 400
@@ -250,3 +360,15 @@ class InvitationInvalid(ApplicationError):
     status_code = 410
     code = "INVITATION_INVALID"
     public_message = "This invitation is unavailable, expired, revoked, or already used."
+
+
+class EvidenceInvalid(ApplicationError):
+    status_code = 422
+    code = "EVIDENCE_INVALID"
+    public_message = "The supplied evidence could not be accepted safely."
+
+
+class SemanticValidationFailed(ApplicationError):
+    status_code = 422
+    code = "SEMANTIC_VALIDATION_FAILED"
+    public_message = "The proposed interpretation is not ready for confirmation."

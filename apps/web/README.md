@@ -1,8 +1,8 @@
 # APBRA MVP-1 web application
 
-APBRA-162 adds an invite-only, authenticated reporting-case shell backed by the local FastAPI and PostgreSQL services. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, or private-case permission claims.
+APBRA-163 adds durable conversation, qualified CSV/XLSX evidence, server-derived interpretation and exact confirmation to the APBRA-162 invite-only case shell. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, private-case permission or confirmed semantic claims.
 
-An active invited member can create a case without a project or file, list only authorized cases, resume a case after a restart, save a new request version with optimistic concurrency, and inspect request history returned by the API. Selecting a case initializes the existing clarification experience from its persisted current request. The workflow is keyed to the case's current request-version identity, so a saved or reloaded version resets transient clarification, confirmation, design, and generation state.
+An active invited member can create a case without a project or file, list only authorized cases, resume after a restart, save immutable request versions, add durable messages and protected evidence, inspect a server-derived understanding and explicitly confirm its exact current meaning. Request, conversation or evidence changes make earlier confirmation stale. Report generation is intentionally absent from this Package B screen.
 
 Invitation bearer secrets are accepted only from the URL fragment of an original `/invite#token=...` link, removed from the address immediately, and sent in the body of fixed-path POST requests. A signed-out browser does not persist or forward the token through login; the user must sign in and reopen the original invitation link.
 
@@ -58,7 +58,9 @@ npm run build
 npm run dev
 ```
 
-Vite normally serves `http://127.0.0.1:5173/`. AI-dependent stages show an unavailable/error state if the configured endpoint cannot be reached.
+Vite normally serves `http://127.0.0.1:5173/`. Package B makes no paid or live model call. Its clearly labelled deterministic local interpretation can proceed directly when the request identifies one observed numeric business measure and one observed comparison category. Otherwise it uses the canonical bounded clarification state machine to present schema-grounded supported choices or accept a business-language answer; the exact question, raw answer and supported-choice decision remain durable provenance. Live AI interpretation remains a later qualification boundary.
+
+For a short manual checkpoint, sign in as `member`, create a case without a file, save a message, and refresh to verify it remains. Add a synthetic CSV or XLSX containing one numeric and one category field. Choose **Prepare understanding**; answer any displayed material clarification, review the clearly labelled local deterministic understanding, and confirm it. Refresh or restart the API and reopen the case to verify the evidence, clarification decision and ConfirmedRequirementContract v2 remain. Editing the request or adding new current-version evidence must mark the earlier meaning stale and require preparation and confirmation again. This checkpoint does not generate or download a Power BI report.
 
 ### Isolated browser tests
 

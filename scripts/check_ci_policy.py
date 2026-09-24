@@ -43,8 +43,11 @@ ISOLATED_TEST_DATABASES = (
     "(value text NOT NULL)'); sentinel.execute(\\\"INSERT INTO "
     "backend_test_isolation_sentinel VALUES ('preserved')\\\"); sentinel.close()\""
 )
-WEB_COMMAND = (
+SEMANTIC_BRIDGE_BUILD = (
     'npm --prefix apps/web ci --ignore-scripts\n'
+    'npm --prefix apps/web run build:semantic-bridge'
+)
+WEB_COMMAND = (
     'npm --prefix apps/web test\n'
     'npm --prefix apps/web run build\n'
     'npm --prefix apps/web exec playwright install --with-deps chromium\n'
@@ -110,6 +113,7 @@ def validate(text: str) -> list[str]:
             'APBRA_API_ORIGIN': 'http://127.0.0.1:8000',
             'APBRA_SESSION_SECRET': 'ci-only-generated-context-session-material',
             'APBRA_BOOTSTRAP_ENABLED': 'true',
+            'APBRA_TEST_SEMANTIC_BRIDGE': '/tmp/apbra-semantic-bridge.mjs',
         }
         if job['env'] != expected_env:
             errors.append('Unexpected job environment')
@@ -156,11 +160,12 @@ def validate(text: str) -> list[str]:
         expected = [
             'actions/checkout',
             'actions/setup-python',
+            'actions/setup-node',
             *COMMANDS,
             API_INSTALL,
             ISOLATED_TEST_DATABASES,
+            SEMANTIC_BRIDGE_BUILD,
             API_CHECK,
-            'actions/setup-node',
             WEB_COMMAND,
             'actions/upload-artifact',
         ]
