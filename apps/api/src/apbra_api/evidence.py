@@ -354,10 +354,12 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
                     value_node = cell.find("{*}v")
                     value = "" if value_node is None or value_node.text is None else value_node.text
                     if cell.attrib.get("t") == "s" and value:
-                        try:
-                            value = shared[int(value)]
-                        except (IndexError, ValueError) as exc:
-                            raise EvidenceError("Workbook shared strings are malformed.") from exc
+                        if not value.isascii() or not value.isdigit():
+                            raise EvidenceError("Workbook shared strings are malformed.")
+                        shared_index = int(value)
+                        if shared_index >= len(shared):
+                            raise EvidenceError("Workbook shared strings are malformed.")
+                        value = shared[shared_index]
                     elif cell.attrib.get("t") == "inlineStr":
                         value = "".join(cell.itertext())
                     row.append(value)

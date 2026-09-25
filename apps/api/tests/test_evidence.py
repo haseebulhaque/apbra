@@ -299,6 +299,71 @@ def workbook_with_sheet(sheet: str) -> bytes:
     return output.getvalue()
 
 
+def workbook_with_shared_strings(*, header_index: str, value_index: str) -> bytes:
+    output = io.BytesIO()
+    workbook = (
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Observed" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Target="worksheets/sheet1.xml" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"/>'
+        '<Relationship Id="rId2" Target="sharedStrings.xml" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
+        'sharedStrings"/></Relationships>'
+    )
+    sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData><row r="1"><c r="A1" t="s"><v>{header_index}</v></c></row>'
+        f'<row r="2"><c r="A2" t="s"><v>{value_index}</v></c></row>'
+        "</sheetData></worksheet>"
+    )
+    shared_strings = (
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'count="4" uniqueCount="4"><si><t>Category</t></si><si><t>Region</t></si>'
+        '<si><t>North</t></si><si><t>South</t></si></sst>'
+    )
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("xl/workbook.xml", workbook)
+        archive.writestr("xl/_rels/workbook.xml.rels", relationships)
+        archive.writestr("xl/worksheets/sheet1.xml", sheet)
+        archive.writestr("xl/sharedStrings.xml", shared_strings)
+    return output.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("header_index", "value_index", "expected_header", "expected_value"),
+    [("0", "2", "Category", "North"), ("1", "3", "Region", "South")],
+)
+def test_xlsx_resolves_valid_non_negative_shared_string_indexes(
+    header_index: str,
+    value_index: str,
+    expected_header: str,
+    expected_value: str,
+) -> None:
+    parsed = parse_evidence(
+        workbook_with_shared_strings(
+            header_index=header_index,
+            value_index=value_index,
+        ),
+        "shared-strings.xlsx",
+    )
+    column = parsed.observed_schema["tables"][0]["columns"][0]
+    assert column["name"] == expected_header
+    assert column["sampleValues"] == [expected_value]
+
+
+@pytest.mark.parametrize("invalid_index", ["-1", "4", "not-an-integer", "²"])
+def test_xlsx_rejects_invalid_shared_string_indexes(invalid_index: str) -> None:
+    with pytest.raises(EvidenceError, match="shared strings are malformed"):
+        parse_evidence(
+            workbook_with_shared_strings(header_index="0", value_index=invalid_index),
+            "invalid-shared-string.xlsx",
+        )
+
+
 def workbook_with_formula_attribute() -> bytes:
     sheet = (
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -645,6 +710,76 @@ def test_rejected_unheaded_upload_preserves_existing_valid_evidence(
     assert client.get(f"/api/cases/{case['id']}").json()["case"][
         "semantic_context_version"
     ] == context_version
+
+
+def test_rejected_shared_string_upload_preserves_case_history_and_acceptance(
+    client: TestClient,
+) -> None:
+    session = sign_in(client, "member")
+    created = client.post(
+        "/api/cases",
+        json={"request_text": "Create a report of total amount by division."},
+        headers={**csrf(session), "Idempotency-Key": "shared-string-rejection-case"},
+    )
+    assert created.status_code == 201
+    case = created.json()["case"]
+    uploaded = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={"filename": "valid.csv", "expected_context_version": 1},
+        content=b"Amount,Division\n12,North\n",
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert uploaded.status_code == 200
+    context_version = uploaded.json()["evidence"]["semantic_context_version"]
+    interpretation = client.post(
+        f"/api/cases/{case['id']}/interpretations",
+        json={"expected_context_version": context_version},
+        headers=csrf(session),
+    )
+    assert interpretation.status_code == 200
+    interpretation_id = interpretation.json()["interpretation"]["id"]
+    confirmed = client.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation_id,
+            "expected_context_version": context_version,
+        },
+        headers=csrf(session),
+    )
+    assert confirmed.status_code == 200
+
+    before_case = client.get(f"/api/cases/{case['id']}").json()
+    before_evidence = client.get(f"/api/cases/{case['id']}/evidence").json()
+    before_conversation = client.get(f"/api/cases/{case['id']}/conversation").json()
+    before_acceptance = client.get(f"/api/cases/{case['id']}/acceptance").json()
+
+    rejected = client.post(
+        f"/api/cases/{case['id']}/evidence",
+        params={
+            "filename": "negative-shared-string.xlsx",
+            "expected_context_version": context_version,
+        },
+        content=workbook_with_shared_strings(header_index="0", value_index="-1"),
+        headers={**csrf(session), "Content-Type": "application/octet-stream"},
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["code"] == "EVIDENCE_INVALID"
+
+    assert client.get(f"/api/cases/{case['id']}").json() == before_case
+    assert client.get(f"/api/cases/{case['id']}/evidence").json() == before_evidence
+    assert client.get(f"/api/cases/{case['id']}/conversation").json() == before_conversation
+    assert client.get(f"/api/cases/{case['id']}/acceptance").json() == before_acceptance
+
+    replay = client.post(
+        f"/api/cases/{case['id']}/confirm",
+        json={
+            "interpretation_id": interpretation_id,
+            "expected_context_version": context_version,
+        },
+        headers=csrf(session),
+    )
+    assert replay.status_code == 200
+    assert replay.json()["confirmed_contract"] == confirmed.json()["confirmed_contract"]
 
 
 def test_upload_stream_rejects_actual_bytes_beyond_limit_despite_small_header(
