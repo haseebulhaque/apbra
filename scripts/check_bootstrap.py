@@ -311,6 +311,52 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d8
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256 = '5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_HISTORICAL_FIX_SOURCE_SHA256 = '77b1008cac35b06213ce4acfa5fd2f7950f03d84ec33810f6460cbceb45c24c4'
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256 = 'c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
+PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS = {
+    '.github/workflows/bootstrap.yml', 'README.md', 'compose.yaml',
+    'apps/api/Dockerfile', 'apps/api/README.md', 'apps/api/pyproject.toml',
+    'apps/api/uv.lock',
+    'apps/api/alembic/versions/20260924_03_protected_generation_output_history.py',
+    'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/artifacts.py', 'apps/api/src/apbra_api/authorization.py',
+    'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/generation.py', 'apps/api/src/apbra_api/main.py',
+    'apps/api/src/apbra_api/persistence.py', 'apps/api/src/apbra_api/semantic_bridge.py',
+    'apps/api/tests/conftest.py', 'apps/api/tests/test_acceptance.py',
+    'apps/api/tests/test_api.py', 'apps/api/tests/test_artifacts.py',
+    'apps/api/tests/test_authorization.py', 'apps/api/tests/test_conversations.py',
+    'apps/api/tests/test_generation.py', 'apps/api/tests/test_migrations.py',
+    'apps/api/tests/test_semantic_bridge.py', 'apps/web/README.md',
+    'apps/web/e2e/protected-generation.spec.ts', 'apps/web/package-lock.json',
+    'apps/web/package.json', 'apps/web/playwright.config.ts',
+    'apps/web/scripts/generation-bridge.ts', 'apps/web/src/App.test.tsx',
+    'apps/web/src/EnterpriseApp.tsx', 'apps/web/src/api.test.ts',
+    'apps/web/src/api.ts', 'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/confirmedRequirements.ts', 'apps/web/src/deploymentGuide.test.ts',
+    'apps/web/src/deploymentGuide.ts', 'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableConversation.tsx', 'apps/web/src/durableGeneration.test.tsx',
+    'apps/web/src/durableGeneration.tsx', 'apps/web/src/execution.test.ts',
+    'apps/web/src/execution.ts', 'apps/web/src/foundry.test.ts',
+    'apps/web/src/foundry.ts', 'apps/web/src/genericPowerBI.test.ts',
+    'apps/web/src/genericPowerBI.ts', 'apps/web/src/governance.test.ts',
+    'apps/web/src/governance.ts', 'apps/web/src/guardrail.test.ts',
+    'apps/web/src/guardrail.ts', 'apps/web/src/knowledge.test.tsx',
+    'apps/web/src/knowledge.ts', 'apps/web/src/powerbi.test.ts',
+    'apps/web/src/powerbi.ts', 'apps/web/src/rag.test.ts', 'apps/web/src/rag.ts',
+    'apps/web/src/reportDesignNormalization.test.ts',
+    'apps/web/src/reportDesignNormalization.ts', 'apps/web/src/style.css',
+    'apps/web/src/tenant.ts', 'apps/web/src/validation.test.ts',
+    'apps/web/src/validation.ts', 'apps/web/vite.config.ts',
+    'scripts/check_ci_policy.py', 'tests/bootstrap/test_ci_policy.py',
+}
+PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-164-protected-generation-output-history.json',
+    'tests/bootstrap/test_protected_generation_output_history_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256 = '88b323cf5660376c8c01f6ce881e389da108c87bf2a735eec71e2dbed4c5452c'
+PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256 = 'dd9da96390eec30550204c53a9452095e89ac369c90856acf52e4ea06995acad'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -391,12 +437,12 @@ def matches(path: str, pattern: str) -> bool:
 
 def path_allowed(path: str, task: dict, card: dict) -> bool:
     restricted = any(matches(path, p) for p in task['restricted_paths'])
-    exact_apbra_163_ci_policy_test = (
-        task.get('task_id') == 'APBRA-163' and
+    exact_mvp_ci_policy_test = (
+        task.get('task_id') in {'APBRA-163', 'APBRA-164'} and
         path == 'tests/bootstrap/test_ci_policy.py' and
         path in task['allowed_paths']
     )
-    return valid_path(path) and (not restricted or exact_apbra_163_ci_policy_test) and (
+    return valid_path(path) and (not restricted or exact_mvp_ci_policy_test) and (
         any(matches(path, p) for p in task['allowed_paths']) and
         any(matches(path, p) for p in card['allowed_paths'])
     )
@@ -1072,6 +1118,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 durable_conversation_evidence_acceptance_task = None
+        protected_generation_output_history_task = None
+        protected_generation_output_history_path = root / 'tasks/APBRA-164-protected-generation-output-history.json'
+        if protected_generation_output_history_path.exists():
+            protected_generation_output_history_task = load_json(protected_generation_output_history_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), protected_generation_output_history_task)
+            if not extension_errors:
+                extension_errors += task_errors(protected_generation_output_history_task, catalog, sources)
+                canonical_task = json.dumps(protected_generation_output_history_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256:
+                    extension_errors.append('Protected generation output history contract differs from accepted authority')
+                if protected_generation_output_history_task['task_id'] != 'APBRA-164' or protected_generation_output_history_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected protected generation output history identity')
+                if protected_generation_output_history_task['agent_card_version'] != '0.1':
+                    extension_errors.append('Stale protected generation output history agent card version')
+                if protected_generation_output_history_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-164-protected-generation-output-history':
+                    extension_errors.append('Unexpected protected generation output history branch')
+                if protected_generation_output_history_task['base_commit'] != '12b75a93eebdbbd2a284e6179ae676a8cd411e0f':
+                    extension_errors.append('Stale protected generation output history base')
+                if set(protected_generation_output_history_task['allowed_paths']) != PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS:
+                    extension_errors.append('Unexpected protected generation output history scope')
+                if (protected_generation_output_history_task['task_mode'], protected_generation_output_history_task['readiness'], protected_generation_output_history_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Protected generation output history requires issued implementation acceptance')
+                if protected_generation_output_history_task['source_ids'] != ['mvp1-protected-generation-output-history']:
+                    extension_errors.append('Protected generation output history requires its specific accepted source')
+                source_map = {source['id']: source for source in sources['sources']}
+                package_source = source_map.get('mvp1-protected-generation-output-history')
+                if package_source is None:
+                    extension_errors.append('Protected generation output history accepted source is missing')
+                else:
+                    canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256:
+                        extension_errors.append('Protected generation output history source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                protected_generation_output_history_task = None
         registered_tasks = {
             registered['task_id']: registered for registered in (
                 task, shell_task, requirements_task, knowledge_task, design_task,
@@ -1087,6 +1168,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 confirmation_readiness_integrity_task,
                 invited_private_case_foundation_task,
                 durable_conversation_evidence_acceptance_task,
+                protected_generation_output_history_task,
             ) if registered is not None
         }
         if changed_paths is not None and changed_paths:
@@ -1142,6 +1224,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         hashlib.sha256(workflow.read_bytes()).hexdigest() !=
                         DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256):
                     errors.append('APBRA-163 capacity amendment permits only the accepted 20-minute workflow')
+            if (active_task_id == 'APBRA-164' and
+                    changed_paths.intersection(PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
+                    changed_paths.intersection(PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS)):
+                errors.append('APBRA-164 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-164' and
+                    changed_paths.intersection(PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
+                    changed_paths != PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS):
+                errors.append('APBRA-164 registration must change exactly its five governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1187,13 +1277,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-163' and
                      name in DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-164' and
+                     name in PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not ((durable_conversation_evidence_acceptance_task is not None and path_allowed(name, durable_conversation_evidence_acceptance_task, card)) or (invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
+            if file.is_symlink() or not (((active_task_id == 'APBRA-164' and protected_generation_output_history_task is not None) and path_allowed(name, protected_generation_output_history_task, card)) or (durable_conversation_evidence_acceptance_task is not None and path_allowed(name, durable_conversation_evidence_acceptance_task, card)) or (invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

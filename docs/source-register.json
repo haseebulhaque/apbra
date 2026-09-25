@@ -195,6 +195,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-163",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized a separate governance-only amendment correcting the APBRA-163 capacity regression test so it reconstructs the exact immutable timeout-only workflow accepted at that historical checkpoint instead of copying mutable current HEAD. The correction must preserve the existing historical workflow digest and assertion, prove that mutation of the reconstructed workflow still fails, make no current workflow or CI behavior change, and leave Package B implementation untouched. The amendment changes only the four standard APBRA-163 governance paths plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append this source ID to its otherwise unchanged historical accepted-source list."
+    },
+    {
+      "id": "mvp1-protected-generation-output-history",
+      "content_id": "APBRA-164",
+      "version": "Owner Package B correction and Package C registration authorization on 2026-09-24; APBRA-164 comments 10261, 10262 and 10265; Product Vision v4; MVP Scope v3; Requirements v4; RTM v6; Conversational UX v5; Data, Identity and Integration Requirements v3; Data Models v4; Data Dictionary and Lineage v3",
+      "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-164 protected generation, output artifacts and durable history",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-164",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized a separate APBRA-164 registration-only governance mission for Package C after correction and manual merge of Package B. Package C reuses the existing canonical TypeScript generation, governed RAG, ReportDesign, deterministic validation and PBIP compiler through a bounded server-side bridge; persists truthful attempt and output history; and protects local-only artifacts with current private-resource authorization. Registration changes exactly the four standard task-specific governance files plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append this source ID to the unchanged historical accepted-source list. The finite implementation authority is the exact literal allowlist in the APBRA-164 contract. No Package C implementation, Package D, cloud spend, public deployment, live provider call or automatic merge is authorized by registration."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
