@@ -194,7 +194,8 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
         infos = archive.infolist()
         names = {item.filename for item in infos}
         if (
-            len(infos) > MAX_ARCHIVE_ENTRIES
+            len(names) != len(infos)
+            or len(infos) > MAX_ARCHIVE_ENTRIES
             or sum(item.file_size for item in infos) > MAX_UNCOMPRESSED_BYTES
             or any(
                 item.filename.startswith("/")

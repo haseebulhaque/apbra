@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import warnings
 import zipfile
 from pathlib import Path
 from uuid import uuid4
@@ -334,6 +335,26 @@ def workbook_with_shared_strings(*, header_index: str, value_index: str | None) 
     return output.getvalue()
 
 
+def workbook_with_duplicate_shared_strings() -> bytes:
+    source_bytes = workbook_with_shared_strings(header_index="0", value_index="2")
+    output = io.BytesIO()
+    duplicate = (
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'count="2" uniqueCount="2"><si><t>InjectedHeader</t></si>'
+        '<si><t>InjectedValue</t></si></sst>'
+    )
+    with (
+        zipfile.ZipFile(io.BytesIO(source_bytes)) as source,
+        zipfile.ZipFile(output, "w") as target,
+    ):
+        for item in source.infolist():
+            target.writestr(item, source.read(item.filename))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            target.writestr("xl/sharedStrings.xml", duplicate)
+    return output.getvalue()
+
+
 @pytest.mark.parametrize(
     ("header_index", "value_index", "expected_header", "expected_value"),
     [("0", "2", "Category", "North"), ("1", "3", "Region", "South")],
@@ -365,6 +386,14 @@ def test_xlsx_rejects_invalid_shared_string_indexes(invalid_index: str | None) -
         parse_evidence(
             workbook_with_shared_strings(header_index="0", value_index=invalid_index),
             "invalid-shared-string.xlsx",
+        )
+
+
+def test_xlsx_rejects_duplicate_package_parts() -> None:
+    with pytest.raises(EvidenceError, match="archive containment or resource limits failed"):
+        parse_evidence(
+            workbook_with_duplicate_shared_strings(),
+            "duplicate-shared-strings.xlsx",
         )
 
 
@@ -757,10 +786,20 @@ def test_rejected_shared_string_upload_preserves_case_history_and_acceptance(
     before_conversation = client.get(f"/api/cases/{case['id']}/conversation").json()
     before_acceptance = client.get(f"/api/cases/{case['id']}/acceptance").json()
 
-    for suffix, invalid_index in (
-        ("negative", "-1"),
-        ("oversized", "9" * 5_000),
-        ("empty", None),
+    for suffix, content in (
+        (
+            "negative",
+            workbook_with_shared_strings(header_index="0", value_index="-1"),
+        ),
+        (
+            "oversized",
+            workbook_with_shared_strings(header_index="0", value_index="9" * 5_000),
+        ),
+        (
+            "empty",
+            workbook_with_shared_strings(header_index="0", value_index=None),
+        ),
+        ("duplicate-part", workbook_with_duplicate_shared_strings()),
     ):
         rejected = client.post(
             f"/api/cases/{case['id']}/evidence",
@@ -768,10 +807,7 @@ def test_rejected_shared_string_upload_preserves_case_history_and_acceptance(
                 "filename": f"{suffix}-shared-string.xlsx",
                 "expected_context_version": context_version,
             },
-            content=workbook_with_shared_strings(
-                header_index="0",
-                value_index=invalid_index,
-            ),
+            content=content,
             headers={**csrf(session), "Content-Type": "application/octet-stream"},
         )
         assert rejected.status_code == 422
