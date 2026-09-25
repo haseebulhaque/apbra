@@ -7,6 +7,7 @@ dependencies = [
   "alembic==1.20.0",
   "authlib==1.8.0",
   "cryptography==46.0.1",
+  "defusedxml==0.7.1",
   "fastapi==0.141.1",
   "httpx==0.28.1",
   "psycopg[binary]==3.2.10",
@@ -22,6 +23,7 @@ dev = [
   "pytest==8.4.2",
   "pytest-cov==7.0.0",
   "ruff==0.13.2",
+  "types-defusedxml==0.7.0.20260504",
 ]
 
 [build-system]

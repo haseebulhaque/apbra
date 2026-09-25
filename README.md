@@ -39,7 +39,7 @@ PBIP delivery and deployment guidance remain the first delivery boundary. Connec
 
 ## Run locally
 
-APBRA-162 adds a local/CI invite-only reporting-case foundation. It uses a FastAPI API, PostgreSQL 17, and a development-only OIDC issuer. Use synthetic data only. Generate local secrets in the shell and keep them out of files, logs and commits.
+APBRA-163 extends the local/CI invite-only foundation with durable case conversation, protected CSV/XLSX evidence, server-derived interpretation and exact durable confirmation. It uses FastAPI, PostgreSQL 17, a private local evidence volume, the canonical TypeScript semantic engine, and a development-only OIDC issuer. Use synthetic data only. Generate local secrets in the shell and keep them out of files, logs and commits.
 
 ```sh
 export APBRA_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
@@ -54,7 +54,7 @@ npm --prefix apps/web ci --ignore-scripts
 npm --prefix apps/web run dev
 ```
 
-Open `http://127.0.0.1:5173/`; the API health endpoint is `http://127.0.0.1:8000/api/health`. The local identity choices exercise the OIDC redirect and server-side APBRA authorization path. Creating a case requires neither a project nor a file. PostgreSQL retains the original request, current pointer, immutable request versions, private access, concurrency state and audit evidence across browser, frontend and API restarts.
+Open `http://127.0.0.1:5173/`; the API health endpoint is `http://127.0.0.1:8000/api/health`. The local identity choices exercise the OIDC redirect and server-side APBRA authorization path. Creating a case requires neither a project nor a file. PostgreSQL retains requests, conversation, evidence provenance, interpretations and confirmed contracts across browser, frontend and API restarts. The Package B interpretation preview is explicitly deterministic and simulated: it makes no model call. When the current request does not establish one observed numeric business measure and one observed comparison category, the canonical clarification state machine presents bounded supported choices or accepts a business-language answer before confirmation can become available.
 
 See [the API runbook](apps/api/README.md) and [web application guide](apps/web/README.md) for the bounded preview, synthetic identities, restart behaviour and limitations. Do not use `docker compose down --volumes` unless deliberately deleting synthetic local data. Existing optional Azure AI configuration remains server-side and is not required for case persistence; AI-dependent stages fail visibly when it is unavailable.
 

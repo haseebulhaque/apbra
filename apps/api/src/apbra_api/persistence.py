@@ -37,6 +37,7 @@ from .domain import (
     Actor,
     CaseRecord,
     IdentityRecord,
+    InterpretationRecord,
     InvitationRecord,
     MembershipRecord,
     Role,
@@ -144,6 +145,7 @@ class CaseRow(Base):
     creator_membership_id: Mapped[UUID] = mapped_column(nullable=False)
     current_request_version_id: Mapped[UUID] = mapped_column(nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    semantic_context_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     request_versions: Mapped[list[RequestVersionRow]] = relationship(
@@ -251,6 +253,176 @@ class AuditEventRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ConversationEventRow(Base):
+    __tablename__ = "case_conversation_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_conversation_event_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_conversation_event_actor_company",
+        ),
+        UniqueConstraint("case_id", "sequence", name="uq_conversation_event_sequence"),
+        UniqueConstraint(
+            "case_id", "created_by_membership_id", "command_key",
+            name="uq_conversation_event_command",
+        ),
+        CheckConstraint(
+            "kind IN ('USER_MESSAGE','RAW_ANSWER','CLARIFICATION_QUESTION',"
+            "'AI_ANALYSIS','CORRECTION','ALTERNATIVE_PROPOSED',"
+            "'ALTERNATIVE_ACCEPTED','ALTERNATIVE_DECLINED')",
+            name="ck_conversation_event_kind",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    command_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class EvidenceRow(Base):
+    __tablename__ = "case_evidence_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_evidence_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_evidence_request_version",
+        ),
+        ForeignKeyConstraint(
+            ["uploaded_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_evidence_actor_company",
+        ),
+        UniqueConstraint(
+            "case_id", "request_version_id", "content_digest",
+            name="uq_case_request_evidence_digest",
+        ),
+        UniqueConstraint("id", "case_id", "company_id", name="uq_evidence_case_company"),
+        CheckConstraint("format IN ('CSV','XLSX')", name="ck_evidence_format"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    uploaded_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
+    observed_schema_json: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class InterpretationRow(Base):
+    __tablename__ = "case_interpretation_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_interpretation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["evidence_id", "case_id", "company_id"],
+            [
+                "case_evidence_versions.id",
+                "case_evidence_versions.case_id",
+                "case_evidence_versions.company_id",
+            ],
+            name="fk_interpretation_evidence_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_interpretation_request_version",
+        ),
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_interpretation_actor_company",
+        ),
+        CheckConstraint(
+            "state IN ('NEEDS_CLARIFICATION','READY_FOR_CONFIRMATION')",
+            name="ck_interpretation_state",
+        ),
+        UniqueConstraint(
+            "case_id", "context_version", name="uq_interpretation_case_context"
+        ),
+        UniqueConstraint("id", "case_id", "company_id", name="uq_interpretation_case_company"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    evidence_id: Mapped[UUID | None] = mapped_column(ForeignKey("case_evidence_versions.id"))
+    context_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    session_json: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmation_summary_json: Mapped[str] = mapped_column(Text, nullable=False)
+    readiness_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ConfirmedContractRow(Base):
+    __tablename__ = "confirmed_requirement_contracts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_confirmed_contract_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["interpretation_id", "case_id", "company_id"],
+            [
+                "case_interpretation_versions.id",
+                "case_interpretation_versions.case_id",
+                "case_interpretation_versions.company_id",
+            ],
+            name="fk_confirmed_contract_interpretation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["accepted_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_confirmed_contract_actor_company",
+        ),
+        UniqueConstraint("interpretation_id", name="uq_confirmed_contract_interpretation"),
+        CheckConstraint("schema_version = 2", name="ck_confirmed_contract_v2"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
+    contract_json: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    accepted_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AuthTransactionRow(Base):
     __tablename__ = "auth_transactions"
     __table_args__ = (UniqueConstraint("state_digest", name="uq_auth_state"),)
@@ -346,9 +518,7 @@ class ApplicationSession(Session):
             role=Role(membership.role),
         )
 
-    def case_access(
-        self, actor: Actor, case_id: object
-    ) -> tuple[CaseRow, CaseAccessRow] | None:
+    def case_access(self, actor: Actor, case_id: object) -> tuple[CaseRow, CaseAccessRow] | None:
         pair = self.execute(
             select(CaseRow, CaseAccessRow)
             .join(
@@ -356,11 +526,17 @@ class ApplicationSession(Session):
                 (CaseAccessRow.case_id == CaseRow.id)
                 & (CaseAccessRow.company_id == CaseRow.company_id),
             )
+            .join(MembershipRow, MembershipRow.id == CaseAccessRow.membership_id)
+            .join(ExternalIdentityRow, ExternalIdentityRow.id == MembershipRow.identity_id)
+            .join(CompanyRow, CompanyRow.id == CaseRow.company_id)
             .where(
                 CaseRow.id == case_id,
                 CaseRow.company_id == actor.company_id,
                 CaseAccessRow.membership_id == actor.membership_id,
                 CaseAccessRow.active.is_(True),
+                MembershipRow.active.is_(True),
+                ExternalIdentityRow.active.is_(True),
+                CompanyRow.active.is_(True),
             )
         ).one_or_none()
         if pair is None:
@@ -470,10 +646,16 @@ class ApplicationSession(Session):
             self.scalars(
                 select(CaseRow)
                 .join(CaseAccessRow, CaseAccessRow.case_id == CaseRow.id)
+                .join(MembershipRow, MembershipRow.id == CaseAccessRow.membership_id)
+                .join(ExternalIdentityRow, ExternalIdentityRow.id == MembershipRow.identity_id)
+                .join(CompanyRow, CompanyRow.id == CaseRow.company_id)
                 .where(
                     CaseRow.company_id == actor.company_id,
                     CaseAccessRow.membership_id == actor.membership_id,
                     CaseAccessRow.active.is_(True),
+                    MembershipRow.active.is_(True),
+                    ExternalIdentityRow.active.is_(True),
+                    CompanyRow.active.is_(True),
                 )
                 .order_by(CaseRow.updated_at.desc())
             ).all()
@@ -491,9 +673,7 @@ class ApplicationSession(Session):
     def locked_case(self, case_id: UUID) -> CaseRow | None:
         return self.scalar(select(CaseRow).where(CaseRow.id == case_id).with_for_update())
 
-    def update_case_request(
-        self, row: CaseRecord, actor: Actor, request_text: str
-    ) -> CaseRow:
+    def update_case_request(self, row: CaseRecord, actor: Actor, request_text: str) -> CaseRow:
         assert isinstance(row, CaseRow)
         new_version = RequestVersionRow(
             case_id=row.id,
@@ -506,6 +686,7 @@ class ApplicationSession(Session):
         self.flush()
         row.current_request_version_id = new_version.id
         row.version += 1
+        row.semantic_context_version += 1
         row.updated_at = utcnow()
         self.add_audit(actor, "CASE_REQUEST_UPDATED", "REPORTING_CASE", row.id)
         self.flush()
@@ -565,9 +746,7 @@ class ApplicationSession(Session):
         if identity is None:
             raise RuntimeError("Invitation identity disappeared during acceptance.")
 
-    def accept_invitation(
-        self, row: InvitationRecord, identity: IdentityRecord
-    ) -> MembershipRow:
+    def accept_invitation(self, row: InvitationRecord, identity: IdentityRecord) -> MembershipRow:
         assert isinstance(row, InvitationRow)
         membership = MembershipRow(
             company_id=row.company_id,
@@ -685,6 +864,203 @@ class ApplicationSession(Session):
             )
             .with_for_update()
         )
+
+    def advance_semantic_context(self, row: CaseRecord) -> None:
+        assert isinstance(row, CaseRow)
+        row.semantic_context_version += 1
+        row.updated_at = utcnow()
+
+    def append_conversation_event(
+        self, actor: Actor, case_id: UUID, kind: str, payload_json: str,
+        command_key: str, payload_digest: str,
+    ) -> ConversationEventRow:
+        sequence = self.scalar(
+            select(func.coalesce(func.max(ConversationEventRow.sequence), 0) + 1).where(
+                ConversationEventRow.case_id == case_id
+            )
+        )
+        row = ConversationEventRow(
+            case_id=case_id,
+            company_id=actor.company_id,
+            sequence=int(sequence or 1),
+            kind=kind,
+            payload_json=payload_json,
+            command_key=command_key,
+            payload_digest=payload_digest,
+            created_by_membership_id=actor.membership_id,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def conversation_event_by_command(
+        self, case_id: UUID, membership_id: UUID, command_key: str
+    ) -> ConversationEventRow | None:
+        return self.scalar(
+            select(ConversationEventRow).where(
+                ConversationEventRow.case_id == case_id,
+                ConversationEventRow.created_by_membership_id == membership_id,
+                ConversationEventRow.command_key == command_key,
+            )
+        )
+
+    def conversation_events(self, case_id: UUID) -> list[ConversationEventRow]:
+        return list(
+            self.scalars(
+                select(ConversationEventRow)
+                .where(ConversationEventRow.case_id == case_id)
+                .order_by(ConversationEventRow.sequence)
+            ).all()
+        )
+
+    def add_evidence(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        request_version_id: UUID,
+        filename: str,
+        format_name: str,
+        content_digest: str,
+        storage_key: str,
+        observed_schema_json: str,
+        schema_digest: str,
+    ) -> EvidenceRow:
+        row = EvidenceRow(
+            case_id=case_id,
+            company_id=actor.company_id,
+            request_version_id=request_version_id,
+            uploaded_by_membership_id=actor.membership_id,
+            filename=filename,
+            format=format_name,
+            content_digest=content_digest,
+            storage_key=storage_key,
+            observed_schema_json=observed_schema_json,
+            schema_digest=schema_digest,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def evidence_items(self, case_id: UUID) -> list[EvidenceRow]:
+        return list(
+            self.scalars(
+                select(EvidenceRow)
+                .where(EvidenceRow.case_id == case_id, EvidenceRow.eligible.is_(True))
+                .order_by(EvidenceRow.created_at)
+            ).all()
+        )
+
+    def evidence_item(self, case_id: UUID, evidence_id: UUID) -> EvidenceRow | None:
+        return self.scalar(
+            select(EvidenceRow).where(
+                EvidenceRow.case_id == case_id,
+                EvidenceRow.id == evidence_id,
+                EvidenceRow.eligible.is_(True),
+            )
+        )
+
+    def evidence_by_digest(
+        self, case_id: UUID, request_version_id: UUID, content_digest: str
+    ) -> EvidenceRow | None:
+        return self.scalar(
+            select(EvidenceRow).where(
+                EvidenceRow.case_id == case_id,
+                EvidenceRow.request_version_id == request_version_id,
+                EvidenceRow.content_digest == content_digest,
+                EvidenceRow.eligible.is_(True),
+            )
+        )
+
+    def add_interpretation(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        request_version_id: UUID,
+        evidence_id: UUID | None,
+        context_version: int,
+        session_json: str,
+        confirmation_summary_json: str,
+        readiness_binding_digest: str,
+        state: str,
+    ) -> InterpretationRow:
+        row = InterpretationRow(
+            case_id=case_id,
+            company_id=actor.company_id,
+            request_version_id=request_version_id,
+            evidence_id=evidence_id,
+            context_version=context_version,
+            session_json=session_json,
+            confirmation_summary_json=confirmation_summary_json,
+            readiness_binding_digest=readiness_binding_digest,
+            state=state,
+            created_by_membership_id=actor.membership_id,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def interpretation(self, case_id: UUID, interpretation_id: UUID) -> InterpretationRow | None:
+        return self.scalar(
+            select(InterpretationRow).where(
+                InterpretationRow.case_id == case_id,
+                InterpretationRow.id == interpretation_id,
+            )
+        )
+
+    def latest_interpretation(self, case_id: UUID) -> InterpretationRow | None:
+        return self.scalar(
+            select(InterpretationRow)
+            .where(InterpretationRow.case_id == case_id)
+            .order_by(InterpretationRow.created_at.desc(), InterpretationRow.id.desc())
+            .limit(1)
+        )
+
+    def interpretation_for_context(
+        self, case_id: UUID, context_version: int
+    ) -> InterpretationRow | None:
+        return self.scalar(
+            select(InterpretationRow).where(
+                InterpretationRow.case_id == case_id,
+                InterpretationRow.context_version == context_version,
+            )
+        )
+
+    def confirmed_contract(self, interpretation_id: UUID) -> ConfirmedContractRow | None:
+        return self.scalar(
+            select(ConfirmedContractRow).where(
+                ConfirmedContractRow.interpretation_id == interpretation_id
+            )
+        )
+
+    def accept_interpretation(
+        self, actor: Actor, row: InterpretationRecord, contract_json: str
+    ) -> ConfirmedContractRow:
+        assert isinstance(row, InterpretationRow)
+        existing = self.confirmed_contract(row.id)
+        if existing is not None:
+            return existing
+        contract = ConfirmedContractRow(
+            case_id=row.case_id,
+            company_id=row.company_id,
+            interpretation_id=row.id,
+            contract_json=contract_json,
+            schema_version=2,
+            accepted_by_membership_id=actor.membership_id,
+        )
+        self.add(contract)
+        self.flush()
+        self.add_audit(
+            actor,
+            "REQUIREMENTS_CONFIRMED",
+            "REPORTING_CASE",
+            row.case_id,
+            json.dumps(
+                {"interpretation_id": str(row.id), "contract_id": str(contract.id)},
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+        return contract
 
 
 def sha256_text(value: str) -> str:

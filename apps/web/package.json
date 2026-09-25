@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "build:semantic-bridge": "esbuild scripts/semantic-bridge.ts --bundle --platform=node --format=esm --target=node22 --outfile=${APBRA_SEMANTIC_BRIDGE_OUT:-/tmp/apbra-semantic-bridge.mjs}",
     "test": "vitest run src",
+    "pretest:e2e": "npm run build:semantic-bridge",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -24,6 +26,7 @@
     "@types/pdfmake": "0.2.13",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
+    "esbuild": "0.27.7",
     "typescript": "5.9.3",
     "vite": "7.3.6",
     "vitest": "4.1.11"
