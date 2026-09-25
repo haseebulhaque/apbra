@@ -299,7 +299,7 @@ def workbook_with_sheet(sheet: str) -> bytes:
     return output.getvalue()
 
 
-def workbook_with_shared_strings(*, header_index: str, value_index: str) -> bytes:
+def workbook_with_shared_strings(*, header_index: str, value_index: str | None) -> bytes:
     output = io.BytesIO()
     workbook = (
         '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
@@ -314,10 +314,11 @@ def workbook_with_shared_strings(*, header_index: str, value_index: str) -> byte
         'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/'
         'sharedStrings"/></Relationships>'
     )
+    value_element = "" if value_index is None else f"<v>{value_index}</v>"
     sheet = (
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         f'<sheetData><row r="1"><c r="A1" t="s"><v>{header_index}</v></c></row>'
-        f'<row r="2"><c r="A2" t="s"><v>{value_index}</v></c></row>'
+        f'<row r="2"><c r="A2" t="s">{value_element}</c></row>'
         "</sheetData></worksheet>"
     )
     shared_strings = (
@@ -355,8 +356,11 @@ def test_xlsx_resolves_valid_non_negative_shared_string_indexes(
     assert column["sampleValues"] == [expected_value]
 
 
-@pytest.mark.parametrize("invalid_index", ["-1", "4", "not-an-integer", "²"])
-def test_xlsx_rejects_invalid_shared_string_indexes(invalid_index: str) -> None:
+@pytest.mark.parametrize(
+    "invalid_index",
+    ["-1", "4", "not-an-integer", "²", "9" * 5_000, "", None],
+)
+def test_xlsx_rejects_invalid_shared_string_indexes(invalid_index: str | None) -> None:
     with pytest.raises(EvidenceError, match="shared strings are malformed"):
         parse_evidence(
             workbook_with_shared_strings(header_index="0", value_index=invalid_index),
@@ -753,17 +757,25 @@ def test_rejected_shared_string_upload_preserves_case_history_and_acceptance(
     before_conversation = client.get(f"/api/cases/{case['id']}/conversation").json()
     before_acceptance = client.get(f"/api/cases/{case['id']}/acceptance").json()
 
-    rejected = client.post(
-        f"/api/cases/{case['id']}/evidence",
-        params={
-            "filename": "negative-shared-string.xlsx",
-            "expected_context_version": context_version,
-        },
-        content=workbook_with_shared_strings(header_index="0", value_index="-1"),
-        headers={**csrf(session), "Content-Type": "application/octet-stream"},
-    )
-    assert rejected.status_code == 422
-    assert rejected.json()["error"]["code"] == "EVIDENCE_INVALID"
+    for suffix, invalid_index in (
+        ("negative", "-1"),
+        ("oversized", "9" * 5_000),
+        ("empty", None),
+    ):
+        rejected = client.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={
+                "filename": f"{suffix}-shared-string.xlsx",
+                "expected_context_version": context_version,
+            },
+            content=workbook_with_shared_strings(
+                header_index="0",
+                value_index=invalid_index,
+            ),
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        )
+        assert rejected.status_code == 422
+        assert rejected.json()["error"]["code"] == "EVIDENCE_INVALID"
 
     assert client.get(f"/api/cases/{case['id']}").json() == before_case
     assert client.get(f"/api/cases/{case['id']}/evidence").json() == before_evidence

@@ -353,13 +353,21 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
                     row.extend([""] * (column_index - len(row)))
                     value_node = cell.find("{*}v")
                     value = "" if value_node is None or value_node.text is None else value_node.text
-                    if cell.attrib.get("t") == "s" and value:
-                        if not value.isascii() or not value.isdigit():
+                    if cell.attrib.get("t") == "s":
+                        if not value or not value.isascii() or not value.isdigit():
                             raise EvidenceError("Workbook shared strings are malformed.")
-                        shared_index = int(value)
-                        if shared_index >= len(shared):
+                        normalized_index = value.lstrip("0") or "0"
+                        maximum_index = str(len(shared) - 1)
+                        if (
+                            not shared
+                            or len(normalized_index) > len(maximum_index)
+                            or (
+                                len(normalized_index) == len(maximum_index)
+                                and normalized_index > maximum_index
+                            )
+                        ):
                             raise EvidenceError("Workbook shared strings are malformed.")
-                        value = shared[shared_index]
+                        value = shared[int(normalized_index)]
                     elif cell.attrib.get("t") == "inlineStr":
                         value = "".join(cell.itertext())
                     row.append(value)
