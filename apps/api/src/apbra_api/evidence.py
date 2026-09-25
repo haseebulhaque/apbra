@@ -270,7 +270,12 @@ def _parse_xlsx(content: bytes) -> ParsedEvidence:
 
         for relationship_name in (name for name in names if name.lower().endswith(".rels")):
             relationship_root = _xml(archive.read(relationship_name))
+            relationship_ids: set[str] = set()
             for relationship in relationship_root.findall("{*}Relationship"):
+                relationship_id = relationship.attrib.get("Id", "").strip()
+                if not relationship_id or relationship_id in relationship_ids:
+                    raise EvidenceError("Workbook relationships are malformed.")
+                relationship_ids.add(relationship_id)
                 target = relationship.attrib.get("Target", "").strip()
                 target_mode = relationship.attrib.get("TargetMode", "").strip().lower()
                 relationship_type = relationship.attrib.get("Type", "").strip().lower()

@@ -355,6 +355,40 @@ def workbook_with_duplicate_shared_strings() -> bytes:
     return output.getvalue()
 
 
+def workbook_with_duplicate_relationship_ids() -> bytes:
+    output = io.BytesIO()
+    workbook = (
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Observed" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Target="worksheets/sheet1.xml" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"/>'
+        '<Relationship Id="rId1" Target="worksheets/sheet2.xml" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"/>'
+        "</Relationships>"
+    )
+    valid_sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row><c t="inlineStr"><is><t>Category</t></is></c></row>'
+        '<row><c t="inlineStr"><is><t>North</t></is></c></row></sheetData></worksheet>'
+    )
+    injected_sheet = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<sheetData><row><c t="inlineStr"><is><t>InjectedHeader</t></is></c></row>'
+        '<row><c t="inlineStr"><is><t>InjectedValue</t></is></c></row></sheetData>'
+        "</worksheet>"
+    )
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("xl/workbook.xml", workbook)
+        archive.writestr("xl/_rels/workbook.xml.rels", relationships)
+        archive.writestr("xl/worksheets/sheet1.xml", valid_sheet)
+        archive.writestr("xl/worksheets/sheet2.xml", injected_sheet)
+    return output.getvalue()
+
+
 @pytest.mark.parametrize(
     ("header_index", "value_index", "expected_header", "expected_value"),
     [("0", "2", "Category", "North"), ("1", "3", "Region", "South")],
@@ -394,6 +428,14 @@ def test_xlsx_rejects_duplicate_package_parts() -> None:
         parse_evidence(
             workbook_with_duplicate_shared_strings(),
             "duplicate-shared-strings.xlsx",
+        )
+
+
+def test_xlsx_rejects_duplicate_relationship_ids() -> None:
+    with pytest.raises(EvidenceError, match="relationships are malformed"):
+        parse_evidence(
+            workbook_with_duplicate_relationship_ids(),
+            "duplicate-relationship-ids.xlsx",
         )
 
 
@@ -800,6 +842,7 @@ def test_rejected_shared_string_upload_preserves_case_history_and_acceptance(
             workbook_with_shared_strings(header_index="0", value_index=None),
         ),
         ("duplicate-part", workbook_with_duplicate_shared_strings()),
+        ("duplicate-relationship", workbook_with_duplicate_relationship_ids()),
     ):
         rejected = client.post(
             f"/api/cases/{case['id']}/evidence",
