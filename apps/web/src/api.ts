@@ -15,6 +15,7 @@ export type DurableQuestion={id:string;question:string;reason:string;required:bo
 export type DurableInterpretation={id:string;state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION'|'CONFIRMED';current:boolean;context_version:number;confirmation_summary:{objective:string;businessQuestions:string[];kpiDefinitions:string[];scopeAndTime:string[];dimensionsAndFilters:string[];lifecycleDefinitions:string[];materialPolicyDecisions:string[]};interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[];simulation:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'};
 export type DurableContract={id:string;interpretation_id:string;schema_version:2;accepted_at:string;contract:Record<string,unknown>;current:boolean};
 export type AcceptanceState={interpretation:DurableInterpretation|null;confirmed_contract:DurableContract|null};
+export type GenerationAttempt={id:string;case_id:string;confirmed_contract_id:string;interpretation_id:string;request_version_id:string;status:'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED';attempt_number:number;retry_of_attempt_id:string|null;supersedes_attempt_id:string|null;provenance:{mode:string;pipeline:string;runtimeEvidence:Record<string,string>};validation:Record<string,unknown>|null;failure:{code:string;message:string}|null;created_at:string;started_at:string|null;completed_at:string|null;cancelled_at:string|null;artifact:{id:string;filename:string;content_digest:string;byte_size:number;validation_status:'PASS';created_at:string}|null};
 export type ApiErrorBody={error?:{code?:string;message?:string}};
 
 export class ApiError extends Error{
@@ -71,4 +72,10 @@ export const acceptanceApi={
   state:(caseId:string)=>request<AcceptanceState>(`/api/cases/${encodeURIComponent(caseId)}/acceptance`),
   prepare:(caseId:string,expectedContextVersion:number,csrfToken:string)=>request<{interpretation:DurableInterpretation}>(`/api/cases/${encodeURIComponent(caseId)}/interpretations`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})}).then(value=>value.interpretation),
   confirm:(caseId:string,interpretationId:string,expectedContextVersion:number,csrfToken:string)=>request<{confirmed_contract:DurableContract}>(`/api/cases/${encodeURIComponent(caseId)}/confirm`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({interpretation_id:interpretationId,expected_context_version:expectedContextVersion})}).then(value=>value.confirmed_contract),
+};
+export const generationApi={
+  list:(caseId:string)=>request<{items:GenerationAttempt[]}>(`/api/cases/${encodeURIComponent(caseId)}/generation`),
+  start:(caseId:string,confirmedContractId:string,commandKey:string,csrfToken:string,mode:'BUILD'|'RETRY'|'REGENERATE'='BUILD',sourceAttemptId?:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,command_key:commandKey,mode,source_attempt_id:sourceAttemptId})}).then(value=>value.attempt),
+  cancel:(caseId:string,attemptId:string,csrfToken:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/cancel`,{method:'POST',headers:csrfHeaders(csrfToken)}).then(value=>value.attempt),
+  artifactUrl:(caseId:string,attemptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/artifact`,
 };

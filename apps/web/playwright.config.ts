@@ -25,7 +25,7 @@ if(!sessionSecret)throw new Error('APBRA_E2E_SESSION_SECRET must be provided for
 
 export default defineConfig({
   testDir:'./e2e',
-  outputDir:process.env.APBRA_E2E_OUTPUT_DIR||'/tmp/apbra-162-playwright-output',
+  outputDir:process.env.APBRA_E2E_OUTPUT_DIR||'/tmp/apbra-164-playwright-output',
   timeout:30_000,
   fullyParallel:false,
   retries:ci?1:0,
@@ -39,7 +39,7 @@ export default defineConfig({
       cwd:'.',
       reuseExistingServer:false,
       timeout:60_000,
-      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true',APBRA_EVIDENCE_ROOT:'/tmp/apbra-163-e2e-evidence',APBRA_SEMANTIC_BRIDGE_PATH:'/tmp/apbra-semantic-bridge.mjs',APBRA_SEMANTIC_NODE_PATH:process.execPath},
+      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true',APBRA_EVIDENCE_ROOT:'/tmp/apbra-164-e2e-evidence',APBRA_ARTIFACT_ROOT:'/tmp/apbra-164-e2e-artifacts',APBRA_SEMANTIC_BRIDGE_PATH:'/tmp/apbra-semantic-bridge.mjs',APBRA_GENERATION_BRIDGE_PATH:'/tmp/apbra-generation-bridge.mjs',APBRA_SEMANTIC_NODE_PATH:process.execPath},
     },
     {
       command:`npm run dev -- --port ${webPort} --strictPort`,

@@ -107,8 +107,12 @@ def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Set
         session_secret=secrets.token_urlsafe(48),
         bootstrap_enabled=True,
         evidence_root=root / "evidence",
+        artifact_root=root / "artifacts",
         semantic_bridge_path=Path(
             os.environ.get("APBRA_TEST_SEMANTIC_BRIDGE", "/nonexistent/bridge.mjs")
+        ),
+        generation_bridge_path=Path(
+            os.environ.get("APBRA_TEST_GENERATION_BRIDGE", "/nonexistent/generation.mjs")
         ),
         semantic_node_path=Path(shutil.which("node") or "/nonexistent/node"),
     )
