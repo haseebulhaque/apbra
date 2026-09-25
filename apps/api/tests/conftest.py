@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import secrets
+import shutil
 from collections.abc import Iterator
+from pathlib import Path
 from typing import cast
 from urllib.parse import urlsplit
 
@@ -75,9 +77,7 @@ def validate_disposable_database_url(raw_url: str) -> str:
                 "while destructive backend tests run."
             ) from error
         if candidate_url.database == "apbra_test" or candidate_target == test_target:
-            raise pytest.UsageError(
-                f"APBRA_TEST_DATABASE_URL must be distinct from {name}."
-            )
+            raise pytest.UsageError(f"APBRA_TEST_DATABASE_URL must be distinct from {name}.")
     return raw_url
 
 
@@ -97,7 +97,8 @@ def database_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def settings(database_url: str) -> Settings:
+def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Settings:
+    root = tmp_path_factory.mktemp("apbra-api")
     return Settings(
         profile="test",
         database_url=database_url,
@@ -105,6 +106,11 @@ def settings(database_url: str) -> Settings:
         api_origin="http://127.0.0.1:8000",
         session_secret=secrets.token_urlsafe(48),
         bootstrap_enabled=True,
+        evidence_root=root / "evidence",
+        semantic_bridge_path=Path(
+            os.environ.get("APBRA_TEST_SEMANTIC_BRIDGE", "/nonexistent/bridge.mjs")
+        ),
+        semantic_node_path=Path(shutil.which("node") or "/nonexistent/node"),
     )
 
 

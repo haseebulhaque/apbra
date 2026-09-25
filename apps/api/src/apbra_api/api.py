@@ -11,7 +11,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from .application import CaseService, InvitationService, MembershipService
+from .application import (
+    AcceptanceService,
+    CaseService,
+    ConversationService,
+    EvidenceService,
+    InvitationService,
+    MembershipService,
+)
 from .auth_boundary import (
     AUTH_BINDING_COOKIE,
     SESSION_COOKIE,
@@ -26,7 +33,15 @@ from .auth_boundary import (
 from .authorization import resolve_actor, resolve_session
 from .bootstrap import BOOTSTRAP_IDENTITIES
 from .config import Settings, get_settings
-from .domain import AccessLevel, ApplicationError, AuthenticationRequired, Conflict, Role
+from .domain import (
+    AccessLevel,
+    ApplicationError,
+    AuthenticationRequired,
+    Conflict,
+    EvidenceInvalid,
+    Role,
+)
+from .evidence import MAX_EVIDENCE_BYTES, LocalEvidenceStore
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     AuthorizationCodeRow,
@@ -36,6 +51,7 @@ from .persistence import (
     MembershipRow,
     SessionRow,
 )
+from .semantic_bridge import SemanticBridge
 
 logger = logging.getLogger("apbra_api")
 
@@ -67,6 +83,25 @@ class InvitationToken(BaseModel):
     token: str = Field(min_length=40, max_length=200)
 
 
+class ConversationEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str = Field(min_length=1, max_length=40)
+    payload: dict[str, Any]
+    expected_context_version: int = Field(ge=1)
+    command_key: str = Field(min_length=8, max_length=200)
+
+
+class InterpretationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_context_version: int = Field(ge=1)
+
+
+class InterpretationConfirm(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    interpretation_id: UUID
+    expected_context_version: int = Field(ge=1)
+
+
 def error_response(exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -94,6 +129,12 @@ def create_app(
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
+    conversation_service = ConversationService()
+    evidence_service = (
+        EvidenceService(LocalEvidenceStore(settings.evidence_root, settings.profile))
+        if settings.profile in {"development", "test"}
+        else None
+    )
     invitation_service = InvitationService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
@@ -111,6 +152,20 @@ def create_app(
             exc.code = "CSRF_INVALID"
             exc.public_message = "The request could not be verified. Refresh and try again."
             raise exc
+
+    def local_evidence_service() -> EvidenceService:
+        if evidence_service is None:
+            raise EvidenceInvalid()
+        return evidence_service
+
+    def local_acceptance_service() -> AcceptanceService:
+        objects = local_evidence_service().objects
+        return AcceptanceService(
+            SemanticBridge(
+                settings.semantic_bridge_path, node_executable=settings.semantic_node_path
+            ),
+            objects,
+        )
 
     @app.exception_handler(ApplicationError)
     async def handle_application_error(_request: Request, exc: ApplicationError) -> JSONResponse:
@@ -281,8 +336,7 @@ def create_app(
                 transaction.expected_issuer != settings.issuer
                 or transaction.client_id != settings.oidc_audience
                 or transaction.redirect_uri != settings.callback_url
-                or transaction.provider_configuration_digest
-                != settings.oidc_configuration_digest
+                or transaction.provider_configuration_digest != settings.oidc_configuration_digest
                 or transaction.response_issuer_required != settings.callback_issuer_required
             )
             else "response_issuer_missing"
@@ -427,6 +481,127 @@ def create_app(
     def case_versions(case_id: UUID, db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         return {"items": case_service.versions(db, resolve_actor(db, session_token), case_id)}
 
+    @app.get("/api/cases/{case_id}/conversation")
+    def list_conversation(
+        case_id: UUID, db: DB, session_token: SessionCookie = None
+    ) -> dict[str, Any]:
+        return {
+            "items": conversation_service.list_events(db, resolve_actor(db, session_token), case_id)
+        }
+
+    @app.post("/api/cases/{case_id}/conversation")
+    def append_conversation(
+        case_id: UUID,
+        payload: ConversationEventCreate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        event = conversation_service.append_event(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            kind=payload.kind,
+            payload=payload.payload,
+            expected_context_version=payload.expected_context_version,
+            command_key=payload.command_key,
+        )
+        db.commit()
+        return {"event": event}
+
+    @app.get("/api/cases/{case_id}/evidence")
+    def list_evidence(case_id: UUID, db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        return {
+            "items": local_evidence_service().list(db, resolve_actor(db, session_token), case_id)
+        }
+
+    @app.post("/api/cases/{case_id}/evidence")
+    async def add_evidence(
+        case_id: UUID,
+        request: Request,
+        db: DB,
+        filename: str = Query(min_length=1, max_length=255),
+        expected_context_version: int = Query(ge=1),
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        content_length = request.headers.get("content-length")
+        if (
+            content_length is None
+            or not content_length.isdigit()
+            or int(content_length) > MAX_EVIDENCE_BYTES
+        ):
+            raise EvidenceInvalid()
+        content_buffer = bytearray()
+        async for chunk in request.stream():
+            if len(content_buffer) + len(chunk) > MAX_EVIDENCE_BYTES:
+                raise EvidenceInvalid()
+            content_buffer.extend(chunk)
+        content = bytes(content_buffer)
+        objects = local_evidence_service()
+        result, storage_key = objects.add(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            filename=filename,
+            content=content,
+            expected_context_version=expected_context_version,
+        )
+        try:
+            db.commit()
+        except Exception:
+            if storage_key is not None:
+                objects.objects.delete(storage_key)
+            raise
+        return {"evidence": result}
+
+    @app.post("/api/cases/{case_id}/interpretations")
+    def create_interpretation(
+        case_id: UUID,
+        payload: InterpretationCreate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        result = local_acceptance_service().create_interpretation(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            expected_context_version=payload.expected_context_version,
+        )
+        db.commit()
+        return {"interpretation": result}
+
+    @app.get("/api/cases/{case_id}/acceptance")
+    def acceptance_state(
+        case_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return local_acceptance_service().state(db, resolve_actor(db, session_token), case_id)
+
+    @app.post("/api/cases/{case_id}/confirm")
+    def confirm_interpretation(
+        case_id: UUID,
+        payload: InterpretationConfirm,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        result = local_acceptance_service().confirm(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            interpretation_id=payload.interpretation_id,
+            expected_context_version=payload.expected_context_version,
+        )
+        db.commit()
+        return {"confirmed_contract": result}
+
     @app.put("/api/cases/{case_id}")
     def update_case(
         case_id: UUID,
@@ -452,11 +627,7 @@ def create_app(
     def list_case_access(
         case_id: UUID, db: DB, session_token: SessionCookie = None
     ) -> dict[str, Any]:
-        return {
-            "items": case_service.list_access(
-                db, resolve_actor(db, session_token), case_id
-            )
-        }
+        return {"items": case_service.list_access(db, resolve_actor(db, session_token), case_id)}
 
     @app.post("/api/cases/{case_id}/access")
     def grant_case_access(
@@ -486,9 +657,7 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, bool]:
         require_csrf(session_token, csrf)
-        case_service.revoke_access(
-            db, resolve_actor(db, session_token), case_id, membership_id
-        )
+        case_service.revoke_access(db, resolve_actor(db, session_token), case_id, membership_id)
         db.commit()
         return {"revoked": True}
 

@@ -24,6 +24,7 @@ jobs:
       APBRA_API_ORIGIN: http://127.0.0.1:8000
       APBRA_SESSION_SECRET: ci-only-generated-context-session-material
       APBRA_BOOTSTRAP_ENABLED: "true"
+      APBRA_TEST_SEMANTIC_BRIDGE: /tmp/apbra-semantic-bridge.mjs
     services:
       postgres:
         image: postgres:17.11-bookworm
@@ -46,6 +47,9 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
       - name: Scan tracked files and fetched history
         run: bash scripts/scan_secrets.sh
       - name: Install exact engineering tooling
@@ -65,6 +69,10 @@ jobs:
       - name: Create isolated backend and browser test databases
         run: |
           uv --directory apps/api run --frozen python -c "import psycopg; connection=psycopg.connect('postgresql://postgres@127.0.0.1:5432/postgres', autocommit=True); connection.execute('CREATE DATABASE apbra_test'); connection.execute('CREATE DATABASE apbra_e2e'); connection.close(); sentinel=psycopg.connect('postgresql://postgres@127.0.0.1:5432/apbra', autocommit=True); sentinel.execute('CREATE TABLE backend_test_isolation_sentinel (value text NOT NULL)'); sentinel.execute(\"INSERT INTO backend_test_isolation_sentinel VALUES ('preserved')\"); sentinel.close()"
+      - name: Build canonical TypeScript semantic bridge
+        run: |
+          npm --prefix apps/web ci --ignore-scripts
+          npm --prefix apps/web run build:semantic-bridge
       - name: Check and test the API against PostgreSQL 17
         run: |
           uv --directory apps/api run --frozen ruff check .
@@ -72,12 +80,8 @@ jobs:
           uv --directory apps/api run --frozen alembic upgrade head
           uv --directory apps/api run --frozen pytest
           uv --directory apps/api run --frozen python -c "import psycopg; connection=psycopg.connect('postgresql://postgres@127.0.0.1:5432/apbra'); row=connection.execute('SELECT value FROM backend_test_isolation_sentinel').fetchone(); assert row == ('preserved',), row; connection.close()"
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '24.19.0'
       - name: Build and test locked requester shell
         run: |
-          npm --prefix apps/web ci --ignore-scripts
           npm --prefix apps/web test
           npm --prefix apps/web run build
           npm --prefix apps/web exec playwright install --with-deps chromium

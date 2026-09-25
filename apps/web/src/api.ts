@@ -1,13 +1,20 @@
 export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
 export type Session={authenticated:boolean;actor?:Actor;csrf_token?:string};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
-export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;created_at:string;updated_at:string;current_request:RequestVersion};
+export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
 export type Invitation={id:string;company_id:string;subject:string;role:string;expires_at:string};
 export type InvitationInspection={invitation:Invitation;status?:string};
 export type IssuedInvitation={invitation:Invitation;token:string};
 export type Membership={id:string;display_name:string;subject:string;role:string;active:boolean};
 export type CaseAccess={membership_id:string;display_name:string;subject:string;access_level:'OWNER'|'EDITOR'|'VIEWER';active:boolean};
+export type ConversationEvent={id:string;sequence:number;kind:'USER_MESSAGE'|'RAW_ANSWER'|'CORRECTION'|'CLARIFICATION_QUESTION'|'AI_ANALYSIS'|'ALTERNATIVE_PROPOSED'|'ALTERNATIVE_ACCEPTED'|'ALTERNATIVE_DECLINED';payload:Record<string,unknown>;created_at:string;semantic_context_version?:number};
+export type ObservedEvidenceSchema={kind:'REQUEST_DATA_STRUCTURE';tables:Array<{name:string;rowCount:number;columns:Array<{name:string;type:string}>}>};
+export type EvidenceItem={id:string;request_version_id:string;filename:string;format:'CSV'|'XLSX';content_digest:string;schema_digest:string;observed_schema:ObservedEvidenceSchema;created_at:string;semantic_context_version?:number};
+export type DurableQuestion={id:string;question:string;reason:string;required:boolean;suggestions:Array<{id:string;label:string}>;allowFreeText:boolean};
+export type DurableInterpretation={id:string;state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION'|'CONFIRMED';current:boolean;context_version:number;confirmation_summary:{objective:string;businessQuestions:string[];kpiDefinitions:string[];scopeAndTime:string[];dimensionsAndFilters:string[];lifecycleDefinitions:string[];materialPolicyDecisions:string[]};interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[];simulation:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'};
+export type DurableContract={id:string;interpretation_id:string;schema_version:2;accepted_at:string;contract:Record<string,unknown>;current:boolean};
+export type AcceptanceState={interpretation:DurableInterpretation|null;confirmed_contract:DurableContract|null};
 export type ApiErrorBody={error?:{code?:string;message?:string}};
 
 export class ApiError extends Error{
@@ -48,4 +55,20 @@ export const invitationsApi={
 export const membershipsApi={
   list:()=>request<{items:Membership[]}>('/api/memberships'),
   deactivate:(membershipId:string,csrfToken:string)=>request<{deactivated:boolean}>(`/api/memberships/${encodeURIComponent(membershipId)}/deactivate`,{method:'POST',headers:csrfHeaders(csrfToken)}),
+};
+export const conversationApi={
+  list:(caseId:string)=>request<{items:ConversationEvent[]}>(`/api/cases/${encodeURIComponent(caseId)}/conversation`),
+  append:(caseId:string,kind:ConversationEvent['kind'],payload:Record<string,unknown>,expectedContextVersion:number,commandKey:string,csrfToken:string)=>request<{event:ConversationEvent}>(`/api/cases/${encodeURIComponent(caseId)}/conversation`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({kind,payload,expected_context_version:expectedContextVersion,command_key:commandKey})}).then(value=>value.event),
+};
+export const evidenceApi={
+  list:(caseId:string)=>request<{items:EvidenceItem[]}>(`/api/cases/${encodeURIComponent(caseId)}/evidence`),
+  add:async(caseId:string,file:File,expectedContextVersion:number,csrfToken:string)=>{
+    const query=new URLSearchParams({filename:file.name,expected_context_version:String(expectedContextVersion)}),response=await fetch(`/api/cases/${encodeURIComponent(caseId)}/evidence?${query}`,{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/octet-stream',...csrfHeaders(csrfToken)},body:file}),body=await response.json().catch(()=>({})) as {evidence:EvidenceItem}&ApiErrorBody;
+    if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The evidence could not be added.');return body.evidence;
+  },
+};
+export const acceptanceApi={
+  state:(caseId:string)=>request<AcceptanceState>(`/api/cases/${encodeURIComponent(caseId)}/acceptance`),
+  prepare:(caseId:string,expectedContextVersion:number,csrfToken:string)=>request<{interpretation:DurableInterpretation}>(`/api/cases/${encodeURIComponent(caseId)}/interpretations`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})}).then(value=>value.interpretation),
+  confirm:(caseId:string,interpretationId:string,expectedContextVersion:number,csrfToken:string)=>request<{confirmed_contract:DurableContract}>(`/api/cases/${encodeURIComponent(caseId)}/confirm`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({interpretation_id:interpretationId,expected_context_version:expectedContextVersion})}).then(value=>value.confirmed_contract),
 };

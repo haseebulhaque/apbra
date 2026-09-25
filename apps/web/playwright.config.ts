@@ -39,7 +39,7 @@ export default defineConfig({
       cwd:'.',
       reuseExistingServer:false,
       timeout:60_000,
-      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true'},
+      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true',APBRA_EVIDENCE_ROOT:'/tmp/apbra-163-e2e-evidence',APBRA_SEMANTIC_BRIDGE_PATH:'/tmp/apbra-semantic-bridge.mjs',APBRA_SEMANTIC_NODE_PATH:process.execPath},
     },
     {
       command:`npm run dev -- --port ${webPort} --strictPort`,

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 from urllib.parse import ParseResult, urlparse
 
@@ -38,6 +39,9 @@ class Settings(BaseSettings):
     bootstrap_enabled: bool = True
     invitation_ttl_days: int = Field(default=7, ge=1, le=30)
     session_ttl_seconds: int = Field(default=43_200, ge=300, le=86_400)
+    evidence_root: Path = Path("/var/lib/apbra/evidence")
+    semantic_bridge_path: Path = Path("/app/runtime/apbra-semantic-bridge.mjs")
+    semantic_node_path: Path = Path("/usr/local/bin/node")
     oidc_issuer: str | None = None
     oidc_audience: str = "apbra-local-client"
     oidc_jwks_json: str | None = None

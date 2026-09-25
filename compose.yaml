@@ -19,7 +19,8 @@ services:
 
   api:
     build:
-      context: ./apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,6 +32,9 @@ services:
       APBRA_SESSION_SECRET: ${APBRA_SESSION_SECRET:?Set APBRA_SESSION_SECRET for this local stack}
       APBRA_BOOTSTRAP_ENABLED: "true"
       APBRA_INVITATION_TTL_DAYS: "7"
+      APBRA_EVIDENCE_ROOT: /var/lib/apbra/evidence
+      APBRA_SEMANTIC_BRIDGE_PATH: /app/runtime/apbra-semantic-bridge.mjs
+      APBRA_SEMANTIC_NODE_PATH: /usr/local/bin/node
     command:
       - /bin/sh
       - -ec
@@ -46,6 +50,9 @@ services:
       retries: 30
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - apbra_evidence_data:/var/lib/apbra/evidence
 
 volumes:
   apbra_postgres_data:
+  apbra_evidence_data:
