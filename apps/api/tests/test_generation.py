@@ -220,7 +220,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
 
 
 def test_pipeline_failure_is_durable_and_never_downloadable(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     session = sign_in(client, "member")
     case, contract = confirmed_case(
@@ -248,6 +248,18 @@ def test_pipeline_failure_is_durable_and_never_downloadable(
         client.get(f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact").status_code
         == 404
     )
+    with database.session() as db:
+        audit_events = list(
+            db.scalars(
+                text(
+                    "SELECT event_type FROM audit_events "
+                    "WHERE resource_type='GENERATION_ATTEMPT' AND resource_id=:attempt_id "
+                    "ORDER BY created_at, event_type"
+                ),
+                {"attempt_id": attempt["id"]},
+            )
+        )
+    assert audit_events == ["GENERATION_STARTED", "GENERATION_FAILED"]
 
 
 def test_equivalent_concurrent_commands_collapse_to_one_durable_attempt(

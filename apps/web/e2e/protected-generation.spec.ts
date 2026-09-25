@@ -1,5 +1,5 @@
 import {expect,test,type Page} from '@playwright/test';
-import {readFileSync} from 'node:fs';
+import {chmodSync,readFileSync} from 'node:fs';
 
 async function signIn(page:Page,identity:'member'|'foreign'='member'){
   await page.goto('/');
@@ -23,8 +23,14 @@ test('confirmed meaning builds one durable private candidate across reload',asyn
   await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
   await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
 
-  await page.getByRole('button',{name:'Build report'}).click();
-  await expect(page.getByText(/Version 1 · Report ready/)).toBeVisible();
+  const artifactRoot='/tmp/apbra-164-e2e-artifacts';
+  try{
+    chmodSync(artifactRoot,0o500);
+    await page.getByRole('button',{name:'Build report'}).click();
+    await expect(page.getByText(/Version 1 · Build failed/)).toBeVisible();
+  }finally{chmodSync(artifactRoot,0o700)}
+  await page.getByRole('button',{name:'Retry failed build'}).click();
+  await expect(page.getByText(/Version 2 · Report ready/)).toBeVisible();
   const download=page.getByRole('link',{name:'Download validated Power BI candidate'});
   await expect(download).toBeVisible();
   const artifactPath=await download.getAttribute('href')??'';
@@ -43,11 +49,12 @@ test('confirmed meaning builds one durable private candidate across reload',asyn
 
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
-  await expect(page.getByText(/Version 1 · Report ready/)).toBeVisible();
-  await expect(page.getByText('1 attempt',{exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Build another version'}).click();
   await expect(page.getByText(/Version 2 · Report ready/)).toBeVisible();
+  await expect(page.getByText(/Version 1 · Build failed/)).toBeVisible();
   await expect(page.getByText('2 attempts',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Build another version'}).click();
+  await expect(page.getByText(/Version 3 · Report ready/)).toBeVisible();
+  await expect(page.getByText('3 attempts',{exact:true})).toBeVisible();
   await expect(page.getByRole('link',{name:'Download validated Power BI candidate'})).toHaveCount(2);
 
   await page.getByLabel('Current business request').fill(`${request} Include the latest reviewed period.`);
