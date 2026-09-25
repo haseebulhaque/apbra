@@ -107,9 +107,7 @@ def upgrade() -> None:
             name="ck_generation_status",
         ),
     )
-    op.create_index(
-        "ix_generation_case_created", "generation_attempts", ["case_id", "created_at"]
-    )
+    op.create_index("ix_generation_case_created", "generation_attempts", ["case_id", "created_at"])
     op.create_index(
         "uq_generation_case_active",
         "generation_attempts",
@@ -139,16 +137,23 @@ def upgrade() -> None:
             name="fk_artifact_attempt_case_company",
         ),
         sa.UniqueConstraint("attempt_id", name="uq_artifact_attempt"),
+        sa.UniqueConstraint(
+            "id",
+            "attempt_id",
+            "case_id",
+            "company_id",
+            name="uq_artifact_identity_attempt_case_company",
+        ),
         sa.UniqueConstraint("storage_key", name="uq_artifact_storage_key"),
         sa.CheckConstraint("byte_size > 0", name="ck_artifact_size"),
         sa.CheckConstraint("validation_status = 'PASS'", name="ck_artifact_validation_pass"),
     )
     op.create_foreign_key(
-        "fk_generation_artifact",
+        "fk_generation_artifact_identity",
         "generation_attempts",
         "generated_artifacts",
-        ["artifact_id"],
-        ["id"],
+        ["artifact_id", "id", "case_id", "company_id"],
+        ["id", "attempt_id", "case_id", "company_id"],
     )
     op.execute(
         "CREATE FUNCTION apbra_guard_generation_attempt_mutation() RETURNS trigger AS $$ "
@@ -163,13 +168,29 @@ def upgrade() -> None:
         "NEW.interpretation_id <> OLD.interpretation_id OR "
         "NEW.request_version_id <> OLD.request_version_id OR "
         "NEW.created_by_membership_id <> OLD.created_by_membership_id OR "
+        "NEW.retry_of_attempt_id IS DISTINCT FROM OLD.retry_of_attempt_id OR "
+        "NEW.supersedes_attempt_id IS DISTINCT FROM OLD.supersedes_attempt_id OR "
         "NEW.command_key <> OLD.command_key OR "
         "NEW.command_payload_digest <> OLD.command_payload_digest OR "
         "NEW.input_digest <> OLD.input_digest OR "
         "NEW.evidence_binding_digest <> OLD.evidence_binding_digest OR "
         "NEW.attempt_number <> OLD.attempt_number OR "
-        "NEW.fence_token <> OLD.fence_token OR NEW.provenance_json <> OLD.provenance_json "
+        "NEW.fence_token <> OLD.fence_token OR NEW.provenance_json <> OLD.provenance_json OR "
+        "NEW.created_at <> OLD.created_at "
         "THEN RAISE EXCEPTION 'generation identity is immutable'; END IF; "
+        "IF OLD.artifact_id IS NOT NULL AND NEW.artifact_id IS DISTINCT FROM OLD.artifact_id "
+        "THEN RAISE EXCEPTION 'generation artifact identity is immutable'; END IF; "
+        "IF OLD.status = 'PENDING' AND NEW.status NOT IN ('RUNNING','CANCELLED') THEN "
+        "RAISE EXCEPTION 'invalid generation status transition'; END IF; "
+        "IF OLD.status = 'RUNNING' AND NEW.status NOT IN ('SUCCEEDED','FAILED','CANCELLED') "
+        "THEN RAISE EXCEPTION 'invalid generation status transition'; END IF; "
+        "IF NEW.status = 'SUCCEEDED' AND (NEW.artifact_id IS NULL OR "
+        "NEW.validation_json IS NULL OR NEW.completed_at IS NULL) THEN "
+        "RAISE EXCEPTION 'successful generation requires validated artifact'; END IF; "
+        "IF NEW.status IN ('FAILED','CANCELLED') AND NEW.artifact_id IS NOT NULL THEN "
+        "RAISE EXCEPTION 'unsuccessful generation cannot retain artifact'; END IF; "
+        "IF NEW.artifact_id IS NOT NULL AND NEW.status <> 'SUCCEEDED' THEN "
+        "RAISE EXCEPTION 'artifact requires successful generation'; END IF; "
         "RETURN NEW; END; $$ LANGUAGE plpgsql"
     )
     op.execute(
@@ -189,7 +210,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_generation_artifact", "generation_attempts", type_="foreignkey")
+    op.drop_constraint("fk_generation_artifact_identity", "generation_attempts", type_="foreignkey")
     op.drop_table("generated_artifacts")
     op.execute("DROP FUNCTION apbra_reject_generated_artifact_mutation()")
     op.drop_table("generation_attempts")

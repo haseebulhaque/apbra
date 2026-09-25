@@ -1,6 +1,6 @@
 import {readFileSync} from 'node:fs';
 import {afterEach,expect,it,vi} from 'vitest';
-import {analyseRequirementIteratively,generateGroundedReportDesign,inspectMeasureIntegrity,interpretRequirement,normalizeMeasureContracts,repairGroundedReportDesignLayout,reportDesignSchema,validateClarificationAnalysis,validateInterpretation,validateReportDesign,validateReportDesignEnvelope,type ClarificationAnalysis,type ReportDesign} from './foundry';
+import {analyseRequirementIteratively,evaluateDeterministicGovernedKnowledge,generateGroundedReportDesign,inspectMeasureIntegrity,interpretRequirement,normalizeMeasureContracts,repairGroundedReportDesignLayout,reportDesignSchema,validateClarificationAnalysis,validateInterpretation,validateReportDesign,validateReportDesignEnvelope,type ClarificationAnalysis,type ReportDesign} from './foundry';
 import {beginClarificationAnalysis,createClarificationSession} from './clarification';
 import {defaultTenantSettings} from './tenant';
 
@@ -10,6 +10,17 @@ const totalSales=coverage({id:'total-sales-kpi',kind:'KPI',measureNames:['Total 
 const regionFilter=coverage({id:'region-filter',kind:'FILTER',measureNames:[],fields:['Sales.Region'],pageNames:[]});
 const interpretation={request_kind:'POWER_BI_REPORT',objective:'Track sales',businessQuestions:['How much revenue?'],kpis:['Total Sales'],dimensions:['Region'],filters:['Sales.Region'],audience:'Executives',pages:['Executive Summary'],assumptions:[],ambiguities:['Sales definition'],clarifications:[{id:'sales-definition',category:'METRIC_DEFINITION',question:'How is sales defined?',reason:'The schema contains several monetary fields.',required:true,coverageRequirementIds:['total-sales-kpi'],selection:'SINGLE',options:[{id:'gross-sales',label:'Use gross sales',coverageOverrides:[totalSales],pageScope:[],audience:''},{id:'net-sales',label:'Use net sales',coverageOverrides:[{...totalSales,measures:[{...salesMeasure,businessDefinition:'Sum of net sales amount',field:'Sales.NetAmount'}]}],pageScope:[],audience:''}]}],coverageRequirements:[totalSales,regionFilter],businessQuestionCoverage:[{question:'How much revenue?',coverageRequirementIds:['total-sales-kpi']}]};
 afterEach(()=>vi.unstubAllGlobals());
+it('applies only exact machine-enforced governed clauses and fails closed when one is absent',()=>{
+  const clauses=[
+    {citation:'accessibility#1',text:'Use meaningful visual titles, readable labels, text alternatives, sufficient contrast.'},
+    {citation:'measures#1',text:'Explicit measures are preferred over implicit aggregation. Ratios must reference named numerator and denominator measures and handle empty denominators.'},
+    {citation:'visuals#1',text:'Prefer standard Power BI visuals. Use KPI cards for headline measures, a line chart for time trends, and bar charts for regional or category comparisons.'},
+  ];
+  const applied=evaluateDeterministicGovernedKnowledge(clauses);
+  expect(applied.map(item=>item.citation)).toEqual(clauses.map(item=>item.citation));
+  expect(applied.every(item=>item.decision.includes('Enforced')||item.decision.includes('Applied'))).toBe(true);
+  expect(()=>evaluateDeterministicGovernedKnowledge(clauses.slice(0,2))).toThrow('DETERMINISTIC_GOVERNED_KNOWLEDGE_UNSUPPORTED');
+});
 it('keeps the active generic production path free of acceptance-scenario literals and packing recipes',()=>{const files=['foundry.ts','confirmedRequirements.ts','EnterpriseApp.tsx','clarification.ts','tenant.ts','reportDesignNormalization.ts'],source=files.map(file=>readFileSync(new URL(`./${file}`,import.meta.url),'utf8')).join('\n'),forbidden=[/ServiceNow/i,/\btickets?\b/i,/Ticket Number/i,/Ticket Type/i,/Stage Group/i,/Closure Rate/i,/Total Created/i,/Executive Summary/i,/Operational Detail/i,/SalesPerformance\.DesignPlan/i,/four required KPI cards/i,/four-card/i,/two-analysis/i,/four-filter/i,/joint operational breakdown/i];for(const pattern of forbidden)expect(source).not.toMatch(pattern)});
 it('validates structured interpretation and rejects malformed responses',()=>{
   expect(validateInterpretation(interpretation).clarifications[0].question).toContain('sales');

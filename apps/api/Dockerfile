@@ -4,6 +4,7 @@ COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY apps/web/scripts ./scripts
 COPY apps/web/src ./src
+COPY apps/web/knowledge ./knowledge
 RUN APBRA_SEMANTIC_BRIDGE_OUT=/runtime/apbra-semantic-bridge.mjs npm run build:semantic-bridge
 RUN APBRA_GENERATION_BRIDGE_OUT=/runtime/apbra-generation-bridge.mjs npm run build:generation-bridge
 

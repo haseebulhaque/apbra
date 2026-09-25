@@ -466,6 +466,17 @@ class GenerationAttemptRow(Base):
             ["memberships.id", "memberships.company_id"],
             name="fk_generation_actor_company",
         ),
+        ForeignKeyConstraint(
+            ["artifact_id", "id", "case_id", "company_id"],
+            [
+                "generated_artifacts.id",
+                "generated_artifacts.attempt_id",
+                "generated_artifacts.case_id",
+                "generated_artifacts.company_id",
+            ],
+            name="fk_generation_artifact_identity",
+            use_alter=True,
+        ),
         UniqueConstraint(
             "company_id",
             "created_by_membership_id",
@@ -502,9 +513,7 @@ class GenerationAttemptRow(Base):
     validation_json: Mapped[str | None] = mapped_column(Text)
     failure_code: Mapped[str | None] = mapped_column(String(80))
     failure_reason: Mapped[str | None] = mapped_column(String(500))
-    artifact_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("generated_artifacts.id", use_alter=True, name="fk_generation_artifact")
-    )
+    artifact_id: Mapped[UUID | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -524,6 +533,13 @@ class GeneratedArtifactRow(Base):
             name="fk_artifact_attempt_case_company",
         ),
         UniqueConstraint("attempt_id", name="uq_artifact_attempt"),
+        UniqueConstraint(
+            "id",
+            "attempt_id",
+            "case_id",
+            "company_id",
+            name="uq_artifact_identity_attempt_case_company",
+        ),
         UniqueConstraint("storage_key", name="uq_artifact_storage_key"),
         CheckConstraint("byte_size > 0", name="ck_artifact_size"),
         CheckConstraint("validation_status = 'PASS'", name="ck_artifact_validation_pass"),
@@ -609,8 +625,10 @@ class ApplicationSession(Session):
             return None
         return row, identity
 
-    def active_actor(self, membership_id: UUID, identity_id: UUID) -> Actor | None:
-        pair = self.execute(
+    def active_actor(
+        self, membership_id: UUID, identity_id: UUID, *, lock: bool = False
+    ) -> Actor | None:
+        query = (
             select(MembershipRow, ExternalIdentityRow)
             .join(ExternalIdentityRow, ExternalIdentityRow.id == MembershipRow.identity_id)
             .join(CompanyRow, CompanyRow.id == MembershipRow.company_id)
@@ -621,7 +639,12 @@ class ApplicationSession(Session):
                 ExternalIdentityRow.active.is_(True),
                 CompanyRow.active.is_(True),
             )
-        ).one_or_none()
+        )
+        if lock:
+            query = query.with_for_update(
+                of=(MembershipRow, ExternalIdentityRow, CompanyRow)
+            )
+        pair = self.execute(query).one_or_none()
         if pair is None:
             return None
         membership, identity = pair
@@ -635,8 +658,10 @@ class ApplicationSession(Session):
             role=Role(membership.role),
         )
 
-    def case_access(self, actor: Actor, case_id: object) -> tuple[CaseRow, CaseAccessRow] | None:
-        pair = self.execute(
+    def case_access(
+        self, actor: Actor, case_id: object, *, lock: bool = False
+    ) -> tuple[CaseRow, CaseAccessRow] | None:
+        query = (
             select(CaseRow, CaseAccessRow)
             .join(
                 CaseAccessRow,
@@ -655,7 +680,12 @@ class ApplicationSession(Session):
                 ExternalIdentityRow.active.is_(True),
                 CompanyRow.active.is_(True),
             )
-        ).one_or_none()
+        )
+        if lock:
+            query = query.with_for_update(
+                of=(CaseRow, CaseAccessRow, MembershipRow, ExternalIdentityRow, CompanyRow)
+            )
+        pair = self.execute(query).one_or_none()
         if pair is None:
             return None
         return pair[0], pair[1]

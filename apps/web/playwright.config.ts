@@ -2,6 +2,7 @@ import {defineConfig} from '@playwright/test';
 
 const ci=Boolean(process.env.CI);
 const apiPort=18000,webPort=15173;
+const apiPidPath='/tmp/apbra-164-e2e-api.pid';
 const databaseUrl=process.env.APBRA_E2E_DATABASE_URL;
 const sessionSecret=process.env.APBRA_E2E_SESSION_SECRET;
 const inheritedTargetVariables=['PGHOST','PGHOSTADDR','PGPORT','PGDATABASE','PGSERVICE','PGSERVICEFILE','PGSYSCONFDIR'].filter((name)=>process.env[name]);
@@ -34,7 +35,7 @@ export default defineConfig({
   use:{baseURL:`http://127.0.0.1:${webPort}`,trace:'retain-on-failure'},
   webServer:[
     {
-      command:`../api/.venv/bin/alembic -c ../api/alembic.ini downgrade base && ../api/.venv/bin/alembic -c ../api/alembic.ini upgrade head && ../api/.venv/bin/python -m apbra_api.bootstrap && ../api/.venv/bin/uvicorn apbra_api.main:app --host 127.0.0.1 --port ${apiPort} --no-access-log`,
+      command:`../api/.venv/bin/alembic -c ../api/alembic.ini downgrade base && ../api/.venv/bin/alembic -c ../api/alembic.ini upgrade head && ../api/.venv/bin/python -m apbra_api.bootstrap && /bin/sh -c 'while true; do ../api/.venv/bin/uvicorn apbra_api.main:app --host 127.0.0.1 --port ${apiPort} --no-access-log & child=$!; echo $child > ${apiPidPath}; wait $child; done'`,
       url:`http://127.0.0.1:${apiPort}/api/health`,
       cwd:'.',
       reuseExistingServer:false,

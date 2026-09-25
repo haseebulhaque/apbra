@@ -6,7 +6,10 @@ import hmac
 import io
 import json
 import os
+import selectors
 import subprocess
+import threading
+import time
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,6 +39,7 @@ from .evidence import (
 )
 
 MAX_BRIDGE_BYTES = 20_000_000
+MAX_BRIDGE_EXECUTABLE_BYTES = 5_000_000
 MAX_CANDIDATE_FILES = 500
 MAX_CANDIDATE_TEXT = 5_000_000
 
@@ -63,36 +67,103 @@ class GenerationBridge:
         self.executable = executable.resolve()
         self.node_executable = node_executable.resolve()
         self.timeout_seconds = timeout_seconds
+        if self.executable.stat().st_size > MAX_BRIDGE_EXECUTABLE_BYTES:
+            raise ValueError("The generation bridge exceeds the fixed executable limit.")
+        self.pipeline_digest = hashlib.sha256(self.executable.read_bytes()).hexdigest()
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not hmac.compare_digest(
+            hashlib.sha256(self.executable.read_bytes()).hexdigest(), self.pipeline_digest
+        ):
+            raise GenerationFailed()
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         if len(encoded) > MAX_BRIDGE_BYTES:
             raise GenerationFailed()
+        process: subprocess.Popen[bytes] | None = None
+        writer: threading.Thread | None = None
+        writer_error: list[BaseException] = []
         try:
-            result = subprocess.run(  # noqa: S603
+            process = subprocess.Popen(  # noqa: S603
                 [str(self.node_executable), str(self.executable)],
-                input=encoded,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                check=False,
-                timeout=self.timeout_seconds,
                 env={
                     "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
                     "NODE_ENV": "production",
                 },
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            assert process.stdin is not None and process.stdout is not None
+            process_stdin = process.stdin
+
+            def write_input() -> None:
+                try:
+                    process_stdin.write(encoded)
+                    process_stdin.close()
+                except (BrokenPipeError, OSError, ValueError) as exc:
+                    writer_error.append(exc)
+
+            writer = threading.Thread(target=write_input, daemon=True)
+            writer.start()
+            output = bytearray()
+            deadline = time.monotonic() + self.timeout_seconds
+            selector = selectors.DefaultSelector()
+            selector.register(process.stdout, selectors.EVENT_READ)
+            try:
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(
+                            [str(self.node_executable), str(self.executable)],
+                            self.timeout_seconds,
+                        )
+                    events = selector.select(remaining)
+                    if not events:
+                        raise subprocess.TimeoutExpired(
+                            [str(self.node_executable), str(self.executable)],
+                            self.timeout_seconds,
+                        )
+                    chunk = os.read(process.stdout.fileno(), 65_536)
+                    if not chunk:
+                        break
+                    output.extend(chunk)
+                    if len(output) > MAX_BRIDGE_BYTES:
+                        raise GenerationFailed()
+            finally:
+                selector.close()
+            return_code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        except (OSError, subprocess.TimeoutExpired, GenerationFailed) as exc:
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait()
             raise GenerationFailed() from exc
-        if result.returncode != 0 or len(result.stdout) > MAX_BRIDGE_BYTES:
+        finally:
+            if process is not None:
+                if process.stdin is not None and not process.stdin.closed:
+                    process.stdin.close()
+                if process.stdout is not None:
+                    process.stdout.close()
+            if writer is not None:
+                writer.join(timeout=1)
+        if return_code != 0 or writer_error:
             raise GenerationFailed()
         try:
-            response = json.loads(result.stdout)
+            response = json.loads(output)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise GenerationFailed() from exc
         if not isinstance(response, dict) or response.get("ok") is not True:
             raise GenerationFailed()
         value = response.get("value")
         if not isinstance(value, dict):
+            raise GenerationFailed()
+        provenance = value.get("provenance")
+        if (
+            not isinstance(provenance, dict)
+            or canonical_digest(provenance.get("binding"))
+            != canonical_digest(payload.get("binding"))
+            or canonical_digest(provenance.get("execution"))
+            != canonical_digest(payload.get("execution"))
+        ):
             raise GenerationFailed()
         files = value.get("files")
         validation = value.get("validation")
@@ -243,6 +314,12 @@ def _candidate_zip(files: dict[str, str]) -> bytes:
 
 def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) -> dict[str, Any]:
     artifact = store.generated_artifact(row.artifact_id) if row.artifact_id else None
+    if artifact is not None and (
+        artifact.attempt_id != row.id
+        or artifact.case_id != row.case_id
+        or artifact.company_id != row.company_id
+    ):
+        artifact = None
     return {
         "id": str(row.id),
         "case_id": str(row.case_id),
@@ -296,8 +373,10 @@ class GenerationService:
         actor: Actor,
         case_id: UUID,
         contract_id: UUID,
+        *,
+        lock_access: bool = False,
     ) -> tuple[dict[str, Any], str, str, Any, Any]:
-        authorized_case_access(store, actor, case_id, require_edit=True)
+        authorized_case_access(store, actor, case_id, require_edit=True, lock=lock_access)
         case = store.locked_case(case_id)
         contract = store.confirmed_contract_for_case(case_id, contract_id)
         latest = store.latest_interpretation(case_id)
@@ -371,9 +450,19 @@ class GenerationService:
         store = cast(ApplicationPersistence, db)
         if self.bridge is None:
             raise GenerationFailed()
-        payload, input_digest, evidence_digest, case, contract = self._current_payload(
+        payload, semantic_input_digest, evidence_digest, case, contract = self._current_payload(
             store, actor, case_id, contract_id
         )
+        input_digest = canonical_digest(
+            {
+                "semanticInputDigest": semantic_input_digest,
+                "pipelineExecutableDigest": self.bridge.pipeline_digest,
+            }
+        )
+        payload["execution"] = {
+            "inputDigest": input_digest,
+            "pipelineExecutableDigest": self.bridge.pipeline_digest,
+        }
         command_payload_digest = canonical_digest(
             {
                 "inputDigest": input_digest,
@@ -426,6 +515,7 @@ class GenerationService:
             "mode": "LOCAL_DETERMINISTIC_NO_MODEL_CALL",
             "pipeline": "CANONICAL_TYPESCRIPT_PACKAGE_C",
             "bridgeVersion": "protected-generation-1",
+            "pipelineExecutableDigest": self.bridge.pipeline_digest,
             "contractDigest": hashlib.sha256(contract.contract_json.encode()).hexdigest(),
             "commandPayloadDigest": command_payload_digest,
             "inputDigest": input_digest,
@@ -464,10 +554,10 @@ class GenerationService:
             current = store.generation_attempt(case_id, row.id, lock=True)
             if current is None or current.status != "RUNNING" or current.fence_token != fence:
                 return attempt_json(store, current or row), True
-            active_actor = store.active_actor(actor.membership_id, actor.identity_id)
+            active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
             if active_actor is None or active_actor.company_id != actor.company_id:
                 raise GenerationFailed()
-            self._current_payload(store, active_actor, case_id, contract_id)
+            self._current_payload(store, active_actor, case_id, contract_id, lock_access=True)
             storage_key, digest, size = self.artifact_objects.write(
                 actor.company_id, case_id, row.id, content
             )
@@ -541,7 +631,13 @@ class GenerationService:
         if row is None or row.status != "SUCCEEDED" or row.artifact_id is None:
             raise ArtifactUnavailable()
         artifact = store.generated_artifact(row.artifact_id)
-        if artifact is None or artifact.validation_status != "PASS":
+        if (
+            artifact is None
+            or artifact.attempt_id != row.id
+            or artifact.case_id != row.case_id
+            or artifact.company_id != row.company_id
+            or artifact.validation_status != "PASS"
+        ):
             raise ArtifactUnavailable()
         try:
             content = self.artifact_objects.read(

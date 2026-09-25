@@ -73,6 +73,7 @@ class LocalArtifactStore:
         directory_descriptor = self._open_directory(directories, create=True)
         key = f"{uuid4().hex}.zip"
         temporary_key = f".{uuid4().hex}.writing"
+        renamed = False
         try:
             descriptor = os.open(
                 temporary_key,
@@ -90,10 +91,11 @@ class LocalArtifactStore:
                 src_dir_fd=directory_descriptor,
                 dst_dir_fd=directory_descriptor,
             )
+            renamed = True
             os.fsync(directory_descriptor)
         except Exception:
             try:
-                os.unlink(temporary_key, dir_fd=directory_descriptor)
+                os.unlink(key if renamed else temporary_key, dir_fd=directory_descriptor)
             except FileNotFoundError:
                 pass
             raise

@@ -42,3 +42,24 @@ def test_artifact_store_is_local_only(tmp_path: Path) -> None:
         LocalArtifactStore(tmp_path / "artifacts", "hosted")
     with pytest.raises(ValueError, match="outside the application tree"):
         LocalArtifactStore(Path.cwd() / "artifacts", "test")
+
+
+def test_artifact_store_removes_final_object_when_directory_sync_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = LocalArtifactStore(tmp_path / "artifacts", "test")
+    original = os.fsync
+    calls = 0
+
+    def fail_directory_sync(descriptor: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("synthetic directory sync failure")
+        original(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fail_directory_sync)
+    with pytest.raises(OSError, match="synthetic directory sync failure"):
+        store.write(uuid4(), uuid4(), uuid4(), b"candidate")
+    assert not list(store.root.rglob("*.zip"))
+    assert not list(store.root.rglob("*.writing"))

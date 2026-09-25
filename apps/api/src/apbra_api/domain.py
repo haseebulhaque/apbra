@@ -211,10 +211,12 @@ class ApplicationPersistence(Protocol):
         self, token_digest: str, now: datetime
     ) -> tuple[SessionRecord, IdentityRecord] | None: ...
 
-    def active_actor(self, membership_id: UUID, identity_id: UUID) -> Actor | None: ...
+    def active_actor(
+        self, membership_id: UUID, identity_id: UUID, *, lock: bool = False
+    ) -> Actor | None: ...
 
     def case_access(
-        self, actor: Actor, case_id: object
+        self, actor: Actor, case_id: object, *, lock: bool = False
     ) -> tuple[CaseRecord, AccessRecord] | None: ...
 
     def add_audit(

@@ -4,6 +4,7 @@ import hashlib
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from io import BytesIO
 from pathlib import Path
 from threading import Barrier, Event
@@ -16,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from apbra_api.api import create_app
+from apbra_api.artifacts import LocalArtifactStore
 from apbra_api.config import Settings
 from apbra_api.domain import GenerationFailed
 from apbra_api.generation import GenerationBridge
@@ -501,6 +503,172 @@ def test_generation_bridge_rejects_unsafe_executables_timeout_and_malformed_outp
     valid.write_text("setTimeout(()=>{}, 5000)", encoding="utf-8")
     with pytest.raises(GenerationFailed):
         bridge.generate({"bounded": True})
+    with pytest.raises(GenerationFailed):
+        GenerationBridge(valid, node_executable=node, timeout_seconds=1).generate(
+            {"bounded": True}
+        )
+
+    oversized = tmp_path / "oversized.mjs"
+    oversized.write_text("process.stdout.write('x'.repeat(20000001))", encoding="utf-8")
+    with pytest.raises(GenerationFailed):
+        GenerationBridge(oversized, node_executable=node, timeout_seconds=5).generate(
+            {"binding": {}, "execution": {}}
+        )
+
+    mismatched = tmp_path / "mismatched.mjs"
+    mismatched.write_text(
+        "process.stdout.write(JSON.stringify({ok:true,value:{files:{'safe.txt':'x'},"
+        "validation:{status:'PASS'},provenance:{binding:{caseId:'wrong'},"
+        "execution:{inputDigest:'wrong'}}}}))",
+        encoding="utf-8",
+    )
+    with pytest.raises(GenerationFailed):
+        GenerationBridge(mismatched, node_executable=node, timeout_seconds=2).generate(
+            {"binding": {"caseId": "expected"}, "execution": {"inputDigest": "expected"}}
+        )
+
+
+def test_authorization_revocation_waits_for_eligibility_commit(
+    client: TestClient,
+    settings: Settings,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Compare verified shipments by depot.",
+        "shipments.csv",
+        b"Depot,Verified\nNorth,13\nSouth,17\n",
+    )
+    entered, release = Event(), Event()
+    original_write = LocalArtifactStore.write
+
+    def blocked_write(self, company_id, case_id, attempt_id, content):
+        entered.set()
+        assert release.wait(timeout=10)
+        return original_write(self, company_id, case_id, attempt_id, content)
+
+    monkeypatch.setattr(LocalArtifactStore, "write", blocked_write)
+    candidate = TestClient(create_app(settings=settings, database=database))
+    candidate.cookies.update(client.cookies)
+
+    def revoke() -> None:
+        with database.session() as db:
+            db.execute(
+                text("UPDATE memberships SET active=false WHERE id=:id"),
+                {"id": session["actor"]["membership_id"]},
+            )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            build = executor.submit(
+                candidate.post,
+                f"/api/cases/{case['id']}/generation",
+                json={
+                    "confirmed_contract_id": contract["id"],
+                    "command_key": str(uuid4()),
+                },
+                headers=csrf(session),
+            )
+            assert entered.wait(timeout=10)
+            revocation = executor.submit(revoke)
+            with pytest.raises(FutureTimeoutError):
+                revocation.result(timeout=0.25)
+            release.set()
+            response = build.result(timeout=15)
+            revocation.result(timeout=10)
+    finally:
+        release.set()
+        candidate.close()
+    assert response.json()["attempt"]["status"] == "SUCCEEDED"
+    assert client.get(f"/api/cases/{case['id']}/generation").status_code in {401, 404}
+
+
+def test_nonterminal_identity_and_cross_attempt_artifact_binding_are_rejected(
+    client: TestClient,
+    settings: Settings,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = sign_in(client, "member")
+    first_case, first_contract = confirmed_case(
+        client,
+        session,
+        "Show accepted invoices by ledger.",
+        "invoices.csv",
+        b"Ledger,Accepted\nA,8\nB,12\n",
+    )
+    first = client.post(
+        f"/api/cases/{first_case['id']}/generation",
+        json={"confirmed_contract_id": first_contract["id"], "command_key": str(uuid4())},
+        headers=csrf(session),
+    ).json()["attempt"]
+    second_case, second_contract = confirmed_case(
+        client,
+        session,
+        "Show reviewed invoices by ledger.",
+        "reviewed.csv",
+        b"Ledger,Reviewed\nA,9\nB,14\n",
+    )
+    entered, release = Event(), Event()
+    original = GenerationBridge.generate
+
+    def wait_then_generate(bridge: GenerationBridge, payload: dict[str, object]):
+        entered.set()
+        assert release.wait(timeout=10)
+        return original(bridge, payload)
+
+    monkeypatch.setattr(GenerationBridge, "generate", wait_then_generate)
+    candidate = TestClient(create_app(settings=settings, database=database))
+    candidate.cookies.update(client.cookies)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                candidate.post,
+                f"/api/cases/{second_case['id']}/generation",
+                json={
+                    "confirmed_contract_id": second_contract["id"],
+                    "command_key": str(uuid4()),
+                },
+                headers=csrf(session),
+            )
+            assert entered.wait(timeout=10)
+            with database.session() as db:
+                running_id = db.scalar(
+                    text(
+                        "SELECT id FROM generation_attempts "
+                        "WHERE case_id=:case_id AND status='RUNNING'"
+                    ),
+                    {"case_id": second_case["id"]},
+                )
+                with pytest.raises(DBAPIError, match="generation identity is immutable"):
+                    db.execute(
+                        text(
+                            "UPDATE generation_attempts SET "
+                            "created_at=created_at + interval '1 second' "
+                            "WHERE id=:id"
+                        ),
+                        {"id": running_id},
+                    )
+                db.rollback()
+                with pytest.raises(DBAPIError):
+                    db.execute(
+                        text(
+                            "UPDATE generation_attempts SET status='SUCCEEDED', "
+                            "artifact_id=:artifact_id, validation_json='{}', completed_at=now() "
+                            "WHERE id=:id"
+                        ),
+                        {"id": running_id, "artifact_id": first["artifact"]["id"]},
+                    )
+                db.rollback()
+            release.set()
+            response = future.result(timeout=15)
+    finally:
+        release.set()
+        candidate.close()
+    assert response.json()["attempt"]["status"] == "SUCCEEDED"
 
 
 def test_revoked_membership_before_late_result_prevents_artifact_eligibility(
