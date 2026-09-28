@@ -61,22 +61,71 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
                 with self.subTest(path=path):
                     self.assertEqual(self.check(root, {path}), [])
 
-    def test_later_whole_tree_admission_is_limited_to_new_files(self):
-        earlier_tasks = [
-            json.loads(path.read_text())
-            for path in (ROOT / "tasks").glob("APBRA-*.json")
-            if path.name != "APBRA-164-protected-generation-output-history.json"
-        ]
-        introduced = {
-            path for path in c.PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS
-            if not any(
-                c.matches(path, pattern)
-                for task in earlier_tasks
-                for pattern in task.get("allowed_paths", [])
-            )
+    def test_generic_whole_tree_authority_accepts_a_bound_future_registration(self):
+        bootstrap = json.loads((ROOT / "tasks/APBRA-85-bootstrap.json").read_text())
+        catalog = json.loads((ROOT / "agents/catalog.json").read_text())
+        card = next(item for item in catalog["cards"] if item["agent_id"] == "APBRA-DEVOPS")
+        sources = json.loads((ROOT / "docs/source-register.json").read_text())
+        future_source = {
+            "id": "synthetic-future-source",
+            "content_id": "SYNTHETIC-FIXTURE",
+            "version": "Test-only future registration fixture",
+            "section": "Whole-tree authority regression",
+            "url": "https://example.invalid/synthetic-fixture",
+            "status": "ACCEPTED",
+            "acceptance": "Test fixture only; creates no production task or source authority.",
         }
-        self.assertEqual(c.PROTECTED_GENERATION_OUTPUT_HISTORY_NEW_PATHS, introduced)
-        self.assertEqual(len(introduced), 9)
+        future = copy.deepcopy(self.task)
+        future_path = "apps/api/src/apbra_api/future_fixture.py"
+        shared_path = "apps/api/src/apbra_api/shared_fixture.py"
+        future.update({
+            "task_id": "APBRA-165",
+            "branch": "agent/APBRA-DEVOPS/APBRA-165-synthetic-fixture",
+            "allowed_paths": [future_path, shared_path],
+            "source_ids": ["synthetic-future-source"],
+        })
+        schema = json.loads((ROOT / "contracts/engineering/task-contract.schema.json").read_text())
+        digest = lambda value: hashlib.sha256(
+            json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        expected_task_hash = digest(future)
+        expected_source_hash = digest(future_source)
+
+        def validated_fixture(candidate, source):
+            trial_sources = copy.deepcopy(sources)
+            trial_sources["sources"].append(source)
+            if (c.schema_errors(schema, candidate) or
+                    c.task_errors(candidate, catalog, trial_sources) or
+                    digest(candidate) != expected_task_hash or
+                    digest(source) != expected_source_hash):
+                return None
+            return candidate
+
+        valid_future = validated_fixture(future, future_source)
+        self.assertIsNotNone(valid_future)
+        current = (self.task, c.PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS)
+        future_scope = {future_path}
+        self.assertTrue(c.whole_tree_safe(future_path, bootstrap,
+                                          (), (current, (valid_future, future_scope)), card))
+        self.assertFalse(c.whole_tree_safe(future_path, bootstrap,
+                                           (), (current, (None, future_scope)), card))
+        self.assertFalse(c.whole_tree_safe("apps/api/src/apbra_api/unknown_fixture.py",
+                                           bootstrap, (), (current, (valid_future, future_scope)), card))
+        tampered_task = copy.deepcopy(future)
+        tampered_task["objective"] += " unauthorized"
+        tampered_source = {**future_source, "status": "PROPOSED"}
+        for candidate, source in ((tampered_task, future_source), (future, tampered_source)):
+            self.assertIsNone(validated_fixture(candidate, source))
+            self.assertFalse(c.whole_tree_safe(future_path, bootstrap,
+                                               (), (current, (validated_fixture(candidate, source), future_scope)),
+                                               card))
+        shared_scope = {shared_path}
+        self.assertFalse(c.whole_tree_safe(shared_path, bootstrap,
+                                           (), ((None, shared_scope), (valid_future, future_scope | shared_scope)),
+                                           card))
+        self.assertFalse(c.whole_tree_safe(shared_path, bootstrap,
+                                           ((None, shared_scope),), ((valid_future, future_scope | shared_scope),),
+                                           card))
 
     def test_registration_is_exact_disjoint_and_positive(self):
         expected = {
