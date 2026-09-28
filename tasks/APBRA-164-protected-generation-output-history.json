@@ -191,7 +191,8 @@
   "base_commit": "12b75a93eebdbbd2a284e6179ae676a8cd411e0f",
   "branch": "agent/APBRA-DEVOPS/APBRA-164-protected-generation-output-history",
   "source_ids": [
-    "mvp1-protected-generation-output-history"
+    "mvp1-protected-generation-output-history",
+    "mvp1-protected-generation-output-history-bootstrap-compatibility-amendment"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / MVP-1 protected generation, output artifacts and durable history",
@@ -199,6 +200,7 @@
     "Corrected APBRA-163 Package B PR #56 must be manually merged by Haseeb and resulting origin/main independently verified before implementation begins.",
     "The APBRA-164 registration-only PR changes exactly five governance files and must pass exact-head review and hosted gates, then be manually merged by Haseeb before implementation begins.",
     "The fifth registration path tests/bootstrap/test_invited_private_case_foundation_scope.py is limited to appending mvp1-protected-generation-output-history to the existing ordered expected_ids list.",
+    "The separate 2026-09-29 bootstrap compatibility amendment changes only the exact five APBRA-164 governance registration paths, admits files from valid hash-bound registered tasks into the whole-tree scan independent of active task identity, and preserves active-task-only changed-path authorization. Its dedicated branch is agent/APBRA-DEVOPS/APBRA-164-bootstrap-compatibility-amendment; the original implementation branch and exact 70-path implementation allowlist are unchanged.",
     "PostgreSQL 17, isolated private local storage and the canonical TypeScript generation pipeline are mandatory evidence boundaries; browser-only storage, client validity claims and a second generator are not substitutes.",
     "APBRA-34, APBRA-79, APBRA-99, APBRA-104, APBRA-150 and APBRA-152 retain broader independent scope and are not completed by this package.",
     "Haseeb remains the sole manual merge authority; no delegated merge or auto-merge is authorised."

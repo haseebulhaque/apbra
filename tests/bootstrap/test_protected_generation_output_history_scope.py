@@ -61,6 +61,23 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
                 with self.subTest(path=path):
                     self.assertEqual(self.check(root, {path}), [])
 
+    def test_later_whole_tree_admission_is_limited_to_new_files(self):
+        earlier_tasks = [
+            json.loads(path.read_text())
+            for path in (ROOT / "tasks").glob("APBRA-*.json")
+            if path.name != "APBRA-164-protected-generation-output-history.json"
+        ]
+        introduced = {
+            path for path in c.PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS
+            if not any(
+                c.matches(path, pattern)
+                for task in earlier_tasks
+                for pattern in task.get("allowed_paths", [])
+            )
+        }
+        self.assertEqual(c.PROTECTED_GENERATION_OUTPUT_HISTORY_NEW_PATHS, introduced)
+        self.assertEqual(len(introduced), 9)
+
     def test_registration_is_exact_disjoint_and_positive(self):
         expected = {
             "scripts/check_bootstrap.py",
@@ -81,6 +98,24 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
                     "APBRA-164 registration must change exactly its five governance files",
                     errors,
                 )
+            self.assertEqual(
+                self.check(
+                    root,
+                    expected,
+                    branch=c.PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH,
+                ),
+                [],
+            )
+            self.assertIn(
+                "Active branch conflicts with task authority",
+                " ".join(
+                    self.check(
+                        root,
+                        {"apps/api/src/apbra_api/generation.py"},
+                        branch=c.PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH,
+                    )
+                ),
+            )
 
     def test_registration_and_implementation_cannot_be_mixed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -143,6 +178,57 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
                 "Protected generation output history source differs from accepted provenance",
                 self.check(root, {"apps/api/src/apbra_api/generation.py"}),
             )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            amendment = next(
+                item for item in sources["sources"]
+                if item["id"] == c.PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID
+            )
+            amendment["acceptance"] += " broadened"
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            errors = self.check(root, {"apps/api/src/apbra_api/generation.py"})
+            self.assertIn(
+                "Protected generation output history bootstrap amendment source differs from accepted provenance",
+                errors,
+            )
+            self.assertIn(
+                "File outside safe bootstrap scope: apps/api/src/apbra_api/generation.py",
+                errors,
+            )
+
+    def test_valid_older_task_admits_later_tree_but_cannot_change_later_files(self):
+        prior = json.loads(
+            (ROOT / "tasks/APBRA-163-durable-conversation-evidence-acceptance.json").read_text()
+        )
+        later = "apps/api/src/apbra_api/generation.py"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(
+                self.check(root, {"apps/api/src/apbra_api/evidence.py"},
+                           task_id="APBRA-163", branch=prior["branch"]),
+                [],
+            )
+            errors = self.check(root, {later}, task_id="APBRA-163", branch=prior["branch"])
+            self.assertIn(f"File outside active task scope: {later}", errors)
+            self.assertNotIn(f"File outside safe bootstrap scope: {later}", errors)
+
+            unknown = "apps/api/src/apbra_api/unregistered_later.py"
+            (root / unknown).write_text("unregistered product file\n")
+            errors = self.check(root, {"apps/api/src/apbra_api/evidence.py"},
+                                task_id="APBRA-163", branch=prior["branch"])
+            self.assertIn(f"File outside safe bootstrap scope: {unknown}", errors)
+
+            task_path = root / self.task_path
+            mutated = json.loads(task_path.read_text())
+            mutated["objective"] += " unauthorized"
+            task_path.write_text(json.dumps(mutated))
+            errors = self.check(root, {"apps/api/src/apbra_api/evidence.py"},
+                                task_id="APBRA-163", branch=prior["branch"])
+            self.assertIn("Protected generation output history contract differs from accepted authority", errors)
+            self.assertIn(f"File outside safe bootstrap scope: {later}", errors)
 
     def test_missing_malformed_unknown_task_and_branch_fail_closed(self):
         cases = (
@@ -192,9 +278,16 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
             source["id"]
             for source in json.loads((ROOT / "docs/source-register.json").read_text())["sources"]
         ]
-        self.assertEqual(expected_ids[-1], "mvp1-protected-generation-output-history")
+        self.assertEqual(expected_ids[-2:], [
+            "mvp1-protected-generation-output-history",
+            c.PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID,
+        ])
         historical = (ROOT / "tests/bootstrap/test_invited_private_case_foundation_scope.py").read_text()
         self.assertEqual(historical.count('"mvp1-protected-generation-output-history"'), 1)
+        self.assertEqual(
+            historical.count('"mvp1-protected-generation-output-history-bootstrap-compatibility-amendment"'),
+            1,
+        )
         for path in c.PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS:
             target = ROOT / path
             self.assertTrue(target.is_file())
