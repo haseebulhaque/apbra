@@ -355,8 +355,11 @@ PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256 = '88b323cf5660376c8c01f6ce881e389da108c87bf2a735eec71e2dbed4c5452c'
+PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256 = '9b1a1c1b8314dbea829083c83760306808046350c0a541d99d292883a264a34a'
 PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256 = 'dd9da96390eec30550204c53a9452095e89ac369c90856acf52e4ea06995acad'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-164-bootstrap-compatibility-amendment'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID = 'mvp1-protected-generation-output-history-bootstrap-compatibility-amendment'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_SHA256 = '08c74385f68523d5e3a69ef7b6caa98a2b6b6760e22808deb3d3e1800a7d7429'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -446,6 +449,30 @@ def path_allowed(path: str, task: dict, card: dict) -> bool:
         any(matches(path, p) for p in task['allowed_paths']) and
         any(matches(path, p) for p in card['allowed_paths'])
     )
+
+
+def whole_tree_safe(path: str, bootstrap_task: dict,
+                    legacy_authorities: tuple[tuple[dict | None, set[str]], ...],
+                    bound_authorities: tuple[tuple[dict | None, set[str]], ...],
+                    card: dict) -> bool:
+    """Preserve legacy coverage; admit newer files through their first bound scope.
+
+    Existing Capstone tasks may independently cover the same legacy file. New
+    hash-bound tasks may introduce files outside that legacy scope, but cannot
+    rescue a legacy file or a prior bound task's invalid registration.
+    """
+    if path_allowed(path, bootstrap_task, card):
+        return True
+    if any(registered is not None and path_allowed(path, registered, card)
+           for registered, _ in legacy_authorities):
+        return True
+    if any(matches(path, pattern) for _, scope in legacy_authorities
+           for pattern in scope):
+        return False
+    for registered, expected_scope in bound_authorities:
+        if any(matches(path, pattern) for pattern in expected_scope):
+            return registered is not None and path_allowed(path, registered, card)
+    return False
 
 
 def schema_errors(schema: dict, value: object) -> list[str]:
@@ -1140,7 +1167,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected protected generation output history scope')
                 if (protected_generation_output_history_task['task_mode'], protected_generation_output_history_task['readiness'], protected_generation_output_history_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Protected generation output history requires issued implementation acceptance')
-                if protected_generation_output_history_task['source_ids'] != ['mvp1-protected-generation-output-history']:
+                if protected_generation_output_history_task['source_ids'] != ['mvp1-protected-generation-output-history', PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Protected generation output history requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get('mvp1-protected-generation-output-history')
@@ -1150,27 +1177,54 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256:
                         extension_errors.append('Protected generation output history source differs from accepted provenance')
+                amendment_source = source_map.get(PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID)
+                if amendment_source is None:
+                    extension_errors.append('Protected generation output history bootstrap amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('Protected generation output history bootstrap amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 protected_generation_output_history_task = None
-        registered_tasks = {
-            registered['task_id']: registered for registered in (
-                task, shell_task, requirements_task, knowledge_task, design_task,
-                generation_task, validation_task, governance_task,
-                orchestration_task, evaluation_task, deployment_guide_task, ux_task,
-                measure_resolution_task, report_design_normalization_task,
-                capstone_documentation_task, measure_contract_pipeline_task,
-                layout_repair_task, typed_confirmed_requirements_task,
-                ai_native_clarification_task, generic_time_grain_task,
-                post_capstone_mvp_baseline_task,
-                post_capstone_product_reconciliation_task,
-                data_model_documentation_reconciliation_task,
-                confirmation_readiness_integrity_task,
-                invited_private_case_foundation_task,
-                durable_conversation_evidence_acceptance_task,
-                protected_generation_output_history_task,
-            ) if registered is not None
-        }
+        # Keep established overlapping Capstone coverage while preventing a
+        # newer hash-bound registration from rescuing its historical files.
+        legacy_authorities = (
+            (shell_task, CAPSTONE_SHELL_PATHS),
+            (requirements_task, CAPSTONE_REQUIREMENTS_PATHS),
+            (knowledge_task, CAPSTONE_KNOWLEDGE_PATHS),
+            (design_task, CAPSTONE_DESIGN_PATHS),
+            (generation_task, CAPSTONE_GENERATION_PATHS),
+            (validation_task, CAPSTONE_VALIDATION_PATHS),
+            (governance_task, CAPSTONE_GOVERNANCE_PATHS),
+            (orchestration_task, CAPSTONE_ORCHESTRATION_PATHS),
+            (evaluation_task, CAPSTONE_EVALUATION_PATHS),
+            (deployment_guide_task, DEPLOYMENT_GUIDE_PATHS),
+            (ux_task, CAPSTONE_UX_PATHS),
+            (measure_resolution_task, MEASURE_RESOLUTION_PATHS),
+            (report_design_normalization_task, REPORT_DESIGN_NORMALIZATION_PATHS),
+            (capstone_documentation_task, CAPSTONE_DOCUMENTATION_PATHS),
+            (measure_contract_pipeline_task, MEASURE_CONTRACT_PIPELINE_PATHS),
+            (layout_repair_task, LAYOUT_REPAIR_PATHS),
+            (typed_confirmed_requirements_task, TYPED_CONFIRMED_REQUIREMENTS_PATHS),
+            (ai_native_clarification_task, AI_NATIVE_CLARIFICATION_PATHS),
+            (generic_time_grain_task, GENERIC_TIME_GRAIN_PATHS),
+            (post_capstone_mvp_baseline_task, POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS),
+            (post_capstone_product_reconciliation_task, POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS),
+            (data_model_documentation_reconciliation_task, DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS),
+            (confirmation_readiness_integrity_task, CONFIRMATION_READINESS_INTEGRITY_PATHS),
+        )
+        # Each task object has passed the checks above, or is None if its
+        # registration is missing/invalid. Future bound tasks join this ordered
+        # sequence without their own whole-tree admission clause or new-file list.
+        bound_authorities = (
+            (invited_private_case_foundation_task, INVITED_PRIVATE_CASE_FOUNDATION_PATHS),
+            (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
+            (protected_generation_output_history_task, PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS),
+        )
+        registered_tasks = {registered['task_id']: registered for registered, _ in
+                            legacy_authorities + bound_authorities if registered is not None}
+        registered_tasks[task['task_id']] = task
         if changed_paths is not None and changed_paths:
             active_task = registered_tasks.get(active_task_id or '')
             if active_task_id is None:
@@ -1182,7 +1236,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             if active_branch is None:
                 errors.append('Active task branch identity missing for changed paths')
                 active_task = None
-            elif active_task is not None and active_task['branch'] != active_branch:
+            elif (active_task is not None and active_task['branch'] != active_branch and
+                    not (active_task_id == 'APBRA-164' and
+                         active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
+                         changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1286,7 +1343,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         manifest = {}
         for file in repo_files(root):
             name = file.relative_to(root).as_posix()
-            if file.is_symlink() or not (((active_task_id == 'APBRA-164' and protected_generation_output_history_task is not None) and path_allowed(name, protected_generation_output_history_task, card)) or (durable_conversation_evidence_acceptance_task is not None and path_allowed(name, durable_conversation_evidence_acceptance_task, card)) or (invited_private_case_foundation_task is not None and path_allowed(name, invited_private_case_foundation_task, card)) or (confirmation_readiness_integrity_task is not None and path_allowed(name, confirmation_readiness_integrity_task, card)) or (data_model_documentation_reconciliation_task is not None and path_allowed(name, data_model_documentation_reconciliation_task, card)) or (post_capstone_product_reconciliation_task is not None and path_allowed(name, post_capstone_product_reconciliation_task, card)) or path_allowed(name, task, card) or (shell_task is not None and path_allowed(name, shell_task, card)) or (requirements_task is not None and path_allowed(name, requirements_task, card)) or (knowledge_task is not None and path_allowed(name, knowledge_task, card)) or (design_task is not None and path_allowed(name, design_task, card)) or (generation_task is not None and path_allowed(name, generation_task, card)) or (validation_task is not None and path_allowed(name, validation_task, card)) or (governance_task is not None and path_allowed(name, governance_task, card)) or (orchestration_task is not None and path_allowed(name, orchestration_task, card)) or (evaluation_task is not None and path_allowed(name, evaluation_task, card)) or (deployment_guide_task is not None and path_allowed(name, deployment_guide_task, card)) or (ux_task is not None and path_allowed(name, ux_task, card)) or (measure_resolution_task is not None and path_allowed(name, measure_resolution_task, card)) or (report_design_normalization_task is not None and path_allowed(name, report_design_normalization_task, card)) or (capstone_documentation_task is not None and path_allowed(name, capstone_documentation_task, card)) or (measure_contract_pipeline_task is not None and path_allowed(name, measure_contract_pipeline_task, card)) or (layout_repair_task is not None and path_allowed(name, layout_repair_task, card)) or (typed_confirmed_requirements_task is not None and path_allowed(name, typed_confirmed_requirements_task, card)) or (ai_native_clarification_task is not None and path_allowed(name, ai_native_clarification_task, card)) or (generic_time_grain_task is not None and path_allowed(name, generic_time_grain_task, card)) or (post_capstone_mvp_baseline_task is not None and path_allowed(name, post_capstone_mvp_baseline_task, card))):
+            if file.is_symlink() or not whole_tree_safe(
+                    name, task, legacy_authorities, bound_authorities, card):
                 errors.append('File outside safe bootstrap scope: ' + name)
                 continue
             data = file.read_bytes()

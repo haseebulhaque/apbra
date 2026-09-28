@@ -204,6 +204,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-164",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized a separate APBRA-164 registration-only governance mission for Package C after correction and manual merge of Package B. Package C reuses the existing canonical TypeScript generation, governed RAG, ReportDesign, deterministic validation and PBIP compiler through a bounded server-side bridge; persists truthful attempt and output history; and protects local-only artifacts with current private-resource authorization. Registration changes exactly the four standard task-specific governance files plus tests/bootstrap/test_invited_private_case_foundation_scope.py solely to append this source ID to the unchanged historical accepted-source list. The finite implementation authority is the exact literal allowlist in the APBRA-164 contract. No Package C implementation, Package D, cloud spend, public deployment, live provider call or automatic merge is authorized by registration."
+    },
+    {
+      "id": "mvp1-protected-generation-output-history-bootstrap-compatibility-amendment",
+      "content_id": "APBRA-164",
+      "version": "Haseeb's explicit APBRA-164 governance-only instruction on 2026-09-29; exact main base 4ab57819a8ea86c26903d3f8bab9ba8793f6d0c9; Jira PLAN comment 10277",
+      "section": "APBRA-164 bootstrap whole-tree compatibility amendment",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-164",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb authorized a separate five-path governance amendment to admit tracked files from any valid, hash-bound registered task in the whole-tree safety scan independently of the active task. Changed paths remain authorized only by the active task; malformed or unregistered files, invalid task or source hashes, and historical negative cases remain fail-closed. Only scripts/check_bootstrap.py, tasks/APBRA-164-protected-generation-output-history.json, tests/bootstrap/test_protected_generation_output_history_scope.py, tests/bootstrap/test_invited_private_case_foundation_scope.py, and docs/source-register.json may change. The exact 70-path Package C implementation authority and unpublished implementation branch are unchanged. The amendment needs its own review, required checks, PR and Haseeb's manual merge; it does not authorize application implementation, Package D, cloud spend or automatic merge."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
