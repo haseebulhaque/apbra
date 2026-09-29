@@ -581,7 +581,7 @@ class GenerationService:
 
     def list_reviewed_designs(
         self, db: object, actor: Actor, case_id: UUID, contract_id: UUID
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         store = cast(ApplicationPersistence, db)
         payload, semantic_digest, evidence_digest, _, _ = self._current_payload(
             store, actor, case_id, contract_id, require_edit=False
@@ -596,7 +596,13 @@ class GenerationService:
             except ReviewedDesignRequired:
                 continue
             result.append(self._reviewed_design_json(row))
-        return result
+        can_submit = actor.role == Role.EXPERT
+        if can_submit:
+            try:
+                authorized_case_access(store, actor, case_id, require_edit=True)
+            except ProtectedResourceNotFound:
+                can_submit = False
+        return {"items": result, "can_submit": can_submit}
 
     def start(
         self,

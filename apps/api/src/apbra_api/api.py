@@ -682,11 +682,9 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
-        return {
-            "items": local_generation_service().list_reviewed_designs(
-                db, resolve_actor(db, session_token), case_id, confirmed_contract_id
-            )
-        }
+        return local_generation_service().list_reviewed_designs(
+            db, resolve_actor(db, session_token), case_id, confirmed_contract_id
+        )
 
     @app.post("/api/cases/{case_id}/reviewed-designs")
     def intake_reviewed_design(

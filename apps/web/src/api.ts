@@ -75,7 +75,7 @@ export const acceptanceApi={
   confirm:(caseId:string,interpretationId:string,expectedContextVersion:number,csrfToken:string)=>request<{confirmed_contract:DurableContract}>(`/api/cases/${encodeURIComponent(caseId)}/confirm`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({interpretation_id:interpretationId,expected_context_version:expectedContextVersion})}).then(value=>value.confirmed_contract),
 };
 export const reviewedDesignApi={
-  list:(caseId:string,confirmedContractId:string)=>request<{items:ReviewedDesign[]}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),
+  list:(caseId:string,confirmedContractId:string)=>request<{items:ReviewedDesign[];can_submit:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),
   intake:(caseId:string,confirmedContractId:string,reportDesign:Record<string,unknown>,csrfToken:string)=>request<{reviewed_design:ReviewedDesign}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,report_design:reportDesign})}).then(value=>value.reviewed_design),
 };
 export const generationApi={
@@ -83,4 +83,9 @@ export const generationApi={
   start:(caseId:string,confirmedContractId:string,reviewedDesignId:string,commandKey:string,csrfToken:string,mode:'BUILD'|'RETRY'|'REGENERATE'='BUILD',sourceAttemptId?:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,reviewed_design_id:reviewedDesignId,command_key:commandKey,mode,source_attempt_id:sourceAttemptId})}).then(value=>value.attempt),
   cancel:(caseId:string,attemptId:string,csrfToken:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/cancel`,{method:'POST',headers:csrfHeaders(csrfToken)}).then(value=>value.attempt),
   artifactUrl:(caseId:string,attemptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/artifact`,
+  download:async(caseId:string,attemptId:string)=>{
+    const response=await fetch(`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/artifact`,{credentials:'same-origin',headers:{Accept:'application/zip'}});
+    if(!response.ok){const body=await response.json().catch(()=>({})) as ApiErrorBody;throw new ApiError(response.status,body.error?.code??'ARTIFACT_NOT_FOUND','This report file is unavailable or you no longer have access. Reload the case or ask for help.');}
+    return response.blob();
+  },
 };

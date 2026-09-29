@@ -158,7 +158,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     </section>
     <section className="evidence-step" aria-label="Supporting information">
       <h4>Supporting information</h4><p>Add a CSV or XLSX file to ground the understanding in observed fields. You can save the case without a file, but confirmation is unavailable until supported evidence is added.</p>
-      <input ref={fileRef} id={'case-evidence-'+record.id} className="sr-only" type="file" accept=".csv,.xlsx" disabled={busy} onChange={event=>void addEvidence(event.target.files?.[0])}/>
+      <input ref={fileRef} id={'case-evidence-'+record.id} className="sr-only file-input" type="file" accept=".csv,.xlsx" disabled={busy} onChange={event=>void addEvidence(event.target.files?.[0])}/>
       <label className="upload-button" htmlFor={'case-evidence-'+record.id}>Add CSV or XLSX evidence</label>
       <details className="evidence-list"><summary>Supporting information · {evidence.length}</summary>{evidence.length?<ul>{evidence.map(item=><li key={item.id}><strong>{item.filename}</strong> · {item.format}<details className="expert-details"><summary>Source details</summary><ul>{item.observed_schema.tables.map(table=><li key={table.name}>{table.name} · {table.rowCount} row{table.rowCount===1?'':'s'} · {table.columns.map(column=>column.name+' ('+column.type+')').join(', ')}</li>)}</ul></details></li>)}</ul>:<p>No supporting file has been added yet.</p>}</details>
     </section>

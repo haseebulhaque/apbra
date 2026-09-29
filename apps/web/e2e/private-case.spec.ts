@@ -41,6 +41,12 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await expect(page.getByRole('heading',{name:'Describe your reporting goal'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
+  await page.getByLabel('Original business request').fill('Compare completed synthetic orders by depot.');
+  await page.getByRole('button',{name:'Create case'}).click();
+  const upload=page.getByLabel('Add CSV or XLSX evidence');
+  await upload.focus();
+  await expect(upload).toBeFocused();
+  await expect(page.locator('label.upload-button')).toHaveCSS('outline-style','solid');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{

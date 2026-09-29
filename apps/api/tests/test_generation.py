@@ -286,6 +286,7 @@ def test_reviewed_design_intake_is_expert_only_and_business_response_is_non_raw(
         params={"confirmed_contract_id": contract["id"]},
     )
     assert listed.status_code == 200
+    assert listed.json()["can_submit"] is False
     assert len(listed.json()["items"]) == 1
     reviewed = listed.json()["items"][0]
     assert reviewed["id"] == contract["reviewed_design_id"]
@@ -458,6 +459,56 @@ def test_reviewed_design_requires_current_private_case_access_for_reviewer(
     )
     assert blocked.status_code == 422
     assert blocked.json()["error"]["code"] == "TRUSTED_REPORT_DESIGN_REQUIRED"
+
+
+def test_reviewed_design_submission_capability_requires_expert_edit_access(
+    client: TestClient, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Show approved items by group.", "items.csv",
+        b"Group,Approved\nA,3\nB,5\n",
+    )
+    with database.session() as db:
+        reviewer_id = db.scalar(
+            text("SELECT reviewer_membership_id FROM reviewed_report_designs WHERE id=:id"),
+            {"id": contract["reviewed_design_id"]},
+        )
+    with TestClient(client.app) as expert:
+        expert_session = sign_in(expert, "uninvited")
+        assert expert_session["actor"]["role"] == "EXPERT"
+        listed = expert.get(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert listed.status_code == 200
+        assert listed.json()["can_submit"] is True
+        revoked = client.post(
+            f"/api/cases/{case['id']}/access/{reviewer_id}/revoke",
+            headers=csrf(session),
+        )
+        assert revoked.status_code == 200
+        granted = client.post(
+            f"/api/cases/{case['id']}/access",
+            json={"membership_id": str(reviewer_id), "access_level": "VIEWER"},
+            headers=csrf(session),
+        )
+        assert granted.status_code == 200
+        viewer_listing = expert.get(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert viewer_listing.status_code == 200
+        assert viewer_listing.json()["can_submit"] is False
+        denied = expert.post(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "report_design": contract["reviewed_report_design"],
+            },
+            headers=csrf(expert_session),
+        )
+        assert denied.status_code == 404
 
 
 def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmation(
