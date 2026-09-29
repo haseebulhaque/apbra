@@ -111,6 +111,7 @@ class GenerationCreate(BaseModel):
     command_key: str = Field(min_length=8, max_length=200)
     mode: str = Field(default="BUILD", pattern="^(BUILD|RETRY|REGENERATE)$")
     source_attempt_id: UUID | None = None
+    report_design: dict[str, Any] | None = None
 
 
 def error_response(exc: ApplicationError) -> JSONResponse:
@@ -684,6 +685,7 @@ def create_app(
             command_key=payload.command_key,
             mode=payload.mode,
             source_attempt_id=payload.source_attempt_id,
+            report_design=payload.report_design,
         )
         response.status_code = 201 if created else 200
         return {"attempt": result}

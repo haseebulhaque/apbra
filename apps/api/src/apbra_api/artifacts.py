@@ -24,7 +24,29 @@ class LocalArtifactStore:
             raise ValueError("Artifact root must be a private real directory.")
         self.root = root.resolve()
         working_root = Path.cwd().resolve()
-        if self.root == working_root or working_root in self.root.parents:
+        module_path = Path(__file__).resolve()
+        application_root = next(
+            (parent for parent in module_path.parents if (parent / "src" / "apbra_api").is_dir()),
+            None,
+        )
+        if application_root is None:
+            raise ValueError("Artifact application root could not be established.")
+        repository_root = next(
+            (
+                parent
+                for parent in application_root.parents
+                if (parent / "apps" / "api").resolve() == application_root
+                and (parent / "apps" / "web").is_dir()
+            ),
+            None,
+        )
+        protected_roots = [working_root, application_root]
+        if repository_root is not None:
+            protected_roots.extend((repository_root, repository_root / "apps" / "web"))
+        if any(
+            self.root == protected or protected in self.root.parents
+            for protected in protected_roots
+        ):
             raise ValueError("Artifact root must be outside the application tree.")
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         if self.root.is_symlink() or not self.root.is_dir():

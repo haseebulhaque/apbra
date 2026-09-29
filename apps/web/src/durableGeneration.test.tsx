@@ -10,7 +10,8 @@ it('offers a clear private report build without overstating local validation',()
   expect(html).toContain('Generated reports');
   expect(html).toContain('Build report');
   expect(html).toContain('Validated ZIP outputs remain private');
-  expect(html).toContain('Local deterministic report-design substitute');
+  expect(html).toContain('Supplied and reviewed ReportDesign JSON');
+  expect(html).toContain('LOCAL_DETERMINISTIC_NO_MODEL_CALL');
   expect(html).toContain('Power BI Desktop, DAX, RLS and deployment validation are not run');
 });
 

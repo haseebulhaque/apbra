@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+import apbra_api.artifacts as artifacts_module
 from apbra_api.artifacts import ArtifactError, LocalArtifactStore
 
 
@@ -42,6 +43,34 @@ def test_artifact_store_is_local_only(tmp_path: Path) -> None:
         LocalArtifactStore(tmp_path / "artifacts", "hosted")
     with pytest.raises(ValueError, match="outside the application tree"):
         LocalArtifactStore(Path.cwd() / "artifacts", "test")
+
+
+def test_artifact_store_rejects_repository_and_application_roots_from_other_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = Path(__file__).resolve().parents[3]
+    monkeypatch.chdir(tmp_path)
+    for protected in (repository, repository / "apps" / "api", repository / "apps" / "web"):
+        with pytest.raises(ValueError, match="outside the application tree"):
+            LocalArtifactStore(protected, "test")
+        with pytest.raises(ValueError, match="outside the application tree"):
+            LocalArtifactStore(protected / "synthetic-artifacts", "test")
+    linked_parent = tmp_path / "linked-repository"
+    linked_parent.symlink_to(repository, target_is_directory=True)
+    with pytest.raises(ValueError, match="outside the application tree"):
+        LocalArtifactStore(linked_parent / "apps" / "web" / "synthetic-artifacts", "test")
+
+
+def test_artifact_store_rejects_flat_container_application_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    application_root = tmp_path / "container" / "app"
+    module_directory = application_root / "src" / "apbra_api"
+    module_directory.mkdir(parents=True)
+    monkeypatch.setattr(artifacts_module, "__file__", str(module_directory / "artifacts.py"))
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ValueError, match="outside the application tree"):
+        LocalArtifactStore(application_root / "runtime" / "generated", "test")
 
 
 def test_artifact_store_removes_final_object_when_directory_sync_fails(

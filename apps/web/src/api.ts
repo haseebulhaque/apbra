@@ -75,7 +75,7 @@ export const acceptanceApi={
 };
 export const generationApi={
   list:(caseId:string)=>request<{items:GenerationAttempt[]}>(`/api/cases/${encodeURIComponent(caseId)}/generation`),
-  start:(caseId:string,confirmedContractId:string,commandKey:string,csrfToken:string,mode:'BUILD'|'RETRY'|'REGENERATE'='BUILD',sourceAttemptId?:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,command_key:commandKey,mode,source_attempt_id:sourceAttemptId})}).then(value=>value.attempt),
+  start:(caseId:string,confirmedContractId:string,commandKey:string,csrfToken:string,mode:'BUILD'|'RETRY'|'REGENERATE'='BUILD',sourceAttemptId?:string,reportDesign?:Record<string,unknown>)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,command_key:commandKey,mode,source_attempt_id:sourceAttemptId,report_design:reportDesign})}).then(value=>value.attempt),
   cancel:(caseId:string,attemptId:string,csrfToken:string)=>request<{attempt:GenerationAttempt}>(`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/cancel`,{method:'POST',headers:csrfHeaders(csrfToken)}).then(value=>value.attempt),
   artifactUrl:(caseId:string,attemptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/generation/${encodeURIComponent(attemptId)}/artifact`,
 };

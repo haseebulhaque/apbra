@@ -1,5 +1,5 @@
 import {validateConfirmedRequirementContract,type ConfirmedRequirementContract} from '../src/confirmedRequirements';
-import {createDeterministicReportDesign,type AIResult,type RequirementInterpretation} from '../src/foundry';
+import {validateConfirmedMeasureAuthority,validateReportDesign,type AIResult,type RequirementInterpretation} from '../src/foundry';
 import {compilePowerBI,validateGenericCandidate} from '../src/genericPowerBI';
 import {evaluateGuardrails} from '../src/guardrail';
 import {retrieveKnowledge,type Embedder} from '../src/rag';
@@ -7,7 +7,7 @@ import {inspectLayoutRepairSemantics,normalizeReportDesign} from '../src/reportD
 import type {DataStructure} from '../src/schemaIngestion';
 import {defaultTenantSettings} from '../src/tenant';
 
-type Request={contract:unknown;dataStructure:unknown;binding:unknown;execution:unknown};
+type Request={contract:unknown;dataStructure:unknown;reportDesign?:unknown;binding:unknown;execution:unknown};
 const encoder=new TextEncoder();
 
 function deterministicVector(text:string){const values=new Array<number>(48).fill(0);for(const [index,value] of encoder.encode(text.normalize('NFKC').toLocaleLowerCase('en-US')).entries())values[(value+index*17)%values.length]+=((value%29)+1)/29;const norm=Math.sqrt(values.reduce((sum,value)=>sum+value*value,0))||1;return values.map(value=>value/norm)}
@@ -21,7 +21,9 @@ async function main(){
  const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure);
  const query=[contract.objective,contract.audience,...contract.businessQuestions.map(item=>item.question),...contract.obligations.flatMap(item=>[...item.measureNames,...item.fields])].join('\n');
  const retrieval=await retrieveKnowledge(query,50,localEmbedder),knowledge=retrieval.retrieved.map(({citation,text})=>({citation,text}));if(!knowledge.length)throw new Error('GOVERNED_KNOWLEDGE_UNAVAILABLE');
- const original=createDeterministicReportDesign(contract,dataStructure,defaultTenantSettings,knowledge),normalization=normalizeReportDesign(original,dataStructure);if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${normalization.normalizationFindings.map(item=>item.code).join(',')}`);
+ if(input.reportDesign===undefined||input.reportDesign===null)throw new Error('TRUSTED_REPORT_DESIGN_REQUIRED: no ReportDesign was supplied for local no-model generation.');
+ const original=validateReportDesign(input.reportDesign,knowledge.map(item=>item.citation),dataStructure,defaultTenantSettings.generation.supportedTrendGrains);validateConfirmedMeasureAuthority(original,contract);
+ const normalization=normalizeReportDesign(original,dataStructure);if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${normalization.normalizationFindings.map(item=>item.code).join(',')}`);
  const design=normalization.normalizedReportDesign,semanticInspection=inspectLayoutRepairSemantics(original,design,contract);if(semanticInspection.status!=='PASS')throw new Error(`REPORT_DESIGN_SEMANTICS_FAILED: ${semanticInspection.findings.filter(item=>item.result==='FAIL').map(item=>item.code).join(',')}`);
  const interpretation=contract.provenance.interpretation as RequirementInterpretation,guardrails=evaluateGuardrails(interpretation,design,dataStructure,defaultTenantSettings);if(guardrails.generation!=='AVAILABLE')throw new Error(`GUARDRAILS_BLOCKED: ${guardrails.outcome}`);
  const candidate=compilePowerBI(design,dataStructure,defaultTenantSettings),candidateValidation=validateGenericCandidate(candidate,design,dataStructure);if(candidateValidation.status!=='PASS')throw new Error('CANDIDATE_VALIDATION_FAILED');

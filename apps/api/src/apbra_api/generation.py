@@ -62,10 +62,16 @@ class GenerationBridge:
     ) -> None:
         if not executable.is_file() or executable.is_symlink():
             raise ValueError("The generation bridge must be a fixed regular file.")
-        if not node_executable.is_file() or node_executable.is_symlink():
-            raise ValueError("The generation bridge runtime must be a fixed regular file.")
+        try:
+            resolved_node = node_executable.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise ValueError(
+                "The generation bridge runtime must be an executable regular file."
+            ) from exc
+        if not resolved_node.is_file() or not os.access(resolved_node, os.X_OK):
+            raise ValueError("The generation bridge runtime must be an executable regular file.")
         self.executable = executable.resolve()
-        self.node_executable = node_executable.resolve()
+        self.node_executable = resolved_node
         self.timeout_seconds = timeout_seconds
         if self.executable.stat().st_size > MAX_BRIDGE_EXECUTABLE_BYTES:
             raise ValueError("The generation bridge exceeds the fixed executable limit.")
@@ -446,6 +452,7 @@ class GenerationService:
         command_key: str,
         mode: str = "BUILD",
         source_attempt_id: UUID | None = None,
+        report_design: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         store = cast(ApplicationPersistence, db)
         if self.bridge is None:
@@ -453,6 +460,8 @@ class GenerationService:
         payload, semantic_input_digest, evidence_digest, case, contract = self._current_payload(
             store, actor, case_id, contract_id
         )
+        payload["reportDesign"] = report_design
+        semantic_input_digest = canonical_digest(payload)
         input_digest = canonical_digest(
             {
                 "semanticInputDigest": semantic_input_digest,
