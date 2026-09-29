@@ -204,7 +204,8 @@ def upgrade() -> None:
     )
     op.execute(
         "CREATE FUNCTION apbra_reject_design_attempt_delete() RETURNS trigger AS $$ "
-        "BEGIN RAISE EXCEPTION 'automatic design attempt cannot be deleted'; END; $$ LANGUAGE plpgsql"
+        "BEGIN RAISE EXCEPTION 'automatic design attempt cannot be deleted'; "
+        "END; $$ LANGUAGE plpgsql"
     )
     op.execute(
         "CREATE TRIGGER trg_design_attempt_no_delete BEFORE DELETE "
