@@ -111,7 +111,13 @@ class GenerationCreate(BaseModel):
     command_key: str = Field(min_length=8, max_length=200)
     mode: str = Field(default="BUILD", pattern="^(BUILD|RETRY|REGENERATE)$")
     source_attempt_id: UUID | None = None
-    report_design: dict[str, Any] | None = None
+    reviewed_design_id: UUID | None = None
+
+
+class ReviewedDesignCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_contract_id: UUID
+    report_design: dict[str, Any]
 
 
 def error_response(exc: ApplicationError) -> JSONResponse:
@@ -664,8 +670,44 @@ def create_app(
         case_id: UUID, db: DB, session_token: SessionCookie = None
     ) -> dict[str, Any]:
         return {
-            "items": local_generation_service().list(db, resolve_actor(db, session_token), case_id)
+            "items": local_generation_service().history(
+                db, resolve_actor(db, session_token), case_id
+            )
         }
+
+    @app.get("/api/cases/{case_id}/reviewed-designs")
+    def reviewed_designs(
+        case_id: UUID,
+        confirmed_contract_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return {
+            "items": local_generation_service().list_reviewed_designs(
+                db, resolve_actor(db, session_token), case_id, confirmed_contract_id
+            )
+        }
+
+    @app.post("/api/cases/{case_id}/reviewed-designs")
+    def intake_reviewed_design(
+        case_id: UUID,
+        payload: ReviewedDesignCreate,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, supplied_csrf)
+        reviewed = local_generation_service().intake_reviewed_design(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            contract_id=payload.confirmed_contract_id,
+            report_design=payload.report_design,
+        )
+        db.commit()
+        response.status_code = 201
+        return {"reviewed_design": reviewed}
 
     @app.post("/api/cases/{case_id}/generation")
     def start_generation(
@@ -685,7 +727,7 @@ def create_app(
             command_key=payload.command_key,
             mode=payload.mode,
             source_attempt_id=payload.source_attempt_id,
-            report_design=payload.report_design,
+            reviewed_design_id=payload.reviewed_design_id,
         )
         response.status_code = 201 if created else 200
         return {"attempt": result}

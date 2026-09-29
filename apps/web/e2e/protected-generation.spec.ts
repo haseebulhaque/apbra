@@ -1,7 +1,7 @@
 import {expect,test,type Page} from '@playwright/test';
 import {chmodSync,readFileSync} from 'node:fs';
 
-async function signIn(page:Page,identity:'member'|'foreign'='member'){
+async function signIn(page:Page,identity:'owner'|'uninvited'|'foreign'='owner'){
   await page.goto('/');
   await page.getByText('Local development identities').click();
   await page.getByRole('link',{name:identity,exact:true}).click();
@@ -19,7 +19,7 @@ function reviewedSyntheticDesign(contract:any){
   return {artifact_kind:'ReportDesign',schema_version:1,projectName:'ReviewedSyntheticCandidate',overview:contract.objective,audience:contract.audience,dataModel:{factTables:tableNames.filter((name:string)=>factNames.has(name)),dimensionTables:tableNames.filter((name:string)=>!factNames.has(name)),relationships:schema.relationships},measures,pages,filters:[...new Set(contract.obligations.filter((item:any)=>item.kind==='FILTER').flatMap((item:any)=>item.fields))],branding:{themeName:'Reviewed Synthetic',primary:'#005A9C',accent:'#2D7D9A'},accessibility:['Every test visual has a text alternative.'],standardsApplied:[{citation:'local-knowledge:report-design-standards.md@1.0.0#RD-001',decision:'Reviewed synthetic visual choice for validation only.'}],assumptions:[],warnings:['LOCAL_DETERMINISTIC_NO_MODEL_CALL: synthetic reviewed test design.'],generationRequirements:['Validate the supplied design through the canonical pipeline.']};
 }
 
-test('confirmed meaning builds one durable private candidate across reload',async({page,browser})=>{
+test('confirmed meaning and expert-reviewed plan build durable private candidates across reload',async({page,browser})=>{
   await signIn(page);
   const request='Compare completed inspections by facility.';
   await page.getByLabel('Original business request').fill(request);
@@ -35,19 +35,50 @@ test('confirmed meaning builds one durable private candidate across reload',asyn
   const confirmationResponse=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
   await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
-  await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
+  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
   const design=JSON.stringify(reviewedSyntheticDesign(confirmed));
-  await page.getByLabel('Reviewed ReportDesign JSON').fill(design);
+  await expect(page.getByText('Expert review needed.')).toBeVisible();
+  await expect(page.getByLabel('Expert report plan JSON')).toHaveCount(0);
+
+  const expertContext=await browser.newContext();
+  const expert=await expertContext.newPage();
+  await signIn(expert,'uninvited');
+  if(await expert.getByRole('heading',{name:'An invitation is required'}).isVisible()){
+    await page.getByText('Manage company access').click();
+    await page.getByLabel('External subject').fill('dev-uninvited');
+    await page.getByLabel('Application role').selectOption('EXPERT');
+    await page.getByRole('button',{name:'Issue invitation'}).click();
+    const invitationLink=await page.getByLabel('One-time invitation link').inputValue();
+    await expert.goto(invitationLink);
+    await expert.getByRole('button',{name:'Accept invitation'}).click();
+  }
+  await expect(expert.getByText('EXPERT',{exact:true})).toBeVisible();
+  await page.getByText('Manage private case access').click();
+  await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
+  await page.getByLabel('Case permission').selectOption('EDITOR');
+  await page.getByRole('button',{name:'Grant case access'}).click();
+  await expert.reload();
+  await expert.getByRole('button',{name:new RegExp(request)}).first().click();
+  await expert.getByText('Details for experts').last().click();
+  await expert.getByLabel('Expert report plan JSON').fill(design);
+  await expert.getByRole('button',{name:'Submit reviewed plan'}).click();
+  await expect(expert.getByLabel('Reviewed report plan')).toBeVisible();
+  await expertContext.close();
+  await page.reload();
+  await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await expect(page.getByLabel('Reviewed report plan')).toBeVisible();
+  await expect(page.getByLabel('Expert report plan JSON')).toHaveCount(0);
 
   const artifactRoot='/tmp/apbra-164-e2e-artifacts';
   try{
     chmodSync(artifactRoot,0o500);
     await page.getByRole('button',{name:'Build report'}).click();
+    await page.getByText('Earlier builds and history · 1').click();
     await expect(page.getByText(/Version 1 · Build failed/)).toBeVisible();
   }finally{chmodSync(artifactRoot,0o700)}
   await page.getByRole('button',{name:'Retry failed build'}).click();
   await expect(page.getByText(/Version 2 · Report ready/)).toBeVisible();
-  const download=page.getByRole('link',{name:'Download validated Power BI candidate'});
+  const download=page.getByRole('link',{name:'Download current report candidate'});
   await expect(download).toBeVisible();
   const artifactPath=await download.getAttribute('href')??'';
   const response=await page.request.get(artifactPath);
@@ -65,14 +96,15 @@ test('confirmed meaning builds one durable private candidate across reload',asyn
 
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await page.getByText('Earlier builds and history · 2').click();
   await expect(page.getByText(/Version 2 · Report ready/)).toBeVisible();
   await expect(page.getByText(/Version 1 · Build failed/)).toBeVisible();
-  await expect(page.getByText('2 attempts',{exact:true})).toBeVisible();
-  await page.getByLabel('Reviewed ReportDesign JSON').fill(design);
+  await expect(page.getByText('2 builds',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Build another version'}).click();
   await expect(page.getByText(/Version 3 · Report ready/)).toBeVisible();
-  await expect(page.getByText('3 attempts',{exact:true})).toBeVisible();
-  await expect(page.getByRole('link',{name:'Download validated Power BI candidate'})).toHaveCount(2);
+  await expect(page.getByText('3 builds',{exact:true})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Download current report candidate'})).toHaveCount(1);
+  await expect(page.getByRole('link',{name:'Download earlier report candidate'})).toHaveCount(1);
 
   await page.getByLabel('Current business request').fill(`${request} Include the latest reviewed period.`);
   await page.getByRole('button',{name:'Save new version'}).click();

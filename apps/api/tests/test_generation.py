@@ -87,7 +87,60 @@ def confirm_current_case(
         headers=csrf(session),
     ).json()["confirmed_contract"]
     contract["reviewed_report_design"] = reviewed_synthetic_report_design(contract["contract"])
+    contract["reviewed_design_id"] = submit_reviewed_design(
+        client, session, case_id, contract
+    )
     return contract
+
+
+def submit_reviewed_design(
+    client: TestClient,
+    case_session: dict[str, object],
+    case_id: str,
+    contract: dict[str, object],
+) -> str:
+    """Synthetic expert intake; the ordinary case actor does not approve a design."""
+    with TestClient(client.app) as expert:
+        expert_session = sign_in(expert, "uninvited")
+        if "actor" not in expert_session:
+            with TestClient(client.app) as owner:
+                owner_session = sign_in(owner, "owner")
+                invitation = owner.post(
+                    "/api/invitations",
+                    json={"subject": "dev-uninvited", "role": "EXPERT"},
+                    headers=csrf(owner_session),
+                )
+                assert invitation.status_code == 200, invitation.text
+                accepted = expert.post(
+                    "/api/invitations/accept",
+                    json={"token": invitation.json()["token"]},
+                    headers=csrf(expert_session),
+                )
+                assert accepted.status_code == 200, accepted.text
+            expert_session = expert.get("/api/auth/session").json()
+        membership_id = expert_session["actor"]["membership_id"]
+        access = client.get(f"/api/cases/{case_id}/access")
+        assert access.status_code == 200, access.text
+        if not any(
+            item["membership_id"] == membership_id and item["active"]
+            for item in access.json()["items"]
+        ):
+            granted = client.post(
+                f"/api/cases/{case_id}/access",
+                json={"membership_id": membership_id, "access_level": "EDITOR"},
+                headers=csrf(case_session),
+            )
+            assert granted.status_code == 200, granted.text
+        intake = expert.post(
+            f"/api/cases/{case_id}/reviewed-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "report_design": contract["reviewed_report_design"],
+            },
+            headers=csrf(expert_session),
+        )
+        assert intake.status_code == 201, intake.text
+        return str(intake.json()["reviewed_design"]["id"])
 
 
 def reviewed_synthetic_report_design(snapshot: dict[str, object]) -> dict[str, object]:
@@ -199,7 +252,7 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": command,
         },
         headers=csrf(session),
@@ -219,6 +272,194 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
         assert "ReportDesign.json" in archive.namelist()
 
 
+@pytest.mark.parametrize("selector", ["member", "owner"])
+def test_reviewed_design_intake_is_expert_only_and_business_response_is_non_raw(
+    client: TestClient, database: Database, selector: str
+) -> None:
+    session = sign_in(client, selector)
+    case, contract = confirmed_case(
+        client, session, "Compare approved requests by group.", "requests.csv",
+        b"Group,Approved\nA,4\nB,7\n",
+    )
+    listed = client.get(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    )
+    assert listed.status_code == 200
+    assert len(listed.json()["items"]) == 1
+    reviewed = listed.json()["items"][0]
+    assert reviewed["id"] == contract["reviewed_design_id"]
+    assert reviewed["summary"]["page_count"] >= 1
+    assert "report_design" not in reviewed
+    assert "design_json" not in reviewed
+    assert "approved" not in reviewed
+    assert "reviewed_report_design" not in listed.text
+    denied = client.post(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "report_design": contract["reviewed_report_design"],
+        },
+        headers=csrf(session),
+    )
+    assert denied.status_code == 404
+    client_assertion = client.post(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "report_design": contract["reviewed_report_design"],
+            "approved": True,
+        },
+        headers=csrf(session),
+    )
+    assert client_assertion.status_code == 422
+    with database.session() as db:
+        recorded = db.execute(
+            text(
+                "SELECT reviewer_membership_id, reviewer_identity_id, reviewer_role, "
+                "binding_digest, content_digest, reviewed_at "
+                "FROM reviewed_report_designs WHERE id=:id"
+            ),
+            {"id": reviewed["id"]},
+        ).one()
+    assert recorded.reviewer_role == "EXPERT"
+    assert recorded.reviewer_membership_id is not None
+    assert recorded.reviewer_identity_id is not None
+    assert len(recorded.binding_digest) == len(recorded.content_digest) == 64
+    assert recorded.reviewed_at is not None
+
+
+def test_reviewed_design_is_immutable_and_digest_tamper_fails_closed(
+    client: TestClient, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Compare verified checks by unit.", "checks.csv",
+        b"Unit,Verified\nNorth,5\nSouth,8\n",
+    )
+    design_id = contract["reviewed_design_id"]
+    with database.session() as db:
+        with pytest.raises(DBAPIError, match="reviewed report design is immutable"):
+            db.execute(
+                text("UPDATE reviewed_report_designs SET design_json='{}' WHERE id=:id"),
+                {"id": design_id},
+            )
+        db.rollback()
+        with pytest.raises(DBAPIError, match="reviewed report design is immutable"):
+            db.execute(
+                text("DELETE FROM reviewed_report_designs WHERE id=:id"),
+                {"id": design_id},
+            )
+        db.rollback()
+        db.execute(
+            text(
+                "ALTER TABLE reviewed_report_designs DISABLE TRIGGER "
+                "trg_reviewed_design_immutable"
+            )
+        )
+        db.execute(
+            text("UPDATE reviewed_report_designs SET design_json='{}' WHERE id=:id"),
+            {"id": design_id},
+        )
+        db.execute(
+            text(
+                "ALTER TABLE reviewed_report_designs ENABLE TRIGGER "
+                "trg_reviewed_design_immutable"
+            )
+        )
+    listed = client.get(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    )
+    assert listed.status_code == 200
+    assert listed.json()["items"] == []
+    blocked = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": design_id,
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert blocked.status_code == 422
+    assert blocked.json()["error"]["code"] == "TRUSTED_REPORT_DESIGN_REQUIRED"
+    assert client.get(f"/api/cases/{case['id']}/generation").json()["items"] == []
+
+
+@pytest.mark.parametrize(
+    "membership_change", ["active=false", "role='COMPANY_ADMIN'"]
+)
+def test_revoked_expert_cannot_leave_a_design_build_eligible(
+    client: TestClient, database: Database, membership_change: str
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Show accepted units by location.", "units.csv",
+        b"Location,Accepted\nA,3\nB,6\n",
+    )
+    with database.session() as db:
+        reviewer_id = db.scalar(
+            text("SELECT reviewer_membership_id FROM reviewed_report_designs WHERE id=:id"),
+            {"id": contract["reviewed_design_id"]},
+        )
+        statement = (
+            "UPDATE memberships SET active=false WHERE id=:id"
+            if membership_change == "active=false"
+            else "UPDATE memberships SET role='COMPANY_ADMIN' WHERE id=:id"
+        )
+        db.execute(text(statement), {"id": reviewer_id})
+    blocked = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": contract["reviewed_design_id"],
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert blocked.status_code == 422
+    assert client.get(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    ).json()["items"] == []
+
+
+def test_reviewed_design_requires_current_private_case_access_for_reviewer(
+    client: TestClient, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Show approved items by group.", "items.csv",
+        b"Group,Approved\nA,3\nB,5\n",
+    )
+    with database.session() as db:
+        reviewer_id = db.scalar(
+            text("SELECT reviewer_membership_id FROM reviewed_report_designs WHERE id=:id"),
+            {"id": contract["reviewed_design_id"]},
+        )
+    revoke = client.post(
+        f"/api/cases/{case['id']}/access/{reviewer_id}/revoke",
+        headers=csrf(session),
+    )
+    assert revoke.status_code == 200, revoke.text
+    assert client.get(
+        f"/api/cases/{case['id']}/reviewed-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    ).json()["items"] == []
+    blocked = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": contract["reviewed_design_id"],
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert blocked.status_code == 422
+    assert blocked.json()["error"]["code"] == "TRUSTED_REPORT_DESIGN_REQUIRED"
+
+
 def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmation(
     client: TestClient,
 ) -> None:
@@ -235,7 +476,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": command,
         },
         headers=csrf(session),
@@ -244,7 +485,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": command,
         },
         headers=csrf(session),
@@ -255,7 +496,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": command,
             "mode": "REGENERATE",
         },
@@ -267,7 +508,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
             "mode": "REGENERATE",
         },
@@ -287,7 +528,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -308,7 +549,7 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": replacement_contract["id"],
-            "report_design": replacement_contract["reviewed_report_design"],
+            "reviewed_design_id": replacement_contract["reviewed_design_id"],
             "command_key": str(uuid4()),
             "mode": "REGENERATE",
         },
@@ -318,7 +559,52 @@ def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmati
     assert changed.json()["attempt"]["supersedes_attempt_id"] == regenerated["id"]
 
 
-def test_missing_reviewed_design_fails_durably_and_design_changes_command_binding(
+def test_regeneration_can_select_another_reviewed_design_without_rewriting_history(
+    client: TestClient, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Compare verified units by team.", "units.csv",
+        b"Team,Verified\nNorth,4\nSouth,7\n",
+    )
+    first_design = contract["reviewed_design_id"]
+    second_design = submit_reviewed_design(client, session, case["id"], contract)
+    assert second_design != first_design
+    first = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": first_design,
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert first.status_code == 201, first.text
+    regenerated = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": second_design,
+            "command_key": str(uuid4()),
+            "mode": "REGENERATE",
+        },
+        headers=csrf(session),
+    )
+    assert regenerated.status_code == 201, regenerated.text
+    history = client.get(f"/api/cases/{case['id']}/generation").json()["items"]
+    assert [item["reviewed_design_id"] for item in history] == [second_design, first_design]
+    assert history[0]["supersedes_attempt_id"] == history[1]["id"]
+    assert all(item["artifact"] is not None for item in history)
+    with database.session() as db:
+        with pytest.raises(DBAPIError, match="immutable"):
+            db.execute(
+                text("UPDATE generation_attempts SET reviewed_design_id=:new WHERE id=:id"),
+                {"new": second_design, "id": history[1]["id"]},
+            )
+        db.rollback()
+
+
+def test_missing_reviewed_design_fails_before_attempt_and_cannot_consume_command(
     client: TestClient,
 ) -> None:
     session = sign_in(client, "member")
@@ -335,23 +621,22 @@ def test_missing_reviewed_design_fails_durably_and_design_changes_command_bindin
         json={"confirmed_contract_id": contract["id"], "command_key": command},
         headers=csrf(session),
     )
-    assert missing.status_code == 201
-    failed = missing.json()["attempt"]
-    assert failed["status"] == "FAILED"
-    assert failed["artifact"] is None
-    assert failed["failure"]["code"] == "GENERATION_FAILED"
-    changed_command = client.post(
+    assert missing.status_code == 422
+    assert missing.json()["error"]["code"] == "TRUSTED_REPORT_DESIGN_REQUIRED"
+    assert client.get(f"/api/cases/{case['id']}/generation").json()["items"] == []
+    built = client.post(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
             "command_key": command,
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
         },
         headers=csrf(session),
     )
-    assert changed_command.status_code == 409
-    assert changed_command.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
-    built = client.post(
+    assert built.status_code == 201
+    assert built.json()["attempt"]["status"] == "SUCCEEDED"
+    assert built.json()["attempt"]["reviewed_design_id"] == contract["reviewed_design_id"]
+    raw_browser_command = client.post(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
@@ -360,10 +645,10 @@ def test_missing_reviewed_design_fails_durably_and_design_changes_command_bindin
         },
         headers=csrf(session),
     )
-    assert built.status_code == 201
-    assert built.json()["attempt"]["status"] == "SUCCEEDED"
+    assert raw_browser_command.status_code == 422
+    assert raw_browser_command.json()["error"]["code"] == "REQUEST_VALIDATION_FAILED"
     history = client.get(f"/api/cases/{case['id']}/generation").json()["items"]
-    assert [item["id"] for item in history] == [built.json()["attempt"]["id"], failed["id"]]
+    assert [item["id"] for item in history] == [built.json()["attempt"]["id"]]
 
 
 def test_pipeline_failure_is_durable_and_never_downloadable(
@@ -386,7 +671,7 @@ def test_pipeline_failure_is_durable_and_never_downloadable(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -436,7 +721,7 @@ def test_equivalent_concurrent_commands_collapse_to_one_durable_attempt(
             f"/api/cases/{case['id']}/generation",
             json={
                 "confirmed_contract_id": contract["id"],
-                "report_design": contract["reviewed_report_design"],
+                "reviewed_design_id": contract["reviewed_design_id"],
                 "command_key": command,
             },
             headers=csrf(session),
@@ -490,7 +775,7 @@ def test_cancel_fences_late_pipeline_result_and_retry_creates_new_attempt(
             f"/api/cases/{case['id']}/generation",
             json={
                 "confirmed_contract_id": contract["id"],
-                "report_design": contract["reviewed_report_design"],
+                "reviewed_design_id": contract["reviewed_design_id"],
                 "command_key": str(uuid4()),
             },
             headers=csrf(session),
@@ -517,11 +802,24 @@ def test_cancel_fences_late_pipeline_result_and_retry_creates_new_attempt(
     assert completed.json()["attempt"]["status"] == "CANCELLED"
     assert completed.json()["attempt"]["artifact"] is None
     monkeypatch.setattr(GenerationBridge, "generate", original)
+    alternate_design = submit_reviewed_design(client, session, case["id"], contract)
+    wrong_retry = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": alternate_design,
+            "command_key": str(uuid4()),
+            "mode": "RETRY",
+            "source_attempt_id": completed.json()["attempt"]["id"],
+        },
+        headers=csrf(session),
+    )
+    assert wrong_retry.status_code == 409
     retry = client.post(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
             "mode": "RETRY",
             "source_attempt_id": completed.json()["attempt"]["id"],
@@ -548,7 +846,7 @@ def test_history_and_artifact_survive_restart_but_remain_company_private(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -572,7 +870,7 @@ def test_history_and_artifact_survive_restart_but_remain_company_private(
             f"/api/cases/{case['id']}/generation",
             json={
                 "confirmed_contract_id": contract["id"],
-                "report_design": contract["reviewed_report_design"],
+                "reviewed_design_id": contract["reviewed_design_id"],
                 "command_key": str(uuid4()),
                 "mode": "REGENERATE",
             },
@@ -609,7 +907,7 @@ def test_artifact_integrity_failure_is_fail_closed(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -641,7 +939,7 @@ def test_terminal_attempt_and_artifact_history_are_database_immutable(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -763,7 +1061,7 @@ def test_authorization_revocation_waits_for_eligibility_commit(
                 f"/api/cases/{case['id']}/generation",
                 json={
                     "confirmed_contract_id": contract["id"],
-                    "report_design": contract["reviewed_report_design"],
+                    "reviewed_design_id": contract["reviewed_design_id"],
                     "command_key": str(uuid4()),
                 },
                 headers=csrf(session),
@@ -800,7 +1098,7 @@ def test_nonterminal_identity_and_cross_attempt_artifact_binding_are_rejected(
         f"/api/cases/{first_case['id']}/generation",
         json={
             "confirmed_contract_id": first_contract["id"],
-            "report_design": first_contract["reviewed_report_design"],
+            "reviewed_design_id": first_contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),
@@ -830,7 +1128,7 @@ def test_nonterminal_identity_and_cross_attempt_artifact_binding_are_rejected(
                 f"/api/cases/{second_case['id']}/generation",
                 json={
                     "confirmed_contract_id": second_contract["id"],
-                    "report_design": second_contract["reviewed_report_design"],
+                    "reviewed_design_id": second_contract["reviewed_design_id"],
                     "command_key": str(uuid4()),
                 },
                 headers=csrf(session),
@@ -907,7 +1205,7 @@ def test_revoked_membership_before_late_result_prevents_artifact_eligibility(
                 f"/api/cases/{case['id']}/generation",
                 json={
                     "confirmed_contract_id": contract["id"],
-                    "report_design": contract["reviewed_report_design"],
+                    "reviewed_design_id": contract["reviewed_design_id"],
                     "command_key": str(uuid4()),
                 },
                 headers=csrf(session),
@@ -952,7 +1250,7 @@ def test_database_failure_after_artifact_write_removes_uncommitted_bytes(
         f"/api/cases/{case['id']}/generation",
         json={
             "confirmed_contract_id": contract["id"],
-            "report_design": contract["reviewed_report_design"],
+            "reviewed_design_id": contract["reviewed_design_id"],
             "command_key": str(uuid4()),
         },
         headers=csrf(session),

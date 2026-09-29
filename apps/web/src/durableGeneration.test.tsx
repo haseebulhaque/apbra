@@ -7,17 +7,25 @@ const contract:DurableContract={id:'contract-1',interpretation_id:'interpretatio
 
 it('offers a clear private report build without overstating local validation',()=>{
   const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={contract} csrfToken="csrf" onError={()=>{}}/>);
-  expect(html).toContain('Generated reports');
-  expect(html).toContain('Build report');
-  expect(html).toContain('Validated ZIP outputs remain private');
-  expect(html).toContain('Supplied and reviewed ReportDesign JSON');
-  expect(html).toContain('LOCAL_DETERMINISTIC_NO_MODEL_CALL');
-  expect(html).toContain('Power BI Desktop, DAX, RLS and deployment validation are not run');
+  expect(html).toContain('Build and find reports');
+  expect(html).toContain('Expert review needed.');
+  expect(html).not.toContain('>Build report<');
+  expect(html).not.toContain('Expert report plan JSON');
+  expect(html).toContain('Completed candidate files stay private');
+  expect(html).toContain('Power BI Desktop, DAX, RLS, publication and deployment validation are not run');
+});
+
+it('limits raw reviewed-plan intake to the expert-facing detail',()=>{
+  const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={contract} csrfToken="csrf" actorRole="EXPERT" onError={()=>{}}/>);
+  expect(html).toContain('Details for experts');
+  expect(html).toContain('Expert report plan JSON');
+  expect(html).toContain('Submit reviewed plan');
+  expect(html).not.toContain('>Build report<');
 });
 
 it('requires a current confirmation while keeping historical output area visible',()=>{
   const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={null} csrfToken="csrf" onError={()=>{}}/>);
-  expect(html).toContain('Confirm the current understanding before building a report');
-  expect(html).toContain('Historical outputs remain available below');
+  expect(html).toContain('Review and confirm the current understanding before building.');
+  expect(html).toContain('Earlier reports remain available below.');
   expect(html).not.toContain('>Build report<');
 });

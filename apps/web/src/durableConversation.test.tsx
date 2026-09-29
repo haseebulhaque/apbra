@@ -7,11 +7,11 @@ const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_i
 
 it('labels durable messages and qualified evidence without claiming generated output',()=>{
   const html=renderToStaticMarkup(<DurableConversation record={record} csrfToken="csrf" onContextChanged={()=>{}} onError={()=>{}}/>);
-  expect(html).toContain('Conversation, evidence and confirmed meaning');
-  expect(html).toContain('Context 3');
+  expect(html).toContain('Your report journey');
+  expect(html).toContain('Shape your report');
   expect(html).toContain('Add a business message');
   expect(html).toContain('Add CSV or XLSX evidence');
-  expect(html).toContain('factual interpretation and confirmation remain unavailable');
-  expect(html).toContain('no AI/model call occurs');
+  expect(html).toContain('confirmation is unavailable until supported evidence is added');
+  expect(html).toContain('Review the understanding');
   expect(html).not.toMatch(/candidate ready|report generated/i);
 });

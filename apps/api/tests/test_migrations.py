@@ -22,6 +22,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
         "case_request_versions",
         "generation_attempts",
         "generated_artifacts",
+        "reviewed_report_designs",
     }.issubset(set(inspector.get_table_names()))
     assert "uq_generation_case_active" in {
         index["name"] for index in inspector.get_indexes("generation_attempts")
@@ -29,7 +30,27 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260924_03"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_04"
+
+
+def test_package_c_to_reviewed_design_upgrade_is_isolated(
+    settings: Settings, database: Database
+) -> None:
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20260924_03")
+    inspector = inspect(database.engine)
+    assert "reviewed_report_designs" not in inspector.get_table_names()
+    assert "reviewed_design_id" not in {
+        column["name"] for column in inspector.get_columns("generation_attempts")
+    }
+    command.upgrade(config, "20260929_04")
+    inspector = inspect(database.engine)
+    assert "reviewed_report_designs" in inspector.get_table_names()
+    assert "reviewed_design_id" in {
+        column["name"] for column in inspector.get_columns("generation_attempts")
+    }
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_04"
 
 
 def test_first_migration_downgrades_and_reapplies_explicit_schema(

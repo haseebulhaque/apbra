@@ -163,11 +163,33 @@ class ConfirmedContractRecord(Protocol):
     accepted_at: datetime
 
 
+class ReviewedReportDesignRecord(Protocol):
+    id: UUID
+    company_id: UUID
+    case_id: UUID
+    confirmed_contract_id: UUID
+    interpretation_id: UUID
+    request_version_id: UUID
+    semantic_context_version: int
+    binding_json: str
+    binding_digest: str
+    semantic_input_digest: str
+    evidence_binding_digest: str
+    design_json: str
+    content_digest: str
+    summary_json: str
+    reviewer_membership_id: UUID
+    reviewer_identity_id: UUID
+    reviewer_role: str
+    reviewed_at: datetime
+
+
 class GenerationAttemptRecord(Protocol):
     id: UUID
     case_id: UUID
     company_id: UUID
     confirmed_contract_id: UUID
+    reviewed_design_id: UUID | None
     interpretation_id: UUID
     request_version_id: UUID
     created_by_membership_id: UUID
@@ -369,6 +391,31 @@ class ApplicationPersistence(Protocol):
         self, case_id: UUID, contract_id: UUID
     ) -> ConfirmedContractRecord | None: ...
 
+    def add_reviewed_design(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        interpretation_id: UUID,
+        request_version_id: UUID,
+        semantic_context_version: int,
+        binding_json: str,
+        binding_digest: str,
+        semantic_input_digest: str,
+        evidence_binding_digest: str,
+        design_json: str,
+        content_digest: str,
+        summary_json: str,
+    ) -> ReviewedReportDesignRecord: ...
+
+    def reviewed_design(
+        self, case_id: UUID, design_id: UUID
+    ) -> ReviewedReportDesignRecord | None: ...
+
+    def reviewed_designs(
+        self, case_id: UUID, contract_id: UUID
+    ) -> list[ReviewedReportDesignRecord]: ...
+
     def generation_attempt_by_command(
         self, actor: Actor, case_id: UUID, command_key: str
     ) -> GenerationAttemptRecord | None: ...
@@ -391,6 +438,7 @@ class ApplicationPersistence(Protocol):
         input_digest: str,
         evidence_binding_digest: str,
         provenance_json: str,
+        reviewed_design_id: UUID,
         *,
         retry_of_attempt_id: UUID | None = None,
         supersedes_attempt_id: UUID | None = None,
@@ -476,6 +524,11 @@ class GenerationUnavailable(ApplicationError):
     status_code = 422
     code = "GENERATION_UNAVAILABLE"
     public_message = "A current confirmed requirement is required before building a report."
+
+
+class ReviewedDesignRequired(GenerationUnavailable):
+    code = "TRUSTED_REPORT_DESIGN_REQUIRED"
+    public_message = "A current expert-reviewed report plan is required before building."
 
 
 class GenerationFailed(ApplicationError):
