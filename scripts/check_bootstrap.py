@@ -361,10 +361,19 @@ PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA
 PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID = 'mvp1-protected-generation-output-history-bootstrap-compatibility-amendment'
 PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_SHA256 = '08c74385f68523d5e3a69ef7b6caa98a2b6b6760e22808deb3d3e1800a7d7429'
 BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS = {
+    'apps/api/alembic/versions/20260929_04_reviewed_report_design.py',
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/generation.py',
+    'apps/api/src/apbra_api/persistence.py',
+    'apps/api/tests/test_generation.py',
+    'apps/api/tests/test_migrations.py',
     'apps/web/e2e/durable-conversation.spec.ts',
     'apps/web/e2e/private-case.spec.ts',
     'apps/web/e2e/protected-generation.spec.ts',
     'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/api.test.ts',
+    'apps/web/src/api.ts',
     'apps/web/src/durableConversation.test.tsx',
     'apps/web/src/durableConversation.tsx',
     'apps/web/src/durableGeneration.test.tsx',
@@ -380,8 +389,11 @@ BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_TASK_SHA256 = '1735deb895767441393ef58dfad66b99e3a0b2afc059db436b26e76ad4aa3452'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_TASK_SHA256 = '895fc86ccd6d88a5b2f37ffe53c399f9c86f64b739e4586a67d0b187ae3a6592'
 BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_SOURCE_SHA256 = 'd8da98d6c8bcd7af6683c4f1f86a0113f11368a317d0053993df50920c875399'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-169-reviewed-design-governance-amendment'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID = 'mvp1-business-friendly-ux-reviewed-design-amendment'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_SHA256 = 'd2eee3c8dcf4c07aee257debe64148fdfc4fd430186ef68c8367cc00fbe81202'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1223,7 +1235,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected business-friendly UX application shell identity')
                 if business_friendly_ux_application_shell_task['agent_card_version'] != '0.1':
                     extension_errors.append('Stale business-friendly UX application shell agent card version')
-                if business_friendly_ux_application_shell_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-169-business-friendly-ux-shell-registration':
+                if business_friendly_ux_application_shell_task['branch'] != 'agent/APBRA-DEVOPS/APBRA-169-business-friendly-ux-shell':
                     extension_errors.append('Unexpected business-friendly UX application shell branch')
                 if business_friendly_ux_application_shell_task['base_commit'] != 'a34a20ef8448b932bc9537c2b1c377c8de1727d6':
                     extension_errors.append('Stale business-friendly UX application shell base')
@@ -1231,7 +1243,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected business-friendly UX application shell scope')
                 if (business_friendly_ux_application_shell_task['task_mode'], business_friendly_ux_application_shell_task['readiness'], business_friendly_ux_application_shell_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Business-friendly UX application shell requires issued implementation acceptance')
-                if business_friendly_ux_application_shell_task['source_ids'] != ['mvp1-business-friendly-ux-application-shell']:
+                if business_friendly_ux_application_shell_task['source_ids'] != ['mvp1-business-friendly-ux-application-shell', BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Business-friendly UX application shell requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get('mvp1-business-friendly-ux-application-shell')
@@ -1241,6 +1253,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_SOURCE_SHA256:
                         extension_errors.append('Business-friendly UX application shell source differs from accepted provenance')
+                amendment_source = source_map.get(BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID)
+                if amendment_source is None:
+                    extension_errors.append('Business-friendly UX reviewed-design amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('Business-friendly UX reviewed-design amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 business_friendly_ux_application_shell_task = None
@@ -1297,7 +1316,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             elif (active_task is not None and active_task['branch'] != active_branch and
                     not (active_task_id == 'APBRA-164' and
                          active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
-                         changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS)):
+                         changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-169' and
+                         active_branch == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH and
+                         changed_paths == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
