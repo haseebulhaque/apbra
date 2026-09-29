@@ -596,13 +596,16 @@ class GenerationService:
             except ReviewedDesignRequired:
                 continue
             result.append(self._reviewed_design_json(row))
-        can_submit = actor.role == Role.EXPERT
-        if can_submit:
-            try:
-                authorized_case_access(store, actor, case_id, require_edit=True)
-            except ProtectedResourceNotFound:
-                can_submit = False
-        return {"items": result, "can_submit": can_submit}
+        try:
+            authorized_case_access(store, actor, case_id, require_edit=True)
+            can_build = True
+        except ProtectedResourceNotFound:
+            can_build = False
+        return {
+            "items": result,
+            "can_build": can_build,
+            "can_submit": can_build and actor.role == Role.EXPERT,
+        }
 
     def start(
         self,

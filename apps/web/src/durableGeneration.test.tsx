@@ -18,7 +18,7 @@ it('offers a clear private report build without overstating local validation',()
 it('limits raw reviewed-plan intake to the expert-facing detail',()=>{
   const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={contract} csrfToken="csrf" actorRole="EXPERT" onError={()=>{}}/>);
   expect(html).toContain('Details for experts');
-  expect(html).toContain('Report-plan submission requires expert edit access');
+  expect(html).toContain('Checking expert case access');
   expect(html).not.toContain('Expert report plan JSON');
   expect(html).not.toContain('>Build report<');
 });

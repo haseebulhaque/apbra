@@ -98,7 +98,13 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await download.click();
   await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).toContainText('This report file is unavailable or you no longer have access.');
   await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).not.toContainText('internal detail');
+  await expect(page.getByLabel('Current report')).toContainText('This completed build has no available file.');
+  await expect(page.getByLabel('Current report')).not.toContainText('Validated candidate recorded');
   await page.unroute('**/generation/*/artifact');
+  const retriedDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Try current report download again'}).click();
+  expect((await retriedDownload).suggestedFilename()).toMatch(/\.zip$/);
+  await expect(page.getByLabel('Current report')).toContainText('Validated candidate recorded');
 
   const apiPid=Number(readFileSync('/tmp/apbra-164-e2e-api.pid','utf8').trim());
   process.kill(apiPid,'SIGTERM');
@@ -119,6 +125,21 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByText('3 builds',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Download current report candidate'})).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(1);
+  await page.getByText('Manage private case access').click();
+  await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
+  await page.getByLabel('Case permission').selectOption('VIEWER');
+  await page.getByRole('button',{name:'Grant case access'}).click();
+  const viewerContext=await browser.newContext();
+  const viewer=await viewerContext.newPage();
+  await viewer.goto('/');
+  await viewer.getByText('Local development identities').click();
+  await viewer.getByRole('link',{name:'member',exact:true}).click();
+  await viewer.getByRole('button',{name:new RegExp(request)}).first().click();
+  await expect(viewer.getByLabel('Reviewed report plan')).toBeVisible();
+  await expect(viewer.getByText('building or cancelling a report requires editor access')).toBeVisible();
+  await expect(viewer.getByRole('button',{name:'Build another version'})).toHaveCount(0);
+  await expect(viewer.getByRole('button',{name:'Retry failed build'})).toHaveCount(0);
+  await viewerContext.close();
 
   await page.getByLabel('Current business request').fill(`${request} Show the total completed by facility.`);
   await page.getByRole('button',{name:'Save new version'}).click();
@@ -152,7 +173,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByRole('button',{name:'Build report',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   await page.getByText('Manage private case access').click();
-  await page.getByRole('button',{name:'Revoke'}).click();
+  await page.getByRole('listitem').filter({hasText:'dev-uninvited · editor'}).getByRole('button',{name:'Revoke'}).click();
   await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
   await page.getByLabel('Case permission').selectOption('VIEWER');
   await page.getByRole('button',{name:'Grant case access'}).click();

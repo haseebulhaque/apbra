@@ -286,6 +286,7 @@ def test_reviewed_design_intake_is_expert_only_and_business_response_is_non_raw(
         params={"confirmed_contract_id": contract["id"]},
     )
     assert listed.status_code == 200
+    assert listed.json()["can_build"] is True
     assert listed.json()["can_submit"] is False
     assert len(listed.json()["items"]) == 1
     reviewed = listed.json()["items"][0]
@@ -482,6 +483,7 @@ def test_reviewed_design_submission_capability_requires_expert_edit_access(
             params={"confirmed_contract_id": contract["id"]},
         )
         assert listed.status_code == 200
+        assert listed.json()["can_build"] is True
         assert listed.json()["can_submit"] is True
         revoked = client.post(
             f"/api/cases/{case['id']}/access/{reviewer_id}/revoke",
@@ -499,6 +501,7 @@ def test_reviewed_design_submission_capability_requires_expert_edit_access(
             params={"confirmed_contract_id": contract["id"]},
         )
         assert viewer_listing.status_code == 200
+        assert viewer_listing.json()["can_build"] is False
         assert viewer_listing.json()["can_submit"] is False
         denied = expert.post(
             f"/api/cases/{case['id']}/reviewed-designs",
@@ -509,6 +512,60 @@ def test_reviewed_design_submission_capability_requires_expert_edit_access(
             headers=csrf(expert_session),
         )
         assert denied.status_code == 404
+
+
+def test_viewer_can_inspect_eligible_plan_but_cannot_build_or_cancel(
+    client: TestClient,
+) -> None:
+    owner_session = sign_in(client, "owner")
+    case, contract = confirmed_case(
+        client, owner_session, "Compare approved cases by group.", "cases.csv",
+        b"Group,Approved\nA,3\nB,5\n",
+    )
+    with TestClient(client.app) as viewer:
+        viewer_session = sign_in(viewer, "member")
+        granted = client.post(
+            f"/api/cases/{case['id']}/access",
+            json={
+                "membership_id": viewer_session["actor"]["membership_id"],
+                "access_level": "VIEWER",
+            },
+            headers=csrf(owner_session),
+        )
+        assert granted.status_code == 200, granted.text
+        listed = viewer.get(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert listed.status_code == 200
+        assert len(listed.json()["items"]) == 1
+        assert listed.json()["can_build"] is False
+        assert listed.json()["can_submit"] is False
+        denied = viewer.post(
+            f"/api/cases/{case['id']}/generation",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "reviewed_design_id": contract["reviewed_design_id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(viewer_session),
+        )
+        assert denied.status_code == 404
+        generated = client.post(
+            f"/api/cases/{case['id']}/generation",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "reviewed_design_id": contract["reviewed_design_id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(owner_session),
+        )
+        assert generated.status_code == 201, generated.text
+        cancelled = viewer.post(
+            f"/api/cases/{case['id']}/generation/{generated.json()['attempt']['id']}/cancel",
+            headers=csrf(viewer_session),
+        )
+        assert cancelled.status_code == 404
 
 
 def test_generation_is_idempotent_preserves_history_and_rejects_stale_confirmation(
