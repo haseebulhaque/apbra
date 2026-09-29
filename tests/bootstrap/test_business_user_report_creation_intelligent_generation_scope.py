@@ -19,6 +19,61 @@ SPEC.loader.exec_module(c)
 
 
 class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
+    ORIGINAL_IMPLEMENTATION_PATHS = {
+        "apps/api/.env.example",
+        "apps/api/README.md",
+        "apps/api/alembic/versions/20260929_05_business_user_intelligent_generation.py",
+        "apps/api/src/apbra_api/api.py",
+        "apps/api/src/apbra_api/application.py",
+        "apps/api/src/apbra_api/config.py",
+        "apps/api/src/apbra_api/domain.py",
+        "apps/api/src/apbra_api/evidence.py",
+        "apps/api/src/apbra_api/generation.py",
+        "apps/api/src/apbra_api/model_provider.py",
+        "apps/api/src/apbra_api/persistence.py",
+        "apps/api/src/apbra_api/reference_material.py",
+        "apps/api/src/apbra_api/semantic_bridge.py",
+        "apps/api/tests/conftest.py",
+        "apps/api/tests/test_api.py",
+        "apps/api/tests/test_authorization.py",
+        "apps/api/tests/test_cases.py",
+        "apps/api/tests/test_conversations.py",
+        "apps/api/tests/test_evidence.py",
+        "apps/api/tests/test_generation.py",
+        "apps/api/tests/test_migrations.py",
+        "apps/api/tests/test_model_provider.py",
+        "apps/api/tests/test_reference_material.py",
+        "apps/api/tests/test_semantic_bridge.py",
+        "apps/web/e2e/durable-conversation.spec.ts",
+        "apps/web/e2e/private-case.spec.ts",
+        "apps/web/e2e/protected-generation.spec.ts",
+        "apps/web/scripts/generation-bridge.ts",
+        "apps/web/scripts/semantic-bridge.ts",
+        "apps/web/src/api.test.ts",
+        "apps/web/src/api.ts",
+        "apps/web/src/clarification.test.ts",
+        "apps/web/src/clarification.ts",
+        "apps/web/src/confirmedRequirements.test.ts",
+        "apps/web/src/confirmedRequirements.ts",
+        "apps/web/src/durableConversation.test.tsx",
+        "apps/web/src/durableConversation.tsx",
+        "apps/web/src/durableGeneration.test.tsx",
+        "apps/web/src/durableGeneration.tsx",
+        "apps/web/src/foundry.test.ts",
+        "apps/web/src/foundry.ts",
+        "apps/web/src/genericFoundry.integration.test.ts",
+        "apps/web/src/genericPowerBI.test.ts",
+        "apps/web/src/genericPowerBI.ts",
+        "apps/web/src/guardrail.test.ts",
+        "apps/web/src/guardrail.ts",
+        "apps/web/src/privateCases.test.tsx",
+        "apps/web/src/privateCases.tsx",
+        "apps/web/src/reportDesignNormalization.test.ts",
+        "apps/web/src/reportDesignNormalization.ts",
+        "apps/web/src/style.css",
+        "compose.yaml",
+    }
+
     def setUp(self):
         self.task_path = "tasks/APBRA-171-business-user-report-creation-intelligent-generation.json"
         self.task = json.loads((ROOT / self.task_path).read_text())
@@ -47,12 +102,18 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
     def test_finite_implementation_authority_and_exact_hash(self):
         expected = set(self.task["allowed_paths"])
         self.assertEqual(expected, c.BUSINESS_USER_INTELLIGENT_GENERATION_PATHS)
-        self.assertEqual(len(expected), 52)
+        self.assertEqual(len(expected), 53)
+        self.assertEqual(
+            expected - {"apps/web/playwright.config.ts"},
+            self.ORIGINAL_IMPLEMENTATION_PATHS,
+        )
         self.assertTrue(all("*" not in path for path in expected))
         self.assertIn("apps/api/src/apbra_api/model_provider.py", expected)
         self.assertIn("apps/api/src/apbra_api/reference_material.py", expected)
         self.assertIn("apps/web/src/genericPowerBI.ts", expected)
         self.assertIn("apps/web/scripts/generation-bridge.ts", expected)
+        self.assertIn("apps/web/playwright.config.ts", expected)
+        self.assertNotIn("apps/web/playwright.config.ts", self.task["restricted_paths"])
         self.assertNotIn("apps/api/pyproject.toml", expected)
         self.assertNotIn("apps/web/package.json", expected)
         self.assertNotIn("apps/web/src/App.tsx", expected)
@@ -81,16 +142,69 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
-            self.assertEqual(self.check(root, expected), [])
+            self.assertEqual(
+                self.check(
+                    root,
+                    expected,
+                    branch=c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                ),
+                [],
+            )
             for omitted in sorted(expected):
                 with self.subTest(omitted=omitted):
-                    errors = self.check(root, expected - {omitted})
+                    errors = self.check(
+                        root,
+                        expected - {omitted},
+                        branch=c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                    )
                     self.assertIn(
                         "APBRA-171 registration must change exactly its five governance files",
                         errors,
                     )
+                    self.assertIn(
+                        "Active branch conflicts with task authority: "
+                        + c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                        errors,
+                    )
             errors = self.check(root, expected | {"apps/api/src/apbra_api/model_provider.py"})
             self.assertIn("APBRA-171 registration and implementation changes must remain separate", errors)
+
+    def test_playwright_authority_is_narrow_and_github_remains_restricted(self):
+        rejected = (
+            ".github/workflows/bootstrap.yml",
+            ".github/workflows/apbra-171.yml",
+            "apps/web/package.json",
+            "apps/web/package-lock.json",
+            "apps/web/vite.config.ts",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for path in rejected:
+                with self.subTest(path=path):
+                    target = root / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if not target.exists():
+                        target.write_text("outside APBRA-171 scope\n")
+                    self.assertIn(
+                        f"File outside active task scope: {path}",
+                        self.check(root, {path}),
+                    )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            changed = copy.deepcopy(self.task)
+            changed["allowed_paths"].append(".github/workflows/bootstrap.yml")
+            (root / self.task_path).write_text(json.dumps(changed))
+            errors = self.check(root, {".github/workflows/bootstrap.yml"})
+            self.assertIn(
+                "Business-user intelligent-generation contract differs from accepted authority",
+                errors,
+            )
+            self.assertIn(
+                "File outside active task scope: .github/workflows/bootstrap.yml",
+                errors,
+            )
 
     def test_hash_source_and_identity_mutations_fail_closed(self):
         new_file = "apps/api/src/apbra_api/model_provider.py"
@@ -183,8 +297,12 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         ids = [source["id"] for source in sources["sources"]]
         self.assertEqual(ids.count(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID), 1)
         self.assertEqual(
-            ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 1,
+            ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 2,
             ids.index(c.PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID),
+        )
+        self.assertEqual(
+            ids[ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 1],
+            c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID,
         )
         source = next(
             item for item in sources["sources"]
@@ -195,8 +313,25 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             hashlib.sha256(canonical).hexdigest(),
             c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256,
         )
+        amendment = next(
+            item for item in sources["sources"]
+            if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID
+        )
+        canonical_amendment = json.dumps(
+            amendment, sort_keys=True, separators=(",", ":")
+        ).encode()
+        self.assertEqual(
+            hashlib.sha256(canonical_amendment).hexdigest(),
+            c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256,
+        )
         historical = (ROOT / "tests/bootstrap/test_invited_private_case_foundation_scope.py").read_text()
         self.assertEqual(historical.count('"mvp1-business-user-report-creation-intelligent-generation"'), 1)
+        self.assertEqual(
+            historical.count(
+                '"mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment"'
+            ),
+            1,
+        )
 
     def test_runtime_configuration_invariant_is_hash_bound_and_fail_closed(self):
         invariant = (
@@ -295,6 +430,43 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             self.assertIn(
                 "Business-user intelligent-generation source differs from accepted provenance",
                 self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+
+    def test_playwright_amendment_source_and_runtime_limits_are_hash_bound(self):
+        amendment_ref = (
+            "03.07 - Business-User Self-Service Generation & Hosted Preview "
+            "Direction 8519682 v3"
+        )
+        self.assertIn(amendment_ref, " ".join(self.task["architecture_refs"]))
+        source = next(
+            item for item in json.loads((ROOT / "docs/source-register.json").read_text())["sources"]
+            if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID
+        )
+        for required in (
+            "apps/web/playwright.config.ts",
+            "fifty-third",
+            "synthetic/test-only",
+            "external or paid model call",
+            ".github/workflows/bootstrap.yml remain restricted",
+            "APBRA_E2E",
+            "database-isolation",
+            "implementation PR #66",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source["acceptance"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            changed = next(
+                item for item in sources["sources"]
+                if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID
+            )
+            changed["acceptance"] += " broader workflow authority"
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Business-user intelligent-generation Playwright amendment source differs from accepted provenance",
+                self.check(root, {"apps/web/playwright.config.ts"}),
             )
 
     def test_p0_responsive_journey_is_explicit_and_hash_bound(self):
