@@ -11,7 +11,9 @@ it('labels durable messages and qualified evidence without claiming generated ou
   expect(html).toContain('Shape your report');
   expect(html).toContain('Add a business message');
   expect(html).toContain('Add CSV or XLSX evidence');
-  expect(html).toContain('confirmation is unavailable until supported evidence is added');
+  expect(html).toContain('confirmation is not available without supported evidence');
   expect(html).toContain('Review the understanding');
+  for(const step of ['Goal','Information','Understanding','Confirm','Build','Report'])expect(html).toContain(`<strong>${step}</strong>`);
+  expect(html).toContain('aria-current="step"');
   expect(html).not.toMatch(/candidate ready|report generated/i);
 });

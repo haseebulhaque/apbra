@@ -8,16 +8,16 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign')
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
   await signIn(page,'member');
-  await expect(page.getByRole('heading',{name:'Reporting cases',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
 
   const request='Compare synthetic distribution performance by depot and month.';
-  await page.getByLabel('Original business request').fill(request);
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill(request);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
   await expect(page.getByText(request,{exact:true}).first()).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading',{name:'Reporting cases',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await expect(page.getByLabel('Current business request')).toHaveValue(request);
 
@@ -29,7 +29,7 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('business workspace remains keyboard navigable and contained on a small screen',async({page})=>{
+test('business workspace remains keyboard navigable and contained on a small screen',async({page},testInfo)=>{
   await page.setViewportSize({width:375,height:812});
   await signIn(page,'member');
   const skip=page.getByRole('link',{name:'Skip to reporting workspace'});
@@ -38,11 +38,13 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#workspace-main$/);
   await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Describe your reporting goal'})).toBeVisible();
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await expect(page.getByRole('heading',{name:'What would you like to understand?'})).toBeVisible();
+  if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('mobile-home.png'),fullPage:true});
+  const overflow=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:window.innerWidth,offenders:[...document.querySelectorAll('body *')].filter(element=>element.getBoundingClientRect().right>window.innerWidth+1&&!element.closest('.workspace-rail nav')).slice(0,8).map(element=>({tag:element.tagName,className:element.className,right:Math.round(element.getBoundingClientRect().right)}))}));
+  expect(overflow.document,JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
-  await page.getByLabel('Original business request').fill('Compare completed synthetic orders by depot.');
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill('Compare completed synthetic orders by depot.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   const upload=page.getByLabel('Add CSV or XLSX evidence');
   await upload.focus();
   await expect(upload).toBeFocused();
@@ -52,8 +54,8 @@ test('business workspace remains keyboard navigable and contained on a small scr
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
   await signIn(page,'owner');
   const request='Assess synthetic customer retention by segment.';
-  await page.getByLabel('Original business request').fill(request);
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill(request);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
 
   const otherTab=await context.newPage();
@@ -69,22 +71,22 @@ test('stale edits are rejected through the UI and reload recovers the current ve
   await otherTab.getByLabel('Current business request').fill(`${request} Include support channel.`);
   await otherTab.getByRole('button',{name:'Save new version'}).click();
   await expect(otherTab.getByRole('alert')).toContainText('This case changed in another session. Reload it before saving your changes.');
-  await otherTab.getByRole('button',{name:'Reload'}).click();
+  await otherTab.getByRole('button',{name:'Reload case'}).click();
   await expect(otherTab.getByLabel('Current business request')).toHaveValue(saved);
   await expect(otherTab.getByText('Earlier request versions · 2')).toBeVisible();
 });
 
 test('an expired application session is reported truthfully by the protected UI handler',async({page,context})=>{
   await signIn(page,'owner');
-  await expect(page.getByRole('heading',{name:'Reporting cases',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
 
   const sessionControl=await context.newPage();
   await sessionControl.goto('/');
   await sessionControl.getByRole('button',{name:'Sign out'}).click();
   await expect(sessionControl.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
 
-  await page.getByLabel('Original business request').fill('Review synthetic marketing effectiveness by channel.');
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill('Review synthetic marketing effectiveness by channel.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
   await expect(page.getByText('Your APBRA session has expired. Sign in again to continue.')).toBeVisible();
 });
@@ -108,15 +110,15 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await expect(inviteePage.getByRole('heading',{name:'Accept your invitation'})).toBeVisible();
   await inviteePage.getByRole('button',{name:'Accept invitation'}).click();
   await expect(inviteePage.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
-  await expect(inviteePage.getByRole('heading',{name:'Reporting cases',exact:true})).toBeVisible();
+  await expect(inviteePage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
   await inviteeContext.close();
 });
 
 test('case owner grants and revokes named private access through the real UI',async({page,browser})=>{
   await signIn(page,'owner');
   const request='Review synthetic clinical capacity by facility.';
-  await page.getByLabel('Original business request').fill(request);
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill(request);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
 
   await page.getByText('Manage private case access').click();

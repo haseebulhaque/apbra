@@ -17,8 +17,8 @@ function supportedXlsx(){return storedZip([
 test('saved conversation, qualified CSV evidence, clarification and confirmation survive reload',async({page})=>{
   await signIn(page);
   const request='Help managers understand the supplied fleet evidence.';
-  await page.getByLabel('Original business request').fill(request);
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill(request);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
 
   const message='Use monthly periods and keep maintenance class available for filtering.';
@@ -34,7 +34,7 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
     mimeType:'text/csv',
     buffer:Buffer.from('Date,Depot,Availability\n2026-01-01,North,0.96\n'),
   });
-  await page.getByText('Supporting information · 1').click();
+  await expect(page.locator('.evidence-attached')).toContainText('1 attached');
   await expect(page.getByText(/fleet\.csv.*CSV/)).toBeVisible();
   await page.getByText('Source details').click();
   await expect(page.getByText(/Depot \(text\).*Availability \(decimal\)/)).toBeVisible();
@@ -48,9 +48,9 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await expect(page.getByText(message,{exact:true})).toBeVisible();
-  await page.getByText('Supporting information · 1').click();
+  await expect(page.locator('.evidence-attached')).toContainText('1 attached');
   await expect(page.getByText(/fleet\.csv.*CSV/)).toBeVisible();
-  await expect(page.getByText('Supporting information · 1')).toBeVisible();
+  await expect(page.locator('.evidence-attached')).toContainText('1 attached');
   await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
   await page.getByLabel('Current business request').fill('Compare synthetic fleet availability by depot and maintenance class.');
   await page.getByRole('button',{name:'Save new version'}).click();
@@ -60,11 +60,11 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
 test('protected XLSX evidence follows the same deterministic confirmation path',async({page})=>{
   await signIn(page);
   const request='Compare WaitMinutes by Clinic for appointment operations.';
-  await page.getByLabel('Original business request').fill(request);
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill(request);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   const workbook=supportedXlsx();
   await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
-  await page.getByText('Supporting information · 1').click();
+  await expect(page.locator('.evidence-attached')).toContainText('1 attached');
   await expect(page.getByText(/appointments\.xlsx.*XLSX/)).toBeVisible();
   await page.getByText('Source details').click();
   await expect(page.getByText(/Clinic \(text\).*WaitMinutes \(integer\)/)).toBeVisible();
@@ -74,15 +74,15 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
-  await page.getByText('Supporting information · 1').click();
+  await expect(page.locator('.evidence-attached')).toContainText('1 attached');
   await expect(page.getByText(/appointments\.xlsx.*XLSX/)).toBeVisible();
   await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
 });
 
 test('a late interpretation response cannot repaint a newer request as current',async({page})=>{
   await signIn(page);
-  await page.getByLabel('Original business request').fill('Compare Availability by Depot.');
-  await page.getByRole('button',{name:'Create case'}).click();
+  await page.getByLabel('Your reporting goal').fill('Compare Availability by Depot.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({
     name:'availability.csv',
     mimeType:'text/csv',
