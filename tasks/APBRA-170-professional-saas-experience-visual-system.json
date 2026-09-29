@@ -130,7 +130,7 @@
   "dependencies": [
     "APBRA-169 is manually merged and independently verified in origin/main at d7fc0dfe06ed06fa64ed6cd95ef617a876191565 before this registration.",
     "The APBRA-170 registration-only PR changes exactly five governance files and must pass exact-head review and hosted gates, then be manually merged by Haseeb before any implementation path changes.",
-    "The fifth registration path tests/bootstrap/test_invited_private_case_foundation_scope.py is limited to appending mvp1-professional-saas-experience-visual-system to its existing ordered expected_ids list.",
+    "The fifth registration path tests/bootstrap/test_invited_private_case_foundation_scope.py is limited to inserting mvp1-professional-saas-experience-visual-system at the accepted historical-source position immediately before APBRA-169, preserving every existing source entry and APBRA-169's immutable source-position assertion.",
     "The later implementation authority is the exact ten literal frontend/test paths in this contract; no backend, API-client, migration, package, configuration, bridge/compiler or broad wildcard authority is granted.",
     "Haseeb remains the sole manual merge authority; no delegated merge or auto-merge is authorised."
   ]
