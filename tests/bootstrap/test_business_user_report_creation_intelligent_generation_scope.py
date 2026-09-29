@@ -198,6 +198,56 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         historical = (ROOT / "tests/bootstrap/test_invited_private_case_foundation_scope.py").read_text()
         self.assertEqual(historical.count('"mvp1-business-user-report-creation-intelligent-generation"'), 1)
 
+    def test_runtime_configuration_invariant_is_hash_bound_and_fail_closed(self):
+        invariant = (
+            "No environment-, provider-, customer-, deployment-, capability- or "
+            "policy-dependent runtime value may be hardcoded in application logic."
+        )
+        adrs = " ".join(self.task["adrs"])
+        self.assertIn(invariant, adrs)
+        for required in (
+            "validated server-side configuration",
+            "governed tenant/product configuration",
+            "provider selection",
+            "endpoint/base URL",
+            "configurable API version",
+            "vision/structured-output capabilities",
+            "upload file types and size/count limits",
+            "storage/runtime endpoints",
+            "customer/tenant policy choices",
+            "truthful capability/configuration error",
+            "No silent compiled-in default provider",
+            "test values must never become production defaults",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required.lower(), adrs.lower())
+        self.assertTrue(any("Configuration-matrix tests" in item for item in self.task["verification_required"]))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            task = copy.deepcopy(self.task)
+            task["adrs"] = [item for item in task["adrs"] if invariant not in item]
+            (root / self.task_path).write_text(json.dumps(task))
+            self.assertIn(
+                "Business-user intelligent-generation contract differs from accepted authority",
+                self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            source = next(
+                item for item in sources["sources"]
+                if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
+            )
+            self.assertIn(invariant, source["acceptance"])
+            source["acceptance"] = source["acceptance"].replace(invariant, "")
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Business-user intelligent-generation source differs from accepted provenance",
+                self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
