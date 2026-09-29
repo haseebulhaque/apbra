@@ -394,6 +394,29 @@ BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_SOURCE_SHA256 = 'd8da98d6c8bcd7af6683c4f1
 BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-169-reviewed-design-governance-amendment'
 BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID = 'mvp1-business-friendly-ux-reviewed-design-amendment'
 BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_SHA256 = 'd2eee3c8dcf4c07aee257debe64148fdfc4fd430186ef68c8367cc00fbe81202'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS = {
+    'apps/web/e2e/durable-conversation.spec.ts',
+    'apps/web/e2e/private-case.spec.ts',
+    'apps/web/e2e/protected-generation.spec.ts',
+    'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableConversation.tsx',
+    'apps/web/src/durableGeneration.test.tsx',
+    'apps/web/src/durableGeneration.tsx',
+    'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/privateCases.tsx',
+    'apps/web/src/style.css',
+}
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-170-professional-saas-experience-visual-system.json',
+    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256 = '91c166a130e7f646eab73538ed2e376ab0bcc6e0ecb7b3e8e26f2fec40b27a8c'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID = 'mvp1-professional-saas-experience-visual-system'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256 = 'e3f3dcc0bf39088fc692cdc807190741c154bf562b3f83b5f7de6fab70eb2057'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-170-professional-saas-experience'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1263,6 +1286,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 business_friendly_ux_application_shell_task = None
+        professional_saas_experience_visual_system_task = None
+        professional_saas_experience_visual_system_path = root / 'tasks/APBRA-170-professional-saas-experience-visual-system.json'
+        if professional_saas_experience_visual_system_path.exists():
+            professional_saas_experience_visual_system_task = load_json(professional_saas_experience_visual_system_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), professional_saas_experience_visual_system_task)
+            if not extension_errors:
+                extension_errors += task_errors(professional_saas_experience_visual_system_task, catalog, sources)
+                canonical_task = json.dumps(professional_saas_experience_visual_system_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256:
+                    extension_errors.append('Professional SaaS experience visual-system contract differs from accepted authority')
+                if professional_saas_experience_visual_system_task['task_id'] != 'APBRA-170' or professional_saas_experience_visual_system_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected professional SaaS experience visual-system identity')
+                if professional_saas_experience_visual_system_task['agent_card_version'] != '0.1':
+                    extension_errors.append('Stale professional SaaS experience visual-system agent card version')
+                if professional_saas_experience_visual_system_task['branch'] != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH:
+                    extension_errors.append('Unexpected professional SaaS experience visual-system branch')
+                if professional_saas_experience_visual_system_task['base_commit'] != 'd7fc0dfe06ed06fa64ed6cd95ef617a876191565':
+                    extension_errors.append('Stale professional SaaS experience visual-system base')
+                if set(professional_saas_experience_visual_system_task['allowed_paths']) != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS:
+                    extension_errors.append('Unexpected professional SaaS experience visual-system scope')
+                if (professional_saas_experience_visual_system_task['task_mode'], professional_saas_experience_visual_system_task['readiness'], professional_saas_experience_visual_system_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Professional SaaS experience visual-system requires issued implementation acceptance')
+                if professional_saas_experience_visual_system_task['source_ids'] != [PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID]:
+                    extension_errors.append('Professional SaaS experience visual-system requires its specific accepted source')
+                source_map = {source['id']: source for source in sources['sources']}
+                package_source = source_map.get(PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID)
+                if package_source is None:
+                    extension_errors.append('Professional SaaS experience visual-system accepted source is missing')
+                else:
+                    canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256:
+                        extension_errors.append('Professional SaaS experience visual-system source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                professional_saas_experience_visual_system_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1298,6 +1356,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
             (protected_generation_output_history_task, PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS),
             (business_friendly_ux_application_shell_task, BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS),
+            (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1377,6 +1436,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS) and
                     changed_paths != BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS):
                 errors.append('APBRA-169 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-170' and
+                    changed_paths.intersection(PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS) and
+                    changed_paths.intersection(PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS)):
+                errors.append('APBRA-170 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-170' and
+                    changed_paths.intersection(PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS) and
+                    changed_paths != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS):
+                errors.append('APBRA-170 registration must change exactly its five governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1428,6 +1495,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-169' and
                      name in BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-170' and
+                     name in PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
