@@ -417,6 +417,71 @@ PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256 = 'e6fb9148028b9edcc75039
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID = 'mvp1-professional-saas-experience-visual-system'
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256 = 'e3f3dcc0bf39088fc692cdc807190741c154bf562b3f83b5f7de6fab70eb2057'
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-170-professional-saas-experience'
+BUSINESS_USER_INTELLIGENT_GENERATION_PATHS = {
+    'apps/api/.env.example',
+    'apps/api/README.md',
+    'apps/api/alembic/versions/20260929_05_business_user_intelligent_generation.py',
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/config.py',
+    'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/evidence.py',
+    'apps/api/src/apbra_api/generation.py',
+    'apps/api/src/apbra_api/model_provider.py',
+    'apps/api/src/apbra_api/persistence.py',
+    'apps/api/src/apbra_api/reference_material.py',
+    'apps/api/src/apbra_api/semantic_bridge.py',
+    'apps/api/tests/conftest.py',
+    'apps/api/tests/test_api.py',
+    'apps/api/tests/test_authorization.py',
+    'apps/api/tests/test_cases.py',
+    'apps/api/tests/test_conversations.py',
+    'apps/api/tests/test_evidence.py',
+    'apps/api/tests/test_generation.py',
+    'apps/api/tests/test_migrations.py',
+    'apps/api/tests/test_model_provider.py',
+    'apps/api/tests/test_reference_material.py',
+    'apps/api/tests/test_semantic_bridge.py',
+    'apps/web/e2e/durable-conversation.spec.ts',
+    'apps/web/e2e/private-case.spec.ts',
+    'apps/web/e2e/protected-generation.spec.ts',
+    'apps/web/scripts/generation-bridge.ts',
+    'apps/web/scripts/semantic-bridge.ts',
+    'apps/web/src/api.test.ts',
+    'apps/web/src/api.ts',
+    'apps/web/src/clarification.test.ts',
+    'apps/web/src/clarification.ts',
+    'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/confirmedRequirements.ts',
+    'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableConversation.tsx',
+    'apps/web/src/durableGeneration.test.tsx',
+    'apps/web/src/durableGeneration.tsx',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/foundry.ts',
+    'apps/web/src/genericFoundry.integration.test.ts',
+    'apps/web/src/genericPowerBI.test.ts',
+    'apps/web/src/genericPowerBI.ts',
+    'apps/web/src/guardrail.test.ts',
+    'apps/web/src/guardrail.ts',
+    'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/privateCases.tsx',
+    'apps/web/src/reportDesignNormalization.test.ts',
+    'apps/web/src/reportDesignNormalization.ts',
+    'apps/web/src/style.css',
+    'compose.yaml',
+}
+BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json',
+    'tests/bootstrap/test_business_user_report_creation_intelligent_generation_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'docs/source-register.json',
+}
+BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256 = '9b3ef121bf77d2c474bd275539d1e6c950e451422a26226fd55d4de1bcb1aafd'
+BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation'
+BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256 = '40a6422f05e2559bab6df41a0082c94a2b0b086817af9cf3361896ed37796fbd'
+BUSINESS_USER_INTELLIGENT_GENERATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-business-user-report-creation-intelligent-generation'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1321,6 +1386,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 professional_saas_experience_visual_system_task = None
+        business_user_intelligent_generation_task = None
+        business_user_intelligent_generation_path = root / 'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json'
+        if business_user_intelligent_generation_path.exists():
+            business_user_intelligent_generation_task = load_json(business_user_intelligent_generation_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), business_user_intelligent_generation_task)
+            if not extension_errors:
+                extension_errors += task_errors(business_user_intelligent_generation_task, catalog, sources)
+                canonical_task = json.dumps(business_user_intelligent_generation_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256:
+                    extension_errors.append('Business-user intelligent-generation contract differs from accepted authority')
+                if business_user_intelligent_generation_task['task_id'] != 'APBRA-171' or business_user_intelligent_generation_task['assigned_agent'] != 'APBRA-DEVOPS':
+                    extension_errors.append('Unexpected business-user intelligent-generation identity')
+                if business_user_intelligent_generation_task['agent_card_version'] != '0.1':
+                    extension_errors.append('Stale business-user intelligent-generation agent card version')
+                if business_user_intelligent_generation_task['branch'] != BUSINESS_USER_INTELLIGENT_GENERATION_BRANCH:
+                    extension_errors.append('Unexpected business-user intelligent-generation branch')
+                if business_user_intelligent_generation_task['base_commit'] != '2e6dfa67d674015773555aa334ef4561d8b907cb':
+                    extension_errors.append('Stale business-user intelligent-generation base')
+                if set(business_user_intelligent_generation_task['allowed_paths']) != BUSINESS_USER_INTELLIGENT_GENERATION_PATHS:
+                    extension_errors.append('Unexpected business-user intelligent-generation scope')
+                if (business_user_intelligent_generation_task['task_mode'], business_user_intelligent_generation_task['readiness'], business_user_intelligent_generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('Business-user intelligent generation requires issued implementation acceptance')
+                if business_user_intelligent_generation_task['source_ids'] != [BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID]:
+                    extension_errors.append('Business-user intelligent generation requires its specific accepted source')
+                source_map = {source['id']: source for source in sources['sources']}
+                package_source = source_map.get(BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID)
+                if package_source is None:
+                    extension_errors.append('Business-user intelligent-generation accepted source is missing')
+                else:
+                    canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256:
+                        extension_errors.append('Business-user intelligent-generation source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                business_user_intelligent_generation_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1357,6 +1457,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (protected_generation_output_history_task, PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS),
             (business_friendly_ux_application_shell_task, BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS),
             (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
+            (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1444,6 +1545,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS) and
                     changed_paths != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS):
                 errors.append('APBRA-170 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-171' and
+                    changed_paths.intersection(BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
+                    changed_paths.intersection(BUSINESS_USER_INTELLIGENT_GENERATION_PATHS)):
+                errors.append('APBRA-171 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-171' and
+                    changed_paths.intersection(BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
+                    changed_paths != BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS):
+                errors.append('APBRA-171 registration must change exactly its five governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1498,6 +1607,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-170' and
                      name in PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-171' and
+                     name in BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
