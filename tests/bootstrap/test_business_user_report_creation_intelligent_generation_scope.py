@@ -249,10 +249,10 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             )
 
     def test_current_confluence_direction_is_exactly_bound(self):
-        current = "03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v1"
+        current = "03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v2"
         refs = " ".join(self.task["architecture_refs"])
         self.assertIn(current, refs)
-        self.assertNotIn("8388610", refs)
+        self.assertNotIn("8519682 v1", refs)
         for unchanged in (
             "Business & Functional Requirements 3932362 v4",
             "Product Vision 3965201 v4",
@@ -266,13 +266,13 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
         )
         self.assertIn(current, source["version"])
-        self.assertNotIn("8388610", source["version"])
+        self.assertNotIn("8519682 v1", source["version"])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
             task = copy.deepcopy(self.task)
             task["architecture_refs"] = [
-                item.replace(current, "03.07 governed APBRA-169 package 8388610 v1")
+                item.replace(current, "03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v1")
                 for item in task["architecture_refs"]
             ]
             (root / self.task_path).write_text(json.dumps(task))
@@ -289,12 +289,72 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
                 if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
             )
             source["version"] = source["version"].replace(
-                current, "03.07 governed APBRA-169 package 8388610 v1"
+                current, "03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v1"
             )
             (root / "docs/source-register.json").write_text(json.dumps(sources))
             self.assertIn(
                 "Business-user intelligent-generation source differs from accepted provenance",
                 self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+
+    def test_p0_responsive_journey_is_explicit_and_hash_bound(self):
+        invariant = "Responsive UX and cross-flow consistency are P0 acceptance scope inside APBRA-171"
+        self.assertTrue(any(invariant in item for item in self.task["requirements"]))
+        acceptance = " ".join(self.task["acceptance_criteria"]).lower()
+        verification = " ".join(self.task["verification_required"]).lower()
+        for required in (
+            "desktop, laptop, tablet and narrow/mobile",
+            "horizontal page overflow",
+            "hidden primary actions",
+            "overlapping or broken sticky regions",
+            "navigation rail, top bar, sticky six-stage journey",
+            "upload/drop zone",
+            "requirement review, clarification, build/report states, durable history and expert escalation",
+            "long report titles, filenames, field names, validation text and user-entered requirements",
+            "keyboard accessible and touch-usable",
+            "empty, loading, disabled, success, warning, stale, error and unavailable",
+            "business terminology and primary action labels",
+            "progressively disclosed at every viewport size",
+            "centralized in the design/style system",
+            "desktop screenshot alone is insufficient",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required.lower(), acceptance)
+        self.assertIn("real-browser responsive regression coverage", verification)
+        self.assertIn("viewport matrix", verification)
+        self.assertIn("keyboard/focus and touch-usable controls", verification)
+        for path in (
+            "apps/web/src/privateCases.tsx",
+            "apps/web/src/durableConversation.tsx",
+            "apps/web/src/durableGeneration.tsx",
+            "apps/web/src/style.css",
+            "apps/web/e2e/durable-conversation.spec.ts",
+        ):
+            self.assertIn(path, self.task["allowed_paths"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            task = copy.deepcopy(self.task)
+            task["requirements"] = [item for item in task["requirements"] if invariant not in item]
+            (root / self.task_path).write_text(json.dumps(task))
+            self.assertIn(
+                "Business-user intelligent-generation contract differs from accepted authority",
+                self.check(root, {"apps/web/src/privateCases.tsx"}),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            source = next(
+                item for item in sources["sources"]
+                if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
+            )
+            self.assertIn(invariant, source["acceptance"])
+            source["acceptance"] = source["acceptance"].replace(invariant, "")
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Business-user intelligent-generation source differs from accepted provenance",
+                self.check(root, {"apps/web/src/privateCases.tsx"}),
             )
 
 
