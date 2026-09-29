@@ -248,6 +248,55 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
                 self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
             )
 
+    def test_current_confluence_direction_is_exactly_bound(self):
+        current = "03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v1"
+        refs = " ".join(self.task["architecture_refs"])
+        self.assertIn(current, refs)
+        self.assertNotIn("8388610", refs)
+        for unchanged in (
+            "Business & Functional Requirements 3932362 v4",
+            "Product Vision 3965201 v4",
+            "RTM 3932382 v6",
+        ):
+            with self.subTest(unchanged=unchanged):
+                self.assertIn(unchanged, refs)
+        sources = json.loads((ROOT / "docs/source-register.json").read_text())
+        source = next(
+            item for item in sources["sources"]
+            if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
+        )
+        self.assertIn(current, source["version"])
+        self.assertNotIn("8388610", source["version"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            task = copy.deepcopy(self.task)
+            task["architecture_refs"] = [
+                item.replace(current, "03.07 governed APBRA-169 package 8388610 v1")
+                for item in task["architecture_refs"]
+            ]
+            (root / self.task_path).write_text(json.dumps(task))
+            self.assertIn(
+                "Business-user intelligent-generation contract differs from accepted authority",
+                self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            source = next(
+                item for item in sources["sources"]
+                if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID
+            )
+            source["version"] = source["version"].replace(
+                current, "03.07 governed APBRA-169 package 8388610 v1"
+            )
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Business-user intelligent-generation source differs from accepted provenance",
+                self.check(root, {"apps/api/src/apbra_api/model_provider.py"}),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

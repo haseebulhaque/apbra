@@ -38,7 +38,7 @@
   "architecture_refs": [
     "Live Jira APBRA-171 issue 10271, read 2026-09-29, updated 2026-09-29T19:37:35.759+1000; PLAN comment 10285",
     "Haseeb's APBRA-171 owner package brief, explicit provider/runtime approval and configuration-invariant clarification in this execution on 2026-09-29",
-    "Confluence Business & Functional Requirements 3932362 v4, Product Vision 3965201 v4, RTM 3932382 v6 and 03.07 governed APBRA-169 package 8388610 v1, refreshed 2026-09-29",
+    "Confluence Business & Functional Requirements 3932362 v4, Product Vision 3965201 v4, RTM 3932382 v6 and 03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v1, refreshed 2026-09-29",
     "APBRA-162 private authority, APBRA-163 durable evidence/acceptance, APBRA-164 canonical generation/history, APBRA-169 immutable expert-reviewed design and APBRA-170 merged business workspace",
     "GitHub origin/main 2e6dfa67d674015773555aa334ef4561d8b907cb"
   ],
