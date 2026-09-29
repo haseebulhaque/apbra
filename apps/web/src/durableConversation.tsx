@@ -18,7 +18,7 @@ const eventText=(event:ConversationEvent)=>{
   return 'Saved case activity';
 };
 
-export function DurableConversation({record,csrfToken,actorRole='MEMBER',onContextChanged,onError}:{record:CaseRecord;csrfToken:string;actorRole?:string;onContextChanged:(version:number)=>void;onError:(error:unknown)=>void}){
+export function DurableConversation({record,csrfToken,actorRole='MEMBER',onContextChanged,onReportReady,onError}:{record:CaseRecord;csrfToken:string;actorRole?:string;onContextChanged:(version:number)=>void;onReportReady?:(ready:boolean)=>void;onError:(error:unknown)=>void}){
   const [events,setEvents]=useState<ConversationEvent[]>([]);
   const [evidence,setEvidence]=useState<EvidenceItem[]>([]);
   const [acceptance,setAcceptance]=useState<AcceptanceState>(emptyAcceptance);
@@ -26,6 +26,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
   const [answer,setAnswer]=useState('');
   const [contextVersion,setContextVersion]=useState(record.semantic_context_version);
   const [busy,setBusy]=useState(false);
+  const [reportReady,setReportReady]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const refreshGeneration=useRef(0);
   const caseIdRef=useRef(record.id);
@@ -47,6 +48,8 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     caseIdRef.current=record.id;
     contextVersionRef.current=record.semantic_context_version;
     setContextVersion(record.semantic_context_version);
+    setReportReady(false);
+    onReportReady?.(false);
     void refresh().catch(onError);
     return()=>{refreshGeneration.current+=1};
   },[record.id,record.semantic_context_version]);
@@ -143,32 +146,31 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
   const summary=interpretation?.confirmation_summary;
   const stale=Boolean(interpretation&&!interpretation.current);
   const question=interpretation?.state==='NEEDS_CLARIFICATION'?interpretation.questions.at(-1):undefined;
-  const stage=acceptance.confirmed_contract?.current?3:summary&&!stale?2:evidence.length?1:0;
-  const stages=['Describe your goal','Add supporting information','Review the understanding','Build and find reports'];
+  const stage=reportReady?5:acceptance.confirmed_contract?.current?4:summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'?3:summary&&!stale||evidence.length?2:events.length?1:0;
+  const stages=['Goal','Information','Understanding','Confirm','Build','Report'];
 
-  return <section className="panel durable-conversation" aria-label="Your report journey">
-    <ol className="journey-steps" aria-label="Report journey">{stages.map((label,index)=><li key={label} className={index===stage?'active':index<stage?'complete':''} aria-current={index===stage?'step':undefined}><span aria-hidden="true">{index+1}</span>{label}</li>)}</ol>
-    <div className="section-title"><div><h3>Shape your report</h3><p>Explain what you need, add supporting information, then confirm that the understanding matches your goal.</p></div><span className="status-badge">Private and saved</span></div>
+  return <section className="durable-conversation" aria-label="Your report journey">
+    <div className="journey-heading"><div><span className="eyebrow">Your report journey</span><h2>From question to candidate</h2><p>Each step stays with this private case. Review the meaning before any build begins.</p></div><span className="status-badge status-info">Private and saved</span></div>
+    <ol className="journey-steps" aria-label="Report journey">{stages.map((label,index)=><li key={label} className={index===stage?'active':index<stage?'complete':''} aria-current={index===stage?'step':undefined}><span className="step-number" aria-hidden="true">{index<stage?'✓':index+1}</span><span className="step-copy"><small>{index<stage?'Complete':index===stage?stale&&index>=2?'Needs review':'Current':'Upcoming'}</small><strong>{label}</strong></span></li>)}</ol>
+    <div className="journey-section-title"><div><span className="eyebrow">Working together</span><h3>Shape your report</h3><p>Explain what you need, add supporting information, then confirm that the understanding matches your goal.</p></div></div>
     <section className="conversation-step" aria-label="Business conversation">
-      <h4>Describe what matters</h4>
-      <div className="conversation-events" aria-live="polite">{events.length===0?<p>No saved messages yet.</p>:<ol>{events.map(event=><li key={event.id}><strong>{eventLabel(event.kind)}</strong><p>{eventText(event)}</p></li>)}</ol>}</div>
-      <label htmlFor={'case-message-'+record.id}>Add a business message</label>
-      <textarea id={'case-message-'+record.id} rows={3} maxLength={12000} value={message} onChange={event=>setMessage(event.target.value)}/>
-      <div className="command-bar"><button disabled={busy||!message.trim()} onClick={()=>void addMessage()}>Save message</button></div>
+      <div className="step-heading"><span className="step-icon" aria-hidden="true">✎</span><div><span className="eyebrow">Conversation</span><h4>Describe what matters</h4><p>Add context or corrections in everyday language. Saved messages stay in the case history.</p></div></div>
+      <div className="conversation-events" aria-live="polite">{events.length===0?<p className="quiet-empty">No saved messages yet. Add context when it helps explain your goal.</p>:<ol>{events.map(event=><li key={event.id}><strong>{eventLabel(event.kind)}</strong><p>{eventText(event)}</p></li>)}</ol>}</div>
+      <div className="message-composer"><label htmlFor={'case-message-'+record.id}>Add a business message</label><textarea id={'case-message-'+record.id} rows={3} maxLength={12000} placeholder="Add context, a correction or an important business detail…" value={message} onChange={event=>setMessage(event.target.value)}/><div className="composer-footer"><span>Saved to this private case</span><button disabled={busy||!message.trim()} onClick={()=>void addMessage()}>Save message <span aria-hidden="true">→</span></button></div></div>
     </section>
     <section className="evidence-step" aria-label="Supporting information">
-      <h4>Supporting information</h4><p>Add a CSV or XLSX file to ground the understanding in observed fields. You can save the case without a file, but confirmation is unavailable until supported evidence is added.</p>
+      <div className="step-heading"><span className="step-icon" aria-hidden="true">▦</span><div><span className="eyebrow">Information</span><h4>Supporting information</h4><p>Add a CSV or XLSX file so the understanding can use observed fields. Confirmation needs supported evidence.</p></div></div>
       <input ref={fileRef} id={'case-evidence-'+record.id} className="sr-only file-input" type="file" accept=".csv,.xlsx" disabled={busy} onChange={event=>void addEvidence(event.target.files?.[0])}/>
-      <label className="upload-button" htmlFor={'case-evidence-'+record.id}>Add CSV or XLSX evidence</label>
-      <details className="evidence-list"><summary>Supporting information · {evidence.length}</summary>{evidence.length?<ul>{evidence.map(item=><li key={item.id}><strong>{item.filename}</strong> · {item.format}<details className="expert-details"><summary>Source details</summary><ul>{item.observed_schema.tables.map(table=><li key={table.name}>{table.name} · {table.rowCount} row{table.rowCount===1?'':'s'} · {table.columns.map(column=>column.name+' ('+column.type+')').join(', ')}</li>)}</ul></details></li>)}</ul>:<p>No supporting file has been added yet.</p>}</details>
+      <div className="evidence-upload"><span className="upload-symbol" aria-hidden="true">↑</span><div><strong>Add a supporting file</strong><small>CSV or XLSX · attached to this private case</small></div><label className="upload-button" htmlFor={'case-evidence-'+record.id}>Add CSV or XLSX evidence</label></div>
+      {evidence.length>0?<div className="evidence-attached"><span className="status-badge status-success">{evidence.length} attached</span><ul>{evidence.map(item=><li key={item.id}><span aria-hidden="true">▦</span><div><strong>{item.filename}</strong><small>{item.format} · {item.observed_schema.tables.length} observed table{item.observed_schema.tables.length===1?'':'s'}</small></div><details className="expert-details"><summary>Source details</summary><ul>{item.observed_schema.tables.map(table=><li key={table.name}>{table.name} · {table.rowCount} row{table.rowCount===1?'':'s'} · {table.columns.map(column=>column.name+' ('+column.type+')').join(', ')}</li>)}</ul></details></li>)}</ul></div>:<p className="evidence-note">No supporting file attached yet. You can keep working on the request, but confirmation is not available without supported evidence.</p>}
     </section>
     <section className="acceptance-panel" aria-label="Review the understanding">
-      <h4>Current understanding</h4>
-      {stale&&<p role="status"><strong>Reconfirmation required.</strong> The request, conversation or evidence changed after this understanding was prepared.</p>}
-      {question&&!stale?<div className="clarification-panel"><p><strong>Clarification required</strong></p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div><p>Choose a supported interpretation:</p>{question.suggestions.map(option=><button key={option.id} disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}<button className="subtle" disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:'I decline the proposed supported choices.',decision:'DECLINE'})}>Decline these choices</button></div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={500} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>:summary&&!stale&&interpretation?.state!=='NEEDS_CLARIFICATION'?<><p><strong>{summary.objective}</strong></p><ul>{[...summary.businessQuestions,...summary.kpiDefinitions,...summary.scopeAndTime,...summary.dimensionsAndFilters].map((item,index)=><li key={index+'-'+item}>{item}</li>)}</ul><p className="supporting-copy">This local preview uses deterministic rules to propose an understanding; no AI model was called.</p></>:<p>Prepare an understanding after adding supported information. If a material choice is unclear, APBRA will ask you.</p>}
+      <div className="step-heading"><span className="step-icon" aria-hidden="true">◇</span><div><span className="eyebrow">Review and confirm</span><h4>Current understanding</h4><p>Check the business meaning before confirming this exact version.</p></div></div>
+      {stale&&<p role="status" className="state-callout warning"><strong>Reconfirmation required.</strong> The request, conversation or evidence changed after this understanding was prepared.</p>}
+      {question&&!stale?<div className="clarification-panel"><p><strong>Clarification required</strong></p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div><p>Choose a supported interpretation:</p>{question.suggestions.map(option=><button key={option.id} disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}<button className="subtle" disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:'I decline the proposed supported choices.',decision:'DECLINE'})}>Decline these choices</button></div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={500} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>:summary&&!stale&&interpretation?.state!=='NEEDS_CLARIFICATION'?<div className="understanding-summary"><div className="understanding-objective"><span className="eyebrow">The goal as understood</span><strong>{summary.objective}</strong></div><div className="understanding-grid">{([{title:'Business questions',items:summary.businessQuestions},{title:'Measures',items:summary.kpiDefinitions},{title:'Scope and timing',items:summary.scopeAndTime},{title:'Ways to explore',items:summary.dimensionsAndFilters}] as const).filter(group=>group.items.length>0).map(group=><div key={group.title}><h5>{group.title}</h5><ul>{group.items.map((item,index)=><li key={index+'-'+item}>{item}</li>)}</ul></div>)}</div><p className="supporting-copy">This local preview uses deterministic rules to propose an understanding; no AI model was called.</p></div>:<div className="understanding-empty"><span aria-hidden="true">◇</span><p>Prepare an understanding after adding supported information. If a material choice is unclear, APBRA will ask you.</p></div>}
       <div className="command-bar"><button disabled={busy||!evidence.length||Boolean(question&&!stale)} onClick={()=>void prepare()}>{stale?'Prepare updated understanding':'Prepare understanding'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button disabled={busy} onClick={()=>void confirm()}>Confirm this exact meaning</button>}</div>
       {acceptance.confirmed_contract?.current&&<div className="confirmed-state" role="status"><strong>Your understanding is confirmed</strong><p>Accepted {new Date(acceptance.confirmed_contract.accepted_at).toLocaleString()}. If the request or supporting information changes, you will need to confirm the revised understanding.</p></div>}
     </section>
-    <DurableGeneration caseId={record.id} contract={acceptance.confirmed_contract} csrfToken={csrfToken} actorRole={actorRole} onError={onError}/>
+    <DurableGeneration caseId={record.id} contract={acceptance.confirmed_contract} csrfToken={csrfToken} actorRole={actorRole} onReportReady={ready=>{setReportReady(ready);onReportReady?.(ready)}} onError={onError}/>
   </section>;
 }
