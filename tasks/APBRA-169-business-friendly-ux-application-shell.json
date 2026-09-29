@@ -13,14 +13,17 @@
     "Default journey: describe a reporting goal, provide supporting information, review the understood outcome, build, view the current report, and access historical private report versions",
     "Business language and optional permission-respecting Details for experts disclosure without engineering terminology in the normal flow",
     "Preserve the trusted reviewed ReportDesign boundary while removing raw ReportDesign JSON from the normal user flow",
+    "Use immutable server-held reviewed ReportDesign records and an opaque reviewed_design_id for protected generation; normal business users receive only an authorised business-safe summary",
+    "For MVP-1, successful authorised intake by an active same-company EXPERT is the review action; the same EXPERT may supply and review the design, while COMPANY_ADMIN, MEMBER and other roles are not reviewers",
     "Truthful accessible states for no report, ready, building, ready, failed, retry, supported cancellation, current versus historical versions, stale reconfirmation, private-access denial and unavailable artifacts",
     "FR-012 through FR-020 and FR-024; PC26-FR-005, PC26-FR-006, PC26-FR-009 and bounded presentation responsibilities from PC26-FR-010"
   ],
   "adrs": [
     "The browser presents truthful business states and invokes existing protected endpoints; server-derived company membership, private-case access, CSRF, idempotency, exact confirmation, evidence binding, ReportDesign validation, canonical generation, artifact eligibility and current-access rechecks remain authoritative.",
-    "The normal UI must not render or require raw Reviewed ReportDesign JSON. It cannot invent, derive, silently alter, approve, persist, submit or bypass a ReportDesign. If no safe reviewed-design input can be exposed through an existing authorised non-raw boundary, stop and request a bounded architecture decision rather than adding a synthetic design generator, design engine or compiler.",
+    "The normal business UI must not render, require or transport raw ReportDesign JSON and cannot invent, derive, silently alter, approve or bypass a design. An authorised EXPERT may submit an explicit ReportDesign through the protected server intake; the client never controls a reviewed/approved flag. Successful server-authorised intake, not canonical validation alone, constitutes MVP-1 review.",
+    "The server immutably stores the reviewed design and digest with actual authenticated reviewer identity and membership, company, case, exact confirmed contract, request/evidence/context binding and review timestamp. Generation accepts only an opaque reviewed_design_id, resolves exact stored bytes and rechecks current authority and binding before invoking the unchanged canonical TypeScript bridge/compiler.",
     "Local deterministic simulation and unsupported validation or deployment capabilities are described plainly; the shell must not imply live AI/provider design, Power BI Desktop, live DAX, RLS, Service deployment, publication, gateway or credential automation.",
-    "APBRA-169 is local and CI only, synthetic-data only and AUD 0 cloud spend. It is a web presentation package, not Package D or a replacement for Package B/C domain, persistence, authorization, generation or compiler ownership."
+    "APBRA-169 is local and CI only, synthetic-data only and AUD 0 cloud spend. Its narrowly bounded reviewed-design persistence, API and generation-eligibility extension preserves Package B/C server authority and canonical generation ownership; it is not Package D or a replacement compiler."
   ],
   "architecture_refs": [
     "03.07 Business-Friendly UX & Application Shell — Governed Package v1 (Confluence 8388610)",
@@ -28,13 +31,23 @@
     "APBRA-160 MVP-1 invite-only reporting workspace",
     "APBRA-162 Package A private-case foundation and APBRA-163 Package B durable conversation",
     "APBRA-164 Package C protected generation, private artifact and durable output history",
-    "GitHub main a34a20ef8448b932bc9537c2b1c377c8de1727d6"
+    "GitHub main a34a20ef8448b932bc9537c2b1c377c8de1727d6",
+    "Haseeb's approved Option B immutable server-held reviewed ReportDesign architecture and MVP-1 EXPERT intake authority, 2026-09-29; Jira PLAN comment 10281; verified main 1f53a427ed95ea58871b81cb8cd65263dc9fcba7"
   ],
   "allowed_paths": [
+    "apps/api/alembic/versions/20260929_04_reviewed_report_design.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/generation.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/tests/test_generation.py",
+    "apps/api/tests/test_migrations.py",
     "apps/web/e2e/durable-conversation.spec.ts",
     "apps/web/e2e/private-case.spec.ts",
     "apps/web/e2e/protected-generation.spec.ts",
     "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/api.test.ts",
+    "apps/web/src/api.ts",
     "apps/web/src/durableConversation.test.tsx",
     "apps/web/src/durableConversation.tsx",
     "apps/web/src/durableGeneration.test.tsx",
@@ -50,9 +63,6 @@
     "docs/source-register.json",
     "agents/**",
     "contracts/**",
-    "apps/api/**",
-    "apps/web/src/api.ts",
-    "apps/web/src/api.test.ts",
     "apps/web/scripts/**",
     "apps/web/knowledge/**",
     "apps/web/package.json",
@@ -77,7 +87,10 @@
     "An authorised business user can follow the supported journey from reporting goal through supporting information, review, protected build, current report and durable historical private reports using business language and clear next actions.",
     "Normal presentation does not expose ConfirmedRequirementContract, LOCAL_DETERMINISTIC_NO_MODEL_CALL, generation bridge, provenance payload, canonical compiler, validation codes, raw Reviewed ReportDesign JSON or internal schema/version identifiers unless genuinely useful in the optional expert disclosure.",
     "A collapsed Details for experts area is optional, permission-respecting and concise; it exposes only authorised diagnostics, relevant identifiers, limitations and validation details and cannot change authority, validation, state or protected cross-company/user information.",
-    "Raw ReportDesign JSON is absent from the normal flow while the trusted Package C reviewed-design boundary remains intact. The browser neither invents nor modifies nor approves nor bypasses a design; an unavailable safe reviewed-design input produces an explicit architecture-decision boundary rather than a synthetic design or second compiler.",
+    "Raw ReportDesign JSON is absent from the normal flow while the trusted Package C reviewed-design boundary remains intact. The browser neither invents nor modifies nor approves nor bypasses a design; if no eligible reviewed design exists, show a truthful unavailable state and an authorised EXPERT review route rather than a synthetic design or second compiler.",
+    "An active same-company EXPERT alone may submit an explicit ReportDesign through protected intake. The server records the actual reviewer identity/membership, company, case, confirmed contract, exact request/evidence/context, timestamp, immutable design bytes and digest; the same EXPERT may supply and review for MVP-1. No client-supplied approved flag or validation-as-human-review substitution is accepted.",
+    "An authorised normal business user sees only a bounded business-safe reviewed-design summary and opaque reviewed_design_id, never raw design JSON. Generation resolves the immutable design server-side, verifies digest, current membership/access, current confirmation and exact company/case/contract/request/evidence/context eligibility, and fails closed for stale, tampered, foreign or revoked inputs.",
+    "Retries remain bound to the same reviewed design; explicit regeneration may select another currently eligible reviewed design, while each durable historical attempt retains its original immutable reviewed-design association.",
     "No report, ready, building, ready, failed, retry, supported cancellation, current version, historical version, stale reconfirmation, denied and unavailable states are truthful, accessible and distinguishable without colour alone.",
     "Package B/C server authority for company and case isolation, membership, CSRF, idempotency, confirmation and evidence binding, ReportDesign validation, canonical pipeline, private artifacts, history, retry/regeneration, stale rejection and current-access rechecks is unchanged or strengthened; browser presentation never creates these decisions.",
     "Keyboard navigation, visible focus, meaningful order, semantic controls, screen-reader status/error context, no hover-only controls and small-screen use are covered by component and browser evidence.",
@@ -90,6 +103,8 @@
     "Locked web dependency validation, complete web component tests, typecheck and production build",
     "Component and real-browser coverage of the normal business journey, Details for experts disclosure, default-copy exclusions, accessible states, small-screen layout, refresh, durable history, retry/cancellation and private-access denial",
     "Regression coverage proving raw ReportDesign JSON is neither displayed nor required in normal UX and that any retained trusted boundary is server-authorised and non-raw",
+    "Migration tests for immutable reviewed-design storage and attempt association from the current Package C schema, with no change to the manual Package B preview database",
+    "Protected intake/API and PostgreSQL tests for active same-company EXPERT review authority, recorded server-derived provenance, bounded summary, design immutability/digest, current eligibility, foreign/revoked/stale/tampered fail-closed behavior, retry binding and explicit regeneration history",
     "Regression coverage for Package B/C exact confirmation, stale rejection, protected generation, private artifact access, history, regeneration, current-access and denied/revoked access",
     "python scripts/check_ci_policy.py",
     "python scripts/check_bootstrap.py",
@@ -104,12 +119,12 @@
     "Package D expert assignment or takeover, live AI or provider/model integration, new report-design capability or a second compiler/design engine",
     "Cloud resources, spending, live Microsoft Entra, customer data, public endpoint or public registration",
     "Power BI Service deployment, publication, gateway, refresh or credential automation; Power BI Desktop, live DAX or RLS runtime validation",
-    "Projects, sharing, billing, broad collaboration or any backend domain, persistence, authorization, canonical generation or compiler change",
+    "Projects, sharing, billing, broad collaboration or backend changes beyond the exact reviewed-design intake, immutable persistence, eligibility, generation command and associated tests registered here; canonical TypeScript bridge/compiler changes remain excluded",
     "Production branches or templates for clinic, retail, school, warehouse, Sales, ServiceNow, Contoso, specific fields, KPIs or synthetic-domain visual layouts"
   ],
   "escalate_when": [
-    "A required implementation path is outside the exact eleven-path frontend allowlist or a backend/API contract change is needed",
-    "A safe reviewed ReportDesign input cannot be presented through an existing authorised non-raw boundary, or fulfilling the journey would require browser design synthesis, hidden layout logic, a new design capability or compiler",
+    "A required implementation path is outside the exact twenty-path frontend, backend, migration and test allowlist",
+    "The approved EXPERT intake and server-held reviewed-design boundary cannot be implemented within the exact authority, or fulfilling the journey would require browser design synthesis, hidden layout logic, a new design capability or compiler",
     "Any Package B/C server authority, isolation, private-artifact access, validation, idempotency, confirmation binding or current-access recheck would need to move into the browser or weaken",
     "Implementation requires Package D, live provider credentials, Entra/Azure/cloud resources, customer data, spend, hosted exposure or excluded Power BI capability",
     "A required accessibility, browser, static, scan, hosted CI or independent exact-head review gate is missing, skipped, crashed or fails",
@@ -120,9 +135,10 @@
   "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Jira, Confluence and GitHub connections",
   "human_initiator": "Haseeb Ul Haque",
   "base_commit": "a34a20ef8448b932bc9537c2b1c377c8de1727d6",
-  "branch": "agent/APBRA-DEVOPS/APBRA-169-business-friendly-ux-shell-registration",
+  "branch": "agent/APBRA-DEVOPS/APBRA-169-business-friendly-ux-shell",
   "source_ids": [
-    "mvp1-business-friendly-ux-application-shell"
+    "mvp1-business-friendly-ux-application-shell",
+    "mvp1-business-friendly-ux-reviewed-design-amendment"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / MVP-1 business-friendly UX and application shell",
@@ -130,7 +146,8 @@
     "Package C APBRA-164 is manually merged and independently verified in origin/main at a34a20ef8448b932bc9537c2b1c377c8de1727d6 before this registration.",
     "The APBRA-169 registration-only PR changes exactly five governance files and must pass exact-head review and hosted gates, then be manually merged by Haseeb before any implementation path changes.",
     "The fifth registration path tests/bootstrap/test_invited_private_case_foundation_scope.py is limited to appending mvp1-business-friendly-ux-application-shell to its existing ordered expected_ids list.",
-    "The exact eleven-path implementation allowlist is web presentation and evidence only; no backend or API-client authority is granted. A material missing contract requires a new bounded decision rather than scope expansion.",
+    "The original registration's exact eleven frontend/test implementation paths remain unchanged. This separately accepted amendment adds exactly nine literal backend, migration, API-client and test paths for the approved Option B architecture, totaling twenty; no broad wildcard or canonical bridge/compiler authority is granted.",
+    "The amendment PR changes exactly the same five governance-registration paths as the original registration and must be manually merged and its resulting origin/main independently verified before any reviewed-design or UX implementation begins.",
     "Haseeb remains the sole manual merge authority; no delegated merge or auto-merge is authorised."
   ]
 }
