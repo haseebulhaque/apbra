@@ -320,6 +320,7 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "mvp1-durable-conversation-evidence-acceptance",
             "mvp1-durable-conversation-evidence-acceptance-ci-amendment",
             "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture",
+            "mvp1-business-friendly-ux-application-shell",
             "mvp1-protected-generation-output-history",
             "mvp1-protected-generation-output-history-bootstrap-compatibility-amendment",
         ]
