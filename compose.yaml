@@ -33,7 +33,9 @@ services:
       APBRA_BOOTSTRAP_ENABLED: "true"
       APBRA_INVITATION_TTL_DAYS: "7"
       APBRA_EVIDENCE_ROOT: /var/lib/apbra/evidence
+      APBRA_ARTIFACT_ROOT: /var/lib/apbra/artifacts
       APBRA_SEMANTIC_BRIDGE_PATH: /app/runtime/apbra-semantic-bridge.mjs
+      APBRA_GENERATION_BRIDGE_PATH: /app/runtime/apbra-generation-bridge.mjs
       APBRA_SEMANTIC_NODE_PATH: /usr/local/bin/node
     command:
       - /bin/sh
@@ -52,7 +54,9 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - apbra_evidence_data:/var/lib/apbra/evidence
+      - apbra_artifact_data:/var/lib/apbra/artifacts
 
 volumes:
   apbra_postgres_data:
   apbra_evidence_data:
+  apbra_artifact_data:

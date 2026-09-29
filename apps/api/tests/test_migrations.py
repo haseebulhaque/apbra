@@ -15,11 +15,21 @@ from apbra_api.persistence import CaseAccessRow, CaseRow, Database
 
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
     inspector = inspect(database.engine)
-    assert {"companies", "memberships", "reporting_cases", "case_request_versions"}.issubset(
-        set(inspector.get_table_names())
-    )
+    assert {
+        "companies",
+        "memberships",
+        "reporting_cases",
+        "case_request_versions",
+        "generation_attempts",
+        "generated_artifacts",
+    }.issubset(set(inspector.get_table_names()))
+    assert "uq_generation_case_active" in {
+        index["name"] for index in inspector.get_indexes("generation_attempts")
+    }
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260924_03"
 
 
 def test_first_migration_downgrades_and_reapplies_explicit_schema(
@@ -83,8 +93,7 @@ def test_explicit_disposable_target_wins_over_application_environment(
             "must be distinct",
         ),
         (
-            "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra"
-            "?dbname=apbra_test",
+            "postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra?dbname=apbra_test",
             "must expose an unambiguous",
         ),
     ],

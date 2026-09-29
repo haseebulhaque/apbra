@@ -40,8 +40,11 @@ class Settings(BaseSettings):
     invitation_ttl_days: int = Field(default=7, ge=1, le=30)
     session_ttl_seconds: int = Field(default=43_200, ge=300, le=86_400)
     evidence_root: Path = Path("/var/lib/apbra/evidence")
+    artifact_root: Path = Path("/var/lib/apbra/artifacts")
     semantic_bridge_path: Path = Path("/app/runtime/apbra-semantic-bridge.mjs")
+    generation_bridge_path: Path = Path("/app/runtime/apbra-generation-bridge.mjs")
     semantic_node_path: Path = Path("/usr/local/bin/node")
+    generation_timeout_seconds: int = Field(default=30, ge=1, le=120)
     oidc_issuer: str | None = None
     oidc_audience: str = "apbra-local-client"
     oidc_jwks_json: str | None = None

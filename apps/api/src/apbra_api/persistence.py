@@ -268,7 +268,9 @@ class ConversationEventRow(Base):
         ),
         UniqueConstraint("case_id", "sequence", name="uq_conversation_event_sequence"),
         UniqueConstraint(
-            "case_id", "created_by_membership_id", "command_key",
+            "case_id",
+            "created_by_membership_id",
+            "command_key",
             name="uq_conversation_event_command",
         ),
         CheckConstraint(
@@ -313,7 +315,9 @@ class EvidenceRow(Base):
             name="fk_evidence_actor_company",
         ),
         UniqueConstraint(
-            "case_id", "request_version_id", "content_digest",
+            "case_id",
+            "request_version_id",
+            "content_digest",
             name="uq_case_request_evidence_digest",
         ),
         UniqueConstraint("id", "case_id", "company_id", name="uq_evidence_case_company"),
@@ -369,9 +373,7 @@ class InterpretationRow(Base):
             "state IN ('NEEDS_CLARIFICATION','READY_FOR_CONFIRMATION')",
             name="ck_interpretation_state",
         ),
-        UniqueConstraint(
-            "case_id", "context_version", name="uq_interpretation_case_context"
-        ),
+        UniqueConstraint("case_id", "context_version", name="uq_interpretation_case_context"),
         UniqueConstraint("id", "case_id", "company_id", name="uq_interpretation_case_company"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -411,6 +413,7 @@ class ConfirmedContractRow(Base):
             name="fk_confirmed_contract_actor_company",
         ),
         UniqueConstraint("interpretation_id", name="uq_confirmed_contract_interpretation"),
+        UniqueConstraint("id", "case_id", "company_id", name="uq_confirmed_contract_case"),
         CheckConstraint("schema_version = 2", name="ck_confirmed_contract_v2"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -421,6 +424,136 @@ class ConfirmedContractRow(Base):
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
     accepted_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GenerationAttemptRow(Base):
+    __tablename__ = "generation_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_generation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["confirmed_contract_id", "case_id", "company_id"],
+            [
+                "confirmed_requirement_contracts.id",
+                "confirmed_requirement_contracts.case_id",
+                "confirmed_requirement_contracts.company_id",
+            ],
+            name="fk_generation_contract_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["interpretation_id", "case_id", "company_id"],
+            [
+                "case_interpretation_versions.id",
+                "case_interpretation_versions.case_id",
+                "case_interpretation_versions.company_id",
+            ],
+            name="fk_generation_interpretation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_generation_request_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_generation_actor_company",
+        ),
+        ForeignKeyConstraint(
+            ["artifact_id", "id", "case_id", "company_id"],
+            [
+                "generated_artifacts.id",
+                "generated_artifacts.attempt_id",
+                "generated_artifacts.case_id",
+                "generated_artifacts.company_id",
+            ],
+            name="fk_generation_artifact_identity",
+            use_alter=True,
+        ),
+        UniqueConstraint(
+            "company_id",
+            "created_by_membership_id",
+            "case_id",
+            "command_key",
+            name="uq_generation_command",
+        ),
+        UniqueConstraint("case_id", "attempt_number", name="uq_generation_attempt_number"),
+        UniqueConstraint("id", "case_id", "company_id", name="uq_generation_case_company"),
+        CheckConstraint("attempt_number >= 1", name="ck_generation_attempt_number"),
+        CheckConstraint(
+            "status IN ('PENDING','RUNNING','SUCCEEDED','FAILED','CANCELLED')",
+            name="ck_generation_status",
+        ),
+        Index("ix_generation_case_created", "case_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    confirmed_contract_id: Mapped[UUID] = mapped_column(nullable=False)
+    interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    command_payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    retry_of_attempt_id: Mapped[UUID | None] = mapped_column(ForeignKey("generation_attempts.id"))
+    supersedes_attempt_id: Mapped[UUID | None] = mapped_column(ForeignKey("generation_attempts.id"))
+    fence_token: Mapped[UUID] = mapped_column(nullable=False, default=uuid4)
+    provenance_json: Mapped[str] = mapped_column(Text, nullable=False)
+    validation_json: Mapped[str | None] = mapped_column(Text)
+    failure_code: Mapped[str | None] = mapped_column(String(80))
+    failure_reason: Mapped[str | None] = mapped_column(String(500))
+    artifact_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GeneratedArtifactRow(Base):
+    __tablename__ = "generated_artifacts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["attempt_id", "case_id", "company_id"],
+            [
+                "generation_attempts.id",
+                "generation_attempts.case_id",
+                "generation_attempts.company_id",
+            ],
+            name="fk_artifact_attempt_case_company",
+        ),
+        UniqueConstraint("attempt_id", name="uq_artifact_attempt"),
+        UniqueConstraint(
+            "id",
+            "attempt_id",
+            "case_id",
+            "company_id",
+            name="uq_artifact_identity_attempt_case_company",
+        ),
+        UniqueConstraint("storage_key", name="uq_artifact_storage_key"),
+        CheckConstraint("byte_size > 0", name="ck_artifact_size"),
+        CheckConstraint("validation_status = 'PASS'", name="ck_artifact_validation_pass"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    attempt_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(600), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    validation_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PASS")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AuthTransactionRow(Base):
@@ -492,8 +625,10 @@ class ApplicationSession(Session):
             return None
         return row, identity
 
-    def active_actor(self, membership_id: UUID, identity_id: UUID) -> Actor | None:
-        pair = self.execute(
+    def active_actor(
+        self, membership_id: UUID, identity_id: UUID, *, lock: bool = False
+    ) -> Actor | None:
+        query = (
             select(MembershipRow, ExternalIdentityRow)
             .join(ExternalIdentityRow, ExternalIdentityRow.id == MembershipRow.identity_id)
             .join(CompanyRow, CompanyRow.id == MembershipRow.company_id)
@@ -504,7 +639,12 @@ class ApplicationSession(Session):
                 ExternalIdentityRow.active.is_(True),
                 CompanyRow.active.is_(True),
             )
-        ).one_or_none()
+        )
+        if lock:
+            query = query.with_for_update(
+                of=(MembershipRow, ExternalIdentityRow, CompanyRow)
+            )
+        pair = self.execute(query).one_or_none()
         if pair is None:
             return None
         membership, identity = pair
@@ -518,8 +658,10 @@ class ApplicationSession(Session):
             role=Role(membership.role),
         )
 
-    def case_access(self, actor: Actor, case_id: object) -> tuple[CaseRow, CaseAccessRow] | None:
-        pair = self.execute(
+    def case_access(
+        self, actor: Actor, case_id: object, *, lock: bool = False
+    ) -> tuple[CaseRow, CaseAccessRow] | None:
+        query = (
             select(CaseRow, CaseAccessRow)
             .join(
                 CaseAccessRow,
@@ -538,7 +680,12 @@ class ApplicationSession(Session):
                 ExternalIdentityRow.active.is_(True),
                 CompanyRow.active.is_(True),
             )
-        ).one_or_none()
+        )
+        if lock:
+            query = query.with_for_update(
+                of=(CaseRow, CaseAccessRow, MembershipRow, ExternalIdentityRow, CompanyRow)
+            )
+        pair = self.execute(query).one_or_none()
         if pair is None:
             return None
         return pair[0], pair[1]
@@ -871,8 +1018,13 @@ class ApplicationSession(Session):
         row.updated_at = utcnow()
 
     def append_conversation_event(
-        self, actor: Actor, case_id: UUID, kind: str, payload_json: str,
-        command_key: str, payload_digest: str,
+        self,
+        actor: Actor,
+        case_id: UUID,
+        kind: str,
+        payload_json: str,
+        command_key: str,
+        payload_digest: str,
     ) -> ConversationEventRow:
         sequence = self.scalar(
             select(func.coalesce(func.max(ConversationEventRow.sequence), 0) + 1).where(
@@ -1061,6 +1213,139 @@ class ApplicationSession(Session):
             ),
         )
         return contract
+
+    def confirmed_contract_for_case(
+        self, case_id: UUID, contract_id: UUID
+    ) -> ConfirmedContractRow | None:
+        return self.scalar(
+            select(ConfirmedContractRow).where(
+                ConfirmedContractRow.case_id == case_id,
+                ConfirmedContractRow.id == contract_id,
+            )
+        )
+
+    def generation_attempt_by_command(
+        self, actor: Actor, case_id: UUID, command_key: str
+    ) -> GenerationAttemptRow | None:
+        return self.scalar(
+            select(GenerationAttemptRow).where(
+                GenerationAttemptRow.case_id == case_id,
+                GenerationAttemptRow.company_id == actor.company_id,
+                GenerationAttemptRow.created_by_membership_id == actor.membership_id,
+                GenerationAttemptRow.command_key == command_key,
+            )
+        )
+
+    def equivalent_generation_attempt(
+        self, case_id: UUID, input_digest: str
+    ) -> GenerationAttemptRow | None:
+        return self.scalar(
+            select(GenerationAttemptRow)
+            .where(
+                GenerationAttemptRow.case_id == case_id,
+                GenerationAttemptRow.input_digest == input_digest,
+            )
+            .order_by(GenerationAttemptRow.attempt_number.desc())
+            .limit(1)
+        )
+
+    def active_generation_attempt(self, case_id: UUID) -> GenerationAttemptRow | None:
+        return self.scalar(
+            select(GenerationAttemptRow)
+            .where(
+                GenerationAttemptRow.case_id == case_id,
+                GenerationAttemptRow.status.in_(("PENDING", "RUNNING")),
+            )
+            .order_by(GenerationAttemptRow.attempt_number.desc())
+            .limit(1)
+        )
+
+    def create_generation_attempt(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        interpretation_id: UUID,
+        request_version_id: UUID,
+        command_key: str,
+        command_payload_digest: str,
+        input_digest: str,
+        evidence_binding_digest: str,
+        provenance_json: str,
+        *,
+        retry_of_attempt_id: UUID | None = None,
+        supersedes_attempt_id: UUID | None = None,
+    ) -> GenerationAttemptRow:
+        number = self.scalar(
+            select(func.coalesce(func.max(GenerationAttemptRow.attempt_number), 0)).where(
+                GenerationAttemptRow.case_id == case_id
+            )
+        )
+        row = GenerationAttemptRow(
+            case_id=case_id,
+            company_id=actor.company_id,
+            confirmed_contract_id=contract_id,
+            interpretation_id=interpretation_id,
+            request_version_id=request_version_id,
+            created_by_membership_id=actor.membership_id,
+            command_key=command_key,
+            command_payload_digest=command_payload_digest,
+            input_digest=input_digest,
+            evidence_binding_digest=evidence_binding_digest,
+            status="PENDING",
+            attempt_number=int(number or 0) + 1,
+            retry_of_attempt_id=retry_of_attempt_id,
+            supersedes_attempt_id=supersedes_attempt_id,
+            provenance_json=provenance_json,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def generation_attempt(
+        self, case_id: UUID, attempt_id: UUID, *, lock: bool = False
+    ) -> GenerationAttemptRow | None:
+        query = select(GenerationAttemptRow).where(
+            GenerationAttemptRow.case_id == case_id,
+            GenerationAttemptRow.id == attempt_id,
+        )
+        return self.scalar(query.with_for_update() if lock else query)
+
+    def generation_attempts(self, case_id: UUID) -> list[GenerationAttemptRow]:
+        return list(
+            self.scalars(
+                select(GenerationAttemptRow)
+                .where(GenerationAttemptRow.case_id == case_id)
+                .order_by(GenerationAttemptRow.attempt_number.desc())
+            ).all()
+        )
+
+    def generated_artifact(self, artifact_id: UUID) -> GeneratedArtifactRow | None:
+        return self.get(GeneratedArtifactRow, artifact_id)
+
+    def add_generated_artifact(
+        self,
+        attempt: object,
+        storage_key: str,
+        filename: str,
+        content_digest: str,
+        byte_size: int,
+    ) -> GeneratedArtifactRow:
+        assert isinstance(attempt, GenerationAttemptRow)
+        row = GeneratedArtifactRow(
+            attempt_id=attempt.id,
+            case_id=attempt.case_id,
+            company_id=attempt.company_id,
+            storage_key=storage_key,
+            filename=filename,
+            content_digest=content_digest,
+            byte_size=byte_size,
+            validation_status="PASS",
+        )
+        self.add(row)
+        self.flush()
+        attempt.artifact_id = row.id
+        return row
 
 
 def sha256_text(value: str) -> str:

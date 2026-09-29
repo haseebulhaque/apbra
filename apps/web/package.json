@@ -10,8 +10,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "build:semantic-bridge": "esbuild scripts/semantic-bridge.ts --bundle --platform=node --format=esm --target=node22 --outfile=${APBRA_SEMANTIC_BRIDGE_OUT:-/tmp/apbra-semantic-bridge.mjs}",
+    "build:generation-bridge": "esbuild scripts/generation-bridge.ts --bundle --platform=node --format=esm --target=node22 --loader:.md=text --outfile=${APBRA_GENERATION_BRIDGE_OUT:-/tmp/apbra-generation-bridge.mjs}",
     "test": "vitest run src",
-    "pretest:e2e": "npm run build:semantic-bridge",
+    "pretest:e2e": "npm run build:semantic-bridge && npm run build:generation-bridge",
     "test:e2e": "playwright test"
   },
   "dependencies": {

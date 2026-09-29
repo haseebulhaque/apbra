@@ -1,8 +1,8 @@
 # APBRA MVP-1 web application
 
-APBRA-163 adds durable conversation, qualified CSV/XLSX evidence, server-derived interpretation and exact confirmation to the APBRA-162 invite-only case shell. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, private-case permission or confirmed semantic claims.
+APBRA-164 extends the APBRA-163 durable case journey from exact confirmation to protected report generation, immutable attempt history and validated candidate download. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, private-case permission, confirmed semantic claims, validation status or artifact identity.
 
-An active invited member can create a case without a project or file, list only authorized cases, resume after a restart, save immutable request versions, add durable messages and protected evidence, inspect a server-derived understanding and explicitly confirm its exact current meaning. Request, conversation or evidence changes make earlier confirmation stale. Report generation is intentionally absent from this Package B screen.
+An active invited member can create a case without a project or file, list only authorized cases, resume after a restart, save immutable request versions, add durable messages and protected evidence, inspect a server-derived understanding and explicitly confirm its exact current meaning. A current confirmation can then build a private candidate through the canonical pipeline. Request, conversation or evidence changes make earlier confirmation stale and prevent it from authorizing a new build.
 
 Invitation bearer secrets are accepted only from the URL fragment of an original `/invite#token=...` link, removed from the address immediately, and sent in the body of fixed-path POST requests. A signed-out browser does not persist or forward the token through login; the user must sign in and reopen the original invitation link.
 
@@ -58,9 +58,9 @@ npm run build
 npm run dev
 ```
 
-Vite normally serves `http://127.0.0.1:5173/`. Package B makes no paid or live model call. Its clearly labelled deterministic local interpretation can proceed directly when the request identifies one observed numeric business measure and one observed comparison category. The substitute is intentionally limited to field selection and SUM-by-category comparison so persistence, evidence and exact acceptance can be tested; successful renamed-field examples do not prove arbitrary business requirements are interpreted correctly. Otherwise it uses the canonical bounded clarification state machine to present schema-grounded supported choices or accept a business-language answer; the exact question, raw answer and supported-choice decision remain durable provenance. Real AI integration and semantic-quality evaluation remain pending.
+Vite normally serves `http://127.0.0.1:5173/`. Packages B and C make no paid or live model call. The clearly labelled deterministic local interpretation can proceed directly when the request identifies one observed numeric business measure and one observed comparison category. The Package C adapter maps the resulting typed, confirmed obligations into the existing ReportDesign contract, then runs the existing governed retrieval, normalization, guardrails, compiler and candidate validation. These substitutes prove persistence and control mechanics; successful renamed-field examples do not prove arbitrary business requirements are understood or professionally designed by AI. Real AI integration and semantic-quality evaluation remain pending.
 
-For a short manual checkpoint, sign in as `member`, create a case without a file, save a message, and refresh to verify it remains. Add a synthetic CSV or XLSX containing one numeric and one category field. Choose **Prepare understanding**; answer any displayed material clarification, review the clearly labelled local deterministic understanding, and confirm it. Refresh or restart the API and reopen the case to verify the evidence, clarification decision and ConfirmedRequirementContract v2 remain. Editing the request or adding new current-version evidence must mark the earlier meaning stale and require preparation and confirmation again. This checkpoint does not generate or download a Power BI report.
+For a short manual checkpoint, sign in as `member`, create a case without a file, save a message, and add a synthetic CSV or XLSX containing one numeric and one category field. Choose **Prepare understanding**; answer any material clarification, review the labelled local deterministic understanding, and confirm it. Choose **Build report**, inspect the successful version in generation history and download the validated candidate ZIP. Refresh or restart the API and reopen the case to verify the history and download remain. **Build another version** creates a new immutable attempt. Editing the request or adding current-version evidence makes the earlier meaning stale and requires preparation and confirmation before another build.
 
 ### Isolated browser tests
 
@@ -75,7 +75,7 @@ export APBRA_E2E_SESSION_SECRET="$(openssl rand -hex 32)"
 npm run test:e2e
 ```
 
-Test traces are written outside the repository under `/tmp/apbra-162-playwright-output` by default. Set `APBRA_E2E_OUTPUT_DIR` to another disposable location when needed. These tests may reset only the isolated E2E database; they do not stop, reuse or alter the manual preview database.
+Test traces are written outside the repository under `/tmp/apbra-164-playwright-output` by default. Test evidence and generated artifacts also use dedicated `/tmp/apbra-164-e2e-*` roots. Set `APBRA_E2E_OUTPUT_DIR` to another disposable location when needed. These tests may reset only the isolated E2E database; they do not stop, reuse or alter the manual preview database or storage.
 
 ## AI and governed knowledge
 

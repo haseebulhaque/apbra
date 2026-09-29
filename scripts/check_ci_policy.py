@@ -43,9 +43,10 @@ ISOLATED_TEST_DATABASES = (
     "(value text NOT NULL)'); sentinel.execute(\\\"INSERT INTO "
     "backend_test_isolation_sentinel VALUES ('preserved')\\\"); sentinel.close()\""
 )
-SEMANTIC_BRIDGE_BUILD = (
+TYPESCRIPT_BRIDGE_BUILD = (
     'npm --prefix apps/web ci --ignore-scripts\n'
-    'npm --prefix apps/web run build:semantic-bridge'
+    'npm --prefix apps/web run build:semantic-bridge\n'
+    'npm --prefix apps/web run build:generation-bridge'
 )
 WEB_COMMAND = (
     'npm --prefix apps/web test\n'
@@ -114,6 +115,7 @@ def validate(text: str) -> list[str]:
             'APBRA_SESSION_SECRET': 'ci-only-generated-context-session-material',
             'APBRA_BOOTSTRAP_ENABLED': 'true',
             'APBRA_TEST_SEMANTIC_BRIDGE': '/tmp/apbra-semantic-bridge.mjs',
+            'APBRA_TEST_GENERATION_BRIDGE': '/tmp/apbra-generation-bridge.mjs',
         }
         if job['env'] != expected_env:
             errors.append('Unexpected job environment')
@@ -164,7 +166,7 @@ def validate(text: str) -> list[str]:
             *COMMANDS,
             API_INSTALL,
             ISOLATED_TEST_DATABASES,
-            SEMANTIC_BRIDGE_BUILD,
+            TYPESCRIPT_BRIDGE_BUILD,
             API_CHECK,
             WEB_COMMAND,
             'actions/upload-artifact',

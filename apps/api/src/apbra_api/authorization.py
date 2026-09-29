@@ -48,9 +48,14 @@ def resolve_actor(db: object, session_token: str | None) -> Actor:
 
 
 def authorized_case_access(
-    db: object, actor: Actor, case_id: object, *, require_edit: bool = False
+    db: object,
+    actor: Actor,
+    case_id: object,
+    *,
+    require_edit: bool = False,
+    lock: bool = False,
 ) -> tuple[CaseRecord, AccessRecord]:
-    pair = cast(ApplicationPersistence, db).case_access(actor, case_id)
+    pair = cast(ApplicationPersistence, db).case_access(actor, case_id, lock=lock)
     if pair is None:
         raise ProtectedResourceNotFound()
     case, access = pair

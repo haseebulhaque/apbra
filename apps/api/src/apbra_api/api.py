@@ -19,6 +19,7 @@ from .application import (
     InvitationService,
     MembershipService,
 )
+from .artifacts import LocalArtifactStore
 from .auth_boundary import (
     AUTH_BINDING_COOKIE,
     SESSION_COOKIE,
@@ -39,9 +40,11 @@ from .domain import (
     AuthenticationRequired,
     Conflict,
     EvidenceInvalid,
+    GenerationFailed,
     Role,
 )
 from .evidence import MAX_EVIDENCE_BYTES, LocalEvidenceStore
+from .generation import GenerationBridge, GenerationService
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     AuthorizationCodeRow,
@@ -102,6 +105,15 @@ class InterpretationConfirm(BaseModel):
     expected_context_version: int = Field(ge=1)
 
 
+class GenerationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_contract_id: UUID
+    command_key: str = Field(min_length=8, max_length=200)
+    mode: str = Field(default="BUILD", pattern="^(BUILD|RETRY|REGENERATE)$")
+    source_attempt_id: UUID | None = None
+    report_design: dict[str, Any] | None = None
+
+
 def error_response(exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -135,6 +147,11 @@ def create_app(
         if settings.profile in {"development", "test"}
         else None
     )
+    artifact_store = (
+        LocalArtifactStore(settings.artifact_root, settings.profile)
+        if settings.profile in {"development", "test"}
+        else None
+    )
     invitation_service = InvitationService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
@@ -165,6 +182,25 @@ def create_app(
                 settings.semantic_bridge_path, node_executable=settings.semantic_node_path
             ),
             objects,
+        )
+
+    def local_generation_service(*, require_bridge: bool = False) -> GenerationService:
+        if artifact_store is None:
+            raise EvidenceInvalid()
+        bridge = None
+        if require_bridge:
+            try:
+                bridge = GenerationBridge(
+                    settings.generation_bridge_path,
+                    node_executable=settings.semantic_node_path,
+                    timeout_seconds=settings.generation_timeout_seconds,
+                )
+            except ValueError as exc:
+                raise GenerationFailed() from exc
+        return GenerationService(
+            bridge,
+            local_evidence_service().objects,
+            artifact_store,
         )
 
     @app.exception_handler(ApplicationError)
@@ -622,6 +658,89 @@ def create_app(
         }
         db.commit()
         return result
+
+    @app.get("/api/cases/{case_id}/generation")
+    def generation_history(
+        case_id: UUID, db: DB, session_token: SessionCookie = None
+    ) -> dict[str, Any]:
+        return {
+            "items": local_generation_service().list(db, resolve_actor(db, session_token), case_id)
+        }
+
+    @app.post("/api/cases/{case_id}/generation")
+    def start_generation(
+        case_id: UUID,
+        payload: GenerationCreate,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, supplied_csrf)
+        result, created = local_generation_service(require_bridge=True).start(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            contract_id=payload.confirmed_contract_id,
+            command_key=payload.command_key,
+            mode=payload.mode,
+            source_attempt_id=payload.source_attempt_id,
+            report_design=payload.report_design,
+        )
+        response.status_code = 201 if created else 200
+        return {"attempt": result}
+
+    @app.get("/api/cases/{case_id}/generation/{attempt_id}")
+    def generation_status(
+        case_id: UUID,
+        attempt_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return {
+            "attempt": local_generation_service().get(
+                db, resolve_actor(db, session_token), case_id, attempt_id
+            )
+        }
+
+    @app.post("/api/cases/{case_id}/generation/{attempt_id}/cancel")
+    def cancel_generation(
+        case_id: UUID,
+        attempt_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, supplied_csrf)
+        return {
+            "attempt": local_generation_service().cancel(
+                db, resolve_actor(db, session_token), case_id, attempt_id
+            )
+        }
+
+    @app.get("/api/cases/{case_id}/generation/{attempt_id}/artifact")
+    def download_generation_artifact(
+        case_id: UUID,
+        attempt_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> Response:
+        content, filename, digest_value = local_generation_service().artifact(
+            db, resolve_actor(db, session_token), case_id, attempt_id
+        )
+        safe_filename = "".join(
+            character for character in filename if character.isalnum() or character in "._-"
+        )
+        safe_filename = safe_filename or "apbra-report-candidate.zip"
+        return Response(
+            content=content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                "X-Content-SHA256": digest_value,
+                "Cache-Control": "private, no-store",
+            },
+        )
 
     @app.get("/api/cases/{case_id}/access")
     def list_case_access(

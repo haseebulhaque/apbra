@@ -1,4 +1,4 @@
-# APBRA local API — APBRA-162 foundation + APBRA-163 Package B
+# APBRA local API — APBRA-162 foundation through APBRA-164 Package C
 
 This FastAPI service is the local/CI invited-identity and private reporting-case foundation. It uses PostgreSQL 17 for durable state and an OIDC-compatible browser redirect boundary. The bundled issuer and synthetic identities exist only in the `development` and `test` profiles; the hosted profile cannot enable either the issuer or the bootstrap.
 
@@ -26,7 +26,7 @@ Expected response:
 {"status":"ok","database":"ok"}
 ```
 
-The persistent Compose volumes are `apbra_postgres_data` and `apbra_evidence_data`. A normal stop/restart retains cases, request versions, conversation, qualified evidence, interpretations and confirmed contracts:
+The persistent Compose volumes are `apbra_postgres_data`, `apbra_evidence_data` and `apbra_artifact_data`. A normal stop/restart retains cases, request versions, conversation, qualified evidence, interpretations, confirmed contracts, generation attempts and validated candidates:
 
 ```sh
 docker compose stop
@@ -67,8 +67,10 @@ uv --directory apps/api lock --check
 uv --directory apps/api sync --frozen --python 3.13
 uv --directory apps/api run --frozen ruff check .
 uv --directory apps/api run --frozen mypy
-uv --directory apps/api run --frozen alembic upgrade head
+APBRA_DATABASE_URL="$APBRA_TEST_DATABASE_URL" uv --directory apps/api run --frozen alembic upgrade head
 uv --directory apps/api run --frozen pytest
 ```
 
-APBRA-163 adds only private local/CI CSV/XLSX evidence storage and durable business acceptance. Its local deterministic interpretation uses the canonical TypeScript semantic engine and is clearly labelled as no-model simulation. The substitute exercises a deliberately narrow field-selection and SUM-by-category comparison path so persistence, evidence handling and exact acceptance can be tested; renamed or unrelated examples do not establish general-purpose semantic interpretation. Real AI integration and semantic-quality evaluation remain pending. It does not add report-generation orchestration, candidate downloads, projects, expert takeover, billing, live Entra qualification, Azure provisioning, or hosted deployment.
+APBRA-164 adds local/CI-only protected generation after exact confirmation. The API binds each command to the current request, evidence, interpretation and `ConfirmedRequirementContract`, invokes the canonical TypeScript governed-knowledge, ReportDesign, normalization, guardrail, compiler and candidate-validation path, and stores only validated candidate ZIP bytes in the private artifact volume. Attempts, failures, cancellation, retry, regeneration and immutable history are durable in PostgreSQL; membership and private-case access are rechecked for history and download.
+
+Package B interpretation is a `LOCAL_DETERMINISTIC_NO_MODEL_CALL` simulation. Package C local generation requires an explicitly supplied and reviewed ReportDesign; it does not invent a layout or call a model. These paths prove durable governed mechanics, not general AI understanding or AI report-design judgement. Package C does not add projects, expert takeover, billing, live Entra qualification, Azure provisioning, hosted generation, Power BI Service publishing, gateway/credential automation, Power BI Desktop PASS or deployment.

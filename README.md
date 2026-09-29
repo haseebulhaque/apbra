@@ -39,7 +39,7 @@ PBIP delivery and deployment guidance remain the first delivery boundary. Connec
 
 ## Run locally
 
-APBRA-163 extends the local/CI invite-only foundation with durable case conversation, protected CSV/XLSX evidence, server-derived interpretation and exact durable confirmation. It uses FastAPI, PostgreSQL 17, a private local evidence volume, the canonical TypeScript semantic engine, and a development-only OIDC issuer. Use synthetic data only. Generate local secrets in the shell and keep them out of files, logs and commits.
+APBRA-164 extends the local/CI invite-only foundation with protected generation, durable attempt history and private validated candidate artifacts after APBRA-163 conversation, evidence and exact confirmation. It uses FastAPI, PostgreSQL 17, separate private local evidence and artifact volumes, the canonical TypeScript semantic/generation pipeline, and a development-only OIDC issuer. Use synthetic data only. Generate local secrets in the shell and keep them out of files, logs and commits.
 
 ```sh
 export APBRA_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
@@ -54,7 +54,7 @@ npm --prefix apps/web ci --ignore-scripts
 npm --prefix apps/web run dev
 ```
 
-Open `http://127.0.0.1:5173/`; the API health endpoint is `http://127.0.0.1:8000/api/health`. The local identity choices exercise the OIDC redirect and server-side APBRA authorization path. Creating a case requires neither a project nor a file. PostgreSQL retains requests, conversation, evidence provenance, interpretations and confirmed contracts across browser, frontend and API restarts. The Package B interpretation preview is explicitly deterministic and simulated: it makes no model call. When the current request does not establish one observed numeric business measure and one observed comparison category, the canonical clarification state machine presents bounded supported choices or accepts a business-language answer before confirmation can become available.
+Open `http://127.0.0.1:5173/`; the API health endpoint is `http://127.0.0.1:8000/api/health`. The local identity choices exercise the OIDC redirect and server-side APBRA authorization path. Creating a case requires neither a project nor a file. PostgreSQL retains requests, conversation, evidence provenance, interpretations, confirmed contracts and generation history across restarts; the private volumes retain qualified evidence and validated candidate bytes. The Package B interpretation and Package C ReportDesign adapter are explicitly deterministic simulations and make no model call. They exercise the governed lifecycle but do not establish general AI understanding or AI design quality.
 
 See [the API runbook](apps/api/README.md) and [web application guide](apps/web/README.md) for the bounded preview, synthetic identities, restart behaviour and limitations. Do not use `docker compose down --volumes` unless deliberately deleting synthetic local data. Existing optional Azure AI configuration remains server-side and is not required for case persistence; AI-dependent stages fail visibly when it is unavailable.
 
@@ -68,7 +68,7 @@ No durable run-specific candidate digest or exact-candidate Power BI Desktop PAS
 
 APBRA does not claim universal Power BI generation or production readiness. The bounded compiler supports common cards, charts, tables and slicers within an explicit layout/model contract. DAY, MONTH, QUARTER and YEAR trend grains have genuine representations; WEEK, fiscal/custom calendars and locale-specific policies remain unsupported. Unsupported or unsafe designs stop rather than being approximated.
 
-APBRA-162 provides a bounded local/CI identity, membership and private-case authorization foundation. Live Entra qualification, hosted tenant isolation and operations, durable knowledge ingestion and indexing, managed configuration, protected artifact storage, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations remain gaps.
+APBRA-162 provides the bounded local/CI identity, membership and private-case authorization foundation; APBRA-164 adds private local/CI validated artifact storage, not a hosted artifact service. Live Entra qualification, hosted tenant isolation and operations, durable knowledge ingestion and indexing, managed configuration, broader Power BI compatibility, tenant publishing, gateway and credential orchestration, reviewer workflow, load and resilience engineering, SLOs/monitoring, broader evaluation, privacy/compliance operations and commercial operations remain gaps.
 
 Modes, licences, company membership and model keys do not themselves authorize private-resource access, trusted-author status, publishing or external management. Expert assistance, business confirmation, candidate inspection, release approval and successful deployment remain distinct states.
 

@@ -155,10 +155,53 @@ class InterpretationRecord(Protocol):
 
 class ConfirmedContractRecord(Protocol):
     id: UUID
+    case_id: UUID
+    company_id: UUID
     interpretation_id: UUID
     contract_json: str
     schema_version: int
     accepted_at: datetime
+
+
+class GenerationAttemptRecord(Protocol):
+    id: UUID
+    case_id: UUID
+    company_id: UUID
+    confirmed_contract_id: UUID
+    interpretation_id: UUID
+    request_version_id: UUID
+    created_by_membership_id: UUID
+    command_key: str
+    command_payload_digest: str
+    input_digest: str
+    evidence_binding_digest: str
+    status: str
+    attempt_number: int
+    retry_of_attempt_id: UUID | None
+    supersedes_attempt_id: UUID | None
+    fence_token: UUID
+    provenance_json: str
+    validation_json: str | None
+    failure_code: str | None
+    failure_reason: str | None
+    artifact_id: UUID | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+    cancelled_at: datetime | None
+
+
+class GeneratedArtifactRecord(Protocol):
+    id: UUID
+    attempt_id: UUID
+    case_id: UUID
+    company_id: UUID
+    storage_key: str
+    filename: str
+    content_digest: str
+    byte_size: int
+    validation_status: str
+    created_at: datetime
 
 
 class ApplicationPersistence(Protocol):
@@ -168,10 +211,12 @@ class ApplicationPersistence(Protocol):
         self, token_digest: str, now: datetime
     ) -> tuple[SessionRecord, IdentityRecord] | None: ...
 
-    def active_actor(self, membership_id: UUID, identity_id: UUID) -> Actor | None: ...
+    def active_actor(
+        self, membership_id: UUID, identity_id: UUID, *, lock: bool = False
+    ) -> Actor | None: ...
 
     def case_access(
-        self, actor: Actor, case_id: object
+        self, actor: Actor, case_id: object, *, lock: bool = False
     ) -> tuple[CaseRecord, AccessRecord] | None: ...
 
     def add_audit(
@@ -253,8 +298,13 @@ class ApplicationPersistence(Protocol):
     def lock_case_access(self, case_id: UUID, membership_id: UUID) -> AccessRecord | None: ...
 
     def append_conversation_event(
-        self, actor: Actor, case_id: UUID, kind: str, payload_json: str,
-        command_key: str, payload_digest: str,
+        self,
+        actor: Actor,
+        case_id: UUID,
+        kind: str,
+        payload_json: str,
+        command_key: str,
+        payload_digest: str,
     ) -> ConversationEventRecord: ...
 
     def conversation_event_by_command(
@@ -315,6 +365,54 @@ class ApplicationPersistence(Protocol):
 
     def advance_semantic_context(self, row: CaseRecord) -> None: ...
 
+    def confirmed_contract_for_case(
+        self, case_id: UUID, contract_id: UUID
+    ) -> ConfirmedContractRecord | None: ...
+
+    def generation_attempt_by_command(
+        self, actor: Actor, case_id: UUID, command_key: str
+    ) -> GenerationAttemptRecord | None: ...
+
+    def equivalent_generation_attempt(
+        self, case_id: UUID, input_digest: str
+    ) -> GenerationAttemptRecord | None: ...
+
+    def active_generation_attempt(self, case_id: UUID) -> GenerationAttemptRecord | None: ...
+
+    def create_generation_attempt(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        interpretation_id: UUID,
+        request_version_id: UUID,
+        command_key: str,
+        command_payload_digest: str,
+        input_digest: str,
+        evidence_binding_digest: str,
+        provenance_json: str,
+        *,
+        retry_of_attempt_id: UUID | None = None,
+        supersedes_attempt_id: UUID | None = None,
+    ) -> GenerationAttemptRecord: ...
+
+    def generation_attempt(
+        self, case_id: UUID, attempt_id: UUID, *, lock: bool = False
+    ) -> GenerationAttemptRecord | None: ...
+
+    def generation_attempts(self, case_id: UUID) -> list[GenerationAttemptRecord]: ...
+
+    def generated_artifact(self, artifact_id: UUID) -> GeneratedArtifactRecord | None: ...
+
+    def add_generated_artifact(
+        self,
+        attempt: GenerationAttemptRecord,
+        storage_key: str,
+        filename: str,
+        content_digest: str,
+        byte_size: int,
+    ) -> GeneratedArtifactRecord: ...
+
 
 class ApplicationError(Exception):
     status_code = 400
@@ -372,3 +470,21 @@ class SemanticValidationFailed(ApplicationError):
     status_code = 422
     code = "SEMANTIC_VALIDATION_FAILED"
     public_message = "The proposed interpretation is not ready for confirmation."
+
+
+class GenerationUnavailable(ApplicationError):
+    status_code = 422
+    code = "GENERATION_UNAVAILABLE"
+    public_message = "A current confirmed requirement is required before building a report."
+
+
+class GenerationFailed(ApplicationError):
+    status_code = 422
+    code = "GENERATION_FAILED"
+    public_message = "The report candidate could not be generated and validated."
+
+
+class ArtifactUnavailable(ApplicationError):
+    status_code = 404
+    code = "ARTIFACT_NOT_FOUND"
+    public_message = "The generated report is unavailable."
