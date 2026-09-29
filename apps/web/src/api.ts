@@ -1,7 +1,7 @@
 export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
 export type Session={authenticated:boolean;actor?:Actor;csrf_token?:string};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
-export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;created_at:string;updated_at:string;current_request:RequestVersion};
+export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;report_title?:string;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
 export type Invitation={id:string;company_id:string;subject:string;role:string;expires_at:string};
 export type InvitationInspection={invitation:Invitation;status?:string};
@@ -11,11 +11,14 @@ export type CaseAccess={membership_id:string;display_name:string;subject:string;
 export type ConversationEvent={id:string;sequence:number;kind:'USER_MESSAGE'|'RAW_ANSWER'|'CORRECTION'|'CLARIFICATION_QUESTION'|'AI_ANALYSIS'|'ALTERNATIVE_PROPOSED'|'ALTERNATIVE_ACCEPTED'|'ALTERNATIVE_DECLINED';payload:Record<string,unknown>;created_at:string;semantic_context_version?:number};
 export type ObservedEvidenceSchema={kind:'REQUEST_DATA_STRUCTURE';tables:Array<{name:string;rowCount:number;columns:Array<{name:string;type:string}>}>};
 export type EvidenceItem={id:string;request_version_id:string;filename:string;format:'CSV'|'XLSX';content_digest:string;schema_digest:string;observed_schema:ObservedEvidenceSchema;created_at:string;semantic_context_version?:number};
+export type ReferenceMaterial={id:string;request_version_id:string;filename:string;media_type:'image/png'|'image/jpeg';content_digest:string;interpretation_state:'NOT_INTERPRETED'|'VISION_AVAILABLE';capability_profile_id:string|null;created_at:string;semantic_context_version?:number};
 export type DurableQuestion={id:string;question:string;reason:string;required:boolean;suggestions:Array<{id:string;label:string}>;allowFreeText:boolean};
-export type DurableInterpretation={id:string;state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION'|'CONFIRMED';current:boolean;context_version:number;confirmation_summary:{objective:string;businessQuestions:string[];kpiDefinitions:string[];scopeAndTime:string[];dimensionsAndFilters:string[];lifecycleDefinitions:string[];materialPolicyDecisions:string[]};interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[];simulation:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'};
+export type DurableInterpretation={id:string;state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION'|'CONFIRMED'|'HUMAN_REVIEW_REQUIRED'|'UNSUPPORTED'|'OUT_OF_SCOPE';current:boolean;context_version:number;confirmation_summary:{objective:string;businessQuestions:string[];kpiDefinitions:string[];scopeAndTime:string[];dimensionsAndFilters:string[];lifecycleDefinitions:string[];materialPolicyDecisions:string[]};interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[];simulation:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'|'QUALIFIED_SERVER_MODEL'};
 export type DurableContract={id:string;interpretation_id:string;schema_version:2;accepted_at:string;contract:Record<string,unknown>;current:boolean};
 export type AcceptanceState={interpretation:DurableInterpretation|null;confirmed_contract:DurableContract|null};
-export type ReviewedDesign={id:string;confirmed_contract_id:string;summary:{page_count:number;visual_count:number;description:string};reviewed_at:string};
+export type ReviewedDesign={id:string;confirmed_contract_id:string;summary:{page_count:number;visual_count:number;description:string};origin:'AUTO_ELIGIBLE'|'EXPERT_REVIEWED';provenance_label:string;reviewed_at:string};
+export type AutomaticDesignAttempt={id:string;confirmed_contract_id:string;status:'RUNNING'|'ELIGIBLE'|'FAILED'|'CANCELLED';provider_profile_id:string|null;model_or_deployment:string|null;prompt_version:string|null;configuration_id:string|null;capability_profile:Record<string,boolean>;usage:Record<string,number|null>;failure:{code:string;message:string}|null;validation:Record<string,unknown>|null;created_at:string;completed_at:string|null};
+export type UploadCapabilities={data_extensions:string[];reference_extensions:string[];max_file_bytes:number;max_files_per_selection:number};
 export type GenerationAttempt={id:string;case_id:string;confirmed_contract_id:string;reviewed_design_id:string|null;interpretation_id:string;request_version_id:string;status:'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED';attempt_number:number;retry_of_attempt_id:string|null;supersedes_attempt_id:string|null;provenance:{mode:string;pipeline:string;runtimeEvidence:Record<string,string>};validation:Record<string,unknown>|null;failure:{code:string;message:string}|null;created_at:string;started_at:string|null;completed_at:string|null;cancelled_at:string|null;artifact:{id:string;filename:string;content_digest:string;byte_size:number;validation_status:'PASS';created_at:string}|null};
 export type ApiErrorBody={error?:{code?:string;message?:string}};
 
@@ -38,6 +41,7 @@ export const authApi={
   loginUrl:(identity?:string,returnTo='/')=>`/api/auth/login?${new URLSearchParams({...identity?{identity}:{},return_to:returnTo})}`,
   logout:(csrfToken:string)=>request<void>('/api/auth/logout',{method:'POST',headers:csrfHeaders(csrfToken)}),
 };
+export const capabilitiesApi={uploads:()=>request<UploadCapabilities>('/api/cases/capabilities/uploads')};
 export const casesApi={
   list:()=>request<{items:CaseSummary[]}>('/api/cases'),
   get:(caseId:string)=>request<{case:CaseRecord}>(`/api/cases/${encodeURIComponent(caseId)}`).then(value=>value.case),
@@ -69,6 +73,13 @@ export const evidenceApi={
     if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The evidence could not be added.');return body.evidence;
   },
 };
+export const referenceMaterialApi={
+  list:(caseId:string)=>request<{items:ReferenceMaterial[]}>(`/api/cases/${encodeURIComponent(caseId)}/reference-material`),
+  add:async(caseId:string,file:File,expectedContextVersion:number,csrfToken:string)=>{
+    const query=new URLSearchParams({filename:file.name,expected_context_version:String(expectedContextVersion)}),response=await fetch(`/api/cases/${encodeURIComponent(caseId)}/reference-material?${query}`,{method:'POST',credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/octet-stream',...csrfHeaders(csrfToken)},body:file}),body=await response.json().catch(()=>({})) as {reference_material:ReferenceMaterial}&ApiErrorBody;
+    if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The reference material could not be added.');return body.reference_material;
+  },
+};
 export const acceptanceApi={
   state:(caseId:string)=>request<AcceptanceState>(`/api/cases/${encodeURIComponent(caseId)}/acceptance`),
   prepare:(caseId:string,expectedContextVersion:number,csrfToken:string)=>request<{interpretation:DurableInterpretation}>(`/api/cases/${encodeURIComponent(caseId)}/interpretations`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})}).then(value=>value.interpretation),
@@ -77,6 +88,10 @@ export const acceptanceApi={
 export const reviewedDesignApi={
   list:(caseId:string,confirmedContractId:string)=>request<{items:ReviewedDesign[];can_build:boolean;can_submit:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),
   intake:(caseId:string,confirmedContractId:string,reportDesign:Record<string,unknown>,csrfToken:string)=>request<{reviewed_design:ReviewedDesign}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,report_design:reportDesign})}).then(value=>value.reviewed_design),
+};
+export const automaticDesignApi={
+  list:(caseId:string,confirmedContractId:string)=>request<{items:AutomaticDesignAttempt[]}>(`/api/cases/${encodeURIComponent(caseId)}/automatic-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),
+  propose:(caseId:string,confirmedContractId:string,commandKey:string,csrfToken:string)=>request<{attempt:AutomaticDesignAttempt;reviewed_design:ReviewedDesign|null}>(`/api/cases/${encodeURIComponent(caseId)}/automatic-designs`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,command_key:commandKey})}),
 };
 export const generationApi={
   list:(caseId:string)=>request<{items:GenerationAttempt[]}>(`/api/cases/${encodeURIComponent(caseId)}/generation`),

@@ -5,10 +5,12 @@ import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
 from .authorization import authorized_case_access
+from .config import ClarificationPolicy, UploadPolicy
 from .domain import (
     AccessLevel,
     Actor,
@@ -20,6 +22,7 @@ from .domain import (
     Forbidden,
     IdempotencyConflict,
     IdentityRecord,
+    IntelligentAnalysisUnavailable,
     InterpretationRecord,
     InvitationInvalid,
     InvitationRecord,
@@ -36,6 +39,7 @@ from .evidence import (
     parse_evidence,
     schema_digest,
 )
+from .model_provider import ModelProvider, ProviderCallError, ProviderRequest
 from .semantic_bridge import SemanticBridge
 
 
@@ -47,6 +51,17 @@ def canonical_payload(payload: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def concise_report_title(request_text: str) -> str:
+    """Derive a stable display title without replacing the immutable request."""
+    compact = " ".join(request_text.split())
+    sentence = compact.split(".", 1)[0].split("?", 1)[0].split("!", 1)[0].strip()
+    words = sentence.split()
+    title = " ".join(words[:10])
+    if len(words) > 10:
+        title += "…"
+    return (title or "New report")[:160]
 
 
 def request_version_json(row: RequestVersionRecord) -> dict[str, Any]:
@@ -68,6 +83,7 @@ def case_json(db: ApplicationPersistence, row: CaseRecord) -> dict[str, Any]:
         "current_request_version_id": str(row.current_request_version_id),
         "version": row.version,
         "semantic_context_version": row.semantic_context_version,
+        "report_title": row.report_title,
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
         "current_request": request_version_json(current),
@@ -111,7 +127,9 @@ class CaseService:
             case, _ = authorized_case_access(store, actor, existing.resource_id)
             return case_json(store, case), False
 
-        case = store.create_case(actor, text, command_key, payload_digest)
+        case = store.create_case(
+            actor, text, command_key, payload_digest, concise_report_title(text)
+        )
         return case_json(store, case), True
 
     def list_cases(self, db: object, actor: Actor) -> list[dict[str, Any]]:
@@ -491,8 +509,9 @@ class ConversationService:
 
 
 class EvidenceService:
-    def __init__(self, objects: LocalEvidenceStore) -> None:
+    def __init__(self, objects: LocalEvidenceStore, policy: UploadPolicy) -> None:
         self.objects = objects
+        self.policy = policy
 
     @staticmethod
     def _json(row: Any) -> dict[str, Any]:
@@ -536,6 +555,19 @@ class EvidenceService:
         case = store.locked_case(case_id)
         if case is None or case.semantic_context_version != expected_context_version:
             raise StaleVersion()
+        current_items = [
+            row
+            for row in store.evidence_items(case_id)
+            if row.request_version_id == case.current_request_version_id
+        ]
+        if len(current_items) >= self.policy.max_data_items_per_report:
+            raise EvidenceInvalid()
+        extension = Path(filename).suffix.upper().lstrip(".")
+        if (
+            extension not in set(self.policy.data_extensions)
+            or len(content) > self.policy.max_file_bytes
+        ):
+            raise EvidenceInvalid()
         try:
             parsed = parse_evidence(content, filename)
         except EvidenceError as exc:
@@ -577,9 +609,20 @@ class EvidenceService:
 
 
 class AcceptanceService:
-    def __init__(self, bridge: SemanticBridge, objects: LocalEvidenceStore) -> None:
+    def __init__(
+        self,
+        bridge: SemanticBridge,
+        objects: LocalEvidenceStore,
+        *,
+        reference_objects: LocalEvidenceStore | None = None,
+        model_provider: ModelProvider | None = None,
+        clarification_policy: ClarificationPolicy | None = None,
+    ) -> None:
         self.bridge = bridge
         self.objects = objects
+        self.reference_objects = reference_objects
+        self.model_provider = model_provider
+        self.clarification_policy = clarification_policy
 
     def _current_context(
         self, store: ApplicationPersistence, case: CaseRecord
@@ -615,11 +658,35 @@ class AcceptanceService:
             "relationships": [],
             "parsedAt": max(row.created_at for row in evidence).isoformat(),
         }
+        references: list[dict[str, Any]] = []
+        for reference_row in store.reference_materials(case.id):
+            if reference_row.request_version_id != case.current_request_version_id:
+                continue
+            if self.reference_objects is None:
+                raise SemanticValidationFailed()
+            try:
+                self.reference_objects.read(
+                    reference_row.storage_key, reference_row.content_digest
+                )
+            except EvidenceError as exc:
+                raise SemanticValidationFailed() from exc
+            references.append(
+                {
+                    "id": str(reference_row.id),
+                    "filename": reference_row.filename,
+                    "mediaType": reference_row.media_type,
+                    "contentDigest": reference_row.content_digest,
+                    "interpretationState": reference_row.interpretation_state,
+                }
+            )
+        versions = store.case_versions(case.id)
+        original_request = versions[0].request_text if versions else request.request_text
         binding = json.dumps(
             {
                 "caseId": str(case.id),
                 "requestVersionId": str(case.current_request_version_id),
                 "requestText": request.request_text,
+                "originalRequest": original_request,
                 "semanticContextVersion": case.semantic_context_version,
                 "conversation": [
                     {
@@ -639,6 +706,7 @@ class AcceptanceService:
                     }
                     for row in evidence
                 ],
+                "referenceMaterial": references,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -707,19 +775,111 @@ class AcceptanceService:
                 if existing_session.get("rounds")
                 else [],
                 "unresolved_ambiguities": existing_session.get("unresolvedAmbiguities", []),
-                "simulation": "LOCAL_DETERMINISTIC_NO_MODEL_CALL",
+                "simulation": (
+                    "QUALIFIED_SERVER_MODEL"
+                    if existing_session.get("providerProvenance")
+                    else "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
+                ),
             }
         # Re-qualify every retained evidence object before preparing a new
         # interpretation. Persisted metadata alone is not proof that the
         # protected bytes remain available and intact.
         schema, context_binding, evidence = self._current_context(store, case)
-        session = self.bridge.simulate(
-            session_id=f"case-{case.id}-context-{case.semantic_context_version}",
-            original_request=current_request.request_text,
-            context_binding=context_binding,
-            analysed_at=datetime.now(UTC),
-            data_structure=schema,
-        ).session
+        material_context = json.loads(context_binding)
+        original_request = material_context.get("originalRequest")
+        if not isinstance(original_request, str) or not original_request:
+            raise SemanticValidationFailed()
+        analysed_at = datetime.now(UTC)
+        if self.model_provider is not None:
+            if self.clarification_policy is None:
+                raise IntelligentAnalysisUnavailable()
+            try:
+                result = self.model_provider.structured(
+                    ProviderRequest(
+                        task="REQUIREMENT_ANALYSIS",
+                        system_prompt=(
+                            "Interpret the complete report-requirement context for an ordinary "
+                            "business user. Preserve the immutable original request, durable "
+                            "additions, corrections, accepted answers and qualified schema. "
+                            "Support multiple measures and dimensions, avoid identifier fields as "
+                            "default dimensions, and express exact evidenced subtraction and ratio "
+                            "semantics with typed operands. Ask only unanswered questions whose "
+                            "ambiguity materially affects meaning, feasibility, governance or "
+                            "security. Never assert access, confirmation, approval or eligibility. "
+                            "Image references marked NOT_INTERPRETED convey no visual semantics."
+                        ),
+                        context={
+                            "materialContext": material_context,
+                            "dataStructure": schema,
+                        },
+                        output_schema={
+                            "type": "object",
+                            "required": [
+                                "state",
+                                "interpretation",
+                                "questions",
+                                "unresolvedAmbiguities",
+                                "confirmationSummary",
+                                "conflictReasons",
+                            ],
+                            "properties": {
+                                "state": {
+                                    "enum": [
+                                        "NEEDS_CLARIFICATION",
+                                        "READY_FOR_CONFIRMATION",
+                                        "HUMAN_REVIEW_REQUIRED",
+                                        "UNSUPPORTED",
+                                        "OUT_OF_SCOPE",
+                                    ]
+                                },
+                                "interpretation": {"type": "object"},
+                                "questions": {"type": "array"},
+                                "unresolvedAmbiguities": {"type": "array"},
+                                "confirmationSummary": {"type": "object"},
+                                "conflictReasons": {"type": "array"},
+                                "knowledgeSources": {"type": "array"},
+                            },
+                            "additionalProperties": False,
+                        },
+                    )
+                )
+                session = self.bridge.analysis(
+                    session_id=f"case-{case.id}-context-{case.semantic_context_version}",
+                    original_request=original_request,
+                    context_binding=context_binding,
+                    analysed_at=analysed_at,
+                    data_structure=schema,
+                    analysis=result.value,
+                    limits={
+                        "maxRounds": self.clarification_policy.max_rounds,
+                        "maxQuestionsPerRound": (
+                            self.clarification_policy.max_questions_per_round
+                        ),
+                        "maxAnswerCharacters": (
+                            self.clarification_policy.max_answer_characters
+                        ),
+                    },
+                ).session
+                session["providerProvenance"] = {
+                    "profileId": result.profile_id,
+                    "modelOrDeployment": result.model_or_deployment,
+                    "promptVersion": result.prompt_version,
+                    "configurationId": result.configuration_id,
+                    "capabilityProfile": result.capability_profile,
+                    "usage": result.usage,
+                    "latencyMs": result.latency_ms,
+                    "callCount": result.call_count,
+                }
+            except (ProviderCallError, SemanticValidationFailed) as exc:
+                raise IntelligentAnalysisUnavailable() from exc
+        else:
+            session = self.bridge.simulate(
+                session_id=f"case-{case.id}-context-{case.semantic_context_version}",
+                original_request=original_request,
+                context_binding=context_binding,
+                analysed_at=analysed_at,
+                data_structure=schema,
+            ).session
         state = session.get("state")
         if state not in {"NEEDS_CLARIFICATION", "READY_FOR_CONFIRMATION"}:
             raise SemanticValidationFailed()
@@ -766,7 +926,11 @@ class AcceptanceService:
             if session.get("rounds")
             else [],
             "unresolved_ambiguities": session.get("unresolvedAmbiguities", []),
-            "simulation": "LOCAL_DETERMINISTIC_NO_MODEL_CALL",
+            "simulation": (
+                "QUALIFIED_SERVER_MODEL"
+                if session.get("providerProvenance")
+                else "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
+            ),
         }
 
     def state(self, db: object, actor: Actor, case_id: UUID) -> dict[str, Any]:
@@ -798,7 +962,11 @@ class AcceptanceService:
                 if session.get("rounds")
                 else [],
                 "unresolved_ambiguities": session.get("unresolvedAmbiguities", []),
-                "simulation": "LOCAL_DETERMINISTIC_NO_MODEL_CALL",
+                "simulation": (
+                    "QUALIFIED_SERVER_MODEL"
+                    if session.get("providerProvenance")
+                    else "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
+                ),
             },
             "confirmed_contract": (
                 {

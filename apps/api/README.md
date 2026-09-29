@@ -26,7 +26,7 @@ Expected response:
 {"status":"ok","database":"ok"}
 ```
 
-The persistent Compose volumes are `apbra_postgres_data`, `apbra_evidence_data` and `apbra_artifact_data`. A normal stop/restart retains cases, request versions, conversation, qualified evidence, interpretations, confirmed contracts, generation attempts and validated candidates:
+The persistent Compose volumes are `apbra_postgres_data`, `apbra_evidence_data`, `apbra_reference_data` and `apbra_artifact_data`. A normal stop/restart retains reports, immutable original and revised requests, requirements, qualified data, reference material, interpretations, confirmed contracts, automatic design attempts, generation attempts and validated candidates:
 
 ```sh
 docker compose stop
@@ -71,6 +71,8 @@ APBRA_DATABASE_URL="$APBRA_TEST_DATABASE_URL" uv --directory apps/api run --froz
 uv --directory apps/api run --frozen pytest
 ```
 
-APBRA-164 adds local/CI-only protected generation after exact confirmation. The API binds each command to the current request, evidence, interpretation and `ConfirmedRequirementContract`, invokes the canonical TypeScript governed-knowledge, ReportDesign, normalization, guardrail, compiler and candidate-validation path, and stores only validated candidate ZIP bytes in the private artifact volume. Attempts, failures, cancellation, retry, regeneration and immutable history are durable in PostgreSQL; membership and private-case access are rechecked for history and download.
+APBRA-171 adds a provider-neutral, server-side structured-output boundary for requirement analysis and report-design proposals. The browser never receives provider configuration or credentials. A provider result is untrusted input: APBRA persists an immutable attempt, validates the exact current request, requirements, qualified data and reference digests, runs the canonical TypeScript contract, normalization, semantic-coverage, guardrail, compiler and candidate-validation path, and makes a design build-eligible only after every deterministic check passes. Reference PNG/JPEG files are stored separately from calculation data and remain explicitly `NOT_INTERPRETED` unless a future accepted capability profile and implementation proves otherwise.
 
-Package B interpretation is a `LOCAL_DETERMINISTIC_NO_MODEL_CALL` simulation. Package C local generation requires an explicitly supplied and reviewed ReportDesign; it does not invent a layout or call a model. These paths prove durable governed mechanics, not general AI understanding or AI report-design judgement. Package C does not add projects, expert takeover, billing, live Entra qualification, Azure provisioning, hosted generation, Power BI Service publishing, gateway/credential automation, Power BI Desktop PASS or deployment.
+All runtime limits and policies are explicit configuration. `APBRA_UPLOAD_POLICY_JSON`, `APBRA_CLARIFICATION_POLICY_JSON`, `APBRA_GENERATION_POLICY_JSON`, both bridge timeouts and the three storage roots must be present. The checked-in Compose profile leaves `APBRA_AUTOMATIC_GENERATION_ENABLED=false`: deterministic upload, confirmation, history and expert paths remain available, while automatic analysis/design fails truthfully as unavailable. To enable it, supply one accepted `APBRA_MODEL_PROVIDER_PROFILE_JSON` and `APBRA_MODEL_PROVIDER_API_KEY` outside source control. APBRA never selects a model, deployment, endpoint, region, quota or fallback implicitly.
+
+Before enabling a real provider, verify the selected account's current official entitlement, structured-output support, quota, region, permissions and pricing. Enabling it may incur external-provider charges; the repository does not authorize purchases or paid capacity. A configuration change does not prove model quality, service availability, Power BI Desktop PASS, publishing, gateway credentials or successful deployment.

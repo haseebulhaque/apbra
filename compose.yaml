@@ -33,10 +33,17 @@ services:
       APBRA_BOOTSTRAP_ENABLED: "true"
       APBRA_INVITATION_TTL_DAYS: "7"
       APBRA_EVIDENCE_ROOT: /var/lib/apbra/evidence
+      APBRA_REFERENCE_ROOT: /var/lib/apbra/references
       APBRA_ARTIFACT_ROOT: /var/lib/apbra/artifacts
       APBRA_SEMANTIC_BRIDGE_PATH: /app/runtime/apbra-semantic-bridge.mjs
       APBRA_GENERATION_BRIDGE_PATH: /app/runtime/apbra-generation-bridge.mjs
       APBRA_SEMANTIC_NODE_PATH: /usr/local/bin/node
+      APBRA_SEMANTIC_TIMEOUT_SECONDS: "30"
+      APBRA_GENERATION_TIMEOUT_SECONDS: "60"
+      APBRA_UPLOAD_POLICY_JSON: '{"data_extensions":["CSV","XLSX"],"reference_extensions":["PNG","JPG","JPEG"],"max_file_bytes":5000000,"max_files_per_selection":8,"max_data_items_per_report":20,"max_reference_items_per_report":20}'
+      APBRA_CLARIFICATION_POLICY_JSON: '{"max_rounds":3,"max_questions_per_round":5,"max_answer_characters":2000}'
+      APBRA_GENERATION_POLICY_JSON: '{"organisation":{"name":"APBRA local","displayName":"APBRA local","locale":"en-AU","timezone":"Australia/Sydney"},"branding":{"primary":"#17635E","accent":"#2D7D9A","reportNaming":"Concise business report titles","pageNaming":"Short page names","executiveConvention":"Accessible summaries","themeName":"APBRA local"},"generation":{"enabled":true,"supportedCapabilities":["KPI cards","Bar and column charts","Line charts","Tables","Slicers","Multiple pages","Explicit measures"],"supportedTrendGrains":["DAY","MONTH","QUARTER","YEAR"],"validationRequired":true,"policy":"Local governed candidate generation"},"governance":{"requireKnowledge":true,"requireAccessibility":true,"requireValidation":true,"maxVisualsPerPage":20,"maxPages":5,"humanReviewAtVisuals":15}}'
+      APBRA_AUTOMATIC_GENERATION_ENABLED: "false"
     command:
       - /bin/sh
       - -ec
@@ -54,9 +61,11 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - apbra_evidence_data:/var/lib/apbra/evidence
+      - apbra_reference_data:/var/lib/apbra/references
       - apbra_artifact_data:/var/lib/apbra/artifacts
 
 volumes:
   apbra_postgres_data:
   apbra_evidence_data:
+  apbra_reference_data:
   apbra_artifact_data:

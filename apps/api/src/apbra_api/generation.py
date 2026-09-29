@@ -23,6 +23,7 @@ from .domain import (
     ApplicationPersistence,
     ArtifactUnavailable,
     Conflict,
+    DesignProposalUnavailable,
     GenerationAttemptRecord,
     GenerationFailed,
     GenerationUnavailable,
@@ -40,6 +41,11 @@ from .evidence import (
     _xml,
     parse_evidence,
     schema_digest,
+)
+from .model_provider import (
+    ModelProvider,
+    ProviderCallError,
+    ProviderRequest,
 )
 
 MAX_BRIDGE_BYTES = 20_000_000
@@ -367,16 +373,45 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
     }
 
 
+def design_attempt_json(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "confirmed_contract_id": str(row.confirmed_contract_id),
+        "status": row.status,
+        "provider_profile_id": row.provider_profile_id,
+        "model_or_deployment": row.model_or_deployment,
+        "prompt_version": row.prompt_version,
+        "configuration_id": row.configuration_id,
+        "capability_profile": json.loads(row.capability_profile_json),
+        "usage": json.loads(row.usage_json),
+        "failure": (
+            {"code": row.safe_failure_code, "message": "The design proposal was not eligible."}
+            if row.safe_failure_code
+            else None
+        ),
+        "validation": json.loads(row.validation_json) if row.validation_json else None,
+        "created_at": row.created_at.isoformat(),
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+    }
+
+
 class GenerationService:
     def __init__(
         self,
         bridge: GenerationBridge | None,
         evidence_objects: LocalEvidenceStore,
         artifact_objects: LocalArtifactStore,
+        *,
+        reference_objects: LocalEvidenceStore | None = None,
+        model_provider: ModelProvider | None = None,
+        generation_policy: dict[str, Any] | None = None,
     ) -> None:
         self.bridge = bridge
         self.evidence_objects = evidence_objects
         self.artifact_objects = artifact_objects
+        self.reference_objects = reference_objects
+        self.model_provider = model_provider
+        self.generation_policy = generation_policy
 
     def _current_payload(
         self,
@@ -423,6 +458,27 @@ class GenerationService:
             "parsedAt": max(row.created_at for row in evidence).isoformat(),
         }
         evidence_digest = canonical_digest(bindings)
+        references: list[dict[str, Any]] = []
+        for row in store.reference_materials(case_id):
+            if row.request_version_id != case.current_request_version_id:
+                continue
+            if self.reference_objects is None:
+                raise GenerationUnavailable()
+            try:
+                self.reference_objects.read(row.storage_key, row.content_digest)
+            except EvidenceError as exc:
+                raise GenerationUnavailable() from exc
+            references.append(
+                {
+                    "id": str(row.id),
+                    "requestVersionId": str(row.request_version_id),
+                    "filename": row.filename,
+                    "mediaType": row.media_type,
+                    "contentDigest": row.content_digest,
+                    "interpretationState": row.interpretation_state,
+                    "capabilityProfileId": row.capability_profile_id,
+                }
+            )
         payload = {
             "contract": contract_value,
             "dataStructure": data_structure,
@@ -433,8 +489,11 @@ class GenerationService:
                 "interpretationId": str(latest.id),
                 "confirmedContractId": str(contract.id),
                 "evidence": bindings,
+                "referenceMaterial": references,
             },
         }
+        if self.generation_policy is not None:
+            payload["generationPolicy"] = self.generation_policy
         return payload, canonical_digest(payload), evidence_digest, case, contract
 
     def history(self, db: object, actor: Actor, case_id: UUID) -> list[dict[str, Any]]:
@@ -480,24 +539,46 @@ class GenerationService:
             or not hmac.compare_digest(
                 row.binding_digest, hashlib.sha256(row.binding_json.encode()).hexdigest()
             )
-            or row.reviewer_role != Role.EXPERT.value
         ):
             raise ReviewedDesignRequired()
-        reviewer = store.active_actor(
-            row.reviewer_membership_id, row.reviewer_identity_id, lock=lock_access
-        )
-        if (
-            reviewer is None
-            or reviewer.company_id != actor.company_id
-            or reviewer.role != Role.EXPERT
-        ):
+        if row.origin == "EXPERT_REVIEWED":
+            if (
+                row.reviewer_membership_id is None
+                or row.reviewer_identity_id is None
+                or row.reviewer_role != Role.EXPERT.value
+            ):
+                raise ReviewedDesignRequired()
+            reviewer = store.active_actor(
+                row.reviewer_membership_id, row.reviewer_identity_id, lock=lock_access
+            )
+            if (
+                reviewer is None
+                or reviewer.company_id != actor.company_id
+                or reviewer.role != Role.EXPERT
+            ):
+                raise ReviewedDesignRequired()
+            try:
+                authorized_case_access(
+                    store, reviewer, case_id, require_edit=True, lock=lock_access
+                )
+            except ProtectedResourceNotFound as exc:
+                raise ReviewedDesignRequired() from exc
+        elif row.origin == "AUTO_ELIGIBLE":
+            try:
+                eligibility = json.loads(row.eligibility_validation_json or "")
+            except json.JSONDecodeError as exc:
+                raise ReviewedDesignRequired() from exc
+            if (
+                row.design_attempt_id is None
+                or not isinstance(eligibility, dict)
+                or eligibility.get("status") != "PASS"
+            ):
+                raise ReviewedDesignRequired()
+        else:
             raise ReviewedDesignRequired()
         try:
-            authorized_case_access(
-                store, reviewer, case_id, require_edit=True, lock=lock_access
-            )
             design = json.loads(row.design_json)
-        except (ProtectedResourceNotFound, json.JSONDecodeError) as exc:
+        except json.JSONDecodeError as exc:
             raise ReviewedDesignRequired() from exc
         if (
             not isinstance(design, dict)
@@ -570,12 +651,228 @@ class GenerationService:
         )
         return self._reviewed_design_json(row)
 
+    def propose_automatic_design(
+        self,
+        db: object,
+        actor: Actor,
+        case_id: UUID,
+        *,
+        contract_id: UUID,
+        command_key: str,
+    ) -> tuple[dict[str, Any], bool]:
+        store = cast(ApplicationPersistence, db)
+        if self.bridge is None or self.model_provider is None or self.generation_policy is None:
+            raise DesignProposalUnavailable()
+        payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
+            store, actor, case_id, contract_id, lock_access=True
+        )
+        references = cast(list[dict[str, Any]], payload["binding"]["referenceMaterial"])
+        reference_digest = canonical_digest(references)
+        requirement_digest = canonical_digest(
+            {"contract": payload["contract"], "binding": payload["binding"]}
+        )
+        command_digest = canonical_digest(
+            {
+                "contractId": str(contract_id),
+                "semanticInputDigest": semantic_digest,
+                "profileId": self.model_provider.profile.profile_id,
+                "configurationId": self.model_provider.profile.configuration_id,
+            }
+        )
+        existing = store.design_attempt_by_command(actor, case_id, command_key)
+        if existing is not None:
+            if not hmac.compare_digest(existing.command_payload_digest, command_digest):
+                raise IdempotencyConflict()
+            design = next(
+                (
+                    self._reviewed_design_json(row)
+                    for row in store.reviewed_designs(case_id, contract_id)
+                    if row.design_attempt_id == existing.id
+                ),
+                None,
+            )
+            return {"attempt": design_attempt_json(existing), "reviewed_design": design}, False
+        attempt = store.create_design_attempt(
+            actor,
+            case_id,
+            contract.id,
+            contract.interpretation_id,
+            case.current_request_version_id,
+            case.semantic_context_version,
+            command_key,
+            command_digest,
+            requirement_digest,
+            evidence_digest,
+            reference_digest,
+        )
+        store.add_audit(actor, "AUTOMATIC_DESIGN_STARTED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id)
+        cast(Any, db).commit()
+        try:
+            provider_result = self.model_provider.structured(
+                ProviderRequest(
+                    task="REPORT_DESIGN",
+                    system_prompt=(
+                        "Propose a generic Power BI ReportDesign for the exact confirmed business "
+                        "requirements and qualified schema. Preserve every measure, operand, "
+                        "dimension, filter, time grain and business question. Use only evidenced "
+                        "Table.Column fields and supported typed operations. Do not assert access, "
+                        "confirmation, validation, approval or eligibility. Do not emit executable "
+                        "DAX, M or SQL. Reference-material metadata marked NOT_INTERPRETED conveys "
+                        "no visual semantics. Return only the requested structured candidate."
+                    ),
+                    context={
+                        "confirmedRequirements": payload["contract"],
+                        "dataStructure": payload["dataStructure"],
+                        "referenceMaterial": references,
+                        "generationPolicy": self.generation_policy,
+                    },
+                    output_schema={
+                        "type": "object",
+                        "required": ["artifact_kind", "schema_version", "pages"],
+                        "properties": {
+                            "artifact_kind": {"const": "ReportDesign"},
+                            "schema_version": {"const": 1},
+                            "pages": {"type": "array", "minItems": 1},
+                        },
+                        "additionalProperties": True,
+                    },
+                )
+            )
+            candidate = provider_result.value
+            candidate_json = json.dumps(
+                candidate, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            attempt.provider_profile_id = provider_result.profile_id
+            attempt.model_or_deployment = provider_result.model_or_deployment
+            attempt.prompt_version = provider_result.prompt_version
+            attempt.configuration_id = provider_result.configuration_id
+            attempt.capability_profile_json = json.dumps(
+                provider_result.capability_profile, sort_keys=True, separators=(",", ":")
+            )
+            attempt.usage_json = json.dumps(
+                {
+                    **provider_result.usage,
+                    "latency_ms": provider_result.latency_ms,
+                    "call_count": provider_result.call_count,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            attempt.candidate_digest = hashlib.sha256(candidate_json.encode()).hexdigest()
+            validation_payload = {**payload, "reportDesign": candidate}
+            input_digest = canonical_digest(validation_payload)
+            validation_payload["execution"] = {
+                "inputDigest": input_digest,
+                "pipelineExecutableDigest": self.bridge.pipeline_digest,
+            }
+            result = self.bridge.generate(validation_payload)
+            validation = cast(dict[str, Any], result["validation"])
+            normalized = cast(dict[str, Any], result["provenance"])["reportDesign"]
+            if not isinstance(normalized, dict) or validation.get("status") != "PASS":
+                raise GenerationFailed()
+            active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+            if active_actor is None or active_actor.company_id != actor.company_id:
+                raise GenerationFailed()
+            current_payload, current_digest, current_evidence, current_case, _ = (
+                self._current_payload(
+                    store, active_actor, case_id, contract_id, lock_access=True
+                )
+            )
+            if (
+                not hmac.compare_digest(current_digest, semantic_digest)
+                or not hmac.compare_digest(current_evidence, evidence_digest)
+                or current_case.semantic_context_version != attempt.semantic_context_version
+            ):
+                raise StaleVersion()
+            normalized_json = json.dumps(
+                normalized, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            pages = normalized.get("pages")
+            if not isinstance(pages, list):
+                raise GenerationFailed()
+            visual_count = sum(
+                len(page.get("visuals", []))
+                for page in pages
+                if isinstance(page, dict) and isinstance(page.get("visuals"), list)
+            )
+            summary = {
+                "page_count": len(pages),
+                "visual_count": visual_count,
+                "description": "Automatically eligible report plan for the confirmed requirements",
+            }
+            binding_json = json.dumps(
+                current_payload["binding"], sort_keys=True, separators=(",", ":")
+            )
+            validation_json = json.dumps(
+                validation, sort_keys=True, separators=(",", ":")
+            )
+            reviewed = store.add_reviewed_design(
+                active_actor,
+                case_id,
+                contract.id,
+                contract.interpretation_id,
+                current_case.current_request_version_id,
+                current_case.semantic_context_version,
+                binding_json,
+                hashlib.sha256(binding_json.encode()).hexdigest(),
+                current_digest,
+                current_evidence,
+                normalized_json,
+                hashlib.sha256(normalized_json.encode()).hexdigest(),
+                json.dumps(summary, sort_keys=True, separators=(",", ":")),
+                origin="AUTO_ELIGIBLE",
+                design_attempt_id=attempt.id,
+                eligibility_validation_json=validation_json,
+            )
+            attempt.status = "ELIGIBLE"
+            attempt.validation_json = validation_json
+            attempt.completed_at = datetime.now(UTC)
+            store.add_audit(
+                active_actor,
+                "AUTOMATIC_DESIGN_ELIGIBLE",
+                "AUTOMATIC_DESIGN_ATTEMPT",
+                attempt.id,
+            )
+            cast(Any, db).commit()
+            return {
+                "attempt": design_attempt_json(attempt),
+                "reviewed_design": self._reviewed_design_json(reviewed),
+            }, True
+        except Exception as exc:
+            cast(Any, db).rollback()
+            failure_code = (
+                exc.code
+                if isinstance(exc, (ProviderCallError, GenerationFailed))
+                else "AUTOMATIC_DESIGN_VALIDATION_FAILED"
+            )
+            attempt.status = "FAILED"
+            attempt.safe_failure_code = failure_code
+            attempt.completed_at = datetime.now(UTC)
+            store.add_audit(
+                actor, "AUTOMATIC_DESIGN_FAILED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id
+            )
+            cast(Any, db).commit()
+            raise DesignProposalUnavailable() from exc
+
+    def automatic_design_history(
+        self, db: object, actor: Actor, case_id: UUID, contract_id: UUID
+    ) -> list[dict[str, Any]]:
+        store = cast(ApplicationPersistence, db)
+        self._current_payload(store, actor, case_id, contract_id, require_edit=False)
+        return [design_attempt_json(row) for row in store.design_attempts(case_id, contract_id)]
+
     @staticmethod
     def _reviewed_design_json(row: ReviewedReportDesignRecord) -> dict[str, Any]:
         return {
             "id": str(row.id),
             "confirmed_contract_id": str(row.confirmed_contract_id),
             "summary": json.loads(row.summary_json),
+            "origin": row.origin,
+            "provenance_label": (
+                "Automatically eligible"
+                if row.origin == "AUTO_ELIGIBLE"
+                else "Expert reviewed"
+            ),
             "reviewed_at": row.reviewed_at.isoformat(),
         }
 

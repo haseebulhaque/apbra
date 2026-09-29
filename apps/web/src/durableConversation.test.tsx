@@ -9,9 +9,9 @@ it('labels durable messages and qualified evidence without claiming generated ou
   const html=renderToStaticMarkup(<DurableConversation record={record} csrfToken="csrf" onContextChanged={()=>{}} onError={()=>{}}/>);
   expect(html).toContain('Your report journey');
   expect(html).toContain('Shape your report');
-  expect(html).toContain('Add a business message');
-  expect(html).toContain('Add CSV or XLSX evidence');
-  expect(html).toContain('confirmation is not available without supported evidence');
+  expect(html).toContain('Add more requirements');
+  expect(html).toContain('Data and reference material');
+  expect(html).toContain('Confirmation requires a qualified data source');
   expect(html).toContain('Review the understanding');
   for(const step of ['Goal','Information','Understanding','Confirm','Build','Report'])expect(html).toContain(`<strong>${step}</strong>`);
   expect(html).toContain('aria-current="step"');
