@@ -23,10 +23,30 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
 
   await page.getByLabel('Current business request').fill(`${request} Include carrier category.`);
   await page.getByRole('button',{name:'Save new version'}).click();
-  await expect(page.getByText('A new immutable request version was saved.')).toBeVisible();
-  await expect(page.getByText('Request history · 2 immutable versions')).toBeVisible();
+  await expect(page.getByText('Your updated request was saved.')).toBeVisible();
+  await expect(page.getByText('Earlier request versions · 2')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Private case access'})).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('business workspace remains keyboard navigable and contained on a small screen',async({page})=>{
+  await page.setViewportSize({width:375,height:812});
+  await signIn(page,'member');
+  const skip=page.getByRole('link',{name:'Skip to reporting workspace'});
+  await skip.focus();
+  await expect(skip).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#workspace-main$/);
+  await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Describe your reporting goal'})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
+  await page.getByLabel('Original business request').fill('Compare completed synthetic orders by depot.');
+  await page.getByRole('button',{name:'Create case'}).click();
+  const upload=page.getByLabel('Add CSV or XLSX evidence');
+  await upload.focus();
+  await expect(upload).toBeFocused();
+  await expect(page.locator('label.upload-button')).toHaveCSS('outline-style','solid');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
@@ -44,14 +64,14 @@ test('stale edits are rejected through the UI and reload recovers the current ve
   const saved=`${request} Include subscription tier.`;
   await page.getByLabel('Current business request').fill(saved);
   await page.getByRole('button',{name:'Save new version'}).click();
-  await expect(page.getByText('A new immutable request version was saved.')).toBeVisible();
+  await expect(page.getByText('Your updated request was saved.')).toBeVisible();
 
   await otherTab.getByLabel('Current business request').fill(`${request} Include support channel.`);
   await otherTab.getByRole('button',{name:'Save new version'}).click();
   await expect(otherTab.getByRole('alert')).toContainText('This case changed in another session. Reload it before saving your changes.');
   await otherTab.getByRole('button',{name:'Reload'}).click();
   await expect(otherTab.getByLabel('Current business request')).toHaveValue(saved);
-  await expect(otherTab.getByText('Request history · 2 immutable versions')).toBeVisible();
+  await expect(otherTab.getByText('Earlier request versions · 2')).toBeVisible();
 });
 
 test('an expired application session is reported truthfully by the protected UI handler',async({page,context})=>{
@@ -71,7 +91,9 @@ test('an expired application session is reported truthfully by the protected UI 
 
 test('an invited identity accepts the exact single-use invitation through OIDC and the UI',async({page,browser})=>{
   await signIn(page,'owner');
+  await page.getByText('Manage company access').click();
   await page.getByLabel('External subject').fill('dev-uninvited');
+  await page.getByLabel('Application role').selectOption('EXPERT');
   await page.getByRole('button',{name:'Issue invitation'}).click();
   const invitationLink=await page.getByLabel('One-time invitation link').inputValue();
   expect(invitationLink).toMatch(/\/invite#token=/);
@@ -97,6 +119,7 @@ test('case owner grants and revokes named private access through the real UI',as
   await page.getByRole('button',{name:'Create case'}).click();
   await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
 
+  await page.getByText('Manage private case access').click();
   await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
   await page.getByRole('button',{name:'Grant case access'}).click();
   await expect(page.getByText('dev-member · viewer')).toBeVisible();

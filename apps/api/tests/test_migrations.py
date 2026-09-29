@@ -1,3 +1,4 @@
+import hashlib
 from uuid import uuid4
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from test_generation import confirmed_case
 
 from alembic import command
 from apbra_api.config import Settings
@@ -22,6 +24,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
         "case_request_versions",
         "generation_attempts",
         "generated_artifacts",
+        "reviewed_report_designs",
     }.issubset(set(inspector.get_table_names()))
     assert "uq_generation_case_active" in {
         index["name"] for index in inspector.get_indexes("generation_attempts")
@@ -29,7 +32,66 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260924_03"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_04"
+
+
+def test_package_c_to_reviewed_design_upgrade_is_isolated(
+    settings: Settings, database: Database, client: TestClient
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Compare completed cases by team.", "cases.csv",
+        b"Team,Completed\nA,4\nB,7\n",
+    )
+    generated = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": contract["reviewed_design_id"],
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert generated.status_code == 201, generated.text
+    original = generated.json()["attempt"]
+    assert original["status"] == "SUCCEEDED"
+    original_bytes = client.get(
+        f"/api/cases/{case['id']}/generation/{original['id']}/artifact"
+    ).content
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20260924_03")
+    inspector = inspect(database.engine)
+    assert "reviewed_report_designs" not in inspector.get_table_names()
+    assert "reviewed_design_id" not in {
+        column["name"] for column in inspector.get_columns("generation_attempts")
+    }
+    with database.session() as db:
+        historical = db.execute(
+            text("SELECT status, artifact_id FROM generation_attempts WHERE id=:id"),
+            {"id": original["id"]},
+        ).one()
+        assert historical.status == "SUCCEEDED"
+        assert str(historical.artifact_id) == original["artifact"]["id"]
+    command.upgrade(config, "20260929_04")
+    inspector = inspect(database.engine)
+    assert "reviewed_report_designs" in inspector.get_table_names()
+    assert "reviewed_design_id" in {
+        column["name"] for column in inspector.get_columns("generation_attempts")
+    }
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_04"
+        historical = db.execute(
+            text("SELECT status, artifact_id, reviewed_design_id "
+                 "FROM generation_attempts WHERE id=:id"),
+            {"id": original["id"]},
+        ).one()
+        assert historical.status == "SUCCEEDED"
+        assert str(historical.artifact_id) == original["artifact"]["id"]
+        assert historical.reviewed_design_id is None
+    restored = client.get(f"/api/cases/{case['id']}/generation/{original['id']}/artifact")
+    assert restored.status_code == 200
+    assert restored.content == original_bytes
+    assert hashlib.sha256(restored.content).hexdigest() == original["artifact"]["content_digest"]
 
 
 def test_first_migration_downgrades_and_reapplies_explicit_schema(

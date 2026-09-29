@@ -23,30 +23,35 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
 
   const message='Use monthly periods and keep maintenance class available for filtering.';
   await page.getByLabel('Add a business message').fill(message);
+  const savedMessage=page.waitForResponse(response=>response.url().endsWith('/conversation')&&response.request().method()==='POST');
   await page.getByRole('button',{name:'Save message'}).click();
+  expect((await savedMessage).status()).toBe(200);
+  await expect(page.getByLabel('Add a business message')).toBeEmpty();
   await expect(page.getByText(message,{exact:true})).toBeVisible();
-  await expect(page.getByText('Context 2',{exact:true})).toBeVisible();
 
   await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({
     name:'fleet.csv',
     mimeType:'text/csv',
     buffer:Buffer.from('Date,Depot,Availability\n2026-01-01,North,0.96\n'),
   });
+  await page.getByText('Supporting information · 1').click();
   await expect(page.getByText(/fleet\.csv.*CSV/)).toBeVisible();
-  await expect(page.getByText('Depot (text), Availability (decimal)')).toBeVisible();
+  await page.getByText('Source details').click();
+  await expect(page.getByText(/Depot \(text\).*Availability \(decimal\)/)).toBeVisible();
   await page.getByRole('button',{name:'Prepare understanding'}).click();
   await expect(page.getByText('Clarification required',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:/Summarise Availability and compare it by Depot/}).click();
-  await expect(page.getByText('Local deterministic interpretation preview — no AI/model call.')).toBeVisible();
+  await expect(page.getByText('This local preview uses deterministic rules to propose an understanding; no AI model was called.')).toBeVisible();
   await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
-  await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
+  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
 
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await expect(page.getByText(message,{exact:true})).toBeVisible();
+  await page.getByText('Supporting information · 1').click();
   await expect(page.getByText(/fleet\.csv.*CSV/)).toBeVisible();
-  await expect(page.getByText('Qualified evidence · 1')).toBeVisible();
-  await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
+  await expect(page.getByText('Supporting information · 1')).toBeVisible();
+  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
   await page.getByLabel('Current business request').fill('Compare synthetic fleet availability by depot and maintenance class.');
   await page.getByRole('button',{name:'Save new version'}).click();
   await expect(page.getByText(/Reconfirmation required/)).toBeVisible();
@@ -59,16 +64,19 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await page.getByRole('button',{name:'Create case'}).click();
   const workbook=supportedXlsx();
   await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
+  await page.getByText('Supporting information · 1').click();
   await expect(page.getByText(/appointments\.xlsx.*XLSX/)).toBeVisible();
-  await expect(page.getByText('Clinic (text), WaitMinutes (integer)')).toBeVisible();
+  await page.getByText('Source details').click();
+  await expect(page.getByText(/Clinic \(text\).*WaitMinutes \(integer\)/)).toBeVisible();
   await page.getByRole('button',{name:'Prepare understanding'}).click();
-  await expect(page.getByText('Local deterministic interpretation preview — no AI/model call.')).toBeVisible();
+  await expect(page.getByText('This local preview uses deterministic rules to propose an understanding; no AI model was called.')).toBeVisible();
   await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
-  await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
+  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await page.getByText('Supporting information · 1').click();
   await expect(page.getByText(/appointments\.xlsx.*XLSX/)).toBeVisible();
-  await expect(page.getByText('ConfirmedRequirementContract v2 created')).toBeVisible();
+  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
 });
 
 test('a late interpretation response cannot repaint a newer request as current',async({page})=>{
@@ -95,8 +103,8 @@ test('a late interpretation response cannot repaint a newer request as current',
     'Compare the revised maintenance schedule by facility.',
   );
   await page.getByRole('button',{name:'Save new version'}).click();
-  await expect(page.getByText('A new immutable request version was saved.')).toBeVisible();
+  await expect(page.getByText('Your updated request was saved.')).toBeVisible();
   release();
-  await expect(page.getByText('Local deterministic interpretation preview — no AI/model call.')).toHaveCount(0);
+  await expect(page.getByText('This local preview uses deterministic rules to propose an understanding; no AI model was called.')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Prepare understanding'})).toBeDisabled();
 });

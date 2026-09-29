@@ -27,6 +27,10 @@ from .domain import (
     GenerationFailed,
     GenerationUnavailable,
     IdempotencyConflict,
+    ProtectedResourceNotFound,
+    ReviewedDesignRequired,
+    ReviewedReportDesignRecord,
+    Role,
     StaleVersion,
 )
 from .evidence import (
@@ -330,6 +334,7 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
         "id": str(row.id),
         "case_id": str(row.case_id),
         "confirmed_contract_id": str(row.confirmed_contract_id),
+        "reviewed_design_id": str(row.reviewed_design_id) if row.reviewed_design_id else None,
         "interpretation_id": str(row.interpretation_id),
         "request_version_id": str(row.request_version_id),
         "status": row.status,
@@ -381,8 +386,11 @@ class GenerationService:
         contract_id: UUID,
         *,
         lock_access: bool = False,
+        require_edit: bool = True,
     ) -> tuple[dict[str, Any], str, str, Any, Any]:
-        authorized_case_access(store, actor, case_id, require_edit=True, lock=lock_access)
+        authorized_case_access(
+            store, actor, case_id, require_edit=require_edit, lock=lock_access
+        )
         case = store.locked_case(case_id)
         contract = store.confirmed_contract_for_case(case_id, contract_id)
         latest = store.latest_interpretation(case_id)
@@ -429,7 +437,7 @@ class GenerationService:
         }
         return payload, canonical_digest(payload), evidence_digest, case, contract
 
-    def list(self, db: object, actor: Actor, case_id: UUID) -> list[dict[str, Any]]:
+    def history(self, db: object, actor: Actor, case_id: UUID) -> list[dict[str, Any]]:
         store = cast(ApplicationPersistence, db)
         authorized_case_access(store, actor, case_id)
         return [attempt_json(store, row) for row in store.generation_attempts(case_id)]
@@ -442,6 +450,163 @@ class GenerationService:
             raise GenerationUnavailable()
         return attempt_json(store, row)
 
+    def _eligible_design(
+        self,
+        store: ApplicationPersistence,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        design_id: UUID,
+        payload: dict[str, Any],
+        semantic_input_digest: str,
+        evidence_digest: str,
+        *,
+        lock_access: bool = False,
+    ) -> tuple[ReviewedReportDesignRecord, dict[str, Any]]:
+        row = store.reviewed_design(case_id, design_id)
+        if (
+            row is None
+            or row.company_id != actor.company_id
+            or row.case_id != case_id
+            or row.confirmed_contract_id != contract_id
+            or row.interpretation_id != UUID(payload["binding"]["interpretationId"])
+            or row.request_version_id != UUID(payload["binding"]["requestVersionId"])
+            or row.semantic_context_version != payload["binding"]["semanticContextVersion"]
+            or row.evidence_binding_digest != evidence_digest
+            or row.semantic_input_digest != semantic_input_digest
+            or not hmac.compare_digest(
+                row.binding_digest, canonical_digest(payload["binding"])
+            )
+            or not hmac.compare_digest(
+                row.binding_digest, hashlib.sha256(row.binding_json.encode()).hexdigest()
+            )
+            or row.reviewer_role != Role.EXPERT.value
+        ):
+            raise ReviewedDesignRequired()
+        reviewer = store.active_actor(
+            row.reviewer_membership_id, row.reviewer_identity_id, lock=lock_access
+        )
+        if (
+            reviewer is None
+            or reviewer.company_id != actor.company_id
+            or reviewer.role != Role.EXPERT
+        ):
+            raise ReviewedDesignRequired()
+        try:
+            authorized_case_access(
+                store, reviewer, case_id, require_edit=True, lock=lock_access
+            )
+            design = json.loads(row.design_json)
+        except (ProtectedResourceNotFound, json.JSONDecodeError) as exc:
+            raise ReviewedDesignRequired() from exc
+        if (
+            not isinstance(design, dict)
+            or not hmac.compare_digest(
+                row.content_digest, hashlib.sha256(row.design_json.encode()).hexdigest()
+            )
+        ):
+            raise ReviewedDesignRequired()
+        return row, design
+
+    def intake_reviewed_design(
+        self,
+        db: object,
+        actor: Actor,
+        case_id: UUID,
+        *,
+        contract_id: UUID,
+        report_design: dict[str, Any],
+    ) -> dict[str, Any]:
+        store = cast(ApplicationPersistence, db)
+        reviewer = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if (
+            reviewer is None
+            or reviewer.company_id != actor.company_id
+            or reviewer.role != Role.EXPERT
+        ):
+            raise ProtectedResourceNotFound()
+        payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
+            store, reviewer, case_id, contract_id, lock_access=True
+        )
+        try:
+            design_json = json.dumps(
+                report_design, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+        except (TypeError, ValueError) as exc:
+            raise ReviewedDesignRequired() from exc
+        if (
+            report_design.get("artifact_kind") != "ReportDesign"
+            or report_design.get("schema_version") != 1
+            or not isinstance(report_design.get("pages"), list)
+            or len(design_json.encode()) > MAX_BRIDGE_BYTES
+        ):
+            raise ReviewedDesignRequired()
+        pages = report_design["pages"]
+        visual_count = sum(
+            len(page.get("visuals", []))
+            for page in pages
+            if isinstance(page, dict) and isinstance(page.get("visuals"), list)
+        )
+        summary = {
+            "page_count": len(pages),
+            "visual_count": visual_count,
+            "description": "Expert-reviewed report plan for the current confirmed request",
+        }
+        binding_json = json.dumps(payload["binding"], sort_keys=True, separators=(",", ":"))
+        row = store.add_reviewed_design(
+            reviewer,
+            case_id,
+            contract.id,
+            contract.interpretation_id,
+            case.current_request_version_id,
+            case.semantic_context_version,
+            binding_json,
+            hashlib.sha256(binding_json.encode()).hexdigest(),
+            semantic_digest,
+            evidence_digest,
+            design_json,
+            hashlib.sha256(design_json.encode()).hexdigest(),
+            json.dumps(summary, sort_keys=True, separators=(",", ":")),
+        )
+        return self._reviewed_design_json(row)
+
+    @staticmethod
+    def _reviewed_design_json(row: ReviewedReportDesignRecord) -> dict[str, Any]:
+        return {
+            "id": str(row.id),
+            "confirmed_contract_id": str(row.confirmed_contract_id),
+            "summary": json.loads(row.summary_json),
+            "reviewed_at": row.reviewed_at.isoformat(),
+        }
+
+    def list_reviewed_designs(
+        self, db: object, actor: Actor, case_id: UUID, contract_id: UUID
+    ) -> dict[str, Any]:
+        store = cast(ApplicationPersistence, db)
+        payload, semantic_digest, evidence_digest, _, _ = self._current_payload(
+            store, actor, case_id, contract_id, require_edit=False
+        )
+        result = []
+        for row in store.reviewed_designs(case_id, contract_id):
+            try:
+                self._eligible_design(
+                    store, actor, case_id, contract_id, row.id,
+                    payload, semantic_digest, evidence_digest,
+                )
+            except ReviewedDesignRequired:
+                continue
+            result.append(self._reviewed_design_json(row))
+        try:
+            authorized_case_access(store, actor, case_id, require_edit=True)
+            can_build = True
+        except ProtectedResourceNotFound:
+            can_build = False
+        return {
+            "items": result,
+            "can_build": can_build,
+            "can_submit": can_build and actor.role == Role.EXPERT,
+        }
+
     def start(
         self,
         db: object,
@@ -452,7 +617,7 @@ class GenerationService:
         command_key: str,
         mode: str = "BUILD",
         source_attempt_id: UUID | None = None,
-        report_design: dict[str, Any] | None = None,
+        reviewed_design_id: UUID | None = None,
     ) -> tuple[dict[str, Any], bool]:
         store = cast(ApplicationPersistence, db)
         if self.bridge is None:
@@ -460,11 +625,18 @@ class GenerationService:
         payload, semantic_input_digest, evidence_digest, case, contract = self._current_payload(
             store, actor, case_id, contract_id
         )
+        if reviewed_design_id is None:
+            raise ReviewedDesignRequired()
+        reviewed, report_design = self._eligible_design(
+            store, actor, case_id, contract_id, reviewed_design_id,
+            payload, semantic_input_digest, evidence_digest,
+        )
         payload["reportDesign"] = report_design
         semantic_input_digest = canonical_digest(payload)
         input_digest = canonical_digest(
             {
                 "semanticInputDigest": semantic_input_digest,
+                "reviewedDesignId": str(reviewed.id),
                 "pipelineExecutableDigest": self.bridge.pipeline_digest,
             }
         )
@@ -529,6 +701,8 @@ class GenerationService:
             "commandPayloadDigest": command_payload_digest,
             "inputDigest": input_digest,
             "evidenceBindingDigest": evidence_digest,
+            "reviewedDesignId": str(reviewed.id),
+            "reviewedDesignDigest": reviewed.content_digest,
             "runtimeEvidence": {
                 "powerBiDesktop": "NOT_RUN",
                 "dax": "NOT_RUN",
@@ -547,6 +721,7 @@ class GenerationService:
             input_digest,
             evidence_digest,
             json.dumps(provenance, sort_keys=True, separators=(",", ":")),
+            reviewed.id,
             retry_of_attempt_id=retry_of,
             supersedes_attempt_id=supersedes,
         )
@@ -566,7 +741,16 @@ class GenerationService:
             active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
             if active_actor is None or active_actor.company_id != actor.company_id:
                 raise GenerationFailed()
-            self._current_payload(store, active_actor, case_id, contract_id, lock_access=True)
+            current_payload, current_digest, current_evidence_digest, _, _ = (
+                self._current_payload(
+                    store, active_actor, case_id, contract_id, lock_access=True
+                )
+            )
+            self._eligible_design(
+                store, active_actor, case_id, contract_id, reviewed.id,
+                current_payload, current_digest, current_evidence_digest,
+                lock_access=True,
+            )
             storage_key, digest, size = self.artifact_objects.write(
                 actor.company_id, case_id, row.id, content
             )

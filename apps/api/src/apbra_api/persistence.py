@@ -426,6 +426,82 @@ class ConfirmedContractRow(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ReviewedReportDesignRow(Base):
+    __tablename__ = "reviewed_report_designs"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_reviewed_design_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["confirmed_contract_id", "case_id", "company_id"],
+            [
+                "confirmed_requirement_contracts.id",
+                "confirmed_requirement_contracts.case_id",
+                "confirmed_requirement_contracts.company_id",
+            ],
+            name="fk_reviewed_design_contract_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["interpretation_id", "case_id", "company_id"],
+            [
+                "case_interpretation_versions.id",
+                "case_interpretation_versions.case_id",
+                "case_interpretation_versions.company_id",
+            ],
+            name="fk_reviewed_design_interpretation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_reviewed_design_request_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["reviewer_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_reviewed_design_reviewer_company",
+        ),
+        ForeignKeyConstraint(
+            ["reviewer_identity_id"],
+            ["external_identities.id"],
+            name="fk_reviewed_design_reviewer_identity",
+        ),
+        UniqueConstraint(
+            "id", "case_id", "company_id", "confirmed_contract_id",
+            name="uq_reviewed_design_attempt_binding",
+        ),
+        CheckConstraint("reviewer_role = 'EXPERT'", name="ck_reviewed_design_expert_role"),
+        CheckConstraint("semantic_context_version >= 1", name="ck_reviewed_design_context"),
+        Index(
+            "ix_reviewed_design_case_contract",
+            "case_id", "confirmed_contract_id", "reviewed_at",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    confirmed_contract_id: Mapped[UUID] = mapped_column(nullable=False)
+    interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    semantic_context_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    binding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    semantic_input_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    design_json: Mapped[str] = mapped_column(Text, nullable=False)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary_json: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewer_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    reviewer_identity_id: Mapped[UUID] = mapped_column(nullable=False)
+    reviewer_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class GenerationAttemptRow(Base):
     __tablename__ = "generation_attempts"
     __table_args__ = (
@@ -460,6 +536,16 @@ class GenerationAttemptRow(Base):
                 "case_request_versions.company_id",
             ],
             name="fk_generation_request_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["reviewed_design_id", "case_id", "company_id", "confirmed_contract_id"],
+            [
+                "reviewed_report_designs.id",
+                "reviewed_report_designs.case_id",
+                "reviewed_report_designs.company_id",
+                "reviewed_report_designs.confirmed_contract_id",
+            ],
+            name="fk_generation_reviewed_design_binding",
         ),
         ForeignKeyConstraint(
             ["created_by_membership_id", "company_id"],
@@ -497,6 +583,7 @@ class GenerationAttemptRow(Base):
     case_id: Mapped[UUID] = mapped_column(nullable=False)
     company_id: Mapped[UUID] = mapped_column(nullable=False)
     confirmed_contract_id: Mapped[UUID] = mapped_column(nullable=False)
+    reviewed_design_id: Mapped[UUID | None] = mapped_column()
     interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
     request_version_id: Mapped[UUID] = mapped_column(nullable=False)
     created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
@@ -1224,6 +1311,69 @@ class ApplicationSession(Session):
             )
         )
 
+    def add_reviewed_design(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        interpretation_id: UUID,
+        request_version_id: UUID,
+        semantic_context_version: int,
+        binding_json: str,
+        binding_digest: str,
+        semantic_input_digest: str,
+        evidence_binding_digest: str,
+        design_json: str,
+        content_digest: str,
+        summary_json: str,
+    ) -> ReviewedReportDesignRow:
+        row = ReviewedReportDesignRow(
+            company_id=actor.company_id,
+            case_id=case_id,
+            confirmed_contract_id=contract_id,
+            interpretation_id=interpretation_id,
+            request_version_id=request_version_id,
+            semantic_context_version=semantic_context_version,
+            binding_json=binding_json,
+            binding_digest=binding_digest,
+            semantic_input_digest=semantic_input_digest,
+            evidence_binding_digest=evidence_binding_digest,
+            design_json=design_json,
+            content_digest=content_digest,
+            summary_json=summary_json,
+            reviewer_membership_id=actor.membership_id,
+            reviewer_identity_id=actor.identity_id,
+            reviewer_role=actor.role.value,
+        )
+        self.add(row)
+        self.flush()
+        self.add_audit(actor, "REPORT_DESIGN_REVIEWED", "REVIEWED_REPORT_DESIGN", row.id)
+        return row
+
+    def reviewed_design(
+        self, case_id: UUID, design_id: UUID
+    ) -> ReviewedReportDesignRow | None:
+        return self.scalar(
+            select(ReviewedReportDesignRow).where(
+                ReviewedReportDesignRow.case_id == case_id,
+                ReviewedReportDesignRow.id == design_id,
+            )
+        )
+
+    def reviewed_designs(
+        self, case_id: UUID, contract_id: UUID
+    ) -> list[ReviewedReportDesignRow]:
+        return list(
+            self.scalars(
+                select(ReviewedReportDesignRow)
+                .where(
+                    ReviewedReportDesignRow.case_id == case_id,
+                    ReviewedReportDesignRow.confirmed_contract_id == contract_id,
+                )
+                .order_by(ReviewedReportDesignRow.reviewed_at.desc())
+            ).all()
+        )
+
     def generation_attempt_by_command(
         self, actor: Actor, case_id: UUID, command_key: str
     ) -> GenerationAttemptRow | None:
@@ -1272,6 +1422,7 @@ class ApplicationSession(Session):
         input_digest: str,
         evidence_binding_digest: str,
         provenance_json: str,
+        reviewed_design_id: UUID,
         *,
         retry_of_attempt_id: UUID | None = None,
         supersedes_attempt_id: UUID | None = None,
@@ -1285,6 +1436,7 @@ class ApplicationSession(Session):
             case_id=case_id,
             company_id=actor.company_id,
             confirmed_contract_id=contract_id,
+            reviewed_design_id=reviewed_design_id,
             interpretation_id=interpretation_id,
             request_version_id=request_version_id,
             created_by_membership_id=actor.membership_id,
