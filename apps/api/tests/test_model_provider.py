@@ -88,6 +88,53 @@ def test_exact_endpoint_structured_schema_and_safe_provenance_are_used() -> None
     assert body["response_format"]["json_schema"]["strict"] is True
 
 
+def test_deterministic_rejection_gets_one_configured_model_correction() -> None:
+    observed: list[httpx.Request] = []
+
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        observed.append(incoming)
+        value = {"pages": []} if len(observed) == 1 else {"pages": [{"id": "corrected"}]}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(value)}}],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
+            },
+        )
+
+    def validate(value: dict[str, object]) -> None:
+        if not value["pages"]:
+            raise RuntimeError("REPORT_DESIGN_SEMANTICS_FAILED")
+
+    provider = OpenAICompatibleProvider(
+        profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    base = request()
+    result = provider.structured(
+        ProviderRequest(
+            task=base.task,
+            system_prompt=base.system_prompt,
+            context=base.context,
+            output_schema=base.output_schema,
+            validator=validate,
+            retry_instruction=lambda exc: f"Correct this deterministic failure: {exc}",
+        )
+    )
+
+    assert result.value == {"pages": [{"id": "corrected"}]}
+    assert result.call_count == 2
+    assert result.usage["total_tokens"] == 36
+    assert len(observed) == 2
+    retry_body = json.loads(observed[1].content)
+    assert retry_body["messages"][-2] == {
+        "role": "assistant",
+        "content": json.dumps({"pages": []}),
+    }
+    assert retry_body["messages"][-1]["role"] == "user"
+    assert "REPORT_DESIGN_SEMANTICS_FAILED" in retry_body["messages"][-1]["content"]
+    assert "server-secret" not in retry_body["messages"][-1]["content"]
+
+
 def test_transient_failure_retries_only_within_the_exact_call_budget() -> None:
     calls = 0
 

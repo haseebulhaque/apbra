@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import os
 import selectors
 import subprocess
@@ -53,6 +54,7 @@ MAX_BRIDGE_BYTES = 20_000_000
 MAX_BRIDGE_EXECUTABLE_BYTES = 5_000_000
 MAX_CANDIDATE_FILES = 500
 MAX_CANDIDATE_TEXT = 5_000_000
+logger = logging.getLogger(__name__)
 
 
 def canonical_digest(value: object) -> str:
@@ -162,12 +164,22 @@ class GenerationBridge:
                     process.stdout.close()
             if writer is not None:
                 writer.join(timeout=1)
-        if return_code != 0 or writer_error:
+        if writer_error:
             raise GenerationFailed()
         try:
             response = json.loads(output)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise GenerationFailed() from exc
+        if isinstance(response, dict) and response.get("ok") is False:
+            error = response.get("error")
+            if isinstance(error, dict):
+                code = error.get("code")
+                message = error.get("message")
+                if isinstance(code, str) and code and isinstance(message, str) and message:
+                    raise GenerationBridgeFailure(code[:100], message[:500])
+            raise GenerationFailed()
+        if return_code != 0:
+            raise GenerationFailed()
         if not isinstance(response, dict) or response.get("ok") is not True:
             raise GenerationFailed()
         value = response.get("value")
@@ -229,6 +241,70 @@ class GenerationBridge:
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._call({**payload, "operation": "generate"}, validate_candidate=True)
+
+
+class GenerationBridgeFailure(GenerationFailed):
+    """Trusted bounded bridge diagnostic that is never returned to the browser."""
+
+    def __init__(self, diagnostic_code: str, diagnostic_message: str) -> None:
+        super().__init__(diagnostic_code)
+        self.diagnostic_code = diagnostic_code
+        self.diagnostic_message = diagnostic_message
+
+
+SAFE_BRIDGE_DIAGNOSTIC_DETAILS = {
+    "REPORT_DESIGN_NORMALIZATION_FAILED",
+    "REPORT_DESIGN_SEMANTICS_FAILED",
+}
+
+
+def _safe_bridge_diagnostic_detail(exc: GenerationBridgeFailure) -> str | None:
+    return exc.diagnostic_message if exc.diagnostic_code in SAFE_BRIDGE_DIAGNOSTIC_DETAILS else None
+
+
+def _automatic_design_retry_instruction(exc: Exception) -> str:
+    if (
+        isinstance(exc, GenerationBridgeFailure)
+        and exc.diagnostic_code == "REPORT_DESIGN_NORMALIZATION_FAILED"
+        and "LAYOUT_CAPACITY_EXCEEDED" in exc.diagnostic_message
+    ):
+        return (
+            "The prior ReportDesign passed structured parsing but failed compiler geometry "
+            "only. Return the exact same complete ReportDesign, changing only the order of "
+            "objects within each affected page's visuals array. Preserve every object, value, "
+            "ID, page membership, measure, field, title, citation, warning, and all other array "
+            "orders exactly; do not add, remove, move between pages, or otherwise change any "
+            "visual. For the fixed six-slot compiler grid, place every non-card visual among "
+            "positions one through four and place cards in positions five and six when present. "
+            f"Deterministic geometry finding: {exc.diagnostic_message}"
+        )
+    if (
+        isinstance(exc, GenerationBridgeFailure)
+        and exc.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
+    ):
+        return (
+            "The prior ReportDesign failed deterministic confirmed-requirement coverage. "
+            "Return one complete corrected ReportDesign. Use every zero-based index in the "
+            "deterministic finding to locate the exact entry in coverageChecklist and the "
+            "corresponding supplied ConfirmedRequirementContract array. Preserve every already-"
+            "covered obligation, dimension, business question, measure, field, page, citation, "
+            "and supported visual; do not trade one covered requirement for another. Correct "
+            "the uncovered entries without inventing business meaning or unsupported capability. "
+            f"Deterministic coverage finding: {exc.diagnostic_message}"
+        )
+    if isinstance(exc, GenerationBridgeFailure):
+        detail = _safe_bridge_diagnostic_detail(exc)
+        finding = f"{exc.diagnostic_code}: {detail}" if detail is not None else exc.diagnostic_code
+    else:
+        finding = type(exc).__name__
+    return (
+        "The prior ReportDesign was rejected by deterministic validation. Return one complete "
+        "corrected ReportDesign and preserve the supplied ConfirmedRequirementContract exactly. "
+        "Correct the failed invariants without inventing business meaning, measures, fields, "
+        "pages, citations, or unsupported capability, and without following a prescribed "
+        "business design recipe. The corrected value will be fully revalidated. "
+        f"Deterministic finding: {finding}"
+    )
 
 
 def _xlsx_rows(content: bytes) -> list[tuple[str, list[list[str]]]]:
@@ -687,7 +763,10 @@ class GenerationService:
         command_key: str,
     ) -> tuple[dict[str, Any], bool]:
         store = cast(ApplicationPersistence, db)
-        if self.bridge is None or self.model_provider is None or self.generation_policy is None:
+        bridge = self.bridge
+        model_provider = self.model_provider
+        generation_policy = self.generation_policy
+        if bridge is None or model_provider is None or generation_policy is None:
             raise DesignProposalUnavailable()
         payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
             store, actor, case_id, contract_id, lock_access=True
@@ -701,8 +780,8 @@ class GenerationService:
             {
                 "contractId": str(contract_id),
                 "semanticInputDigest": semantic_digest,
-                "profileId": self.model_provider.profile.profile_id,
-                "configurationId": self.model_provider.profile.configuration_id,
+                "profileId": model_provider.profile.profile_id,
+                "configurationId": model_provider.profile.configuration_id,
             }
         )
         existing = store.design_attempt_by_command(actor, case_id, command_key)
@@ -734,8 +813,87 @@ class GenerationService:
         store.add_audit(actor, "AUTOMATIC_DESIGN_STARTED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id)
         cast(Any, db).commit()
         try:
-            governed_knowledge = self.bridge.governed_knowledge(payload)
-            provider_result = self.model_provider.structured(
+            governed_knowledge = bridge.governed_knowledge(payload)
+            contract_payload = cast(dict[str, Any], payload["contract"])
+            obligations = cast(list[dict[str, Any]], contract_payload.get("obligations", []))
+            obligation_indexes = {
+                item.get("id"): index
+                for index, item in enumerate(obligations)
+                if isinstance(item.get("id"), str)
+            }
+            coverage_checklist = {
+                "obligations": [
+                    {
+                        "index": index,
+                        "kind": item.get("kind"),
+                        "required": item.get("required"),
+                        "minimumRepresentations": item.get("minimumRepresentations"),
+                        "measureCount": len(item.get("measureNames", [])),
+                        "fieldCount": len(item.get("fields", [])),
+                        "pageCount": len(item.get("pageNames", [])),
+                    }
+                    for index, item in enumerate(obligations)
+                ],
+                "dimensions": [
+                    {"index": index}
+                    for index, _item in enumerate(contract_payload.get("dimensions", []))
+                ],
+                "businessQuestions": [
+                    {
+                        "index": index,
+                        "obligationIndexes": [
+                            obligation_indexes.get(item)
+                            for item in question.get("coverageRequirementIds", [])
+                            if obligation_indexes.get(item) is not None
+                        ],
+                    }
+                    for index, question in enumerate(
+                        cast(list[dict[str, Any]], contract_payload.get("businessQuestions", []))
+                    )
+                ],
+            }
+            validated_result: dict[str, Any] | None = None
+
+            def validate_candidate(candidate: dict[str, Any]) -> None:
+                nonlocal validated_result
+                validation_payload = {**payload, "reportDesign": candidate}
+                input_digest = canonical_digest(validation_payload)
+                validation_payload["execution"] = {
+                    "inputDigest": input_digest,
+                    "pipelineExecutableDigest": bridge.pipeline_digest,
+                }
+                try:
+                    result = bridge.generate(validation_payload)
+                except GenerationBridgeFailure as exc:
+                    detail = _safe_bridge_diagnostic_detail(exc)
+                    if detail is None:
+                        logger.warning(
+                            "Automatic design candidate rejected by deterministic validation: "
+                            "code=%s detail=withheld",
+                            exc.diagnostic_code,
+                        )
+                    else:
+                        logger.warning(
+                            "Automatic design candidate rejected by deterministic validation: "
+                            "code=%s detail=%s",
+                            exc.diagnostic_code,
+                            detail,
+                        )
+                    raise
+                validation = result.get("validation")
+                provenance = result.get("provenance")
+                normalized = (
+                    provenance.get("reportDesign") if isinstance(provenance, dict) else None
+                )
+                if (
+                    not isinstance(validation, dict)
+                    or validation.get("status") != "PASS"
+                    or not isinstance(normalized, dict)
+                ):
+                    raise GenerationFailed()
+                validated_result = result
+
+            provider_result = model_provider.structured(
                 ProviderRequest(
                     task="REPORT_DESIGN",
                     system_prompt=(
@@ -765,7 +923,11 @@ class GenerationService:
                         "first four positions and never place a non-card after the fourth; "
                         "otherwise use no more than four. Use the smallest "
                         "nonredundant design that fully covers "
-                        "the contract. Prefer exact ReportDesign.filters entries for "
+                        "the contract. Treat coverageChecklist as an exhaustive zero-based "
+                        "cross-reference: cover every required obligation entry, bind every "
+                        "dimension entry in at least one visual, and satisfy every business-"
+                        "question mapping without trading away another entry. Prefer exact "
+                        "ReportDesign.filters entries for "
                         "FILTER obligations because they satisfy filter coverage without a "
                         "duplicate slicer. Never create a slicer for a field already listed "
                         "in ReportDesign.filters; do not repeat the same filter or analysis on "
@@ -782,9 +944,12 @@ class GenerationService:
                         "dataStructure": payload["dataStructure"],
                         "referenceMaterial": references,
                         "governedKnowledge": governed_knowledge,
-                        "generationPolicy": self.generation_policy,
+                        "generationPolicy": generation_policy,
+                        "coverageChecklist": coverage_checklist,
                     },
                     output_schema=report_design_schema(),
+                    validator=validate_candidate,
+                    retry_instruction=_automatic_design_retry_instruction,
                 )
             )
             candidate = provider_result.value
@@ -808,17 +973,11 @@ class GenerationService:
                 separators=(",", ":"),
             )
             attempt.candidate_digest = hashlib.sha256(candidate_json.encode()).hexdigest()
-            validation_payload = {**payload, "reportDesign": candidate}
-            input_digest = canonical_digest(validation_payload)
-            validation_payload["execution"] = {
-                "inputDigest": input_digest,
-                "pipelineExecutableDigest": self.bridge.pipeline_digest,
-            }
-            result = self.bridge.generate(validation_payload)
+            if validated_result is None:
+                raise GenerationFailed()
+            result = validated_result
             validation = cast(dict[str, Any], result["validation"])
             normalized = cast(dict[str, Any], result["provenance"])["reportDesign"]
-            if not isinstance(normalized, dict) or validation.get("status") != "PASS":
-                raise GenerationFailed()
             active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
             if active_actor is None or active_actor.company_id != actor.company_id:
                 raise GenerationFailed()
@@ -898,6 +1057,23 @@ class GenerationService:
             }, True
         except Exception as exc:
             cast(Any, db).rollback()
+            if isinstance(exc, GenerationBridgeFailure):
+                detail = _safe_bridge_diagnostic_detail(exc)
+                if detail is None:
+                    logger.warning(
+                        "Automatic design deterministic validation failed: code=%s detail=withheld",
+                        exc.diagnostic_code,
+                    )
+                else:
+                    logger.warning(
+                        "Automatic design deterministic validation failed: code=%s detail=%s",
+                        exc.diagnostic_code,
+                        detail,
+                    )
+            elif isinstance(exc, ProviderCallError):
+                logger.warning("Automatic design provider failed: code=%s", exc.code)
+            else:
+                logger.warning("Automatic design failed: type=%s", type(exc).__name__)
             failure_code = (
                 exc.code
                 if isinstance(exc, (ProviderCallError, GenerationFailed))

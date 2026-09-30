@@ -20,7 +20,11 @@ from apbra_api.api import create_app
 from apbra_api.artifacts import LocalArtifactStore
 from apbra_api.config import Settings
 from apbra_api.domain import GenerationFailed
-from apbra_api.generation import GenerationBridge
+from apbra_api.generation import (
+    GenerationBridge,
+    GenerationBridgeFailure,
+    _automatic_design_retry_instruction,
+)
 from apbra_api.model_provider import DeterministicFakeProvider, ProviderProfile
 from apbra_api.persistence import ApplicationSession, Database
 
@@ -224,6 +228,7 @@ def reviewed_synthetic_report_design(snapshot: dict[str, object]) -> dict[str, o
 
 
 def automatic_test_provider(responses: list[dict[str, object]]) -> DeterministicFakeProvider:
+    call_limit = max(1, len(responses))
     return DeterministicFakeProvider(
         ProviderProfile.model_validate(
             {
@@ -236,12 +241,12 @@ def automatic_test_provider(responses: list[dict[str, object]]) -> Deterministic
                 "prompt_version": "report-design-v1",
                 "configuration_id": "accepted-test-configuration",
                 "capabilities": {"structured_output": True, "vision": False},
-                "max_calls_per_operation": 1,
+                "max_calls_per_operation": call_limit,
                 "max_input_characters": 200_000,
                 "max_output_tokens": 8_000,
                 "time_budget_seconds": 30,
                 "request_timeout_seconds": 10,
-                "retry_limit": 0,
+                "retry_limit": call_limit - 1,
             }
         ),
         responses,
@@ -309,7 +314,9 @@ def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
         "requests.csv",
         b"Team,Resolved,Unresolved\nA,7,2\nB,5,4\n",
     )
-    provider = automatic_test_provider([contract["reviewed_report_design"]])
+    provider = automatic_test_provider(
+        [{"untrusted": "not a report design"}, contract["reviewed_report_design"]]
+    )
     with TestClient(
         create_app(settings=settings, database=database, model_provider=provider)
     ) as automatic_client:
@@ -327,12 +334,30 @@ def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
         assert result["attempt"]["status"] == "ELIGIBLE"
         assert result["attempt"]["validation"]["status"] == "PASS"
         assert result["attempt"]["provider_profile_id"] == "qualified-test-profile"
-        assert result["attempt"]["usage"]["total_tokens"] == 30
+        assert result["attempt"]["usage"]["total_tokens"] == 60
+        assert result["attempt"]["usage"]["call_count"] == 2
         assert result["reviewed_design"]["origin"] == "AUTO_ELIGIBLE"
         assert "report_design" not in result["reviewed_design"]
         assert provider.requests[0].task == "REPORT_DESIGN"
         assert "credential" not in provider.requests[0].context
         assert provider.requests[0].context["governedKnowledge"]
+        checklist = provider.requests[0].context["coverageChecklist"]
+        assert checklist["obligations"]
+        assert checklist["dimensions"]
+        assert all(set(item) == {"index"} for item in checklist["dimensions"])
+        assert all(
+            set(item)
+            == {
+                "index",
+                "kind",
+                "required",
+                "minimumRepresentations",
+                "measureCount",
+                "fieldCount",
+                "pageCount",
+            }
+            for item in checklist["obligations"]
+        )
         prompt = provider.requests[0].system_prompt
         assert "exact complete canonical measure objects" in prompt
         assert "every confirmed required page exactly once" in prompt
@@ -1252,6 +1277,48 @@ def test_generation_bridge_rejects_unsafe_executables_timeout_and_malformed_outp
         GenerationBridge(mismatched, node_executable=node, timeout_seconds=2).generate(
             {"binding": {"caseId": "expected"}, "execution": {"inputDigest": "expected"}}
         )
+
+    diagnostic = tmp_path / "diagnostic.mjs"
+    diagnostic.write_text(
+        "process.stdout.write(JSON.stringify({ok:false,error:{"
+        "code:'REPORT_DESIGN_SEMANTICS_FAILED',"
+        "message:'REPORT_DESIGN_SEMANTICS_FAILED: REQUIRED_BREAKDOWN_UNCOVERED'}}));"
+        "process.exitCode=1",
+        encoding="utf-8",
+    )
+    with pytest.raises(GenerationBridgeFailure) as captured:
+        GenerationBridge(diagnostic, node_executable=node, timeout_seconds=2).generate(
+            {"binding": {}, "execution": {}}
+        )
+    assert captured.value.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
+    assert captured.value.diagnostic_message.endswith("REQUIRED_BREAKDOWN_UNCOVERED")
+
+
+def test_layout_retry_is_order_only_and_other_rejections_remain_generic() -> None:
+    layout = _automatic_design_retry_instruction(
+        GenerationBridgeFailure(
+            "REPORT_DESIGN_NORMALIZATION_FAILED",
+            "REPORT_DESIGN_NORMALIZATION_FAILED: LAYOUT_CAPACITY_EXCEEDED",
+        )
+    )
+    assert "changing only the order" in layout
+    assert "do not add, remove, move between pages" in layout
+    assert "positions one through four" in layout
+    semantic = _automatic_design_retry_instruction(
+        GenerationBridgeFailure(
+            "REPORT_DESIGN_SEMANTICS_FAILED",
+            "REPORT_DESIGN_SEMANTICS_FAILED: REQUIRED_BREAKDOWN_UNCOVERED",
+        )
+    )
+    assert "changing only the order" not in semantic
+    assert "zero-based index" in semantic
+    assert "do not trade one covered requirement for another" in semantic
+    unknown_detail = "credential=must-not-be-forwarded"
+    unknown = _automatic_design_retry_instruction(
+        GenerationBridgeFailure("GENERATION_PIPELINE_FAILED", unknown_detail)
+    )
+    assert "GENERATION_PIPELINE_FAILED" in unknown
+    assert unknown_detail not in unknown
 
 
 def test_authorization_revocation_waits_for_eligibility_commit(

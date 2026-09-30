@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 
@@ -495,6 +496,8 @@ class ProviderRequest:
     context: dict[str, Any]
     output_schema: dict[str, Any]
     requires_vision: bool = False
+    validator: Callable[[dict[str, Any]], None] | None = field(default=None, repr=False)
+    retry_instruction: Callable[[Exception], str] | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -570,6 +573,12 @@ class OpenAICompatibleProvider:
         started = time.monotonic()
         calls = 0
         last_code = "MODEL_PROVIDER_FAILED"
+        usage_totals: dict[str, int] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        usage_seen: set[str] = set()
         while calls < min(
             self.profile.max_calls_per_operation, self.profile.retry_limit + 1
         ):
@@ -598,14 +607,54 @@ class OpenAICompatibleProvider:
                 usage = payload.get("usage") if isinstance(payload, dict) else None
                 if not isinstance(usage, dict):
                     usage = {}
+                for name in usage_totals:
+                    amount = _integer_or_none(usage.get(name))
+                    if amount is not None:
+                        usage_totals[name] += amount
+                        usage_seen.add(name)
+                if request.validator is not None:
+                    try:
+                        request.validator(value)
+                    except Exception as exc:
+                        if calls >= min(
+                            self.profile.max_calls_per_operation,
+                            self.profile.retry_limit + 1,
+                        ):
+                            raise
+                        instruction = (
+                            request.retry_instruction(exc)
+                            if request.retry_instruction is not None
+                            else (
+                                "The prior structured candidate was rejected by deterministic "
+                                "contract validation. Return one complete corrected candidate "
+                                "without inventing business meaning, fields, requirements, or "
+                                "evidence."
+                            )
+                        )
+                        if not isinstance(instruction, str) or not instruction.strip():
+                            raise ProviderCallError("MODEL_RETRY_INSTRUCTION_INVALID") from exc
+                        assistant_content = (
+                            content
+                            if isinstance(content, str)
+                            else json.dumps(content, sort_keys=True, separators=(",", ":"))
+                        )
+                        retry_messages = [
+                            *body["messages"],
+                            {"role": "assistant", "content": assistant_content},
+                            {"role": "user", "content": instruction[:20_000]},
+                        ]
+                        if (
+                            sum(len(str(message["content"])) for message in retry_messages)
+                            > self.profile.max_input_characters
+                        ):
+                            raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED") from exc
+                        body["messages"] = retry_messages
+                        continue
                 return ProviderResult(
                     value=value,
                     usage={
-                        "prompt_tokens": _integer_or_none(usage.get("prompt_tokens")),
-                        "completion_tokens": _integer_or_none(
-                            usage.get("completion_tokens")
-                        ),
-                        "total_tokens": _integer_or_none(usage.get("total_tokens")),
+                        name: amount if name in usage_seen else None
+                        for name, amount in usage_totals.items()
                     },
                     latency_ms=int((time.monotonic() - started) * 1_000),
                     call_count=calls,
@@ -639,17 +688,33 @@ class DeterministicFakeProvider:
 
     def structured(self, request: ProviderRequest) -> ProviderResult:
         self.requests.append(request)
-        if not self._responses:
-            raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED")
-        value = self._responses.pop(0)
-        return ProviderResult(
-            value=value,
-            usage={"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-            latency_ms=1,
-            call_count=1,
-            profile_id=self.profile.profile_id,
-            model_or_deployment=self.profile.model_or_deployment,
-            prompt_version=self.profile.prompt_version,
-            configuration_id=self.profile.configuration_id,
-            capability_profile=self.profile.capabilities.model_dump(),
-        )
+        calls = 0
+        limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
+        while calls < limit:
+            if not self._responses:
+                raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED")
+            calls += 1
+            value = self._responses.pop(0)
+            if request.validator is not None:
+                try:
+                    request.validator(value)
+                except Exception:
+                    if calls >= limit:
+                        raise
+                    continue
+            return ProviderResult(
+                value=value,
+                usage={
+                    "prompt_tokens": 10 * calls,
+                    "completion_tokens": 20 * calls,
+                    "total_tokens": 30 * calls,
+                },
+                latency_ms=calls,
+                call_count=calls,
+                profile_id=self.profile.profile_id,
+                model_or_deployment=self.profile.model_or_deployment,
+                prompt_version=self.profile.prompt_version,
+                configuration_id=self.profile.configuration_id,
+                capability_profile=self.profile.capabilities.model_dump(),
+            )
+        raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED")
