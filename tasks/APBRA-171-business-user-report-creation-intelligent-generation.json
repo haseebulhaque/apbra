@@ -43,7 +43,8 @@
     "Confluence Business & Functional Requirements 3932362 v4, Product Vision 3965201 v4, RTM 3932382 v6 and 03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v2, refreshed 2026-09-29",
     "APBRA-162 private authority, APBRA-163 durable evidence/acceptance, APBRA-164 canonical generation/history, APBRA-169 immutable expert-reviewed design and APBRA-170 merged business workspace",
     "GitHub origin/main 2e6dfa67d674015773555aa334ef4561d8b907cb",
-    "Haseeb's narrow hosted browser-test blocker amendment of 2026-09-30; live Jira APBRA-171 issue 10271 updated 2026-09-30T02:11:18.068+1000, blocker comment 10290 and governance PLAN comment 10291; Confluence 03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v3; amendment base 68ef74b3b51b419f4e419258922a8cc11201b94a"
+    "Haseeb's narrow hosted browser-test blocker amendment of 2026-09-30; live Jira APBRA-171 issue 10271 updated 2026-09-30T02:11:18.068+1000, blocker comment 10290 and governance PLAN comment 10291; Confluence 03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v3; amendment base 68ef74b3b51b419f4e419258922a8cc11201b94a",
+    "Haseeb's narrow compiler-fixture governance amendment of 2026-09-30; live Jira APBRA-171 governance PLAN comment 10297; Confluence 03.07 - Business-User Self-Service Generation & Hosted Preview Direction 8519682 v8; amendment base 21c8171721a4c46787ec3128ef1dae93625f413a; implementation PR #66 verified open and unchanged at 55515679a5ed5d04c3692b74abb1cf4ff2f593e6"
   ],
   "allowed_paths": [
     "apps/api/.env.example",
@@ -76,6 +77,7 @@
     "apps/web/playwright.config.ts",
     "apps/web/scripts/generation-bridge.ts",
     "apps/web/scripts/semantic-bridge.ts",
+    "apps/web/src/App.test.tsx",
     "apps/web/src/api.test.ts",
     "apps/web/src/api.ts",
     "apps/web/src/clarification.test.ts",
@@ -149,6 +151,7 @@
     "Provider analysis/design uses only approved, bounded, purpose-limited server context. A missing, disabled, incompatible, failed, over-budget or timed-out profile produces a truthful failure or expert route, never an automatic provider/model/region fallback, fabricated success or unbounded retry.",
     "Every environment-, provider-, customer-, deployment-, capability- or policy-dependent runtime value is resolved from validated server-side or governed tenant/product configuration; missing or invalid required values fail closed with a truthful capability/configuration error, without silent compiled-in deployment, limit or customer-rule defaults.",
     "The sole additional Playwright configuration authority supplies only explicit synthetic/test-only APBRA-171 reference storage, semantic/generation timeout, upload, clarification, generation and disabled-or-deterministic automatic-generation settings to the disposable isolated API server. It does not create production defaults, select a provider/model/region/customer, permit an external or paid model call, add a hidden fallback, weaken fail-closed behavior, or alter existing APBRA_E2E and database-isolation protections.",
+    "The sole additional apps/web/src/App.test.tsx authority is limited to test-only compiler-path fixtures that explicitly supply synthetic maxVisualsPerPage: 6, matching the validated six-slot compiler capability. It does not authorize product-runtime behavior, a different compiler capacity, weakened fail-closed validation, business-specific logic, provider/model defaults, fallbacks or unrelated test rewrites.",
     "Expert review is offered for material ambiguity, unsupported or unrealistic intent, explicit user request, applicable governance rule, or failure to produce an eligible automatic design; it is not silently required for an ordinary eligible request.",
     "Only a deterministically eligible candidate from the existing canonical TypeScript contract, normalization, semantic coverage, guardrails, compiler feasibility and candidate checks becomes an immutable AUTO_ELIGIBLE design version; expert-reviewed versions retain separate EXPERT_REVIEWED provenance and authority.",
     "Every automatic design attempt, validation outcome, provider/model/prompt/configuration version, usage observation and safe failure category is durable without persisting secrets or unnecessary raw provider payload; an eligible version binds exact company, report, confirmed contract, request, interpretation, data and reference digests.",
@@ -165,6 +168,7 @@
     "Provider adapter tests for explicit qualification, server-only secrets, prompt/data minimization, configured budget and timeout enforcement, no automatic fallback, bounded retries, invalid/malformed/output-injection handling, safe logs, usage/provenance and image capability gates; automated tests make no paid calls",
     "Configuration-matrix tests cover absent, malformed and unsupported provider/profile, endpoint, model, configurable API version, region, capability, budget, retry/timeout, upload, reference, storage, environment URL and governed tenant/product policy settings; verify truthful fail-closed errors, no silent production defaults and deterministic test-only configuration isolation",
     "Hosted Playwright proves the isolated API server receives explicit synthetic/test-only APBRA-171 runtime policies from apps/web/playwright.config.ts while external/paid provider calls remain disabled and existing APBRA_E2E and disposable-database protections remain unchanged",
+    "The apps/web/src/App.test.tsx compiler-path fixtures explicitly use synthetic maxVisualsPerPage: 6 and continue to prove deterministic rejection for configuration/layout values outside the six-slot compiler capability",
     "Design and API/PostgreSQL tests for exact confirmation/data/reference binding, immutable versions, validation before eligibility, failure persistence, idempotency/concurrency, current access, stale/superseded confirmation, foreign/revoked denial, artifact integrity and restart durability",
     "Real-browser business-user journey with synthetic retail fixture and qualified configured provider during separately bounded development validation; distinguish real-provider evidence from fake-provider CI evidence and do not claim vision interpretation until tested",
     "Real-browser responsive regression coverage across a documented representative desktop, laptop, tablet and narrow/mobile viewport matrix exercises Home, navigation rail, top bar, six-stage journey, composer, upload/drop zone, requirement review, clarification, build/report, history and expert escalation; assert no horizontal overflow, clipped/hidden actions, overlapping or broken sticky regions, inaccessible content, broken cards/tables or unreadable text",
@@ -177,6 +181,7 @@
     "A selected vendor, model version, region, commercial price or new numerical budget without a qualified owner-approved runtime configuration",
     "Automatic fallback to another provider/model/region, browser-provider calls, browser-authored ReportDesign, a second compiler, deterministic hidden visual recipe or test-double-as-real-intelligence claim",
     "Any .github/** or workflow change, dependency or lock change, production runtime default, provider/model/region/customer selection, external or paid model call, or Playwright change beyond explicit disposable APBRA-171 runtime policy injection",
+    "Any apps/web/src/App.test.tsx change beyond the explicit synthetic maxVisualsPerPage: 6 compiler-path fixture alignment, including a product-runtime change, broad test rewrite or weakened fail-closed assertion",
     "Production or customer-data deployment, live Entra/Azure provisioning, hosted exposure, model access to credentials/authorization state/unrelated tenant data, customer-managed profiles beyond a separately qualified configuration",
     "Package D expert takeover/assignment, release approval, trusted-author bypass, Power BI Service publication, gateway/credential/refresh automation, billing, projects, broad sharing or public registration",
     "Destructive deletion of historical requirements, references, failed attempts, reviewed designs, candidates or private artifacts to simplify rollback"
@@ -198,7 +203,8 @@
   "branch": "agent/APBRA-DEVOPS/APBRA-171-business-user-report-creation-intelligent-generation",
   "source_ids": [
     "mvp1-business-user-report-creation-intelligent-generation",
-    "mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment"
+    "mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment",
+    "mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment"
   ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / APBRA-171 bounded business-user intelligent-generation package",
@@ -208,6 +214,7 @@
     "The APBRA-171 owner approval authorizes bounded paid development/validation calls to a separately qualified configured Azure OpenAI/OpenAI-compatible runtime, but does not select a vendor deployment, model, region, credential, price or budget number. Missing configuration/qualification disables real calls.",
     "The exact reference-material, model proposal, typed difference and automatic-eligible design schema changes remain within this task; existing expert-reviewed and generation history remains readable and protected.",
     "The 2026-09-30 governance-only amendment preserves all original 52 implementation paths and adds exactly apps/web/playwright.config.ts as the fifty-third path, solely because hosted CI run #113 proved that the isolated Playwright API server otherwise lacks APBRA-171's mandatory explicit runtime policies and correctly fails closed until workflow timeout. The amendment changes exactly the same five governance files, leaves .github/workflows/bootstrap.yml and every other restricted path unauthorized, and must be manually merged before PR #66 receives any product-code change.",
+    "The later 2026-09-30 governance-only compiler-fixture amendment preserves all 53 existing implementation paths and adds exactly apps/web/src/App.test.tsx as the fifty-fourth path, solely for explicit synthetic maxVisualsPerPage: 6 in the compiler-path fixtures. It changes exactly the established five governance files, leaves PR #66 unchanged, preserves every other restriction and must be manually merged by Haseeb before PR #66 receives the test-fixture correction.",
     "Haseeb remains the sole manual merge authority for registration and eventual implementation; neither PR may be merged automatically."
   ]
 }

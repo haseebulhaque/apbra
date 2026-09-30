@@ -102,9 +102,9 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
     def test_finite_implementation_authority_and_exact_hash(self):
         expected = set(self.task["allowed_paths"])
         self.assertEqual(expected, c.BUSINESS_USER_INTELLIGENT_GENERATION_PATHS)
-        self.assertEqual(len(expected), 53)
+        self.assertEqual(len(expected), 54)
         self.assertEqual(
-            expected - {"apps/web/playwright.config.ts"},
+            expected - {"apps/web/playwright.config.ts", "apps/web/src/App.test.tsx"},
             self.ORIGINAL_IMPLEMENTATION_PATHS,
         )
         self.assertTrue(all("*" not in path for path in expected))
@@ -113,6 +113,7 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         self.assertIn("apps/web/src/genericPowerBI.ts", expected)
         self.assertIn("apps/web/scripts/generation-bridge.ts", expected)
         self.assertIn("apps/web/playwright.config.ts", expected)
+        self.assertIn("apps/web/src/App.test.tsx", expected)
         self.assertNotIn("apps/web/playwright.config.ts", self.task["restricted_paths"])
         self.assertNotIn("apps/api/pyproject.toml", expected)
         self.assertNotIn("apps/web/package.json", expected)
@@ -142,20 +143,21 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
-            self.assertEqual(
-                self.check(
-                    root,
-                    expected,
-                    branch=c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
-                ),
-                [],
-            )
+            for amendment_branch in (
+                c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH,
+            ):
+                with self.subTest(amendment_branch=amendment_branch):
+                    self.assertEqual(
+                        self.check(root, expected, branch=amendment_branch),
+                        [],
+                    )
             for omitted in sorted(expected):
                 with self.subTest(omitted=omitted):
                     errors = self.check(
                         root,
                         expected - {omitted},
-                        branch=c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                        branch=c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH,
                     )
                     self.assertIn(
                         "APBRA-171 registration must change exactly its five governance files",
@@ -163,7 +165,7 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
                     )
                     self.assertIn(
                         "Active branch conflicts with task authority: "
-                        + c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH,
+                        + c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH,
                         errors,
                     )
             errors = self.check(root, expected | {"apps/api/src/apbra_api/model_provider.py"})
@@ -297,12 +299,16 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
         ids = [source["id"] for source in sources["sources"]]
         self.assertEqual(ids.count(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID), 1)
         self.assertEqual(
-            ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 2,
+            ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 3,
             ids.index(c.PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID),
         )
         self.assertEqual(
             ids[ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 1],
             c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID,
+        )
+        self.assertEqual(
+            ids[ids.index(c.BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID) + 2],
+            c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID,
         )
         source = next(
             item for item in sources["sources"]
@@ -324,11 +330,28 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             hashlib.sha256(canonical_amendment).hexdigest(),
             c.BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256,
         )
+        compiler_fixture_amendment = next(
+            item for item in sources["sources"]
+            if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID
+        )
+        canonical_compiler_fixture_amendment = json.dumps(
+            compiler_fixture_amendment, sort_keys=True, separators=(",", ":")
+        ).encode()
+        self.assertEqual(
+            hashlib.sha256(canonical_compiler_fixture_amendment).hexdigest(),
+            c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_SHA256,
+        )
         historical = (ROOT / "tests/bootstrap/test_invited_private_case_foundation_scope.py").read_text()
         self.assertEqual(historical.count('"mvp1-business-user-report-creation-intelligent-generation"'), 1)
         self.assertEqual(
             historical.count(
                 '"mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment"'
+            ),
+            1,
+        )
+        self.assertEqual(
+            historical.count(
+                '"mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment"'
             ),
             1,
         )
@@ -467,6 +490,44 @@ class BusinessUserIntelligentGenerationScopeTests(unittest.TestCase):
             self.assertIn(
                 "Business-user intelligent-generation Playwright amendment source differs from accepted provenance",
                 self.check(root, {"apps/web/playwright.config.ts"}),
+            )
+
+    def test_compiler_fixture_amendment_is_narrow_and_hash_bound(self):
+        amendment_ref = (
+            "03.07 - Business-User Self-Service Generation & Hosted Preview "
+            "Direction 8519682 v8"
+        )
+        self.assertIn(amendment_ref, " ".join(self.task["architecture_refs"]))
+        source = next(
+            item for item in json.loads((ROOT / "docs/source-register.json").read_text())["sources"]
+            if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID
+        )
+        for required in (
+            "apps/web/src/App.test.tsx",
+            "fifty-fourth",
+            "maxVisualsPerPage: 6",
+            "six-slot compiler capability",
+            "test-only",
+            "weakened fail-closed validation",
+            ".github/**",
+            "implementation PR #66",
+            "Haseeb's sole manual merge",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source["acceptance"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources = json.loads((root / "docs/source-register.json").read_text())
+            changed = next(
+                item for item in sources["sources"]
+                if item["id"] == c.BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID
+            )
+            changed["acceptance"] += " broader application test authority"
+            (root / "docs/source-register.json").write_text(json.dumps(sources))
+            self.assertIn(
+                "Business-user intelligent-generation compiler-fixture amendment source differs from accepted provenance",
+                self.check(root, {"apps/web/src/App.test.tsx"}),
             )
 
     def test_p0_responsive_journey_is_explicit_and_hash_bound(self):
