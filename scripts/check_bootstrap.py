@@ -445,6 +445,7 @@ BUSINESS_USER_INTELLIGENT_GENERATION_PATHS = {
     'apps/web/e2e/durable-conversation.spec.ts',
     'apps/web/e2e/private-case.spec.ts',
     'apps/web/e2e/protected-generation.spec.ts',
+    'apps/web/playwright.config.ts',
     'apps/web/scripts/generation-bridge.ts',
     'apps/web/scripts/semantic-bridge.ts',
     'apps/web/src/api.test.ts',
@@ -478,10 +479,13 @@ BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256 = '9b3ef121bf77d2c474bd275539d1e6c950e451422a26226fd55d4de1bcb1aafd'
+BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256 = '88d85a292f6f8274fd090f66d4a06eb26d07a9e3d9d0f45dabb1de67f11f94b2'
 BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation'
 BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256 = '40a6422f05e2559bab6df41a0082c94a2b0b086817af9cf3361896ed37796fbd'
 BUSINESS_USER_INTELLIGENT_GENERATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-business-user-report-creation-intelligent-generation'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-playwright-runtime-governance-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256 = 'be91d06e76a58f9f2825a20147de96f511933b13abd8c9861d94c7fc5a24e692'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1408,7 +1412,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected business-user intelligent-generation scope')
                 if (business_user_intelligent_generation_task['task_mode'], business_user_intelligent_generation_task['readiness'], business_user_intelligent_generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Business-user intelligent generation requires issued implementation acceptance')
-                if business_user_intelligent_generation_task['source_ids'] != [BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID]:
+                if business_user_intelligent_generation_task['source_ids'] != [
+                        BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID,
+                        BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Business-user intelligent generation requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get(BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID)
@@ -1418,6 +1424,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256:
                         extension_errors.append('Business-user intelligent-generation source differs from accepted provenance')
+                amendment_source = source_map.get(BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID)
+                if amendment_source is None:
+                    extension_errors.append('Business-user intelligent-generation Playwright amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('Business-user intelligent-generation Playwright amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 business_user_intelligent_generation_task = None
@@ -1479,7 +1492,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-169' and
                          active_branch == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH and
-                         changed_paths == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS)):
+                         changed_paths == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-171' and
+                         active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH and
+                         changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
