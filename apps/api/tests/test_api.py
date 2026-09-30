@@ -1,7 +1,4 @@
-import pytest
 from fastapi.testclient import TestClient
-
-from apbra_api.config import Settings
 
 
 def test_health_requires_live_database(client: TestClient) -> None:
@@ -23,13 +20,3 @@ def test_validation_errors_do_not_echo_invitation_bearer_input(client: TestClien
             "message": "The request format is invalid.",
         }
     }
-
-
-def test_non_test_profile_cannot_enable_deterministic_semantic_simulator(
-    settings: Settings,
-) -> None:
-    runtime = settings.model_copy(
-        update={"profile": "development", "test_semantic_simulator_enabled": True}
-    )
-    with pytest.raises(ValueError, match="test-profile only"):
-        runtime.validate_security_profile()

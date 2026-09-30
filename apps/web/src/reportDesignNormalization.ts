@@ -66,8 +66,6 @@ const layout=(visual:VisualDesign,index:number):LayoutSlot=>{const x=20+(index%2
 const withinPage=(slot:LayoutSlot)=>slot.x>=0&&slot.y>=0&&slot.right<=PAGE_WIDTH&&slot.bottom<=PAGE_HEIGHT;
 const countVisuals=(design:ReportDesign)=>design.pages.reduce((count,page)=>count+page.visuals.length,0);
 
-export function orderVisualsForCompilerGrid(original:ReportDesign):{reportDesign:ReportDesign;pageIndexes:number[]}{const reportDesign=structuredClone(original),pageIndexes:number[]=[];for(const[pageIndex,page]of reportDesign.pages.entries()){const currentSlots=page.visuals.map(layout);if(currentSlots.every(withinPage))continue;const ordered=[...page.visuals.filter(visual=>visual.type!=='card'),...page.visuals.filter(visual=>visual.type==='card')],orderedSlots=ordered.map(layout);if(orderedSlots.every(withinPage)&&ordered.some((visual,index)=>visual.id!==page.visuals[index]?.id)){page.visuals=ordered;pageIndexes.push(pageIndex)}}return{reportDesign,pageIndexes}}
-
 export function normalizeReportDesign(originalReportDesign:ReportDesign,schema:DataStructure):ReportDesignNormalization{
  const normalizedReportDesign=structuredClone(originalReportDesign),actions:NormalizationAction[]=[],findings:NormalizationFinding[]=[],pageLayouts:PageLayout[]=[];
  const knownFields=new Set(schema.tables.flatMap(table=>table.columns.map(column=>canonical(`${table.name}.${column.name}`))));
