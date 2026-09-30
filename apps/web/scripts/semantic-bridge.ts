@@ -1,11 +1,11 @@
-import {applyClarificationAnalysis,beginClarificationAnalysis,confirmClarificationUnderstanding,createClarificationSession,submitClarificationAnswers,type ClarificationSession,type IterativeClarificationQuestion} from '../src/clarification';
+import {applyClarificationAnalysis,beginClarificationAnalysis,confirmClarificationUnderstanding,createClarificationSession,submitClarificationAnswers,validateClarificationSession,type ClarificationLimits,type ClarificationSession,type IterativeClarificationQuestion} from '../src/clarification';
 import {
   materializeIterativeConfirmedRequirements,
   validateIterativeConfirmationReadiness,
 } from '../src/confirmedRequirements';
 
 type BridgeRequest={
-  operation:'simulate'|'readiness'|'confirm';
+  operation:'simulate'|'analysis'|'readiness'|'confirm';
   dataStructure:unknown;
   session:unknown;
   confirmedAt?:string;
@@ -14,6 +14,8 @@ type BridgeRequest={
   sessionId?:string;
   originalRequest?:string;
   analysedAt?:string;
+  analysis?:unknown;
+  limits?:unknown;
 };
 
 function respond(value:unknown){
@@ -30,6 +32,13 @@ async function main(){
   for await(const chunk of process.stdin)chunks.push(Buffer.from(chunk));
   if(Buffer.concat(chunks).length>1_000_000)throw new Error('Semantic bridge input exceeds the bounded limit.');
   const input=JSON.parse(Buffer.concat(chunks).toString('utf8')) as BridgeRequest;
+  if(input.operation==='analysis'){
+    if(!input.sessionId||!input.originalRequest||!input.contextBinding||!input.analysedAt||!input.analysis||!input.limits)throw new Error('Server-derived intelligent-analysis inputs are required.');
+    const analysis=input.analysis as {state:Parameters<typeof applyClarificationAnalysis>[1]['state'];interpretation:Parameters<typeof applyClarificationAnalysis>[1]['interpretation'];questions:Parameters<typeof applyClarificationAnalysis>[1]['questions'];unresolvedAmbiguities:string[];confirmationSummary:Parameters<typeof applyClarificationAnalysis>[1]['confirmationSummary'];conflictReasons:string[];knowledgeSources?:Parameters<typeof applyClarificationAnalysis>[1]['knowledgeSources']},limits=input.limits as ClarificationLimits;
+    let session=beginClarificationAnalysis(createClarificationSession({sessionId:input.sessionId,mode:'BUSINESS',originalRequest:input.originalRequest,limits,contextBinding:input.contextBinding}));
+    session=applyClarificationAnalysis(session,{...analysis,analysedAt:input.analysedAt});
+    respond({session:validateClarificationSession(session)});return;
+  }
   if(input.operation==='simulate'){
     if(!input.sessionId||!input.originalRequest||!input.contextBinding||!input.analysedAt)throw new Error('Server-derived simulation inputs are required.');
     const structure=input.dataStructure as {tables?:Array<{name?:string;columns?:Array<{name?:string;type?:string}>}>};
