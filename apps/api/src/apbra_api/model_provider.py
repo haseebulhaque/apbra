@@ -7,6 +7,7 @@ contracts; a successful provider response is only untrusted candidate data.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from collections.abc import Callable, Sequence
@@ -456,12 +457,30 @@ class ProviderConfigurationError(ValueError):
     """The explicitly configured profile is absent, malformed or unsupported."""
 
 
-class ProviderCallError(RuntimeError):
-    """A safe provider failure which may be persisted without response content."""
+@dataclass(frozen=True)
+class ProviderExecutionObservation:
+    """Safe observed execution metadata, never raw provider or candidate content."""
 
-    def __init__(self, code: str) -> None:
+    usage: dict[str, int | None]
+    latency_ms: int
+    call_count: int
+    profile_id: str
+    model_or_deployment: str
+    prompt_version: str
+    configuration_id: str
+    capability_profile: dict[str, bool]
+    candidate_digest: str | None = None
+
+
+class ProviderCallError(RuntimeError):
+    """A safe provider failure which may carry observed execution provenance."""
+
+    def __init__(
+        self, code: str, *, observation: ProviderExecutionObservation | None = None
+    ) -> None:
         super().__init__(code)
         self.code = code
+        self.observation = observation
 
 
 class ProviderCapabilities(BaseModel):
@@ -540,12 +559,32 @@ class ProviderResult:
     prompt_version: str
     configuration_id: str
     capability_profile: dict[str, bool]
+    candidate_digest: str | None = None
+
+    @property
+    def observation(self) -> ProviderExecutionObservation:
+        return ProviderExecutionObservation(
+            usage=self.usage,
+            latency_ms=self.latency_ms,
+            call_count=self.call_count,
+            profile_id=self.profile_id,
+            model_or_deployment=self.model_or_deployment,
+            prompt_version=self.prompt_version,
+            configuration_id=self.configuration_id,
+            capability_profile=self.capability_profile,
+            candidate_digest=self.candidate_digest,
+        )
 
 
 class ModelProvider(Protocol):
     profile: ProviderProfile
 
     def structured(self, request: ProviderRequest) -> ProviderResult: ...
+
+
+def _candidate_digest(value: dict[str, Any]) -> str:
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 class OpenAICompatibleProvider:
@@ -590,7 +629,37 @@ class OpenAICompatibleProvider:
         }
 
     def structured(self, request: ProviderRequest) -> ProviderResult:
-        body = self._request_body(request)
+        started = time.monotonic()
+        calls = 0
+        last_code = "MODEL_PROVIDER_FAILED"
+        candidate_digest: str | None = None
+        usage_totals: dict[str, int] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        usage_seen: set[str] = set()
+
+        def observation() -> ProviderExecutionObservation:
+            return ProviderExecutionObservation(
+                usage={
+                    name: amount if name in usage_seen else None
+                    for name, amount in usage_totals.items()
+                },
+                latency_ms=int((time.monotonic() - started) * 1_000),
+                call_count=calls,
+                profile_id=self.profile.profile_id,
+                model_or_deployment=self.profile.model_or_deployment,
+                prompt_version=self.profile.prompt_version,
+                configuration_id=self.profile.configuration_id,
+                capability_profile=self.profile.capabilities.model_dump(),
+                candidate_digest=candidate_digest,
+            )
+
+        try:
+            body = self._request_body(request)
+        except ProviderCallError as exc:
+            raise ProviderCallError(exc.code, observation=observation()) from exc
         headers = {"Content-Type": "application/json"}
         params: dict[str, str] = {}
         if self.profile.protocol == "AZURE_OPENAI_CHAT_COMPATIBLE":
@@ -599,20 +668,11 @@ class OpenAICompatibleProvider:
         else:
             headers["Authorization"] = f"Bearer {self._credential}"
             headers["OpenAI-Version"] = self.profile.api_version
-        started = time.monotonic()
-        calls = 0
-        last_code = "MODEL_PROVIDER_FAILED"
-        usage_totals: dict[str, int] = {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-        }
-        usage_seen: set[str] = set()
         while calls < min(
             self.profile.max_calls_per_operation, self.profile.retry_limit + 1
         ):
             if time.monotonic() - started >= self.profile.time_budget_seconds:
-                raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
+                raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED", observation=observation())
             calls += 1
             try:
                 with httpx.Client(
@@ -627,12 +687,13 @@ class OpenAICompatibleProvider:
                     last_code = "MODEL_PROVIDER_TRANSIENT_FAILURE"
                     continue
                 if response.status_code < 200 or response.status_code >= 300:
-                    raise ProviderCallError("MODEL_PROVIDER_REJECTED")
+                    raise ProviderCallError("MODEL_PROVIDER_REJECTED", observation=observation())
                 payload = response.json()
                 content = payload["choices"][0]["message"]["content"]
                 value = json.loads(content) if isinstance(content, str) else content
                 if not isinstance(value, dict):
-                    raise ProviderCallError("MODEL_OUTPUT_INVALID")
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
+                candidate_digest = _candidate_digest(value)
                 usage = payload.get("usage") if isinstance(payload, dict) else None
                 if not isinstance(usage, dict):
                     usage = {}
@@ -649,7 +710,9 @@ class OpenAICompatibleProvider:
                             self.profile.max_calls_per_operation,
                             self.profile.retry_limit + 1,
                         ):
-                            raise
+                            raise ProviderCallError(
+                                "MODEL_CANDIDATE_REJECTED", observation=observation()
+                            ) from exc
                         instruction = (
                             request.retry_instruction(exc)
                             if request.retry_instruction is not None
@@ -676,7 +739,9 @@ class OpenAICompatibleProvider:
                             sum(len(str(message["content"])) for message in retry_messages)
                             > self.profile.max_input_characters
                         ):
-                            raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED") from exc
+                            raise ProviderCallError(
+                                "MODEL_INPUT_BUDGET_EXCEEDED", observation=observation()
+                            ) from exc
                         body["messages"] = retry_messages
                         continue
                 return ProviderResult(
@@ -692,6 +757,7 @@ class OpenAICompatibleProvider:
                     prompt_version=self.profile.prompt_version,
                     configuration_id=self.profile.configuration_id,
                     capability_profile=self.profile.capabilities.model_dump(),
+                    candidate_digest=candidate_digest,
                 )
             except ProviderCallError:
                 raise
@@ -699,8 +765,8 @@ class OpenAICompatibleProvider:
                 last_code = "MODEL_PROVIDER_TIMEOUT"
                 continue
             except (ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-                raise ProviderCallError("MODEL_OUTPUT_INVALID") from exc
-        raise ProviderCallError(last_code)
+                raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation()) from exc
+        raise ProviderCallError(last_code, observation=observation())
 
 
 def _integer_or_none(value: object) -> int | None:
@@ -718,18 +784,40 @@ class DeterministicFakeProvider:
     def structured(self, request: ProviderRequest) -> ProviderResult:
         self.requests.append(request)
         calls = 0
+        candidate_digest: str | None = None
         limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
+
+        def observation() -> ProviderExecutionObservation:
+            return ProviderExecutionObservation(
+                usage={
+                    "prompt_tokens": 10 * calls if calls else None,
+                    "completion_tokens": 20 * calls if calls else None,
+                    "total_tokens": 30 * calls if calls else None,
+                },
+                latency_ms=calls,
+                call_count=calls,
+                profile_id=self.profile.profile_id,
+                model_or_deployment=self.profile.model_or_deployment,
+                prompt_version=self.profile.prompt_version,
+                configuration_id=self.profile.configuration_id,
+                capability_profile=self.profile.capabilities.model_dump(),
+                candidate_digest=candidate_digest,
+            )
+
         while calls < limit:
             if not self._responses:
-                raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED")
+                raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED", observation=observation())
             calls += 1
             value = self._responses.pop(0)
+            candidate_digest = _candidate_digest(value)
             if request.validator is not None:
                 try:
                     request.validator(value)
-                except Exception:
+                except Exception as exc:
                     if calls >= limit:
-                        raise
+                        raise ProviderCallError(
+                            "MODEL_CANDIDATE_REJECTED", observation=observation()
+                        ) from exc
                     continue
             return ProviderResult(
                 value=value,
@@ -745,5 +833,6 @@ class DeterministicFakeProvider:
                 prompt_version=self.profile.prompt_version,
                 configuration_id=self.profile.configuration_id,
                 capability_profile=self.profile.capabilities.model_dump(),
+                candidate_digest=candidate_digest,
             )
-        raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED")
+        raise ProviderCallError("FAKE_PROVIDER_EXHAUSTED", observation=observation())

@@ -10,10 +10,11 @@ from pathlib import Path
 from threading import Barrier, Event
 from uuid import uuid4
 
+import httpx
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from apbra_api.api import create_app
@@ -25,8 +26,12 @@ from apbra_api.generation import (
     GenerationBridgeFailure,
     _automatic_design_retry_instruction,
 )
-from apbra_api.model_provider import DeterministicFakeProvider, ProviderProfile
-from apbra_api.persistence import ApplicationSession, Database
+from apbra_api.model_provider import (
+    DeterministicFakeProvider,
+    OpenAICompatibleProvider,
+    ProviderProfile,
+)
+from apbra_api.persistence import ApplicationSession, AutomaticDesignAttemptRow, Database
 
 
 def confirmed_case(
@@ -395,7 +400,137 @@ def test_invalid_automatic_design_is_failed_safely_without_losing_requirements(
         "requests.csv",
         b"Team,Requests\nA,7\nB,5\n",
     )
-    provider = automatic_test_provider([{"untrusted": "not a report design"}])
+    provider = automatic_test_provider(
+        [
+            {"untrusted": "first rejected report design"},
+            {"untrusted": "second rejected report design"},
+        ]
+    )
+    command_key = str(uuid4())
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as automatic_client:
+        automatic_client.cookies.update(client.cookies)
+        rejected = automatic_client.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "command_key": command_key,
+            },
+            headers=csrf(session),
+        )
+        assert rejected.status_code == 409
+        assert "untrusted" not in rejected.text
+        history = automatic_client.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert history.status_code == 200
+        failed = history.json()["items"][0]
+        assert failed["status"] == "FAILED"
+        assert failed["provider_profile_id"] == "qualified-test-profile"
+        assert failed["model_or_deployment"] == "qualified-test-model"
+        assert failed["prompt_version"] == "report-design-v1"
+        assert failed["configuration_id"] == "accepted-test-configuration"
+        assert failed["capability_profile"] == {
+            "structured_output": True,
+            "vision": False,
+        }
+        assert failed["usage"] == {
+            "call_count": 2,
+            "completion_tokens": 40,
+            "latency_ms": 2,
+            "prompt_tokens": 20,
+            "total_tokens": 60,
+        }
+        assert failed["validation"] == {
+            "category": "GENERATION_PIPELINE_FAILED",
+            "detail_status": "WITHHELD",
+            "stage": "REPORT_DESIGN_DETERMINISTIC_VALIDATION",
+            "status": "FAILED",
+        }
+        assert failed["failure"]["code"] == "MODEL_CANDIDATE_REJECTED"
+        assert "first rejected" not in history.text
+        assert "second rejected" not in history.text
+        with database.session() as db:
+            persisted = db.scalar(
+                select(AutomaticDesignAttemptRow).where(
+                    AutomaticDesignAttemptRow.command_key == command_key
+                )
+            )
+            assert persisted is not None
+            assert persisted.candidate_digest is not None
+            assert len(persisted.candidate_digest) == 64
+        assert (
+            automatic_client.get(f"/api/cases/{case['id']}/acceptance").json()[
+                "confirmed_contract"
+            ]["current"]
+            is True
+        )
+        designs = automatic_client.get(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert designs.status_code == 200
+        assert all(item["origin"] != "AUTO_ELIGIBLE" for item in designs.json()["items"])
+
+    restarted_database = Database(settings.database_url)
+    with TestClient(
+        create_app(settings=settings, database=restarted_database, model_provider=provider)
+    ) as restarted:
+        restarted.cookies.update(client.cookies)
+        durable = restarted.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert durable.status_code == 200
+        assert durable.json()["items"][0]["usage"]["call_count"] == 2
+        assert durable.json()["items"][0]["validation"]["status"] == "FAILED"
+    restarted_database.engine.dispose()
+
+    foreign = TestClient(create_app(settings=settings, database=database, model_provider=provider))
+    try:
+        sign_in(foreign, "foreign")
+        assert (
+            foreign.get(
+                f"/api/cases/{case['id']}/automatic-designs",
+                params={"confirmed_contract_id": contract["id"]},
+            ).status_code
+            == 404
+        )
+    finally:
+        foreign.close()
+
+    with database.session() as db:
+        db.execute(
+            text("UPDATE memberships SET active=false WHERE id=:id"),
+            {"id": session["actor"]["membership_id"]},  # type: ignore[index]
+        )
+    assert client.get(
+        f"/api/cases/{case['id']}/automatic-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    ).status_code in {401, 404}
+
+
+def test_provider_failure_after_real_call_persists_safe_observation_only(
+    client: TestClient, settings: Settings, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Summarise qualified request counts by service group.",
+        "requests.csv",
+        b"Group,Requests\nA,7\nB,5\n",
+    )
+    test_profile = automatic_test_provider([{}]).profile
+    provider = OpenAICompatibleProvider(
+        test_profile,
+        "server-secret",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(403, text="credential=server-secret hidden-body")
+        ),
+    )
     with TestClient(
         create_app(settings=settings, database=database, model_provider=provider)
     ) as automatic_client:
@@ -409,17 +544,29 @@ def test_invalid_automatic_design_is_failed_safely_without_losing_requirements(
             headers=csrf(session),
         )
         assert rejected.status_code == 409
-        assert "untrusted" not in rejected.text
+        assert "server-secret" not in rejected.text
+        assert "hidden-body" not in rejected.text
         history = automatic_client.get(
             f"/api/cases/{case['id']}/automatic-designs",
             params={"confirmed_contract_id": contract["id"]},
         )
         assert history.status_code == 200
-        assert history.json()["items"][0]["status"] == "FAILED"
-        assert history.json()["items"][0]["failure"]["code"]
-        assert automatic_client.get(f"/api/cases/{case['id']}/acceptance").json()[
-            "confirmed_contract"
-        ]["current"] is True
+        failed = history.json()["items"][0]
+        assert failed["status"] == "FAILED"
+        assert failed["provider_profile_id"] == "qualified-test-profile"
+        assert failed["model_or_deployment"] == "qualified-test-model"
+        assert failed["usage"] == {
+            "call_count": 1,
+            "completion_tokens": None,
+            "latency_ms": failed["usage"]["latency_ms"],
+            "prompt_tokens": None,
+            "total_tokens": None,
+        }
+        assert failed["usage"]["latency_ms"] >= 0
+        assert failed["validation"] is None
+        assert failed["failure"]["code"] == "MODEL_PROVIDER_REJECTED"
+        assert "server-secret" not in history.text
+        assert "hidden-body" not in history.text
 
 
 @pytest.mark.parametrize("selector", ["member", "owner"])

@@ -46,6 +46,7 @@ from .evidence import (
 from .model_provider import (
     ModelProvider,
     ProviderCallError,
+    ProviderExecutionObservation,
     ProviderRequest,
     report_design_schema,
 )
@@ -260,6 +261,56 @@ SAFE_BRIDGE_DIAGNOSTIC_DETAILS = {
 
 def _safe_bridge_diagnostic_detail(exc: GenerationBridgeFailure) -> str | None:
     return exc.diagnostic_message if exc.diagnostic_code in SAFE_BRIDGE_DIAGNOSTIC_DETAILS else None
+
+
+def _provider_validation_failure(exc: Exception) -> Exception | None:
+    if isinstance(exc, ProviderCallError) and exc.code == "MODEL_CANDIDATE_REJECTED":
+        return exc.__cause__ if isinstance(exc.__cause__, Exception) else None
+    return exc if isinstance(exc, GenerationFailed) else None
+
+
+def _safe_failed_validation(exc: Exception) -> dict[str, str] | None:
+    validation_failure = _provider_validation_failure(exc)
+    if validation_failure is None:
+        return None
+    if isinstance(validation_failure, GenerationBridgeFailure):
+        category = validation_failure.diagnostic_code
+        detail = _safe_bridge_diagnostic_detail(validation_failure)
+    elif isinstance(validation_failure, GenerationFailed):
+        category = validation_failure.code
+        detail = None
+    else:
+        category = "CANDIDATE_VALIDATION_FAILED"
+        detail = None
+    evidence = {
+        "status": "FAILED",
+        "stage": "REPORT_DESIGN_DETERMINISTIC_VALIDATION",
+        "category": category,
+        "detail_status": "RECORDED" if detail is not None else "WITHHELD",
+    }
+    if detail is not None:
+        evidence["structural_detail"] = detail[:500]
+    return evidence
+
+
+def _apply_provider_observation(attempt: Any, observation: ProviderExecutionObservation) -> None:
+    attempt.provider_profile_id = observation.profile_id
+    attempt.model_or_deployment = observation.model_or_deployment
+    attempt.prompt_version = observation.prompt_version
+    attempt.configuration_id = observation.configuration_id
+    attempt.capability_profile_json = json.dumps(
+        observation.capability_profile, sort_keys=True, separators=(",", ":")
+    )
+    attempt.usage_json = json.dumps(
+        {
+            **observation.usage,
+            "latency_ms": observation.latency_ms,
+            "call_count": observation.call_count,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    attempt.candidate_digest = observation.candidate_digest
 
 
 def _automatic_design_retry_instruction(
@@ -812,8 +863,19 @@ class GenerationService:
             evidence_digest,
             reference_digest,
         )
+        attempt.provider_profile_id = model_provider.profile.profile_id
+        attempt.model_or_deployment = model_provider.profile.model_or_deployment
+        attempt.prompt_version = model_provider.profile.prompt_version
+        attempt.configuration_id = model_provider.profile.configuration_id
+        attempt.capability_profile_json = json.dumps(
+            model_provider.profile.capabilities.model_dump(),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         store.add_audit(actor, "AUTOMATIC_DESIGN_STARTED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id)
         cast(Any, db).commit()
+        provider_observation: ProviderExecutionObservation | None = None
+        terminal_validation: dict[str, Any] | None = None
         try:
             governed_knowledge = bridge.governed_knowledge(payload)
             generation_capabilities = cast(
@@ -967,31 +1029,13 @@ class GenerationService:
                     ),
                 )
             )
-            candidate = provider_result.value
-            candidate_json = json.dumps(
-                candidate, sort_keys=True, separators=(",", ":"), allow_nan=False
-            )
-            attempt.provider_profile_id = provider_result.profile_id
-            attempt.model_or_deployment = provider_result.model_or_deployment
-            attempt.prompt_version = provider_result.prompt_version
-            attempt.configuration_id = provider_result.configuration_id
-            attempt.capability_profile_json = json.dumps(
-                provider_result.capability_profile, sort_keys=True, separators=(",", ":")
-            )
-            attempt.usage_json = json.dumps(
-                {
-                    **provider_result.usage,
-                    "latency_ms": provider_result.latency_ms,
-                    "call_count": provider_result.call_count,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            attempt.candidate_digest = hashlib.sha256(candidate_json.encode()).hexdigest()
+            provider_observation = provider_result.observation
+            _apply_provider_observation(attempt, provider_observation)
             if validated_result is None:
                 raise GenerationFailed()
             result = validated_result
             validation = cast(dict[str, Any], result["validation"])
+            terminal_validation = validation
             normalized = cast(dict[str, Any], result["provenance"])["reportDesign"]
             active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
             if active_actor is None or active_actor.company_id != actor.company_id:
@@ -1071,18 +1115,28 @@ class GenerationService:
                 "reviewed_design": self._reviewed_design_json(reviewed),
             }, True
         except Exception as exc:
+            failure_observation = (
+                exc.observation
+                if isinstance(exc, ProviderCallError) and exc.observation is not None
+                else provider_observation
+            )
+            failure_validation = _safe_failed_validation(exc) or terminal_validation
+            validation_failure = _provider_validation_failure(exc)
             cast(Any, db).rollback()
-            if isinstance(exc, GenerationBridgeFailure):
-                detail = _safe_bridge_diagnostic_detail(exc)
+            failed_attempt = store.design_attempt_by_command(actor, case_id, command_key)
+            if failed_attempt is None:
+                raise
+            if isinstance(validation_failure, GenerationBridgeFailure):
+                detail = _safe_bridge_diagnostic_detail(validation_failure)
                 if detail is None:
                     logger.warning(
                         "Automatic design deterministic validation failed: code=%s detail=withheld",
-                        exc.diagnostic_code,
+                        validation_failure.diagnostic_code,
                     )
                 else:
                     logger.warning(
                         "Automatic design deterministic validation failed: code=%s detail=%s",
-                        exc.diagnostic_code,
+                        validation_failure.diagnostic_code,
                         detail,
                     )
             elif isinstance(exc, ProviderCallError):
@@ -1094,11 +1148,20 @@ class GenerationService:
                 if isinstance(exc, (ProviderCallError, GenerationFailed))
                 else "AUTOMATIC_DESIGN_VALIDATION_FAILED"
             )
-            attempt.status = "FAILED"
-            attempt.safe_failure_code = failure_code
-            attempt.completed_at = datetime.now(UTC)
+            if failure_observation is not None:
+                _apply_provider_observation(failed_attempt, failure_observation)
+            if failure_validation is not None:
+                failed_attempt.validation_json = json.dumps(
+                    failure_validation, sort_keys=True, separators=(",", ":")
+                )
+            failed_attempt.status = "FAILED"
+            failed_attempt.safe_failure_code = failure_code
+            failed_attempt.completed_at = datetime.now(UTC)
             store.add_audit(
-                actor, "AUTOMATIC_DESIGN_FAILED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id
+                actor,
+                "AUTOMATIC_DESIGN_FAILED",
+                "AUTOMATIC_DESIGN_ATTEMPT",
+                failed_attempt.id,
             )
             cast(Any, db).commit()
             raise DesignProposalUnavailable() from exc

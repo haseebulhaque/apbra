@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -94,6 +95,7 @@ def test_exact_endpoint_structured_schema_and_safe_provenance_are_used() -> None
     assert result.call_count == 1
     assert result.profile_id == "qualified-test-profile"
     assert result.usage["total_tokens"] == 18
+    assert result.candidate_digest == hashlib.sha256(b'{"pages":[]}').hexdigest()
     assert len(observed) == 1
     assert str(observed[0].url) == "https://provider.invalid/v1/chat/completions"
     assert observed[0].headers["authorization"] == "Bearer server-secret"
@@ -138,6 +140,7 @@ def test_deterministic_rejection_gets_one_configured_model_correction() -> None:
     assert result.value == {"pages": [{"id": "corrected"}]}
     assert result.call_count == 2
     assert result.usage["total_tokens"] == 36
+    assert result.candidate_digest == hashlib.sha256(b'{"pages":[{"id":"corrected"}]}').hexdigest()
     assert len(observed) == 2
     retry_body = json.loads(observed[1].content)
     assert retry_body["messages"][-2] == {
@@ -147,6 +150,64 @@ def test_deterministic_rejection_gets_one_configured_model_correction() -> None:
     assert retry_body["messages"][-1]["role"] == "user"
     assert "REPORT_DESIGN_SEMANTICS_FAILED" in retry_body["messages"][-1]["content"]
     assert "server-secret" not in retry_body["messages"][-1]["content"]
+
+
+def test_terminal_candidate_rejection_carries_only_safe_observed_provenance() -> None:
+    observed: list[httpx.Request] = []
+
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        observed.append(incoming)
+        value = {"pages": [{"id": f"candidate-{len(observed)}"}]}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": json.dumps(value)}}],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18},
+            },
+        )
+
+    provider = OpenAICompatibleProvider(
+        profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    base = request()
+    with pytest.raises(ProviderCallError) as captured:
+        provider.structured(
+            ProviderRequest(
+                task=base.task,
+                system_prompt=base.system_prompt,
+                context=base.context,
+                output_schema=base.output_schema,
+                validator=lambda _value: (_ for _ in ()).throw(
+                    RuntimeError("REPORT_DESIGN_SEMANTICS_FAILED secret=must-not-persist")
+                ),
+                retry_instruction=lambda _exc: "Correct the structural failure.",
+            )
+        )
+
+    failure = captured.value
+    assert failure.code == "MODEL_CANDIDATE_REJECTED"
+    assert str(failure) == "MODEL_CANDIDATE_REJECTED"
+    assert "must-not-persist" not in str(failure)
+    assert failure.observation is not None
+    assert failure.observation.call_count == 2
+    assert failure.observation.usage == {
+        "prompt_tokens": 22,
+        "completion_tokens": 14,
+        "total_tokens": 36,
+    }
+    assert failure.observation.profile_id == "qualified-test-profile"
+    assert failure.observation.model_or_deployment == "qualified-test-model"
+    assert failure.observation.prompt_version == "prompt-v1"
+    assert failure.observation.configuration_id == "config-v1"
+    assert failure.observation.capability_profile == {
+        "structured_output": True,
+        "vision": False,
+    }
+    assert (
+        failure.observation.candidate_digest
+        == hashlib.sha256(b'{"pages":[{"id":"candidate-2"}]}').hexdigest()
+    )
+    assert len(observed) == 2
 
 
 def test_transient_failure_retries_only_within_the_exact_call_budget() -> None:
@@ -193,6 +254,11 @@ def test_failures_are_bounded_and_do_not_disclose_provider_content(
         provider.structured(request())
     assert captured.value.code == code
     assert "server-secret" not in str(captured.value)
+    assert captured.value.observation is not None
+    assert captured.value.observation.call_count >= 1
+    assert captured.value.observation.profile_id == "qualified-test-profile"
+    assert captured.value.observation.model_or_deployment == "qualified-test-model"
+    assert "server-secret" not in json.dumps(captured.value.observation.__dict__)
 
 
 def test_vision_and_input_budgets_fail_closed_without_a_provider_call() -> None:
