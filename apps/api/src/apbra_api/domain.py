@@ -89,7 +89,6 @@ class CaseRecord(Protocol):
     current_request_version_id: UUID
     version: int
     semantic_context_version: int
-    report_title: str
     created_at: datetime
     updated_at: datetime
 
@@ -141,19 +140,6 @@ class EvidenceRecord(Protocol):
     created_at: datetime
 
 
-class ReferenceMaterialRecord(Protocol):
-    id: UUID
-    case_id: UUID
-    request_version_id: UUID
-    filename: str
-    media_type: str
-    content_digest: str
-    storage_key: str
-    interpretation_state: str
-    capability_profile_id: str | None
-    created_at: datetime
-
-
 class InterpretationRecord(Protocol):
     id: UUID
     case_id: UUID
@@ -192,41 +178,10 @@ class ReviewedReportDesignRecord(Protocol):
     design_json: str
     content_digest: str
     summary_json: str
-    reviewer_membership_id: UUID | None
-    reviewer_identity_id: UUID | None
-    reviewer_role: str | None
-    origin: str
-    design_attempt_id: UUID | None
-    eligibility_validation_json: str | None
+    reviewer_membership_id: UUID
+    reviewer_identity_id: UUID
+    reviewer_role: str
     reviewed_at: datetime
-
-
-class AutomaticDesignAttemptRecord(Protocol):
-    id: UUID
-    company_id: UUID
-    case_id: UUID
-    confirmed_contract_id: UUID
-    interpretation_id: UUID
-    request_version_id: UUID
-    semantic_context_version: int
-    requested_by_membership_id: UUID
-    command_key: str
-    command_payload_digest: str
-    status: str
-    provider_profile_id: str | None
-    model_or_deployment: str | None
-    prompt_version: str | None
-    configuration_id: str | None
-    capability_profile_json: str
-    usage_json: str
-    safe_failure_code: str | None
-    requirement_binding_digest: str
-    evidence_binding_digest: str
-    reference_binding_digest: str
-    validation_json: str | None
-    candidate_digest: str | None
-    created_at: datetime
-    completed_at: datetime | None
 
 
 class GenerationAttemptRecord(Protocol):
@@ -309,10 +264,7 @@ class ApplicationPersistence(Protocol):
         request_text: str,
         command_key: str,
         payload_digest: str,
-        report_title: str,
     ) -> CaseRecord: ...
-
-    def update_case_report_title(self, case: CaseRecord, report_title: str) -> None: ...
 
     def accessible_cases(self, actor: Actor) -> list[CaseRecord]: ...
 
@@ -404,25 +356,6 @@ class ApplicationPersistence(Protocol):
         self, case_id: UUID, request_version_id: UUID, content_digest: str
     ) -> EvidenceRecord | None: ...
 
-    def add_reference_material(
-        self,
-        actor: Actor,
-        case_id: UUID,
-        request_version_id: UUID,
-        filename: str,
-        media_type: str,
-        content_digest: str,
-        storage_key: str,
-        interpretation_state: str,
-        capability_profile_id: str | None,
-    ) -> ReferenceMaterialRecord: ...
-
-    def reference_materials(self, case_id: UUID) -> list[ReferenceMaterialRecord]: ...
-
-    def reference_by_digest(
-        self, case_id: UUID, request_version_id: UUID, content_digest: str
-    ) -> ReferenceMaterialRecord | None: ...
-
     def add_interpretation(
         self,
         actor: Actor,
@@ -473,34 +406,7 @@ class ApplicationPersistence(Protocol):
         design_json: str,
         content_digest: str,
         summary_json: str,
-        *,
-        origin: str = "EXPERT_REVIEWED",
-        design_attempt_id: UUID | None = None,
-        eligibility_validation_json: str | None = None,
     ) -> ReviewedReportDesignRecord: ...
-
-    def create_design_attempt(
-        self,
-        actor: Actor,
-        case_id: UUID,
-        contract_id: UUID,
-        interpretation_id: UUID,
-        request_version_id: UUID,
-        semantic_context_version: int,
-        command_key: str,
-        command_payload_digest: str,
-        requirement_binding_digest: str,
-        evidence_binding_digest: str,
-        reference_binding_digest: str,
-    ) -> AutomaticDesignAttemptRecord: ...
-
-    def design_attempt_by_command(
-        self, actor: Actor, case_id: UUID, command_key: str
-    ) -> AutomaticDesignAttemptRecord | None: ...
-
-    def design_attempts(
-        self, case_id: UUID, contract_id: UUID
-    ) -> list[AutomaticDesignAttemptRecord]: ...
 
     def reviewed_design(
         self, case_id: UUID, design_id: UUID
@@ -614,15 +520,6 @@ class SemanticValidationFailed(ApplicationError):
     public_message = "The proposed interpretation is not ready for confirmation."
 
 
-class IntelligentAnalysisUnavailable(ApplicationError):
-    status_code = 409
-    code = "INTELLIGENT_ANALYSIS_UNAVAILABLE"
-    public_message = (
-        "APBRA could not safely complete the requirement analysis. Your report request "
-        "and supporting information remain saved; retry later or ask for expert assistance."
-    )
-
-
 class GenerationUnavailable(ApplicationError):
     status_code = 422
     code = "GENERATION_UNAVAILABLE"
@@ -631,22 +528,7 @@ class GenerationUnavailable(ApplicationError):
 
 class ReviewedDesignRequired(GenerationUnavailable):
     code = "TRUSTED_REPORT_DESIGN_REQUIRED"
-    public_message = "A current eligible report plan is required before building."
-
-
-class DesignProposalUnavailable(ApplicationError):
-    status_code = 409
-    code = "AUTOMATIC_DESIGN_UNAVAILABLE"
-    public_message = (
-        "APBRA could not create an eligible report design. Your confirmed requirements "
-        "remain saved; retry later or ask for expert assistance."
-    )
-
-
-class ConfigurationUnavailable(ApplicationError):
-    status_code = 503
-    code = "CONFIGURATION_UNAVAILABLE"
-    public_message = "This report capability is not configured and qualified for this runtime."
+    public_message = "A current expert-reviewed report plan is required before building."
 
 
 class GenerationFailed(ApplicationError):

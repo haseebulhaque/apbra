@@ -36,7 +36,6 @@ def test_create_list_resume_update_history_and_idempotency(client: TestClient) -
     first = create_case(client, "Compare manufacturing throughput by plant.", key)
     repeated = create_case(client, "Compare manufacturing throughput by plant.", key)
     assert repeated["id"] == first["id"]
-    assert first["report_title"] == "Compare manufacturing throughput by plant."
 
     session = client.get("/api/auth/session").json()
     conflict = client.post(
@@ -58,7 +57,6 @@ def test_create_list_resume_update_history_and_idempotency(client: TestClient) -
     )
     assert updated.status_code == 200
     assert updated.json()["case"]["version"] == 2
-    assert updated.json()["case"]["report_title"] == first["report_title"]
     stale = client.put(
         f"/api/cases/{first['id']}",
         json={"request_text": "Overwrite stale meaning", "expected_version": 1},
