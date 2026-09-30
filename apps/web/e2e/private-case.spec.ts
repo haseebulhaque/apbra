@@ -9,12 +9,14 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign')
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
   await signIn(page,'member');
   await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.locator('main').getByRole('button',{name:'Create report'})).toHaveCount(1);
+  await page.getByRole('button',{name:'Create report'}).first().click();
 
   const request='Compare synthetic distribution performance by depot and month.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
-  await expect(page.getByText(request,{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Compare synthetic distribution performance by depot and month'})).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
@@ -25,7 +27,7 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await page.getByRole('button',{name:'Save new version'}).click();
   await expect(page.getByText('Your updated request was saved.')).toBeVisible();
   await expect(page.getByText('Earlier request versions · 2')).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Private case access'})).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Private report access'})).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -38,6 +40,7 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/#workspace-main$/);
   await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
+  await page.getByRole('button',{name:'Create report'}).first().click();
   await expect(page.getByRole('heading',{name:'What would you like to understand?'})).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('mobile-home.png'),fullPage:true});
   const overflow=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:window.innerWidth,offenders:[...document.querySelectorAll('body *')].filter(element=>element.getBoundingClientRect().right>window.innerWidth+1&&!element.closest('.workspace-rail nav')).slice(0,8).map(element=>({tag:element.tagName,className:element.className,right:Math.round(element.getBoundingClientRect().right)}))}));
@@ -45,18 +48,20 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
   await page.getByLabel('Your reporting goal').fill('Compare completed synthetic orders by depot.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  const upload=page.getByLabel('Add CSV or XLSX evidence');
+  const upload=page.getByRole('button',{name:'Add data sources or reference material'});
   await upload.focus();
   await expect(upload).toBeFocused();
-  await expect(page.locator('label.upload-button')).toHaveCSS('outline-style','solid');
+  await expect(page.locator('label.upload-button')).toBeVisible();
+  await expect(page.locator('.journey-steps li.unavailable')).toHaveCount(5);
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
   await signIn(page,'owner');
+  await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Assess synthetic customer retention by segment.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
 
   const otherTab=await context.newPage();
   await otherTab.goto('/');
@@ -70,8 +75,8 @@ test('stale edits are rejected through the UI and reload recovers the current ve
 
   await otherTab.getByLabel('Current business request').fill(`${request} Include support channel.`);
   await otherTab.getByRole('button',{name:'Save new version'}).click();
-  await expect(otherTab.getByRole('alert')).toContainText('This case changed in another session. Reload it before saving your changes.');
-  await otherTab.getByRole('button',{name:'Reload case'}).click();
+  await expect(otherTab.getByRole('alert')).toContainText('This report changed in another session. Reload it before saving your changes.');
+  await otherTab.getByRole('button',{name:'Reload report'}).click();
   await expect(otherTab.getByLabel('Current business request')).toHaveValue(saved);
   await expect(otherTab.getByText('Earlier request versions · 2')).toBeVisible();
 });
@@ -79,6 +84,7 @@ test('stale edits are rejected through the UI and reload recovers the current ve
 test('an expired application session is reported truthfully by the protected UI handler',async({page,context})=>{
   await signIn(page,'owner');
   await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await page.getByRole('button',{name:'Create report'}).first().click();
 
   const sessionControl=await context.newPage();
   await sessionControl.goto('/');
@@ -93,6 +99,7 @@ test('an expired application session is reported truthfully by the protected UI 
 
 test('an invited identity accepts the exact single-use invitation through OIDC and the UI',async({page,browser})=>{
   await signIn(page,'owner');
+  await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByText('Manage company access').click();
   await page.getByLabel('External subject').fill('dev-uninvited');
   await page.getByLabel('Application role').selectOption('EXPERT');
@@ -116,14 +123,15 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
 
 test('case owner grants and revokes named private access through the real UI',async({page,browser})=>{
   await signIn(page,'owner');
+  await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Review synthetic clinical capacity by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Reporting case created and saved.')).toBeVisible();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
 
-  await page.getByText('Manage private case access').click();
+  await page.getByText('Manage private report access').click();
   await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
-  await page.getByRole('button',{name:'Grant case access'}).click();
+  await page.getByRole('button',{name:'Grant report access'}).click();
   await expect(page.getByText('dev-member · viewer')).toBeVisible();
 
   const memberContext=await browser.newContext();

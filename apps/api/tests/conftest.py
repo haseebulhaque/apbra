@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import shutil
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 
 from alembic import command
@@ -84,7 +86,9 @@ def validate_disposable_database_url(raw_url: str) -> str:
 def disposable_alembic_config(database_url: str) -> Config:
     validated_url = validate_disposable_database_url(database_url)
     config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", validated_url)
+    # ConfigParser treats percent-encoded credentials as interpolation syntax.
+    # Doubling percent signs preserves the exact URL returned by Config.get().
+    config.set_main_option("sqlalchemy.url", validated_url.replace("%", "%%"))
     return config
 
 
@@ -99,6 +103,53 @@ def database_url() -> str:
 @pytest.fixture(scope="session")
 def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Settings:
     root = tmp_path_factory.mktemp("apbra-api")
+    upload_policy = {
+        "data_extensions": ["CSV", "XLSX"],
+        "reference_extensions": ["PNG", "JPG", "JPEG"],
+        "max_file_bytes": 5_000_000,
+        "max_files_per_selection": 8,
+        "max_data_items_per_report": 20,
+        "max_reference_items_per_report": 20,
+    }
+    generation_policy = {
+        "organisation": {
+            "name": "Synthetic Test Organisation",
+            "displayName": "Synthetic Test Organisation",
+            "locale": "en-AU",
+            "timezone": "Australia/Sydney",
+        },
+        "branding": {
+            "primary": "#005A9C",
+            "accent": "#2D7D9A",
+            "reportNaming": "Test project names",
+            "pageNaming": "Short page names",
+            "executiveConvention": "Accessible summaries",
+            "themeName": "Synthetic Test Theme",
+        },
+        "generation": {
+            "enabled": True,
+            "supportedCapabilities": [
+                "KPI cards",
+                "Bar and column charts",
+                "Line charts",
+                "Tables",
+                "Slicers",
+                "Multiple pages",
+                "Explicit measures",
+            ],
+            "supportedTrendGrains": ["DAY", "MONTH", "QUARTER", "YEAR"],
+            "validationRequired": True,
+            "policy": "Synthetic deterministic test policy",
+        },
+        "governance": {
+            "requireKnowledge": True,
+            "requireAccessibility": True,
+            "requireValidation": True,
+            "maxVisualsPerPage": 20,
+            "maxPages": 5,
+            "humanReviewAtVisuals": 15,
+        },
+    }
     return Settings(
         profile="test",
         database_url=database_url,
@@ -108,6 +159,7 @@ def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Set
         bootstrap_enabled=True,
         evidence_root=root / "evidence",
         artifact_root=root / "artifacts",
+        reference_root=root / "references",
         semantic_bridge_path=Path(
             os.environ.get("APBRA_TEST_SEMANTIC_BRIDGE", "/nonexistent/bridge.mjs")
         ),
@@ -115,13 +167,32 @@ def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Set
             os.environ.get("APBRA_TEST_GENERATION_BRIDGE", "/nonexistent/generation.mjs")
         ),
         semantic_node_path=Path(shutil.which("node") or "/nonexistent/node"),
+        semantic_timeout_seconds=10,
+        generation_timeout_seconds=30,
+        upload_policy_json=json.dumps(upload_policy),
+        generation_policy_json=json.dumps(generation_policy),
+        clarification_policy_json=json.dumps(
+            {
+                "max_rounds": 3,
+                "max_questions_per_round": 5,
+                "max_answer_characters": 2_000,
+            }
+        ),
+        automatic_generation_enabled=False,
+        test_semantic_simulator_enabled=True,
     )
 
 
 @pytest.fixture(autouse=True)
 def migrated_database(settings: Settings) -> Iterator[Database]:
     config = disposable_alembic_config(settings.database_url)
-    command.downgrade(config, "base")
+    reset_engine = create_engine(settings.database_url)
+    try:
+        with reset_engine.begin() as connection:
+            connection.execute(text("DROP SCHEMA public CASCADE"))
+            connection.execute(text("CREATE SCHEMA public"))
+    finally:
+        reset_engine.dispose()
     command.upgrade(config, "head")
     database = Database(settings.database_url)
     bootstrap(settings, database)
