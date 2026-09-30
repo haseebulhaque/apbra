@@ -60,15 +60,70 @@ class UploadPolicy(BaseModel):
         return self
 
 
+class OrganisationPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    name: str = Field(min_length=1, max_length=200)
+    display_name: str = Field(alias="displayName", min_length=1, max_length=200)
+    locale: str = Field(min_length=2, max_length=35)
+    timezone: str = Field(min_length=1, max_length=120)
+
+
+class BrandingPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    primary: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    accent: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    report_naming: str = Field(alias="reportNaming", min_length=1, max_length=500)
+    page_naming: str = Field(alias="pageNaming", min_length=1, max_length=500)
+    executive_convention: str = Field(
+        alias="executiveConvention", min_length=1, max_length=500
+    )
+    theme_name: str = Field(alias="themeName", min_length=1, max_length=200)
+
+
+class GenerationCapabilityPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    enabled: bool
+    supported_capabilities: list[str] = Field(
+        alias="supportedCapabilities", min_length=1, max_length=100
+    )
+    supported_trend_grains: list[Literal["DAY", "MONTH", "QUARTER", "YEAR"]] = Field(
+        alias="supportedTrendGrains", min_length=1, max_length=4
+    )
+    validation_required: bool = Field(alias="validationRequired")
+    policy: str = Field(min_length=1, max_length=2_000)
+
+    @model_validator(mode="after")
+    def validate_unique_values(self) -> "GenerationCapabilityPolicy":
+        if len(set(self.supported_capabilities)) != len(self.supported_capabilities) or len(
+            set(self.supported_trend_grains)
+        ) != len(self.supported_trend_grains):
+            raise ValueError("generation capabilities and trend grains must be unique")
+        return self
+
+
+class GovernancePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    require_knowledge: bool = Field(alias="requireKnowledge")
+    require_accessibility: bool = Field(alias="requireAccessibility")
+    require_validation: bool = Field(alias="requireValidation")
+    max_visuals_per_page: int = Field(alias="maxVisualsPerPage", ge=1, le=100)
+    max_pages: int = Field(alias="maxPages", ge=1, le=100)
+    human_review_at_visuals: int = Field(alias="humanReviewAtVisuals", ge=1, le=500)
+
+
 class GenerationPolicy(BaseModel):
     """Exact canonical compiler capability/branding policy supplied by configuration."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    organisation: dict[str, object]
-    branding: dict[str, object]
-    generation: dict[str, object]
-    governance: dict[str, object]
+    organisation: OrganisationPolicy
+    branding: BrandingPolicy
+    generation: GenerationCapabilityPolicy
+    governance: GovernancePolicy
 
 
 class ClarificationPolicy(BaseModel):
@@ -83,10 +138,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APBRA_", env_file=".env", extra="ignore")
 
     profile: Literal["development", "test", "hosted"] = "development"
-    database_url: str
+    database_url: str = Field(repr=False)
     public_origin: str = "http://127.0.0.1:5173"
     api_origin: str = "http://127.0.0.1:8000"
-    session_secret: str = Field(min_length=32)
+    session_secret: str = Field(min_length=32, repr=False)
     bootstrap_enabled: bool = True
     invitation_ttl_days: int = Field(default=7, ge=1, le=30)
     session_ttl_seconds: int = Field(default=43_200, ge=300, le=86_400)
@@ -104,12 +159,13 @@ class Settings(BaseSettings):
     automatic_generation_enabled: bool | None = None
     model_provider_profile_json: str | None = None
     model_provider_api_key: SecretStr | None = None
+    test_semantic_simulator_enabled: bool = False
     oidc_issuer: str | None = None
     oidc_audience: str = "apbra-local-client"
     oidc_jwks_json: str | None = None
     oidc_authorization_endpoint: str | None = None
     oidc_token_endpoint: str | None = None
-    oidc_client_secret: str | None = None
+    oidc_client_secret: str | None = Field(default=None, repr=False)
     oidc_response_issuer_policy: Literal["required", "single_issuer_compatibility"] = "required"
     oidc_authorization_response_iss_parameter_supported: bool = True
 
@@ -127,6 +183,8 @@ class Settings(BaseSettings):
         return self
 
     def validate_security_profile(self) -> None:
+        if self.test_semantic_simulator_enabled and self.profile != "test":
+            raise ValueError("the deterministic semantic simulator is test-profile only")
         if (
             self.profile in {"development", "test"}
             and self.oidc_response_issuer_policy != "required"

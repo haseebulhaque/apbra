@@ -160,7 +160,15 @@ def create_app(
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
-    conversation_service = ConversationService()
+    try:
+        clarification_policy = settings.clarification_policy()
+    except ProviderConfigurationError:
+        clarification_policy = None
+    try:
+        generation_policy = settings.generation_policy().model_dump(by_alias=True)
+    except ProviderConfigurationError:
+        generation_policy = None
+    conversation_service = ConversationService(clarification_policy)
     try:
         upload_policy = settings.upload_policy()
     except ProviderConfigurationError:
@@ -228,12 +236,8 @@ def create_app(
         if settings.semantic_timeout_seconds is None:
             raise ConfigurationUnavailable()
         objects = local_evidence_service().objects
-        try:
-            clarification_policy = settings.clarification_policy()
-        except ProviderConfigurationError as exc:
-            if model_provider is not None:
-                raise ConfigurationUnavailable() from exc
-            clarification_policy = None
+        if clarification_policy is None or generation_policy is None:
+            raise ConfigurationUnavailable()
         return AcceptanceService(
             SemanticBridge(
                 settings.semantic_bridge_path,
@@ -244,6 +248,10 @@ def create_app(
             reference_objects=(reference_service.objects if reference_service else None),
             model_provider=model_provider,
             clarification_policy=clarification_policy,
+            generation_policy=generation_policy,
+            allow_test_simulator=(
+                settings.profile == "test" and settings.test_semantic_simulator_enabled
+            ),
         )
 
     def local_reference_service() -> ReferenceMaterialService:
@@ -266,17 +274,15 @@ def create_app(
                 )
             except ValueError as exc:
                 raise ConfigurationUnavailable() from exc
-        try:
-            policy = settings.generation_policy().model_dump()
-        except ProviderConfigurationError as exc:
-            raise ConfigurationUnavailable() from exc
+        if generation_policy is None:
+            raise ConfigurationUnavailable()
         return GenerationService(
             bridge,
             local_evidence_service().objects,
             artifact_store,
             reference_objects=(reference_service.objects if reference_service else None),
             model_provider=model_provider,
-            generation_policy=policy,
+            generation_policy=generation_policy,
         )
 
     @app.exception_handler(ApplicationError)
@@ -310,11 +316,14 @@ def create_app(
     ) -> dict[str, Any]:
         resolve_actor(db, session_token)
         policy = local_upload_policy()
+        if clarification_policy is None:
+            raise ConfigurationUnavailable()
         return {
             "data_extensions": policy.data_extensions,
             "reference_extensions": policy.reference_extensions,
             "max_file_bytes": policy.max_file_bytes,
             "max_files_per_selection": policy.max_files_per_selection,
+            "max_answer_characters": clarification_policy.max_answer_characters,
         }
 
     @app.get("/api/auth/login")

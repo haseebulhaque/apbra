@@ -17,6 +17,411 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
+def _string_array(description: str | None = None) -> dict[str, Any]:
+    value: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
+    if description is not None:
+        value["description"] = description
+    return value
+
+
+def _measure_schema() -> dict[str, Any]:
+    fields = {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "businessDefinition": {"type": "string"},
+        "aggregation": {
+            "type": "string",
+            "description": (
+                "Use FILTERED_COUNT for a counted subset. DIFFERENCE and RATIO require "
+                "exact operand measure IDs."
+            ),
+            "enum": [
+                "SUM",
+                "DISTINCTCOUNT",
+                "COUNT",
+                "AVERAGE",
+                "FILTERED_COUNT",
+                "DIFFERENCE",
+                "RATIO",
+                "PERCENTAGE_OF_TOTAL",
+            ],
+        },
+        "field": {"type": "string"},
+        "numeratorMeasureId": {"type": "string"},
+        "denominatorMeasureId": {"type": "string"},
+        "format": {
+            "type": "string",
+            "enum": ["currency", "integer", "decimal", "percentage"],
+        },
+        "filterField": {"type": "string"},
+        "filterValue": {"type": "string"},
+        "contextField": {"type": "string"},
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": list(fields),
+        "properties": fields,
+    }
+
+
+def requirement_analysis_schema() -> dict[str, Any]:
+    """Strict provider schema mirroring the canonical TypeScript contract."""
+
+    measure = _measure_schema()
+    coverage_fields = {
+        "id": {"type": "string"},
+        "kind": {
+            "type": "string",
+            "enum": ["KPI", "FILTER", "BREAKDOWN", "TREND", "LIFECYCLE"],
+        },
+        "measureNames": _string_array(
+            "Exact names of measures completely defined in this obligation."
+        ),
+        "fields": _string_array(
+            "Exact Table.Column bindings. KPI uses none; FILTER and BREAKDOWN use one "
+            "or more; TREND uses exactly one date or datetime field."
+        ),
+        "pageNames": _string_array(
+            "Only exact names already declared in interpretation.pages."
+        ),
+        "required": {
+            "type": "boolean",
+            "description": "Whether confirmation requires this obligation downstream.",
+        },
+        "minimumRepresentations": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Required obligations use at least 1; optional ones use 0.",
+        },
+        "measures": {
+            "type": "array",
+            "description": (
+                "Complete definitions for every measureName in this obligation. When a "
+                "measure is reused, repeat the exact same full JSON measure object without "
+                "changing its ID, name, definition, format, fields, or operands."
+            ),
+            "items": measure,
+        },
+        "timeGrain": {
+            "type": "string",
+            "description": "TREND uses a non-NONE grain; every other kind uses NONE.",
+            "enum": ["NONE", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR"],
+        },
+        "lifecycleValues": _string_array(
+            "Non-empty only for LIFECYCLE and empty for every other kind."
+        ),
+    }
+    coverage = {
+        "type": "object",
+        "description": (
+            "Typed semantic obligation. KPI uses measures and no fields; FILTER uses fields "
+            "and no measures; BREAKDOWN uses measures and fields; TREND uses measures, "
+            "exactly one date/datetime field, and a non-NONE time grain."
+        ),
+        "additionalProperties": False,
+        "required": list(coverage_fields),
+        "properties": coverage_fields,
+    }
+    option_fields = {
+        "id": {"type": "string"},
+        "label": {"type": "string"},
+        "coverageOverrides": {"type": "array", "items": coverage},
+        "pageScope": _string_array(),
+        "audience": {"type": "string"},
+    }
+    clarification_fields = {
+        "id": {"type": "string"},
+        "category": {
+            "type": "string",
+            "enum": [
+                "METRIC_DEFINITION",
+                "TIME_COMPARISON",
+                "SECURITY",
+                "AUDIENCE",
+                "PAGE_SCOPE",
+                "FILTER_SCOPE",
+                "OTHER",
+            ],
+        },
+        "question": {"type": "string"},
+        "reason": {"type": "string"},
+        "required": {"type": "boolean"},
+        "coverageRequirementIds": _string_array(),
+        "selection": {"type": "string", "enum": ["SINGLE"]},
+        "options": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(option_fields),
+                "properties": option_fields,
+            },
+        },
+    }
+    interpretation_fields = {
+        "request_kind": {
+            "type": "string",
+            "enum": ["POWER_BI_REPORT", "OUT_OF_SCOPE"],
+        },
+        "objective": {"type": "string"},
+        "businessQuestions": _string_array(),
+        "kpis": _string_array(),
+        "dimensions": _string_array(),
+        "filters": _string_array(
+            "Exact confirmed Table.Column report filters. A declared report filter satisfies "
+            "its FILTER obligation without requiring a duplicate slicer."
+        ),
+        "audience": {"type": "string"},
+        "pages": _string_array(),
+        "assumptions": _string_array(),
+        "ambiguities": _string_array(),
+        "clarifications": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(clarification_fields),
+                "properties": clarification_fields,
+            },
+        },
+        "coverageRequirements": {"type": "array", "items": coverage},
+        "businessQuestionCoverage": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["question", "coverageRequirementIds"],
+                "properties": {
+                    "question": {"type": "string"},
+                    "coverageRequirementIds": _string_array(),
+                },
+            },
+        },
+    }
+    question_fields = {
+        "id": {"type": "string"},
+        "category": clarification_fields["category"],
+        "question": {"type": "string"},
+        "reason": {"type": "string"},
+        "required": {"type": "boolean"},
+        "suggestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "label"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "label": {"type": "string"},
+                },
+            },
+        },
+        "allowFreeText": {"type": "boolean"},
+    }
+    summary_fields = {
+        "objective": {"type": "string"},
+        "businessQuestions": _string_array(),
+        "kpiDefinitions": _string_array(),
+        "scopeAndTime": _string_array(),
+        "dimensionsAndFilters": _string_array(),
+        "lifecycleDefinitions": _string_array(),
+        "materialPolicyDecisions": _string_array(),
+    }
+    properties = {
+        "state": {
+            "type": "string",
+            "enum": [
+                "NEEDS_CLARIFICATION",
+                "READY_FOR_CONFIRMATION",
+                "HUMAN_REVIEW_REQUIRED",
+                "UNSUPPORTED",
+                "OUT_OF_SCOPE",
+            ],
+        },
+        "interpretation": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(interpretation_fields),
+            "properties": interpretation_fields,
+        },
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(question_fields),
+                "properties": question_fields,
+            },
+        },
+        "unresolvedAmbiguities": _string_array(),
+        "confirmationSummary": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(summary_fields),
+            "properties": summary_fields,
+        },
+        "conflictReasons": _string_array(),
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": list(properties),
+        "properties": properties,
+    }
+
+
+def report_design_schema() -> dict[str, Any]:
+    """Strict provider schema mirroring the canonical ReportDesign contract."""
+
+    relationship_fields = {
+        "fromTable": {"type": "string"},
+        "fromColumn": {"type": "string"},
+        "toTable": {"type": "string"},
+        "toColumn": {"type": "string"},
+    }
+    visual_fields = {
+        "id": {"type": "string"},
+        "type": {
+            "type": "string",
+            "description": (
+                "card requires exactly one measure; bar, column, and line require at least "
+                "one measure and a categoryField; table requires at least one field or "
+                "measure; slicer requires exactly one field binding and no measure."
+            ),
+            "enum": ["card", "bar", "column", "line", "table", "slicer"],
+        },
+        "title": {"type": "string"},
+        "categoryField": {
+            "type": "string",
+            "description": (
+                "Exact Table.Column category for bar, column, or line. For a slicer, leave "
+                "this empty and put the one binding in fields."
+            ),
+        },
+        "timeGrain": {
+            "type": "string",
+            "description": (
+                "Use the exact confirmed supported grain for a trend visual and NONE for "
+                "every non-trend visual."
+            ),
+            "enum": ["NONE", "DAY", "MONTH", "QUARTER", "YEAR"],
+        },
+        "measureIds": _string_array("Exact IDs declared in ReportDesign.measures."),
+        "fields": _string_array(
+            "Exact Table.Column bindings. A slicer uses exactly one fields entry and an "
+            "empty categoryField and measureIds. Do not create a slicer for a field already "
+            "listed in ReportDesign.filters."
+        ),
+        "altText": {"type": "string"},
+    }
+    page_fields = {
+        "id": {"type": "string"},
+        "name": {
+            "type": "string",
+            "description": (
+                "Exact name of one confirmed required page; emit every confirmed page once "
+                "without renaming it."
+            ),
+        },
+        "purpose": {"type": "string"},
+        "visuals": {
+            "type": "array",
+            "maxItems": 6,
+            "description": (
+                "Compiler-ordered visual list. At most six. If there are five or six, list "
+                "only card visuals in positions five and six; every non-card must be in the "
+                "first four positions."
+            ),
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(visual_fields),
+                "properties": visual_fields,
+            },
+        },
+    }
+    properties = {
+        "artifact_kind": {"type": "string", "enum": ["ReportDesign"]},
+        "schema_version": {"type": "integer", "enum": [1]},
+        "projectName": {"type": "string"},
+        "overview": {"type": "string"},
+        "audience": {"type": "string"},
+        "dataModel": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["factTables", "dimensionTables", "relationships"],
+            "properties": {
+                "factTables": _string_array(),
+                "dimensionTables": _string_array(),
+                "relationships": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": list(relationship_fields),
+                        "properties": relationship_fields,
+                    },
+                },
+            },
+        },
+        "measures": {
+            "type": "array",
+            "description": (
+                "Each canonical confirmed measure exactly once, copied without changing any "
+                "identity, definition, format, source field, or operand."
+            ),
+            "items": _measure_schema(),
+        },
+        "pages": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": list(page_fields),
+                "properties": page_fields,
+            },
+        },
+        "filters": _string_array(
+            "Exact confirmed Table.Column report filters. A declared report filter satisfies "
+            "its FILTER obligation without requiring a duplicate slicer. A field listed here "
+            "must not also be represented by a slicer."
+        ),
+        "branding": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["themeName", "primary", "accent"],
+            "properties": {
+                "themeName": {"type": "string"},
+                "primary": {"type": "string"},
+                "accent": {"type": "string"},
+            },
+        },
+        "accessibility": _string_array(),
+        "standardsApplied": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["citation", "decision"],
+                "properties": {
+                    "citation": {"type": "string"},
+                    "decision": {"type": "string"},
+                },
+            },
+        },
+        "assumptions": _string_array(),
+        "warnings": _string_array(),
+        "generationRequirements": _string_array(),
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": list(properties),
+        "properties": properties,
+    }
+
+
 class ProviderConfigurationError(ValueError):
     """The explicitly configured profile is absent, malformed or unsupported."""
 

@@ -1055,6 +1055,11 @@ class ApplicationSession(Session):
             ).all()
         )
 
+    def update_case_report_title(self, case: CaseRow, report_title: str) -> None:
+        case.report_title = report_title
+        case.updated_at = utcnow()
+        self.flush()
+
     def case_versions(self, case_id: UUID) -> list[RequestVersionRow]:
         return list(
             self.scalars(

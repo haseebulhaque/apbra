@@ -35,6 +35,7 @@ def test_capabilities_and_reference_upload_are_separate_and_truthful(
         "reference_extensions": ["PNG", "JPG", "JPEG"],
         "max_file_bytes": 5_000_000,
         "max_files_per_selection": 8,
+        "max_answer_characters": 2_000,
     }
     case = create_case(client, session)
     added = client.post(

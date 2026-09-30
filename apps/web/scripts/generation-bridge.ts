@@ -7,7 +7,7 @@ import {inspectLayoutRepairSemantics,normalizeReportDesign} from '../src/reportD
 import type {DataStructure} from '../src/schemaIngestion';
 import type {TenantSettings} from '../src/tenant';
 
-type Request={contract:unknown;dataStructure:unknown;reportDesign?:unknown;binding:unknown;execution:unknown;generationPolicy?:unknown};
+type Request={operation?:'knowledge'|'generate';contract:unknown;dataStructure:unknown;reportDesign?:unknown;binding:unknown;execution?:unknown;generationPolicy?:unknown};
 const encoder=new TextEncoder();
 
 function deterministicVector(text:string){const values=new Array<number>(48).fill(0);for(const [index,value] of encoder.encode(text.normalize('NFKC').toLocaleLowerCase('en-US')).entries())values[(value+index*17)%values.length]+=((value%29)+1)/29;const norm=Math.sqrt(values.reduce((sum,value)=>sum+value*value,0))||1;return values.map(value=>value/norm)}
@@ -22,6 +22,9 @@ async function main(){
  const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure),tenant=qualifiedPolicy(input.generationPolicy);
  const query=[contract.objective,contract.audience,...contract.businessQuestions.map(item=>item.question),...contract.obligations.flatMap(item=>[...item.measureNames,...item.fields])].join('\n');
  const retrieval=await retrieveKnowledge(query,50,localEmbedder),knowledge=retrieval.retrieved.map(({citation,text})=>({citation,text}));if(!knowledge.length)throw new Error('GOVERNED_KNOWLEDGE_UNAVAILABLE');
+ if(input.operation==='knowledge'){respond({knowledge});return}
+ if(input.operation!=='generate')throw new Error('GENERATION_OPERATION_REQUIRED');
+ if(!input.execution)throw new Error('GENERATION_EXECUTION_BINDING_REQUIRED');
  if(input.reportDesign===undefined||input.reportDesign===null)throw new Error('TRUSTED_REPORT_DESIGN_REQUIRED: no ReportDesign was supplied for local no-model generation.');
  const original=validateReportDesign(input.reportDesign,knowledge.map(item=>item.citation),dataStructure,tenant.generation.supportedTrendGrains);validateConfirmedMeasureAuthority(original,contract);
  const normalization=normalizeReportDesign(original,dataStructure);if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${normalization.normalizationFindings.map(item=>item.code).join(',')}`);

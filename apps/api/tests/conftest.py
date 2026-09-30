@@ -86,7 +86,9 @@ def validate_disposable_database_url(raw_url: str) -> str:
 def disposable_alembic_config(database_url: str) -> Config:
     validated_url = validate_disposable_database_url(database_url)
     config = Config("alembic.ini")
-    config.set_main_option("sqlalchemy.url", validated_url)
+    # ConfigParser treats percent-encoded credentials as interpolation syntax.
+    # Doubling percent signs preserves the exact URL returned by Config.get().
+    config.set_main_option("sqlalchemy.url", validated_url.replace("%", "%%"))
     return config
 
 
@@ -177,6 +179,7 @@ def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Set
             }
         ),
         automatic_generation_enabled=False,
+        test_semantic_simulator_enabled=True,
     )
 
 

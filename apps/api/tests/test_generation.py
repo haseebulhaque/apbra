@@ -332,6 +332,19 @@ def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
         assert "report_design" not in result["reviewed_design"]
         assert provider.requests[0].task == "REPORT_DESIGN"
         assert "credential" not in provider.requests[0].context
+        assert provider.requests[0].context["governedKnowledge"]
+        prompt = provider.requests[0].system_prompt
+        assert "exact complete canonical measure objects" in prompt
+        assert "every confirmed required page exactly once" in prompt
+        assert "Never create a slicer for a field already listed" in prompt
+        assert "first four positions" in prompt
+        assert not any(
+            fixture_term in prompt.lower()
+            for fixture_term in ("retail", "store", "product", "sales")
+        )
+        assert automatic_client.get(f"/api/cases/{case['id']}").json()["case"][
+            "report_title"
+        ] == contract["reviewed_report_design"]["projectName"]
 
         built = automatic_client.post(
             f"/api/cases/{case['id']}/generation",

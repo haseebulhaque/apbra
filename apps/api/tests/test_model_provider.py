@@ -11,6 +11,8 @@ from apbra_api.model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
     ProviderRequest,
+    report_design_schema,
+    requirement_analysis_schema,
 )
 
 
@@ -159,3 +161,31 @@ def test_vision_and_input_budgets_fail_closed_without_a_provider_call() -> None:
     with pytest.raises(ProviderCallError, match="MODEL_INPUT_BUDGET_EXCEEDED"):
         constrained.structured(oversized)
     assert calls == 0
+
+
+@pytest.mark.parametrize("schema", [requirement_analysis_schema(), report_design_schema()])
+def test_real_provider_schemas_are_closed_and_fully_required(schema: dict[str, object]) -> None:
+    def inspect(value: object) -> None:
+        if isinstance(value, dict):
+            if value.get("type") == "object":
+                assert value.get("additionalProperties") is False
+                properties = value.get("properties")
+                assert isinstance(properties, dict)
+                assert set(value.get("required", [])) == set(properties)
+            for nested in value.values():
+                inspect(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                inspect(nested)
+
+    inspect(schema)
+
+
+def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
+    schema = report_design_schema()
+    properties = schema["properties"]
+    visuals = properties["pages"]["items"]["properties"]["visuals"]
+    assert visuals["maxItems"] == 6
+    assert "positions five and six" in visuals["description"]
+    filters = properties["filters"]
+    assert "must not also be represented by a slicer" in filters["description"]

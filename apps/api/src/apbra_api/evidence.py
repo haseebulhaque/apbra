@@ -11,6 +11,7 @@ import re
 import stat
 import zipfile
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote
@@ -73,6 +74,18 @@ def _value_type(values: list[str]) -> str:
         for value in filled:
             float(value)
         return "decimal"
+    except ValueError:
+        pass
+    try:
+        for value in filled:
+            date.fromisoformat(value)
+        return "date"
+    except ValueError:
+        pass
+    try:
+        for value in filled:
+            datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return "datetime"
     except ValueError:
         return "text"
 

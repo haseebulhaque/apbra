@@ -36,7 +36,7 @@ def test_create_list_resume_update_history_and_idempotency(client: TestClient) -
     first = create_case(client, "Compare manufacturing throughput by plant.", key)
     repeated = create_case(client, "Compare manufacturing throughput by plant.", key)
     assert repeated["id"] == first["id"]
-    assert first["report_title"] == "Compare manufacturing throughput by plant"
+    assert first["report_title"] == "Compare manufacturing throughput by plant."
 
     session = client.get("/api/auth/session").json()
     conflict = client.post(

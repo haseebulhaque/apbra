@@ -46,6 +46,7 @@ from .model_provider import (
     ModelProvider,
     ProviderCallError,
     ProviderRequest,
+    report_design_schema,
 )
 
 MAX_BRIDGE_BYTES = 20_000_000
@@ -87,7 +88,7 @@ class GenerationBridge:
             raise ValueError("The generation bridge exceeds the fixed executable limit.")
         self.pipeline_digest = hashlib.sha256(self.executable.read_bytes()).hexdigest()
 
-    def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _call(self, payload: dict[str, Any], *, validate_candidate: bool) -> dict[str, Any]:
         if not hmac.compare_digest(
             hashlib.sha256(self.executable.read_bytes()).hexdigest(), self.pipeline_digest
         ):
@@ -172,6 +173,24 @@ class GenerationBridge:
         value = response.get("value")
         if not isinstance(value, dict):
             raise GenerationFailed()
+        if not validate_candidate:
+            knowledge = value.get("knowledge")
+            if (
+                not isinstance(knowledge, list)
+                or not knowledge
+                or len(knowledge) > 100
+                or any(
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("citation"), str)
+                    or not item["citation"]
+                    or not isinstance(item.get("text"), str)
+                    or not item["text"]
+                    or len(item["text"].encode()) > 100_000
+                    for item in knowledge
+                )
+            ):
+                raise GenerationFailed()
+            return value
         provenance = value.get("provenance")
         if (
             not isinstance(provenance, dict)
@@ -203,6 +222,13 @@ class GenerationBridge:
             ):
                 raise GenerationFailed()
         return value
+
+    def governed_knowledge(self, payload: dict[str, Any]) -> list[dict[str, str]]:
+        value = self._call({**payload, "operation": "knowledge"}, validate_candidate=False)
+        return cast(list[dict[str, str]], value["knowledge"])
+
+    def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._call({**payload, "operation": "generate"}, validate_candidate=True)
 
 
 def _xlsx_rows(content: bytes) -> list[tuple[str, list[list[str]]]]:
@@ -708,34 +734,57 @@ class GenerationService:
         store.add_audit(actor, "AUTOMATIC_DESIGN_STARTED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id)
         cast(Any, db).commit()
         try:
+            governed_knowledge = self.bridge.governed_knowledge(payload)
             provider_result = self.model_provider.structured(
                 ProviderRequest(
                     task="REPORT_DESIGN",
                     system_prompt=(
                         "Propose a generic Power BI ReportDesign for the exact confirmed business "
-                        "requirements and qualified schema. Preserve every measure, operand, "
-                        "dimension, filter, time grain and business question. Use only evidenced "
-                        "Table.Column fields and supported typed operations. Do not assert access, "
-                        "confirmation, validation, approval or eligibility. Do not emit executable "
-                        "DAX, M or SQL. Reference-material metadata marked NOT_INTERPRETED conveys "
-                        "no visual semantics. Return only the requested structured candidate."
+                        "requirements and qualified schema. Preserve every measure, "
+                        "operand, dimension, filter, time grain and business question. "
+                        "Copy the exact complete canonical measure objects from the "
+                        "confirmed contract into ReportDesign.measures; do not change "
+                        "any measure value. Use only evidenced Table.Column fields and "
+                        "supported typed operations. Every visual must use an exact "
+                        "confirmed page, field and measure ID. Emit every confirmed "
+                        "required page exactly once without renaming it. Each required "
+                        "KPI measure must appear in a visual on an allowed page. Each "
+                        "BREAKDOWN or TREND must cover all of its exact measure IDs and "
+                        "fields on an allowed page; one supported visual may combine its "
+                        "measures. Trend visuals must use "
+                        "the exact confirmed date field and time grain, while all other "
+                        "visuals use timeGrain NONE. A card uses exactly one measure. A "
+                        "bar, column or line uses at least one measure and a non-empty "
+                        "categoryField. A table uses at least one field or measure. A "
+                        "slicer uses exactly one fields entry, an empty categoryField, "
+                        "and no measures. Represent every required obligation at least "
+                        "its configured minimum, within the configured page and visual "
+                        "limits. The compiler grid accepts at most six visuals per page; "
+                        "when a page has five or six, its fifth and sixth visuals must be "
+                        "cards. Order each visuals array so every non-card is among the "
+                        "first four positions and never place a non-card after the fourth; "
+                        "otherwise use no more than four. Use the smallest "
+                        "nonredundant design that fully covers "
+                        "the contract. Prefer exact ReportDesign.filters entries for "
+                        "FILTER obligations because they satisfy filter coverage without a "
+                        "duplicate slicer. Never create a slicer for a field already listed "
+                        "in ReportDesign.filters; do not repeat the same filter or analysis on "
+                        "every page. Do not assert access, confirmation, validation, "
+                        "approval or eligibility. Do not emit executable DAX, M or SQL. "
+                        "Reference-material metadata marked NOT_INTERPRETED conveys no "
+                        "visual semantics. Apply only supplied exact governed citation "
+                        "IDs and apply at least one; do not invent citations. Return "
+                        "only the requested structured "
+                        "candidate."
                     ),
                     context={
                         "confirmedRequirements": payload["contract"],
                         "dataStructure": payload["dataStructure"],
                         "referenceMaterial": references,
+                        "governedKnowledge": governed_knowledge,
                         "generationPolicy": self.generation_policy,
                     },
-                    output_schema={
-                        "type": "object",
-                        "required": ["artifact_kind", "schema_version", "pages"],
-                        "properties": {
-                            "artifact_kind": {"const": "ReportDesign"},
-                            "schema_version": {"const": 1},
-                            "pages": {"type": "array", "minItems": 1},
-                        },
-                        "additionalProperties": True,
-                    },
+                    output_schema=report_design_schema(),
                 )
             )
             candidate = provider_result.value
@@ -788,7 +837,15 @@ class GenerationService:
                 normalized, sort_keys=True, separators=(",", ":"), allow_nan=False
             )
             pages = normalized.get("pages")
-            if not isinstance(pages, list):
+            report_title = normalized.get("projectName")
+            description = normalized.get("overview")
+            if (
+                not isinstance(pages, list)
+                or not isinstance(report_title, str)
+                or not report_title.strip()
+                or not isinstance(description, str)
+                or not description.strip()
+            ):
                 raise GenerationFailed()
             visual_count = sum(
                 len(page.get("visuals", []))
@@ -798,7 +855,7 @@ class GenerationService:
             summary = {
                 "page_count": len(pages),
                 "visual_count": visual_count,
-                "description": "Automatically eligible report plan for the confirmed requirements",
+                "description": description,
             }
             binding_json = json.dumps(
                 current_payload["binding"], sort_keys=True, separators=(",", ":")
@@ -824,6 +881,7 @@ class GenerationService:
                 design_attempt_id=attempt.id,
                 eligibility_validation_json=validation_json,
             )
+            store.update_case_report_title(current_case, report_title.strip()[:160])
             attempt.status = "ELIGIBLE"
             attempt.validation_json = validation_json
             attempt.completed_at = datetime.now(UTC)
