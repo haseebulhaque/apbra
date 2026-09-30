@@ -9,8 +9,11 @@ import {compilePowerBI,validateGenericCandidate,type CandidateValidation} from '
 import {documents as defaultDocuments,type RagRetrieval} from './rag';
 import type {DataStructure} from './schemaIngestion';
 import {normalizeReportDesign} from './reportDesignNormalization';
-import {defaultTenantSettings} from './tenant';
+import {defaultTenantSettings as unvalidatedTenantSettings} from './tenant';
 import {beginClarificationAnalysis,createClarificationSession,type ClarificationSession} from './clarification';
+
+const defaultTenantSettings=structuredClone(unvalidatedTenantSettings);
+defaultTenantSettings.governance.maxVisualsPerPage=6;
 
 const evaluation=(result:PolicyResult)=>({ruleId:`RULE-${result}`,category:'complexity' as const,severity:result==='PASS'?'info' as const:result==='WARNING'?'warning' as const:'error' as const,result,reason:`${result} reason`,recommendedAction:`${result} action`});
 const decision=(outcome:PolicyResult):GuardrailDecision=>({outcome,generation:['PASS','WARNING'].includes(outcome)?'AVAILABLE':'NOT_STARTED',evaluations:[evaluation(outcome)]});

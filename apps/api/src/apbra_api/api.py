@@ -33,18 +33,23 @@ from .auth_boundary import (
 )
 from .authorization import resolve_actor, resolve_session
 from .bootstrap import BOOTSTRAP_IDENTITIES
-from .config import Settings, get_settings
+from .config import Settings, UploadPolicy, get_settings
 from .domain import (
     AccessLevel,
     ApplicationError,
     AuthenticationRequired,
+    ConfigurationUnavailable,
     Conflict,
     EvidenceInvalid,
-    GenerationFailed,
     Role,
 )
-from .evidence import MAX_EVIDENCE_BYTES, LocalEvidenceStore
+from .evidence import LocalEvidenceStore
 from .generation import GenerationBridge, GenerationService
+from .model_provider import (
+    ModelProvider,
+    OpenAICompatibleProvider,
+    ProviderConfigurationError,
+)
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     AuthorizationCodeRow,
@@ -54,6 +59,7 @@ from .persistence import (
     MembershipRow,
     SessionRow,
 )
+from .reference_material import ReferenceMaterialService
 from .semantic_bridge import SemanticBridge
 
 logger = logging.getLogger("apbra_api")
@@ -120,6 +126,12 @@ class ReviewedDesignCreate(BaseModel):
     report_design: dict[str, Any]
 
 
+class AutomaticDesignCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed_contract_id: UUID
+    command_key: str = Field(min_length=8, max_length=200)
+
+
 def error_response(exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -141,16 +153,42 @@ def create_app(
     settings: Settings | None = None,
     database: Database | None = None,
     oidc: OidcAdapter | None = None,
+    model_provider: ModelProvider | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
-    conversation_service = ConversationService()
+    try:
+        clarification_policy = settings.clarification_policy()
+    except ProviderConfigurationError:
+        clarification_policy = None
+    try:
+        generation_policy = settings.generation_policy().model_dump(by_alias=True)
+    except ProviderConfigurationError:
+        generation_policy = None
+    conversation_service = ConversationService(clarification_policy)
+    try:
+        upload_policy = settings.upload_policy()
+    except ProviderConfigurationError:
+        upload_policy = None
     evidence_service = (
-        EvidenceService(LocalEvidenceStore(settings.evidence_root, settings.profile))
-        if settings.profile in {"development", "test"}
+        EvidenceService(
+            LocalEvidenceStore(settings.evidence_root, settings.profile), upload_policy
+        )
+        if settings.profile in {"development", "test"} and upload_policy is not None
+        else None
+    )
+    reference_service = (
+        ReferenceMaterialService(
+            LocalEvidenceStore(settings.reference_root, settings.profile), upload_policy
+        )
+        if (
+            settings.profile in {"development", "test"}
+            and settings.reference_root is not None
+            and upload_policy is not None
+        )
         else None
     )
     artifact_store = (
@@ -161,6 +199,11 @@ def create_app(
     invitation_service = InvitationService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
+
+    if model_provider is None and settings.automatic_generation_enabled is True:
+        model_provider = OpenAICompatibleProvider(
+            settings.model_profile(), settings.model_credential()
+        )
 
     def db_session() -> Iterator[Session]:
         with database.session() as db:
@@ -178,17 +221,40 @@ def create_app(
 
     def local_evidence_service() -> EvidenceService:
         if evidence_service is None:
-            raise EvidenceInvalid()
+            raise ConfigurationUnavailable()
         return evidence_service
 
+    def local_upload_policy() -> UploadPolicy:
+        if upload_policy is None:
+            raise ConfigurationUnavailable()
+        return upload_policy
+
     def local_acceptance_service() -> AcceptanceService:
+        if settings.semantic_timeout_seconds is None:
+            raise ConfigurationUnavailable()
         objects = local_evidence_service().objects
+        if clarification_policy is None or generation_policy is None:
+            raise ConfigurationUnavailable()
         return AcceptanceService(
             SemanticBridge(
-                settings.semantic_bridge_path, node_executable=settings.semantic_node_path
+                settings.semantic_bridge_path,
+                node_executable=settings.semantic_node_path,
+                timeout_seconds=settings.semantic_timeout_seconds,
             ),
             objects,
+            reference_objects=(reference_service.objects if reference_service else None),
+            model_provider=model_provider,
+            clarification_policy=clarification_policy,
+            generation_policy=generation_policy,
+            allow_test_simulator=(
+                settings.profile == "test" and settings.test_semantic_simulator_enabled
+            ),
         )
+
+    def local_reference_service() -> ReferenceMaterialService:
+        if reference_service is None:
+            raise ConfigurationUnavailable()
+        return reference_service
 
     def local_generation_service(*, require_bridge: bool = False) -> GenerationService:
         if artifact_store is None:
@@ -196,17 +262,24 @@ def create_app(
         bridge = None
         if require_bridge:
             try:
+                if settings.generation_timeout_seconds is None:
+                    raise ProviderConfigurationError("GENERATION_TIMEOUT_MISSING")
                 bridge = GenerationBridge(
                     settings.generation_bridge_path,
                     node_executable=settings.semantic_node_path,
                     timeout_seconds=settings.generation_timeout_seconds,
                 )
             except ValueError as exc:
-                raise GenerationFailed() from exc
+                raise ConfigurationUnavailable() from exc
+        if generation_policy is None:
+            raise ConfigurationUnavailable()
         return GenerationService(
             bridge,
             local_evidence_service().objects,
             artifact_store,
+            reference_objects=(reference_service.objects if reference_service else None),
+            model_provider=model_provider,
+            generation_policy=generation_policy,
         )
 
     @app.exception_handler(ApplicationError)
@@ -233,6 +306,22 @@ def create_app(
     def health(db: DB) -> dict[str, str]:
         db.execute(text("SELECT 1"))
         return {"status": "ok", "database": "ok"}
+
+    @app.get("/api/cases/capabilities/uploads")
+    def upload_capabilities(
+        db: DB, session_token: SessionCookie = None
+    ) -> dict[str, Any]:
+        resolve_actor(db, session_token)
+        policy = local_upload_policy()
+        if clarification_policy is None:
+            raise ConfigurationUnavailable()
+        return {
+            "data_extensions": policy.data_extensions,
+            "reference_extensions": policy.reference_extensions,
+            "max_file_bytes": policy.max_file_bytes,
+            "max_files_per_selection": policy.max_files_per_selection,
+            "max_answer_characters": clarification_policy.max_answer_characters,
+        }
 
     @app.get("/api/auth/login")
     def login(
@@ -569,16 +658,17 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
+        policy = local_upload_policy()
         content_length = request.headers.get("content-length")
         if (
             content_length is None
             or not content_length.isdigit()
-            or int(content_length) > MAX_EVIDENCE_BYTES
+            or int(content_length) > policy.max_file_bytes
         ):
             raise EvidenceInvalid()
         content_buffer = bytearray()
         async for chunk in request.stream():
-            if len(content_buffer) + len(chunk) > MAX_EVIDENCE_BYTES:
+            if len(content_buffer) + len(chunk) > policy.max_file_bytes:
                 raise EvidenceInvalid()
             content_buffer.extend(chunk)
         content = bytes(content_buffer)
@@ -598,6 +688,57 @@ def create_app(
                 objects.objects.delete(storage_key)
             raise
         return {"evidence": result}
+
+    @app.get("/api/cases/{case_id}/reference-material")
+    def list_reference_material(
+        case_id: UUID, db: DB, session_token: SessionCookie = None
+    ) -> dict[str, Any]:
+        return {
+            "items": local_reference_service().list(
+                db, resolve_actor(db, session_token), case_id
+            )
+        }
+
+    @app.post("/api/cases/{case_id}/reference-material")
+    async def add_reference_material(
+        case_id: UUID,
+        request: Request,
+        db: DB,
+        filename: str = Query(min_length=1, max_length=255),
+        expected_context_version: int = Query(ge=1),
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, supplied_csrf)
+        policy = local_upload_policy()
+        content_length = request.headers.get("content-length")
+        if (
+            content_length is None
+            or not content_length.isdigit()
+            or int(content_length) > policy.max_file_bytes
+        ):
+            raise EvidenceInvalid()
+        content_buffer = bytearray()
+        async for chunk in request.stream():
+            if len(content_buffer) + len(chunk) > policy.max_file_bytes:
+                raise EvidenceInvalid()
+            content_buffer.extend(chunk)
+        service = local_reference_service()
+        result, storage_key = service.add(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            filename=filename,
+            content=bytes(content_buffer),
+            expected_context_version=expected_context_version,
+        )
+        try:
+            db.commit()
+        except Exception:
+            if storage_key is not None:
+                service.objects.delete(storage_key)
+            raise
+        return {"reference_material": result}
 
     @app.post("/api/cases/{case_id}/interpretations")
     def create_interpretation(
@@ -706,6 +847,42 @@ def create_app(
         db.commit()
         response.status_code = 201
         return {"reviewed_design": reviewed}
+
+    @app.get("/api/cases/{case_id}/automatic-designs")
+    def automatic_design_history(
+        case_id: UUID,
+        confirmed_contract_id: UUID,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return {
+            "items": local_generation_service().automatic_design_history(
+                db,
+                resolve_actor(db, session_token),
+                case_id,
+                confirmed_contract_id,
+            )
+        }
+
+    @app.post("/api/cases/{case_id}/automatic-designs")
+    def propose_automatic_design(
+        case_id: UUID,
+        payload: AutomaticDesignCreate,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, supplied_csrf)
+        result, created = local_generation_service(require_bridge=True).propose_automatic_design(
+            db,
+            resolve_actor(db, session_token),
+            case_id,
+            contract_id=payload.confirmed_contract_id,
+            command_key=payload.command_key,
+        )
+        response.status_code = 201 if created else 200
+        return result
 
     @app.post("/api/cases/{case_id}/generation")
     def start_generation(

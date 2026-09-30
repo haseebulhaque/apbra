@@ -125,6 +125,34 @@ class SemanticBridge:
             raise SemanticValidationFailed()
         return SimulationResult(session)
 
+    def analysis(
+        self,
+        *,
+        session_id: str,
+        original_request: str,
+        context_binding: str,
+        analysed_at: datetime,
+        data_structure: dict[str, Any],
+        analysis: dict[str, Any],
+        limits: dict[str, int],
+    ) -> SimulationResult:
+        value = self._call(
+            {
+                "operation": "analysis",
+                "sessionId": session_id,
+                "originalRequest": original_request,
+                "contextBinding": context_binding,
+                "analysedAt": analysed_at.isoformat(),
+                "dataStructure": data_structure,
+                "analysis": analysis,
+                "limits": limits,
+            }
+        )
+        session = value.get("session")
+        if not isinstance(session, dict):
+            raise SemanticValidationFailed()
+        return SimulationResult(session)
+
     def confirm(
         self,
         session: dict[str, Any],

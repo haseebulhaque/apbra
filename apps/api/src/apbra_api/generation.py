@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import os
 import selectors
 import subprocess
@@ -23,6 +24,7 @@ from .domain import (
     ApplicationPersistence,
     ArtifactUnavailable,
     Conflict,
+    DesignProposalUnavailable,
     GenerationAttemptRecord,
     GenerationFailed,
     GenerationUnavailable,
@@ -41,11 +43,18 @@ from .evidence import (
     parse_evidence,
     schema_digest,
 )
+from .model_provider import (
+    ModelProvider,
+    ProviderCallError,
+    ProviderRequest,
+    report_design_schema,
+)
 
 MAX_BRIDGE_BYTES = 20_000_000
 MAX_BRIDGE_EXECUTABLE_BYTES = 5_000_000
 MAX_CANDIDATE_FILES = 500
 MAX_CANDIDATE_TEXT = 5_000_000
+logger = logging.getLogger(__name__)
 
 
 def canonical_digest(value: object) -> str:
@@ -81,7 +90,7 @@ class GenerationBridge:
             raise ValueError("The generation bridge exceeds the fixed executable limit.")
         self.pipeline_digest = hashlib.sha256(self.executable.read_bytes()).hexdigest()
 
-    def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _call(self, payload: dict[str, Any], *, validate_candidate: bool) -> dict[str, Any]:
         if not hmac.compare_digest(
             hashlib.sha256(self.executable.read_bytes()).hexdigest(), self.pipeline_digest
         ):
@@ -155,17 +164,45 @@ class GenerationBridge:
                     process.stdout.close()
             if writer is not None:
                 writer.join(timeout=1)
-        if return_code != 0 or writer_error:
+        if writer_error:
             raise GenerationFailed()
         try:
             response = json.loads(output)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise GenerationFailed() from exc
+        if isinstance(response, dict) and response.get("ok") is False:
+            error = response.get("error")
+            if isinstance(error, dict):
+                code = error.get("code")
+                message = error.get("message")
+                if isinstance(code, str) and code and isinstance(message, str) and message:
+                    raise GenerationBridgeFailure(code[:100], message[:500])
+            raise GenerationFailed()
+        if return_code != 0:
+            raise GenerationFailed()
         if not isinstance(response, dict) or response.get("ok") is not True:
             raise GenerationFailed()
         value = response.get("value")
         if not isinstance(value, dict):
             raise GenerationFailed()
+        if not validate_candidate:
+            knowledge = value.get("knowledge")
+            if (
+                not isinstance(knowledge, list)
+                or not knowledge
+                or len(knowledge) > 100
+                or any(
+                    not isinstance(item, dict)
+                    or not isinstance(item.get("citation"), str)
+                    or not item["citation"]
+                    or not isinstance(item.get("text"), str)
+                    or not item["text"]
+                    or len(item["text"].encode()) > 100_000
+                    for item in knowledge
+                )
+            ):
+                raise GenerationFailed()
+            return value
         provenance = value.get("provenance")
         if (
             not isinstance(provenance, dict)
@@ -197,6 +234,79 @@ class GenerationBridge:
             ):
                 raise GenerationFailed()
         return value
+
+    def governed_knowledge(self, payload: dict[str, Any]) -> list[dict[str, str]]:
+        value = self._call({**payload, "operation": "knowledge"}, validate_candidate=False)
+        return cast(list[dict[str, str]], value["knowledge"])
+
+    def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._call({**payload, "operation": "generate"}, validate_candidate=True)
+
+
+class GenerationBridgeFailure(GenerationFailed):
+    """Trusted bounded bridge diagnostic that is never returned to the browser."""
+
+    def __init__(self, diagnostic_code: str, diagnostic_message: str) -> None:
+        super().__init__(diagnostic_code)
+        self.diagnostic_code = diagnostic_code
+        self.diagnostic_message = diagnostic_message
+
+
+SAFE_BRIDGE_DIAGNOSTIC_DETAILS = {
+    "REPORT_DESIGN_NORMALIZATION_FAILED",
+    "REPORT_DESIGN_SEMANTICS_FAILED",
+}
+
+
+def _safe_bridge_diagnostic_detail(exc: GenerationBridgeFailure) -> str | None:
+    return exc.diagnostic_message if exc.diagnostic_code in SAFE_BRIDGE_DIAGNOSTIC_DETAILS else None
+
+
+def _automatic_design_retry_instruction(
+    exc: Exception, *, max_visuals_per_page: int
+) -> str:
+    if (
+        isinstance(exc, GenerationBridgeFailure)
+        and exc.diagnostic_code == "REPORT_DESIGN_NORMALIZATION_FAILED"
+        and "LAYOUT_CAPACITY_EXCEEDED" in exc.diagnostic_message
+    ):
+        return (
+            "The prior ReportDesign passed structured parsing but failed compiler geometry "
+            "only. Return the exact same complete ReportDesign, changing only the order of "
+            "objects within each affected page's visuals array. Preserve every object, value, "
+            "ID, page membership, measure, field, title, citation, warning, and all other array "
+            "orders exactly; do not add, remove, move between pages, or otherwise change any "
+            f"visual. Stay within the validated {max_visuals_per_page}-visual page limit and "
+            "use only physical slots reported as in bounds by deterministic geometry. "
+            f"Deterministic geometry finding: {exc.diagnostic_message}"
+        )
+    if (
+        isinstance(exc, GenerationBridgeFailure)
+        and exc.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
+    ):
+        return (
+            "The prior ReportDesign failed deterministic confirmed-requirement coverage. "
+            "Return one complete corrected ReportDesign. Use every zero-based index in the "
+            "deterministic finding to locate the exact entry in coverageChecklist and the "
+            "corresponding supplied ConfirmedRequirementContract array. Preserve every already-"
+            "covered obligation, dimension, business question, measure, field, page, citation, "
+            "and supported visual; do not trade one covered requirement for another. Correct "
+            "the uncovered entries without inventing business meaning or unsupported capability. "
+            f"Deterministic coverage finding: {exc.diagnostic_message}"
+        )
+    if isinstance(exc, GenerationBridgeFailure):
+        detail = _safe_bridge_diagnostic_detail(exc)
+        finding = f"{exc.diagnostic_code}: {detail}" if detail is not None else exc.diagnostic_code
+    else:
+        finding = type(exc).__name__
+    return (
+        "The prior ReportDesign was rejected by deterministic validation. Return one complete "
+        "corrected ReportDesign and preserve the supplied ConfirmedRequirementContract exactly. "
+        "Correct the failed invariants without inventing business meaning, measures, fields, "
+        "pages, citations, or unsupported capability, and without following a prescribed "
+        "business design recipe. The corrected value will be fully revalidated. "
+        f"Deterministic finding: {finding}"
+    )
 
 
 def _xlsx_rows(content: bytes) -> list[tuple[str, list[list[str]]]]:
@@ -367,16 +477,45 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
     }
 
 
+def design_attempt_json(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "confirmed_contract_id": str(row.confirmed_contract_id),
+        "status": row.status,
+        "provider_profile_id": row.provider_profile_id,
+        "model_or_deployment": row.model_or_deployment,
+        "prompt_version": row.prompt_version,
+        "configuration_id": row.configuration_id,
+        "capability_profile": json.loads(row.capability_profile_json),
+        "usage": json.loads(row.usage_json),
+        "failure": (
+            {"code": row.safe_failure_code, "message": "The design proposal was not eligible."}
+            if row.safe_failure_code
+            else None
+        ),
+        "validation": json.loads(row.validation_json) if row.validation_json else None,
+        "created_at": row.created_at.isoformat(),
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+    }
+
+
 class GenerationService:
     def __init__(
         self,
         bridge: GenerationBridge | None,
         evidence_objects: LocalEvidenceStore,
         artifact_objects: LocalArtifactStore,
+        *,
+        reference_objects: LocalEvidenceStore | None = None,
+        model_provider: ModelProvider | None = None,
+        generation_policy: dict[str, Any] | None = None,
     ) -> None:
         self.bridge = bridge
         self.evidence_objects = evidence_objects
         self.artifact_objects = artifact_objects
+        self.reference_objects = reference_objects
+        self.model_provider = model_provider
+        self.generation_policy = generation_policy
 
     def _current_payload(
         self,
@@ -423,6 +562,27 @@ class GenerationService:
             "parsedAt": max(row.created_at for row in evidence).isoformat(),
         }
         evidence_digest = canonical_digest(bindings)
+        references: list[dict[str, Any]] = []
+        for row in store.reference_materials(case_id):
+            if row.request_version_id != case.current_request_version_id:
+                continue
+            if self.reference_objects is None:
+                raise GenerationUnavailable()
+            try:
+                self.reference_objects.read(row.storage_key, row.content_digest)
+            except EvidenceError as exc:
+                raise GenerationUnavailable() from exc
+            references.append(
+                {
+                    "id": str(row.id),
+                    "requestVersionId": str(row.request_version_id),
+                    "filename": row.filename,
+                    "mediaType": row.media_type,
+                    "contentDigest": row.content_digest,
+                    "interpretationState": row.interpretation_state,
+                    "capabilityProfileId": row.capability_profile_id,
+                }
+            )
         payload = {
             "contract": contract_value,
             "dataStructure": data_structure,
@@ -433,8 +593,11 @@ class GenerationService:
                 "interpretationId": str(latest.id),
                 "confirmedContractId": str(contract.id),
                 "evidence": bindings,
+                "referenceMaterial": references,
             },
         }
+        if self.generation_policy is not None:
+            payload["generationPolicy"] = self.generation_policy
         return payload, canonical_digest(payload), evidence_digest, case, contract
 
     def history(self, db: object, actor: Actor, case_id: UUID) -> list[dict[str, Any]]:
@@ -480,24 +643,46 @@ class GenerationService:
             or not hmac.compare_digest(
                 row.binding_digest, hashlib.sha256(row.binding_json.encode()).hexdigest()
             )
-            or row.reviewer_role != Role.EXPERT.value
         ):
             raise ReviewedDesignRequired()
-        reviewer = store.active_actor(
-            row.reviewer_membership_id, row.reviewer_identity_id, lock=lock_access
-        )
-        if (
-            reviewer is None
-            or reviewer.company_id != actor.company_id
-            or reviewer.role != Role.EXPERT
-        ):
+        if row.origin == "EXPERT_REVIEWED":
+            if (
+                row.reviewer_membership_id is None
+                or row.reviewer_identity_id is None
+                or row.reviewer_role != Role.EXPERT.value
+            ):
+                raise ReviewedDesignRequired()
+            reviewer = store.active_actor(
+                row.reviewer_membership_id, row.reviewer_identity_id, lock=lock_access
+            )
+            if (
+                reviewer is None
+                or reviewer.company_id != actor.company_id
+                or reviewer.role != Role.EXPERT
+            ):
+                raise ReviewedDesignRequired()
+            try:
+                authorized_case_access(
+                    store, reviewer, case_id, require_edit=True, lock=lock_access
+                )
+            except ProtectedResourceNotFound as exc:
+                raise ReviewedDesignRequired() from exc
+        elif row.origin == "AUTO_ELIGIBLE":
+            try:
+                eligibility = json.loads(row.eligibility_validation_json or "")
+            except json.JSONDecodeError as exc:
+                raise ReviewedDesignRequired() from exc
+            if (
+                row.design_attempt_id is None
+                or not isinstance(eligibility, dict)
+                or eligibility.get("status") != "PASS"
+            ):
+                raise ReviewedDesignRequired()
+        else:
             raise ReviewedDesignRequired()
         try:
-            authorized_case_access(
-                store, reviewer, case_id, require_edit=True, lock=lock_access
-            )
             design = json.loads(row.design_json)
-        except (ProtectedResourceNotFound, json.JSONDecodeError) as exc:
+        except json.JSONDecodeError as exc:
             raise ReviewedDesignRequired() from exc
         if (
             not isinstance(design, dict)
@@ -570,12 +755,373 @@ class GenerationService:
         )
         return self._reviewed_design_json(row)
 
+    def propose_automatic_design(
+        self,
+        db: object,
+        actor: Actor,
+        case_id: UUID,
+        *,
+        contract_id: UUID,
+        command_key: str,
+    ) -> tuple[dict[str, Any], bool]:
+        store = cast(ApplicationPersistence, db)
+        bridge = self.bridge
+        model_provider = self.model_provider
+        generation_policy = self.generation_policy
+        if bridge is None or model_provider is None or generation_policy is None:
+            raise DesignProposalUnavailable()
+        payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
+            store, actor, case_id, contract_id, lock_access=True
+        )
+        references = cast(list[dict[str, Any]], payload["binding"]["referenceMaterial"])
+        reference_digest = canonical_digest(references)
+        requirement_digest = canonical_digest(
+            {"contract": payload["contract"], "binding": payload["binding"]}
+        )
+        command_digest = canonical_digest(
+            {
+                "contractId": str(contract_id),
+                "semanticInputDigest": semantic_digest,
+                "profileId": model_provider.profile.profile_id,
+                "configurationId": model_provider.profile.configuration_id,
+            }
+        )
+        existing = store.design_attempt_by_command(actor, case_id, command_key)
+        if existing is not None:
+            if not hmac.compare_digest(existing.command_payload_digest, command_digest):
+                raise IdempotencyConflict()
+            design = next(
+                (
+                    self._reviewed_design_json(row)
+                    for row in store.reviewed_designs(case_id, contract_id)
+                    if row.design_attempt_id == existing.id
+                ),
+                None,
+            )
+            return {"attempt": design_attempt_json(existing), "reviewed_design": design}, False
+        attempt = store.create_design_attempt(
+            actor,
+            case_id,
+            contract.id,
+            contract.interpretation_id,
+            case.current_request_version_id,
+            case.semantic_context_version,
+            command_key,
+            command_digest,
+            requirement_digest,
+            evidence_digest,
+            reference_digest,
+        )
+        store.add_audit(actor, "AUTOMATIC_DESIGN_STARTED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id)
+        cast(Any, db).commit()
+        try:
+            governed_knowledge = bridge.governed_knowledge(payload)
+            generation_capabilities = cast(
+                dict[str, Any], generation_policy["generation"]
+            )
+            governance = cast(dict[str, Any], generation_policy["governance"])
+            supported_trend_grains = cast(
+                list[str], generation_capabilities["supportedTrendGrains"]
+            )
+            max_visuals_per_page = cast(int, governance["maxVisualsPerPage"])
+            contract_payload = cast(dict[str, Any], payload["contract"])
+            obligations = cast(list[dict[str, Any]], contract_payload.get("obligations", []))
+            obligation_indexes = {
+                item.get("id"): index
+                for index, item in enumerate(obligations)
+                if isinstance(item.get("id"), str)
+            }
+            coverage_checklist = {
+                "obligations": [
+                    {
+                        "index": index,
+                        "kind": item.get("kind"),
+                        "required": item.get("required"),
+                        "minimumRepresentations": item.get("minimumRepresentations"),
+                        "measureCount": len(item.get("measureNames", [])),
+                        "fieldCount": len(item.get("fields", [])),
+                        "pageCount": len(item.get("pageNames", [])),
+                    }
+                    for index, item in enumerate(obligations)
+                ],
+                "dimensions": [
+                    {"index": index}
+                    for index, _item in enumerate(contract_payload.get("dimensions", []))
+                ],
+                "businessQuestions": [
+                    {
+                        "index": index,
+                        "obligationIndexes": [
+                            obligation_indexes.get(item)
+                            for item in question.get("coverageRequirementIds", [])
+                            if obligation_indexes.get(item) is not None
+                        ],
+                    }
+                    for index, question in enumerate(
+                        cast(list[dict[str, Any]], contract_payload.get("businessQuestions", []))
+                    )
+                ],
+            }
+            validated_result: dict[str, Any] | None = None
+
+            def validate_candidate(candidate: dict[str, Any]) -> None:
+                nonlocal validated_result
+                validation_payload = {**payload, "reportDesign": candidate}
+                input_digest = canonical_digest(validation_payload)
+                validation_payload["execution"] = {
+                    "inputDigest": input_digest,
+                    "pipelineExecutableDigest": bridge.pipeline_digest,
+                }
+                try:
+                    result = bridge.generate(validation_payload)
+                except GenerationBridgeFailure as exc:
+                    detail = _safe_bridge_diagnostic_detail(exc)
+                    if detail is None:
+                        logger.warning(
+                            "Automatic design candidate rejected by deterministic validation: "
+                            "code=%s detail=withheld",
+                            exc.diagnostic_code,
+                        )
+                    else:
+                        logger.warning(
+                            "Automatic design candidate rejected by deterministic validation: "
+                            "code=%s detail=%s",
+                            exc.diagnostic_code,
+                            detail,
+                        )
+                    raise
+                validation = result.get("validation")
+                provenance = result.get("provenance")
+                normalized = (
+                    provenance.get("reportDesign") if isinstance(provenance, dict) else None
+                )
+                if (
+                    not isinstance(validation, dict)
+                    or validation.get("status") != "PASS"
+                    or not isinstance(normalized, dict)
+                ):
+                    raise GenerationFailed()
+                validated_result = result
+
+            provider_result = model_provider.structured(
+                ProviderRequest(
+                    task="REPORT_DESIGN",
+                    system_prompt=(
+                        "Propose a generic Power BI ReportDesign for the exact confirmed business "
+                        "requirements and qualified schema. Preserve every measure, "
+                        "operand, dimension, filter, time grain and business question. "
+                        "Copy the exact complete canonical measure objects from the "
+                        "confirmed contract into ReportDesign.measures; do not change "
+                        "any measure value. Use only evidenced Table.Column fields and "
+                        "supported typed operations. Every visual must use an exact "
+                        "confirmed page, field and measure ID. Emit every confirmed "
+                        "required page exactly once without renaming it. Each required "
+                        "KPI measure must appear in a visual on an allowed page. Each "
+                        "BREAKDOWN or TREND must cover all of its exact measure IDs and "
+                        "fields on an allowed page; one supported visual may combine its "
+                        "measures. Trend visuals must use "
+                        "the exact confirmed date field and time grain, while all other "
+                        "visuals use timeGrain NONE. A card uses exactly one measure. A "
+                        "bar, column or line uses at least one measure and a non-empty "
+                        "categoryField. A table uses at least one field or measure. A "
+                        "slicer uses exactly one fields entry, an empty categoryField, "
+                        "and no measures. Represent every required obligation at least "
+                        "its configured minimum, within the configured page and visual "
+                        f"limits. The validated runtime permits at most "
+                        f"{max_visuals_per_page} visuals per page. The active compiler has "
+                        "four general visual slots followed by two card-only slots; stay "
+                        "within both the configured limit and those physical slot types. "
+                        "Use the smallest "
+                        "nonredundant design that fully covers "
+                        "the contract. Treat coverageChecklist as an exhaustive zero-based "
+                        "cross-reference: cover every required obligation entry, bind every "
+                        "dimension entry in at least one visual, and satisfy every business-"
+                        "question mapping without trading away another entry. Prefer exact "
+                        "ReportDesign.filters entries for "
+                        "FILTER obligations because they satisfy filter coverage without a "
+                        "duplicate slicer. Never create a slicer for a field already listed "
+                        "in ReportDesign.filters; do not repeat the same filter or analysis on "
+                        "every page. Do not assert access, confirmation, validation, "
+                        "approval or eligibility. Do not emit executable DAX, M or SQL. "
+                        "Reference-material metadata marked NOT_INTERPRETED conveys no "
+                        "visual semantics. Apply only supplied exact governed citation "
+                        "IDs and apply at least one; do not invent citations. Return "
+                        "only the requested structured "
+                        "candidate."
+                    ),
+                    context={
+                        "confirmedRequirements": payload["contract"],
+                        "dataStructure": payload["dataStructure"],
+                        "referenceMaterial": references,
+                        "governedKnowledge": governed_knowledge,
+                        "generationPolicy": generation_policy,
+                        "coverageChecklist": coverage_checklist,
+                    },
+                    output_schema=report_design_schema(
+                        max_visuals_per_page=max_visuals_per_page,
+                        supported_trend_grains=supported_trend_grains,
+                    ),
+                    validator=validate_candidate,
+                    retry_instruction=lambda exc: _automatic_design_retry_instruction(
+                        exc, max_visuals_per_page=max_visuals_per_page
+                    ),
+                )
+            )
+            candidate = provider_result.value
+            candidate_json = json.dumps(
+                candidate, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            attempt.provider_profile_id = provider_result.profile_id
+            attempt.model_or_deployment = provider_result.model_or_deployment
+            attempt.prompt_version = provider_result.prompt_version
+            attempt.configuration_id = provider_result.configuration_id
+            attempt.capability_profile_json = json.dumps(
+                provider_result.capability_profile, sort_keys=True, separators=(",", ":")
+            )
+            attempt.usage_json = json.dumps(
+                {
+                    **provider_result.usage,
+                    "latency_ms": provider_result.latency_ms,
+                    "call_count": provider_result.call_count,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            attempt.candidate_digest = hashlib.sha256(candidate_json.encode()).hexdigest()
+            if validated_result is None:
+                raise GenerationFailed()
+            result = validated_result
+            validation = cast(dict[str, Any], result["validation"])
+            normalized = cast(dict[str, Any], result["provenance"])["reportDesign"]
+            active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+            if active_actor is None or active_actor.company_id != actor.company_id:
+                raise GenerationFailed()
+            current_payload, current_digest, current_evidence, current_case, _ = (
+                self._current_payload(
+                    store, active_actor, case_id, contract_id, lock_access=True
+                )
+            )
+            if (
+                not hmac.compare_digest(current_digest, semantic_digest)
+                or not hmac.compare_digest(current_evidence, evidence_digest)
+                or current_case.semantic_context_version != attempt.semantic_context_version
+            ):
+                raise StaleVersion()
+            normalized_json = json.dumps(
+                normalized, sort_keys=True, separators=(",", ":"), allow_nan=False
+            )
+            pages = normalized.get("pages")
+            report_title = normalized.get("projectName")
+            description = normalized.get("overview")
+            if (
+                not isinstance(pages, list)
+                or not isinstance(report_title, str)
+                or not report_title.strip()
+                or not isinstance(description, str)
+                or not description.strip()
+            ):
+                raise GenerationFailed()
+            visual_count = sum(
+                len(page.get("visuals", []))
+                for page in pages
+                if isinstance(page, dict) and isinstance(page.get("visuals"), list)
+            )
+            summary = {
+                "page_count": len(pages),
+                "visual_count": visual_count,
+                "description": description,
+            }
+            binding_json = json.dumps(
+                current_payload["binding"], sort_keys=True, separators=(",", ":")
+            )
+            validation_json = json.dumps(
+                validation, sort_keys=True, separators=(",", ":")
+            )
+            reviewed = store.add_reviewed_design(
+                active_actor,
+                case_id,
+                contract.id,
+                contract.interpretation_id,
+                current_case.current_request_version_id,
+                current_case.semantic_context_version,
+                binding_json,
+                hashlib.sha256(binding_json.encode()).hexdigest(),
+                current_digest,
+                current_evidence,
+                normalized_json,
+                hashlib.sha256(normalized_json.encode()).hexdigest(),
+                json.dumps(summary, sort_keys=True, separators=(",", ":")),
+                origin="AUTO_ELIGIBLE",
+                design_attempt_id=attempt.id,
+                eligibility_validation_json=validation_json,
+            )
+            store.update_case_report_title(current_case, report_title.strip()[:160])
+            attempt.status = "ELIGIBLE"
+            attempt.validation_json = validation_json
+            attempt.completed_at = datetime.now(UTC)
+            store.add_audit(
+                active_actor,
+                "AUTOMATIC_DESIGN_ELIGIBLE",
+                "AUTOMATIC_DESIGN_ATTEMPT",
+                attempt.id,
+            )
+            cast(Any, db).commit()
+            return {
+                "attempt": design_attempt_json(attempt),
+                "reviewed_design": self._reviewed_design_json(reviewed),
+            }, True
+        except Exception as exc:
+            cast(Any, db).rollback()
+            if isinstance(exc, GenerationBridgeFailure):
+                detail = _safe_bridge_diagnostic_detail(exc)
+                if detail is None:
+                    logger.warning(
+                        "Automatic design deterministic validation failed: code=%s detail=withheld",
+                        exc.diagnostic_code,
+                    )
+                else:
+                    logger.warning(
+                        "Automatic design deterministic validation failed: code=%s detail=%s",
+                        exc.diagnostic_code,
+                        detail,
+                    )
+            elif isinstance(exc, ProviderCallError):
+                logger.warning("Automatic design provider failed: code=%s", exc.code)
+            else:
+                logger.warning("Automatic design failed: type=%s", type(exc).__name__)
+            failure_code = (
+                exc.code
+                if isinstance(exc, (ProviderCallError, GenerationFailed))
+                else "AUTOMATIC_DESIGN_VALIDATION_FAILED"
+            )
+            attempt.status = "FAILED"
+            attempt.safe_failure_code = failure_code
+            attempt.completed_at = datetime.now(UTC)
+            store.add_audit(
+                actor, "AUTOMATIC_DESIGN_FAILED", "AUTOMATIC_DESIGN_ATTEMPT", attempt.id
+            )
+            cast(Any, db).commit()
+            raise DesignProposalUnavailable() from exc
+
+    def automatic_design_history(
+        self, db: object, actor: Actor, case_id: UUID, contract_id: UUID
+    ) -> list[dict[str, Any]]:
+        store = cast(ApplicationPersistence, db)
+        self._current_payload(store, actor, case_id, contract_id, require_edit=False)
+        return [design_attempt_json(row) for row in store.design_attempts(case_id, contract_id)]
+
     @staticmethod
     def _reviewed_design_json(row: ReviewedReportDesignRecord) -> dict[str, Any]:
         return {
             "id": str(row.id),
             "confirmed_contract_id": str(row.confirmed_contract_id),
             "summary": json.loads(row.summary_json),
+            "origin": row.origin,
+            "provenance_label": (
+                "Automatically eligible"
+                if row.origin == "AUTO_ELIGIBLE"
+                else "Expert reviewed"
+            ),
             "reviewed_at": row.reviewed_at.isoformat(),
         }
 

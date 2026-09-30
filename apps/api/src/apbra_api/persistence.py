@@ -146,6 +146,7 @@ class CaseRow(Base):
     current_request_version_id: Mapped[UUID] = mapped_column(nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     semantic_context_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    report_title: Mapped[str] = mapped_column(String(160), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     request_versions: Mapped[list[RequestVersionRow]] = relationship(
@@ -338,6 +339,58 @@ class EvidenceRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ReferenceMaterialRow(Base):
+    __tablename__ = "case_reference_materials"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_reference_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_reference_request_version",
+        ),
+        ForeignKeyConstraint(
+            ["uploaded_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_reference_actor_company",
+        ),
+        UniqueConstraint(
+            "case_id",
+            "request_version_id",
+            "content_digest",
+            name="uq_case_request_reference_digest",
+        ),
+        UniqueConstraint("id", "case_id", "company_id", name="uq_reference_case_company"),
+        CheckConstraint(
+            "media_type IN ('image/png','image/jpeg')", name="ck_reference_media_type"
+        ),
+        CheckConstraint(
+            "interpretation_state IN ('NOT_INTERPRETED','VISION_AVAILABLE')",
+            name="ck_reference_interpretation_state",
+        ),
+        Index("ix_reference_case_request", "case_id", "request_version_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    uploaded_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(500), nullable=False, unique=True)
+    interpretation_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    capability_profile_id: Mapped[str | None] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class InterpretationRow(Base):
     __tablename__ = "case_interpretation_versions"
     __table_args__ = (
@@ -426,6 +479,90 @@ class ConfirmedContractRow(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class AutomaticDesignAttemptRow(Base):
+    __tablename__ = "automatic_design_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_design_attempt_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["confirmed_contract_id", "case_id", "company_id"],
+            [
+                "confirmed_requirement_contracts.id",
+                "confirmed_requirement_contracts.case_id",
+                "confirmed_requirement_contracts.company_id",
+            ],
+            name="fk_design_attempt_contract_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["interpretation_id", "case_id", "company_id"],
+            [
+                "case_interpretation_versions.id",
+                "case_interpretation_versions.case_id",
+                "case_interpretation_versions.company_id",
+            ],
+            name="fk_design_attempt_interpretation_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["request_version_id", "case_id", "company_id"],
+            [
+                "case_request_versions.id",
+                "case_request_versions.case_id",
+                "case_request_versions.company_id",
+            ],
+            name="fk_design_attempt_request_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["requested_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_design_attempt_actor_company",
+        ),
+        UniqueConstraint(
+            "case_id", "requested_by_membership_id", "command_key",
+            name="uq_design_attempt_command",
+        ),
+        UniqueConstraint(
+            "id", "case_id", "company_id", "confirmed_contract_id",
+            name="uq_design_attempt_binding",
+        ),
+        CheckConstraint(
+            "status IN ('RUNNING','ELIGIBLE','FAILED','CANCELLED')",
+            name="ck_design_attempt_status",
+        ),
+        CheckConstraint("semantic_context_version >= 1", name="ck_design_attempt_context"),
+        Index(
+            "ix_design_attempt_case_contract", "case_id", "confirmed_contract_id", "created_at"
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    confirmed_contract_id: Mapped[UUID] = mapped_column(nullable=False)
+    interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    semantic_context_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    requested_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    command_payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="RUNNING")
+    provider_profile_id: Mapped[str | None] = mapped_column(String(120))
+    model_or_deployment: Mapped[str | None] = mapped_column(String(255))
+    prompt_version: Mapped[str | None] = mapped_column(String(120))
+    configuration_id: Mapped[str | None] = mapped_column(String(120))
+    capability_profile_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    usage_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    safe_failure_code: Mapped[str | None] = mapped_column(String(100))
+    requirement_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    evidence_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    reference_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    validation_json: Mapped[str | None] = mapped_column(Text)
+    candidate_digest: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ReviewedReportDesignRow(Base):
     __tablename__ = "reviewed_report_designs"
     __table_args__ = (
@@ -471,11 +608,29 @@ class ReviewedReportDesignRow(Base):
             ["external_identities.id"],
             name="fk_reviewed_design_reviewer_identity",
         ),
+        ForeignKeyConstraint(
+            ["design_attempt_id", "case_id", "company_id", "confirmed_contract_id"],
+            [
+                "automatic_design_attempts.id",
+                "automatic_design_attempts.case_id",
+                "automatic_design_attempts.company_id",
+                "automatic_design_attempts.confirmed_contract_id",
+            ],
+            name="fk_reviewed_design_automatic_attempt",
+        ),
         UniqueConstraint(
             "id", "case_id", "company_id", "confirmed_contract_id",
             name="uq_reviewed_design_attempt_binding",
         ),
-        CheckConstraint("reviewer_role = 'EXPERT'", name="ck_reviewed_design_expert_role"),
+        CheckConstraint(
+            "(origin = 'EXPERT_REVIEWED' AND reviewer_membership_id IS NOT NULL "
+            "AND reviewer_identity_id IS NOT NULL AND reviewer_role = 'EXPERT' "
+            "AND design_attempt_id IS NULL) OR "
+            "(origin = 'AUTO_ELIGIBLE' AND reviewer_membership_id IS NULL "
+            "AND reviewer_identity_id IS NULL AND reviewer_role IS NULL "
+            "AND design_attempt_id IS NOT NULL AND eligibility_validation_json IS NOT NULL)",
+            name="ck_reviewed_design_origin",
+        ),
         CheckConstraint("semantic_context_version >= 1", name="ck_reviewed_design_context"),
         Index(
             "ix_reviewed_design_case_contract",
@@ -496,9 +651,12 @@ class ReviewedReportDesignRow(Base):
     design_json: Mapped[str] = mapped_column(Text, nullable=False)
     content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     summary_json: Mapped[str] = mapped_column(Text, nullable=False)
-    reviewer_membership_id: Mapped[UUID] = mapped_column(nullable=False)
-    reviewer_identity_id: Mapped[UUID] = mapped_column(nullable=False)
-    reviewer_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewer_membership_id: Mapped[UUID | None] = mapped_column()
+    reviewer_identity_id: Mapped[UUID | None] = mapped_column()
+    reviewer_role: Mapped[str | None] = mapped_column(String(32))
+    origin: Mapped[str] = mapped_column(String(32), nullable=False, default="EXPERT_REVIEWED")
+    design_attempt_id: Mapped[UUID | None] = mapped_column()
+    eligibility_validation_json: Mapped[str | None] = mapped_column(Text)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -832,6 +990,7 @@ class ApplicationSession(Session):
         request_text: str,
         command_key: str,
         payload_digest: str,
+        report_title: str,
     ) -> CaseRow:
         case_id, version_id = uuid4(), uuid4()
         row = CaseRow(
@@ -839,6 +998,7 @@ class ApplicationSession(Session):
             company_id=actor.company_id,
             creator_membership_id=actor.membership_id,
             current_request_version_id=version_id,
+            report_title=report_title,
         )
         self.add(row)
         self.flush()
@@ -894,6 +1054,11 @@ class ApplicationSession(Session):
                 .order_by(CaseRow.updated_at.desc())
             ).all()
         )
+
+    def update_case_report_title(self, case: CaseRow, report_title: str) -> None:
+        case.report_title = report_title
+        case.updated_at = utcnow()
+        self.flush()
 
     def case_versions(self, case_id: UUID) -> list[RequestVersionRow]:
         return list(
@@ -1210,6 +1375,54 @@ class ApplicationSession(Session):
             )
         )
 
+    def add_reference_material(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        request_version_id: UUID,
+        filename: str,
+        media_type: str,
+        content_digest: str,
+        storage_key: str,
+        interpretation_state: str,
+        capability_profile_id: str | None,
+    ) -> ReferenceMaterialRow:
+        row = ReferenceMaterialRow(
+            company_id=actor.company_id,
+            case_id=case_id,
+            request_version_id=request_version_id,
+            uploaded_by_membership_id=actor.membership_id,
+            filename=filename,
+            media_type=media_type,
+            content_digest=content_digest,
+            storage_key=storage_key,
+            interpretation_state=interpretation_state,
+            capability_profile_id=capability_profile_id,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def reference_materials(self, case_id: UUID) -> list[ReferenceMaterialRow]:
+        return list(
+            self.scalars(
+                select(ReferenceMaterialRow)
+                .where(ReferenceMaterialRow.case_id == case_id)
+                .order_by(ReferenceMaterialRow.created_at)
+            ).all()
+        )
+
+    def reference_by_digest(
+        self, case_id: UUID, request_version_id: UUID, content_digest: str
+    ) -> ReferenceMaterialRow | None:
+        return self.scalar(
+            select(ReferenceMaterialRow).where(
+                ReferenceMaterialRow.case_id == case_id,
+                ReferenceMaterialRow.request_version_id == request_version_id,
+                ReferenceMaterialRow.content_digest == content_digest,
+            )
+        )
+
     def add_interpretation(
         self,
         actor: Actor,
@@ -1326,6 +1539,10 @@ class ApplicationSession(Session):
         design_json: str,
         content_digest: str,
         summary_json: str,
+        *,
+        origin: str = "EXPERT_REVIEWED",
+        design_attempt_id: UUID | None = None,
+        eligibility_validation_json: str | None = None,
     ) -> ReviewedReportDesignRow:
         row = ReviewedReportDesignRow(
             company_id=actor.company_id,
@@ -1341,14 +1558,82 @@ class ApplicationSession(Session):
             design_json=design_json,
             content_digest=content_digest,
             summary_json=summary_json,
-            reviewer_membership_id=actor.membership_id,
-            reviewer_identity_id=actor.identity_id,
-            reviewer_role=actor.role.value,
+            reviewer_membership_id=(
+                actor.membership_id if origin == "EXPERT_REVIEWED" else None
+            ),
+            reviewer_identity_id=(actor.identity_id if origin == "EXPERT_REVIEWED" else None),
+            reviewer_role=(actor.role.value if origin == "EXPERT_REVIEWED" else None),
+            origin=origin,
+            design_attempt_id=design_attempt_id,
+            eligibility_validation_json=eligibility_validation_json,
         )
         self.add(row)
         self.flush()
-        self.add_audit(actor, "REPORT_DESIGN_REVIEWED", "REVIEWED_REPORT_DESIGN", row.id)
+        self.add_audit(
+            actor,
+            "REPORT_DESIGN_REVIEWED" if origin == "EXPERT_REVIEWED" else "REPORT_DESIGN_ELIGIBLE",
+            "REVIEWED_REPORT_DESIGN",
+            row.id,
+        )
         return row
+
+    def create_design_attempt(
+        self,
+        actor: Actor,
+        case_id: UUID,
+        contract_id: UUID,
+        interpretation_id: UUID,
+        request_version_id: UUID,
+        semantic_context_version: int,
+        command_key: str,
+        command_payload_digest: str,
+        requirement_binding_digest: str,
+        evidence_binding_digest: str,
+        reference_binding_digest: str,
+    ) -> AutomaticDesignAttemptRow:
+        row = AutomaticDesignAttemptRow(
+            company_id=actor.company_id,
+            case_id=case_id,
+            confirmed_contract_id=contract_id,
+            interpretation_id=interpretation_id,
+            request_version_id=request_version_id,
+            semantic_context_version=semantic_context_version,
+            requested_by_membership_id=actor.membership_id,
+            command_key=command_key,
+            command_payload_digest=command_payload_digest,
+            requirement_binding_digest=requirement_binding_digest,
+            evidence_binding_digest=evidence_binding_digest,
+            reference_binding_digest=reference_binding_digest,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
+    def design_attempt_by_command(
+        self, actor: Actor, case_id: UUID, command_key: str
+    ) -> AutomaticDesignAttemptRow | None:
+        return self.scalar(
+            select(AutomaticDesignAttemptRow).where(
+                AutomaticDesignAttemptRow.company_id == actor.company_id,
+                AutomaticDesignAttemptRow.case_id == case_id,
+                AutomaticDesignAttemptRow.requested_by_membership_id == actor.membership_id,
+                AutomaticDesignAttemptRow.command_key == command_key,
+            )
+        )
+
+    def design_attempts(
+        self, case_id: UUID, contract_id: UUID
+    ) -> list[AutomaticDesignAttemptRow]:
+        return list(
+            self.scalars(
+                select(AutomaticDesignAttemptRow)
+                .where(
+                    AutomaticDesignAttemptRow.case_id == case_id,
+                    AutomaticDesignAttemptRow.confirmed_contract_id == contract_id,
+                )
+                .order_by(AutomaticDesignAttemptRow.created_at.desc())
+            ).all()
+        )
 
     def reviewed_design(
         self, case_id: UUID, design_id: UUID

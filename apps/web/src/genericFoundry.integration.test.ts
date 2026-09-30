@@ -4,9 +4,9 @@ import {afterAll,beforeAll,expect,it} from 'vitest';
 import {interpretRequirement,generateGroundedReportDesign,type Clarification} from './foundry';
 import {retrieveKnowledge,evaluateRetrieval,clearRagIndex} from './rag';
 import {evaluateGuardrails} from './guardrail';
-import {compilePowerBI,validateGenericCandidate} from './genericPowerBI';
+import {compilePowerBI,compilerCapabilities,validateGenericCandidate} from './genericPowerBI';
 import {zipFiles} from './archive';
-import {defaultTenantSettings} from './tenant';
+import {defaultTenantSettings as unvalidatedTenantSettings} from './tenant';
 import type {DataStructure} from './schemaIngestion';
 
 const enabled=process.env.RUN_FOUNDRY_INTEGRATION==='1';
@@ -56,3 +56,4 @@ it.runIf(enabled)('routes a natural unrelated request outside generation',async(
 it.runIf(enabled)('measures semantic retrieval against the governed corpus',async()=>{
   const result=await evaluateRetrieval(undefined,3);expect(result.hitRate).toBeGreaterThanOrEqual(0.85);evidence.retrieval=result;
 },120_000);
+const defaultTenantSettings=structuredClone(unvalidatedTenantSettings);defaultTenantSettings.governance.maxVisualsPerPage=compilerCapabilities.maxVisualsPerPage;defaultTenantSettings.governance.humanReviewAtVisuals=compilerCapabilities.maxVisualsPerPage;
