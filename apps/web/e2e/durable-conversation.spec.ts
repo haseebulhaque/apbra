@@ -6,6 +6,10 @@ async function signIn(page:Page){
   await page.getByRole('link',{name:'member',exact:true}).click();
 }
 
+async function expectSyntheticUploadPolicy(page:Page){
+  await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible();
+}
+
 function crc32(data:Buffer){let value=0xffffffff;for(const byte of data){value^=byte;for(let bit=0;bit<8;bit+=1)value=(value>>>1)^((value&1)?0xedb88320:0)}return(value^0xffffffff)>>>0}
 function storedZip(entries:Array<[string,string]>){const local:Buffer[]=[],central:Buffer[]=[];let offset=0;for(const[name,text]of entries){const filename=Buffer.from(name),data=Buffer.from(text),crc=crc32(data),header=Buffer.alloc(30),directory=Buffer.alloc(46);header.writeUInt32LE(0x04034b50,0);header.writeUInt16LE(20,4);header.writeUInt32LE(crc,14);header.writeUInt32LE(data.length,18);header.writeUInt32LE(data.length,22);header.writeUInt16LE(filename.length,26);directory.writeUInt32LE(0x02014b50,0);directory.writeUInt16LE(20,4);directory.writeUInt16LE(20,6);directory.writeUInt32LE(crc,16);directory.writeUInt32LE(data.length,20);directory.writeUInt32LE(data.length,24);directory.writeUInt16LE(filename.length,28);directory.writeUInt32LE(offset,42);local.push(header,filename,data);central.push(directory,filename);offset+=header.length+filename.length+data.length}const directoryOffset=offset,directoryBytes=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(entries.length,8);end.writeUInt16LE(entries.length,10);end.writeUInt32LE(directoryBytes.length,12);end.writeUInt32LE(directoryOffset,16);return Buffer.concat([...local,directoryBytes,end])}
 function supportedXlsx(){return storedZip([
@@ -30,6 +34,7 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await expect(page.getByLabel('Add more requirements')).toBeEmpty();
   await expect(page.getByText(message,{exact:true})).toBeVisible();
 
+  await expectSyntheticUploadPolicy(page);
   await page.locator('input[type=file]').setInputFiles([
     {name:'fleet.csv',mimeType:'text/csv',buffer:Buffer.from('Date,Depot,Availability\n2026-01-01,North,0.96\n')},
     {name:'layout.png',mimeType:'image/png',buffer:Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),Buffer.from('synthetic reference')])},
@@ -65,6 +70,7 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   const request='Compare WaitMinutes by Clinic for appointment operations.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expectSyntheticUploadPolicy(page);
   const workbook=supportedXlsx();
   await page.locator('input[type=file]').setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
   await page.getByRole('button',{name:'Add selected files'}).click();
@@ -88,6 +94,7 @@ test('a late interpretation response cannot repaint a newer request as current',
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Compare Availability by Depot.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expectSyntheticUploadPolicy(page);
   await page.locator('input[type=file]').setInputFiles({
     name:'availability.csv',
     mimeType:'text/csv',
