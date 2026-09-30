@@ -322,6 +322,7 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "mvp1-durable-conversation-evidence-acceptance-historical-capacity-fixture",
             "mvp1-business-user-report-creation-intelligent-generation",
             "mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment",
+            "mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment",
             "mvp1-professional-saas-experience-visual-system",
             "mvp1-business-friendly-ux-application-shell",
             "mvp1-business-friendly-ux-reviewed-design-amendment",
