@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-175",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-175-20261002-GOV",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile exact repository architecture and handoff documents with accepted deployment portability, control-plane/data-plane separation and capability entitlement direction in a later documentation-only branch; this registration changes governance files only.",
+  "requirements": [
+    "Jira APBRA-175 issue 10275, To Do, after reviewed and manually merged APBRA-174 PR #74 on main acf1473ea0a05c5f203d85ed55fdc695515880c8.",
+    "Confluence 04.07 Deployment Models, Control Plane & Customer-Hosted Architecture page 9568258 v1 and 04.08 Subscription, Entitlement & Feature-Gating Architecture page 9535525 v1 are accepted future-state sources, not proof of implementation.",
+    "Describe APBRA Cloud, Dedicated and qualified Private / On-Premises profiles; an air-gapped profile remains future and requires explicit qualification.",
+    "Azure is a reference/private-preview profile, not a required core product dependency; deployment and provider choices vary through governed configuration without hidden business or commercial defaults.",
+    "Separate minimum central commercial/licensing/deployment metadata from customer content in the customer data plane; deployment_id is distinct from tenant_id and a central SaaS database is not required for customer report, evidence, prompt or artifact content.",
+    "Describe subscription to versioned entitlement to capability, with effective capability constrained by platform support, subscription entitlement, tenant settings, user/application permission, resource permission and current security/validation/governance.",
+    "Paid entitlement never bypasses authorization, tenant isolation, resource or target-platform validity, mandatory safety, validation or governance; core code does not branch on marketing plan names.",
+    "Distinguish current local/CI PBIP generation and APBRA-174 protected settings from future ARD/native report-definition direction under Confluence 03.06 page 7864321 v1 and Jira APBRA-165.",
+    "Keep exact plans, prices, providers, regions, licences, numerical limits and deployment commitments undecided absent later accepted authority."
+  ],
+  "adrs": [
+    "This task is documentation and architecture reconciliation only. It changes no application/runtime behavior, API, schema, migration, dependency, lockfile, workflow, native permission or cloud resource.",
+    "Present implemented, locally/CI tested, runtime verified and accepted future-state capabilities separately; preserve historical task, source and Capstone evidence without rewriting past provenance.",
+    "Customer content, prompts, evidence, secrets, report artifacts, audit and Tenant Settings remain in the selected customer data plane; the central commercial control plane cannot become a customer-content back door.",
+    "Deployment bootstrap configuration is distinct from tenant policy; provider-neutral interfaces and qualified profile boundaries preserve NO HARDCODING without weakening fixed software/security contracts.",
+    "The entitlement catalogue uses capability semantics, not plan-name branches. Commercial availability is never authorization or release authority.",
+    "PBIP/PBIR/TMDL remain the presently bounded Power BI output; ARD, other adapters, native rendering, connected publishing and offline licensing are future separately governed capabilities."
+  ],
+  "architecture_refs": [
+    "Jira APBRA-175 issue 10275 To Do; PLAN comment 10328; Haseeb Ul Haque owner instruction 2026-10-02; actual actor Codex through authenticated Atlassian/GitHub connections.",
+    "Confluence 04.07 page 9568258 v1 and 04.08 page 9535525 v1, freshly read 2026-10-02, accepted future-state architecture.",
+    "Confluence 03.06 page 7864321 v1, Product Vision 01.01 v5, Requirements 02.01 v5, 04.01 v5, 04.05 v4 and current Jira APBRA-153/APBRA-160/APBRA-165/APBRA-174 as context; these do not extend implementation scope.",
+    "Verified origin/main acf1473ea0a05c5f203d85ed55fdc695515880c8 contains manually merged APBRA-174 PR #74 final reviewed head e08fafb4074f37a4435eaf61b3b7a0d0a10be8ad; hosted run #131 / 36881084290 SUCCESS."
+  ],
+  "allowed_paths": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "AI-RAG-SPEC.md",
+    "POWERBI-GENERATION-SPEC.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "DATA-MODEL.md",
+    "apps/web/README.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "apps/api/**",
+    "apps/web/src/**",
+    "apps/web/e2e/**",
+    "apps/web/scripts/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/vite.config.ts",
+    "apps/web/playwright.config.ts",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    "scripts/**",
+    "tests/**",
+    "tasks/**",
+    "contracts/**",
+    "agents/**",
+    "docs/decisions/**",
+    "docs/source-register.json",
+    "requirements-bootstrap.txt",
+    "compose.yaml",
+    "artifacts/**",
+    "output/**",
+    "manual-testing/**",
+    "local-data/**",
+    "*.zip",
+    "**/*.zip",
+    ".env*",
+    "**/.env*"
+  ],
+  "acceptance_criteria": [
+    "Only the nine literal allowed documentation paths are changed in the later implementation PR; this registration PR changes only its five exact governance paths.",
+    "Repository overview and architecture distinguish current local/CI APBRA from accepted future Cloud, Dedicated, qualified Private / On-Premises and later qualified air-gapped profiles without a SaaS-only or Azure-only core claim.",
+    "The control plane stores only appropriate minimum commercial/licensing/deployment metadata; customer report, prompt, evidence, artifact, secrets, Tenant Settings and audit content stay in the customer data plane; deployment_id and tenant_id have distinct meanings.",
+    "Documentation does not imply central SaaS storage or central access to customer content in customer-hosted profiles, and qualifies identity, storage, networking, model egress, telemetry, recovery and update obligations before any profile is called supported.",
+    "Subscription maps to versioned entitlements and capability keys; effective capability is the intersection of platform support, entitlement, tenant settings, user/application and resource permission, and current safety/validation/governance.",
+    "Paid plans never bypass private access, tenant isolation, technical target validity, validation, policy or release approval; exact plan names, prices, providers and limits remain undecided.",
+    "Current bounded PBIP/PBIR output and APBRA-174 local/CI foundations are accurately stated; future ARD/native reporting and other adapters remain future architecture, not implemented capability.",
+    "Historical source/task/Capstone evidence remains traceable and unchanged; every current-state assertion is tied to inspected main rather than inferred from accepted requirements.",
+    "No application, migration, dependency, lockfile, workflow, cloud resource, billing/provider implementation, paid call, customer data, publication or automatic merge is introduced."
+  ],
+  "verification_required": [
+    "Focused APBRA-175 exact source, task hash, registration separation, finite-path and fail-closed mutation tests.",
+    "Full python -m unittest discover -s tests/bootstrap -v, python scripts/check_bootstrap.py and python scripts/check_ci_policy.py.",
+    "Exact base/head, changed-path and git diff --check audit; history-aware secret scanning locally where supported and on hosted Linux x64.",
+    "Hosted APBRA Bootstrap CI on the exact PR head, including the required governance and secret scan gates.",
+    "Fresh independent exact-base/exact-head review before Haseeb-only manual merge of the governance PR; another separate documentation branch/PR follows only after that merge is verified."
+  ],
+  "out_of_scope": [
+    "Any path beyond the nine future documentation paths, or any documentation edit in the governance-only registration PR.",
+    "Application/runtime code, APIs, database schemas or migrations, dependencies, lockfiles, workflow behavior, native permissions, cloud resources or production deployment.",
+    "Control-plane implementation, customer-content centralization, subscription/billing/provider integration, entitlement issuance or verification, customer-hosted installer or air-gapped qualification.",
+    "Commercial prices, package names, seat counts, grace windows, provider/model/region, SLA, new numerical limits or customer commitments.",
+    "Claiming ARD/native rendering, non-Power-BI adapters, Power BI Desktop PASS, real-model quality or private hosted deployment as implemented from documentation alone.",
+    "Historical task/source rewrites, weakened checks, self-approval, direct main writes, automatic merge or any merge by the agent."
+  ],
+  "escalate_when": [
+    "A required document path lies outside the exact nine-path allowlist or a governance registration path beyond the exact five becomes necessary.",
+    "The accepted sources conflict materially or a product-owner/commercial/security decision is needed to state the target truthfully.",
+    "A documentation change would require application, dependency, lockfile, workflow, provider, billing, native permission or cloud-resource work.",
+    "A mandatory local or hosted validation, secret scan, exact-head independent review or Haseeb manual merge gate is missing, skipped, failed or stale."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "acf1473ea0a05c5f203d85ed55fdc695515880c8",
+  "branch": "agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs",
+  "source_ids": [
+    "apbra-175-deployment-model-control-plane",
+    "apbra-175-subscription-entitlement-feature-gating"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-175 deployment portability and entitlement architecture documentation reconciliation",
+  "dependencies": [
+    "APBRA-174 PR #74 was independently reviewed, passed hosted CI and was manually merged by Haseeb; origin/main acf1473ea0a05c5f203d85ed55fdc695515880c8 is the registration provenance base.",
+    "The separate governance-only PR changes exactly five governance files and requires hosted CI, independent exact-head review and Haseeb manual merge before the later documentation branch has effective authority.",
+    "The later documentation PR starts from its newly verified post-registration main and changes only the nine allowed documents; this historical registration base is not rewritten.",
+    "Confluence 03.06 future ARD direction may be linked as context but APBRA-165 implementation is separate; APBRA-153 commercial entitlement runtime is separate.",
+    "Haseeb remains the sole manual merge authority; no auto-merge or same-session author self-review is accepted as independent review."
+  ]
+}

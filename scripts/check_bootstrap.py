@@ -607,6 +607,26 @@ MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-c
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment'
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256 = '6facc17e3cd2f4b7172d8bd13f3337f03c492b0245887599273dbeeaecee58cf'
 
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS = {
+    'README.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md', 'AI-RAG-SPEC.md',
+    'POWERBI-GENERATION-SPEC.md', 'MVP-ACCEPTANCE-CRITERIA.md', 'DATA-MODEL.md',
+    'apps/web/README.md', 'docs/engineering/codex-handoff.md',
+}
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS = {
+    'docs/source-register.json',
+    'tasks/APBRA-175-deployment-portability-entitlement-docs.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+}
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_TASK_SHA256 = '09d86487fe0a3f964f8a00d8755d77953bc01aa941c17448ff9872070504c13f'
+DEPLOYMENT_PORTABILITY_SOURCE_ID = 'apbra-175-deployment-model-control-plane'
+DEPLOYMENT_PORTABILITY_SOURCE_SHA256 = '803072216d5bafd192ec3a63e64e4b12b6e06d78ab021c83457e4be331c988d5'
+ENTITLEMENT_ARCHITECTURE_SOURCE_ID = 'apbra-175-subscription-entitlement-feature-gating'
+ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256 = 'a6c0b507deb0976cd97aac95313d5ecdabc159d0265b11e068fe965a1f9f0b25'
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH = 'agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs'
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH = DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1634,6 +1654,49 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 model_led_flexible_delivery_task = None
+        deployment_portability_entitlement_docs_task = None
+        deployment_portability_entitlement_docs_path = root / 'tasks/APBRA-175-deployment-portability-entitlement-docs.json'
+        if deployment_portability_entitlement_docs_path.exists():
+            deployment_portability_entitlement_docs_task = load_json(deployment_portability_entitlement_docs_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), deployment_portability_entitlement_docs_task)
+            if not extension_errors:
+                extension_errors += task_errors(deployment_portability_entitlement_docs_task, catalog, sources)
+                canonical_task = json.dumps(deployment_portability_entitlement_docs_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_TASK_SHA256:
+                    extension_errors.append('APBRA-175 contract differs from accepted authority')
+                if (deployment_portability_entitlement_docs_task['task_id'], deployment_portability_entitlement_docs_task['assigned_agent'],
+                        deployment_portability_entitlement_docs_task['agent_card_version']) != ('APBRA-175', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-175 task or agent identity')
+                if deployment_portability_entitlement_docs_task['branch'] != DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH:
+                    extension_errors.append('Unexpected APBRA-175 documentation branch')
+                if deployment_portability_entitlement_docs_task['base_commit'] != 'acf1473ea0a05c5f203d85ed55fdc695515880c8':
+                    extension_errors.append('Stale APBRA-175 registration base')
+                if set(deployment_portability_entitlement_docs_task['allowed_paths']) != DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS:
+                    extension_errors.append('Unexpected APBRA-175 documentation scope')
+                if (deployment_portability_entitlement_docs_task['task_mode'], deployment_portability_entitlement_docs_task['readiness'],
+                        deployment_portability_entitlement_docs_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-175 requires issued documentation-only acceptance')
+                if deployment_portability_entitlement_docs_task['source_ids'] != [
+                    DEPLOYMENT_PORTABILITY_SOURCE_ID, ENTITLEMENT_ARCHITECTURE_SOURCE_ID,
+                ]:
+                    extension_errors.append('APBRA-175 requires its two accepted sources')
+                for source_id, content_id, expected_sha in (
+                    (DEPLOYMENT_PORTABILITY_SOURCE_ID, '9568258', DEPLOYMENT_PORTABILITY_SOURCE_SHA256),
+                    (ENTITLEMENT_ARCHITECTURE_SOURCE_ID, '9535525', ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256),
+                ):
+                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    if package_source is None:
+                        extension_errors.append('APBRA-175 accepted source is missing: ' + source_id)
+                    else:
+                        canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                        if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-175 source differs from accepted provenance: ' + source_id)
+                        if (package_source.get('content_id') != content_id or
+                                package_source.get('version') != 1 or package_source.get('status') != 'ACCEPTED'):
+                            extension_errors.append('APBRA-175 source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                deployment_portability_entitlement_docs_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1672,6 +1735,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
             (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
             (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
+            (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1711,7 +1775,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
                          active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)):
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS) and
+                    not (active_task_id == 'APBRA-175' and
+                         active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
+                         changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1815,6 +1882,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == MODEL_LED_FLEXIBLE_DELIVERY_BRANCH and
                     changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)):
                 errors.append('APBRA-174 product branch cannot change CI capacity files')
+            if (active_task_id == 'APBRA-175' and
+                    changed_paths.intersection(DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS) and
+                    changed_paths.intersection(DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS)):
+                errors.append('APBRA-175 registration and documentation changes must remain separate')
+            if (active_task_id == 'APBRA-175' and
+                    active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
+                    changed_paths != DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS):
+                errors.append('APBRA-175 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-175' and
+                    active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH and
+                    changed_paths.intersection(DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS)):
+                errors.append('APBRA-175 documentation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1889,6 +1968,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS and
                          name in MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS and
                          name in active_task['allowed_paths'] and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-175' and active_task is not None and
+                         active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
+                         changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS and
+                         name in DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
