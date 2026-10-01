@@ -328,6 +328,7 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "mvp1-business-friendly-ux-reviewed-design-amendment",
             "mvp1-protected-generation-output-history",
             "mvp1-protected-generation-output-history-bootstrap-compatibility-amendment",
+            "mvp1-model-led-clarification-flexible-generation-delivery-guide",
         ]
         self.assertEqual([source["id"] for source in self.sources["sources"]], expected_ids)
         source_map = {source["id"]: source for source in self.sources["sources"]}

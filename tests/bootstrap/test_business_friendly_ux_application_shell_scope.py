@@ -232,7 +232,7 @@ class BusinessFriendlyUxApplicationShellScopeTests(unittest.TestCase):
             (ROOT / "docs/source-register.json").read_text()
         )["sources"]]
         self.assertEqual(
-            ids[-4:-2],
+            ids[:-1][-4:-2],
             [
                 "mvp1-business-friendly-ux-application-shell",
                 "mvp1-business-friendly-ux-reviewed-design-amendment",

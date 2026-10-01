@@ -267,6 +267,15 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-164",
       "status": "ACCEPTED",
       "acceptance": "Haseeb authorized a separate five-path governance amendment to admit tracked files from any valid, hash-bound registered task in the whole-tree safety scan independently of the active task. Changed paths remain authorized only by the active task; malformed or unregistered files, invalid task or source hashes, and historical negative cases remain fail-closed. Only scripts/check_bootstrap.py, tasks/APBRA-164-protected-generation-output-history.json, tests/bootstrap/test_protected_generation_output_history_scope.py, tests/bootstrap/test_invited_private_case_foundation_scope.py, and docs/source-register.json may change. The exact 70-path Package C implementation authority and unpublished implementation branch are unchanged. The amendment needs its own review, required checks, PR and Haseeb's manual merge; it does not authorize application implementation, Package D, cloud spend or automatic merge."
+    },
+    {
+      "id": "mvp1-model-led-clarification-flexible-generation-delivery-guide",
+      "content_id": "9404417",
+      "version": 3,
+      "section": "03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417/03.08+-+Model-Led+Clarification+Flexible+Generation+Delivery+Contract",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly directed APBRA-174 governance/task registration on 2026-10-01 for live Jira APBRA-174 issue 10274, In Progress, Highest, parent APBRA-160, and controlling Confluence 03.08 v3. This separate registration changes exactly eight governance files, three of them solely adjusting historical source-order assertions for the appended accepted source, and authorizes a later finite-path implementation of model-led optional clarification, accepted supported-scope generation, server-authoritative versioned Tenant Settings and protected secret references, generic Power BI namespace safety and the version-bound Delivery / Instruction Guide. It makes no product, migration, dependency, workflow, provider, region, cloud secret product or paid-call change. Historical APBRA-143/APBRA-144/APBRA-171 contracts remain unchanged. Hosted CI, independent exact-head review and Haseeb's manual merge are required before implementation authority is effective."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
