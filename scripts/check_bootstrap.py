@@ -491,6 +491,90 @@ BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH = 'agent/
 BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment'
 BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_SHA256 = '4d72de3bd05a2b532cd0b4c5ecdc13926b5e4ca17caeccbc7aa6f0341506c949'
 
+MODEL_LED_FLEXIBLE_DELIVERY_PATHS = set('''
+AI-RAG-SPEC.md
+ARCHITECTURE.md
+POWERBI-GENERATION-SPEC.md
+README.md
+REQUIREMENTS.md
+apps/api/.env.example
+apps/api/README.md
+apps/api/alembic/versions/20261001_06_model_led_clarification_tenant_settings.py
+apps/api/src/apbra_api/api.py
+apps/api/src/apbra_api/application.py
+apps/api/src/apbra_api/authorization.py
+apps/api/src/apbra_api/bootstrap.py
+apps/api/src/apbra_api/config.py
+apps/api/src/apbra_api/domain.py
+apps/api/src/apbra_api/generation.py
+apps/api/src/apbra_api/model_provider.py
+apps/api/src/apbra_api/persistence.py
+apps/api/src/apbra_api/semantic_bridge.py
+apps/api/src/apbra_api/tenant_secrets.py
+apps/api/src/apbra_api/tenant_settings.py
+apps/api/tests/conftest.py
+apps/api/tests/test_api.py
+apps/api/tests/test_authorization.py
+apps/api/tests/test_bootstrap.py
+apps/api/tests/test_conversations.py
+apps/api/tests/test_generation.py
+apps/api/tests/test_migrations.py
+apps/api/tests/test_model_provider.py
+apps/api/tests/test_tenant_secrets.py
+apps/api/tests/test_tenant_settings.py
+apps/web/README.md
+apps/web/e2e/durable-conversation.spec.ts
+apps/web/e2e/private-case.spec.ts
+apps/web/e2e/protected-generation.spec.ts
+apps/web/e2e/tenant-settings.spec.ts
+apps/web/playwright.config.ts
+apps/web/scripts/generation-bridge.ts
+apps/web/scripts/semantic-bridge.ts
+apps/web/src/App.test.tsx
+apps/web/src/App.tsx
+apps/web/src/EnterpriseApp.tsx
+apps/web/src/api.test.ts
+apps/web/src/api.ts
+apps/web/src/clarification.test.ts
+apps/web/src/clarification.ts
+apps/web/src/confirmedRequirements.test.ts
+apps/web/src/confirmedRequirements.ts
+apps/web/src/deploymentGuide.test.ts
+apps/web/src/deploymentGuide.ts
+apps/web/src/durableConversation.test.tsx
+apps/web/src/durableConversation.tsx
+apps/web/src/durableGeneration.test.tsx
+apps/web/src/durableGeneration.tsx
+apps/web/src/foundry.test.ts
+apps/web/src/foundry.ts
+apps/web/src/genericFoundry.integration.test.ts
+apps/web/src/genericPowerBI.test.ts
+apps/web/src/genericPowerBI.ts
+apps/web/src/guardrail.test.ts
+apps/web/src/guardrail.ts
+apps/web/src/reportDesignNormalization.test.ts
+apps/web/src/reportDesignNormalization.ts
+apps/web/src/style.css
+apps/web/src/tenant.test.ts
+apps/web/src/tenant.ts
+compose.yaml
+'''.split())
+MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
+    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+    'tests/bootstrap/test_protected_generation_output_history_scope.py',
+    'docs/source-register.json',
+}
+MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '581d6a17cf86cbf2fc0d64bfc1d2ddd179bf1b0c2200d45c8a0d8f9ee74c4e76'
+MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide'
+MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
+MODEL_LED_FLEXIBLE_DELIVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide'
+MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH = MODEL_LED_FLEXIBLE_DELIVERY_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1446,6 +1530,41 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 business_user_intelligent_generation_task = None
+        model_led_flexible_delivery_task = None
+        model_led_flexible_delivery_path = root / 'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json'
+        if model_led_flexible_delivery_path.exists():
+            model_led_flexible_delivery_task = load_json(model_led_flexible_delivery_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), model_led_flexible_delivery_task)
+            if not extension_errors:
+                extension_errors += task_errors(model_led_flexible_delivery_task, catalog, sources)
+                canonical_task = json.dumps(model_led_flexible_delivery_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256:
+                    extension_errors.append('APBRA-174 contract differs from accepted authority')
+                if (model_led_flexible_delivery_task['task_id'], model_led_flexible_delivery_task['assigned_agent'],
+                        model_led_flexible_delivery_task['agent_card_version']) != ('APBRA-174', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-174 task or agent identity')
+                if model_led_flexible_delivery_task['branch'] != MODEL_LED_FLEXIBLE_DELIVERY_BRANCH:
+                    extension_errors.append('Unexpected APBRA-174 implementation branch')
+                if model_led_flexible_delivery_task['base_commit'] != 'b2fba8d507262cf912e161b491549ab0d5680b0d':
+                    extension_errors.append('Stale APBRA-174 base')
+                if set(model_led_flexible_delivery_task['allowed_paths']) != MODEL_LED_FLEXIBLE_DELIVERY_PATHS:
+                    extension_errors.append('Unexpected APBRA-174 implementation scope')
+                if (model_led_flexible_delivery_task['task_mode'], model_led_flexible_delivery_task['readiness'],
+                        model_led_flexible_delivery_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-174 requires issued implementation acceptance')
+                if model_led_flexible_delivery_task['source_ids'] != [MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID]:
+                    extension_errors.append('APBRA-174 requires its specific accepted source')
+                package_source = next((source for source in sources['sources']
+                                       if source['id'] == MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID), None)
+                if package_source is None:
+                    extension_errors.append('APBRA-174 accepted source is missing')
+                else:
+                    canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_source).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256:
+                        extension_errors.append('APBRA-174 source differs from accepted provenance')
+            errors += extension_errors
+            if extension_errors:
+                model_led_flexible_delivery_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1483,6 +1602,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (business_friendly_ux_application_shell_task, BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS),
             (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
             (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
+            (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1510,7 +1630,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-171' and
                          active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH and
-                         changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS)):
+                         changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-174' and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1584,6 +1707,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
                     changed_paths != BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS):
                 errors.append('APBRA-171 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-174' and
+                    changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
+                    changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_PATHS)):
+                errors.append('APBRA-174 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-174' and
+                    changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
+                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS):
+                errors.append('APBRA-174 registration must change exactly its eight governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1641,6 +1772,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-171' and
                      name in BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS and
+                     path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-174' and
+                     name in MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS and
                      path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

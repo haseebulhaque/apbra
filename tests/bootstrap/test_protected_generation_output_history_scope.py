@@ -327,7 +327,7 @@ class ProtectedGenerationOutputHistoryScopeTests(unittest.TestCase):
             source["id"]
             for source in json.loads((ROOT / "docs/source-register.json").read_text())["sources"]
         ]
-        self.assertEqual(expected_ids[-2:], [
+        self.assertEqual(expected_ids[:-1][-2:], [
             "mvp1-protected-generation-output-history",
             c.PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID,
         ])

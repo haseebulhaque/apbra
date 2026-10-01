@@ -165,7 +165,7 @@ class ProfessionalSaasExperienceVisualSystemScopeTests(unittest.TestCase):
 
     def test_source_history_append_and_registration_files_are_exact(self):
         ids = [source["id"] for source in json.loads((ROOT / "docs/source-register.json").read_text())["sources"]]
-        self.assertEqual(ids[-5], c.PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID)
+        self.assertEqual(ids[:-1][-5], c.PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID)
         historical = (ROOT / "tests/bootstrap/test_invited_private_case_foundation_scope.py").read_text()
         self.assertEqual(historical.count('"mvp1-professional-saas-experience-visual-system"'), 1)
         for path in c.PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS:
