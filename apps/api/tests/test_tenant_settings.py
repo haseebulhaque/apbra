@@ -48,6 +48,8 @@ def test_seed_is_explicit_idempotent_and_not_overridden_by_runtime_env(
     assert payload["settings"]["max_clarification_rounds_per_cycle"] == 2
     assert payload["settings"]["max_clarification_rounds_overall"] == 10
     assert payload["credential"]["status"] == "NOT_CONFIGURED"
+    assert payload["validation_status"] == "PASS"
+    assert payload["applicability"] == "COMPANY_NEW_OR_REVALIDATED_OPERATIONS"
     from apbra_api.bootstrap import bootstrap
 
     changed_env = settings.model_copy(update={"invitation_ttl_days": 29})
@@ -123,6 +125,7 @@ def test_role_and_tenant_boundary(client: TestClient, database: Database) -> Non
     sign_in(client, "member")
     assert client.get("/api/tenant-settings").status_code == 403
     assert client.get("/api/tenant-settings/history").status_code == 403
+    assert client.get("/api/tenant-settings/qualified-profiles").status_code == 403
     assert (
         client.put(
             "/api/tenant-settings",
@@ -142,6 +145,42 @@ def test_role_and_tenant_boundary(client: TestClient, database: Database) -> Non
         assert member is not None
         member.active = False
     assert client.get("/api/tenant-settings").status_code == 401
+
+
+def test_server_qualified_catalog_rejects_self_asserted_profile_and_ceiling(
+    client: TestClient,
+) -> None:
+    owner = sign_in(client)
+    catalogue = client.get("/api/tenant-settings/qualified-profiles")
+    assert catalogue.status_code == 200
+    qualified = catalogue.json()["items"]
+    assert len(qualified) == 1
+    assert qualified[0]["profile_id"] == "synthetic-test-profile"
+    current = client.get("/api/tenant-settings").json()
+    for mutation in (
+        {"profile_id": "owner-self-qualified"},
+        {"endpoint": "https://other.invalid/v1/chat/completions"},
+        {"capabilities": {"structured_output": True, "vision": True}},
+        {"max_calls_per_operation": qualified[0]["max_calls_per_operation"] + 1},
+    ):
+        proposed = deepcopy(current["settings"])
+        proposed["provider_profile"] = {**qualified[0], **mutation}
+        result = client.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"expected_version": current["version"], "settings": proposed},
+        )
+        assert result.status_code == 503
+        assert client.get("/api/tenant-settings").json()["version"] == 1
+    selected = deepcopy(current["settings"])
+    selected["provider_profile"] = {**qualified[0], "max_calls_per_operation": 1, "retry_limit": 0}
+    accepted = client.put(
+        "/api/tenant-settings",
+        headers=csrf(owner),
+        json={"expected_version": 1, "settings": selected},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["version"] == 2
 
 
 def test_enabled_provider_requires_explicit_profile_and_protected_credential(
@@ -208,6 +247,53 @@ def test_enabled_provider_requires_explicit_profile_and_protected_credential(
     assert activation.status_code == 200
     assert activation.json()["settings"]["automatic_generation_enabled"] is True
     assert "synthetic-test-only-value" not in activation.text
+    budget_change = deepcopy(activation.json()["settings"])
+    budget_change["provider_profile"]["max_input_characters"] = 9_000
+    budget_update = protected.put(
+        "/api/tenant-settings",
+        headers=csrf(session),
+        json={"expected_version": 4, "settings": budget_change},
+    )
+    assert budget_update.status_code == 200
+    assert budget_update.json()["credential"]["status"] == "CONFIGURED"
+    replacement_profile = {
+        **_synthetic_profile(),
+        "endpoint": "https://replacement.invalid/v1/chat/completions",
+    }
+    requalified_runtime = runtime.model_copy(
+        update={"qualified_provider_profiles_json": json.dumps([replacement_profile])}
+    )
+    changed_qualification = TestClient(create_app(settings=requalified_runtime, database=database))
+    changed_owner = sign_in(changed_qualification)
+    switched = deepcopy(budget_update.json()["settings"])
+    switched["automatic_generation_enabled"] = False
+    switched["provider_profile"] = replacement_profile
+    switched_result = changed_qualification.put(
+        "/api/tenant-settings",
+        headers=csrf(changed_owner),
+        json={"expected_version": 5, "settings": switched},
+    )
+    assert switched_result.status_code == 200
+    assert switched_result.json()["credential"]["status"] == "NOT_CONFIGURED"
+
+
+def test_no_qualified_catalog_cannot_authorize_tenant_profile(
+    settings: Settings, database: Database
+) -> None:
+    runtime = settings.model_copy(update={"qualified_provider_profiles_json": None})
+    isolated = TestClient(create_app(settings=runtime, database=database))
+    owner = sign_in(isolated)
+    assert isolated.get("/api/tenant-settings/qualified-profiles").json() == {"items": []}
+    current = isolated.get("/api/tenant-settings").json()
+    proposed = deepcopy(current["settings"])
+    proposed["provider_profile"] = _synthetic_profile()
+    result = isolated.put(
+        "/api/tenant-settings",
+        headers=csrf(owner),
+        json={"expected_version": 1, "settings": proposed},
+    )
+    assert result.status_code == 503
+    assert isolated.get("/api/tenant-settings").json()["version"] == 1
 
 
 def test_compiler_capability_rejected_at_tenant_boundary(client: TestClient) -> None:

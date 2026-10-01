@@ -6,7 +6,15 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import ParseResult, urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    TypeAdapter,
+    ValidationError,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .model_provider import (
@@ -162,6 +170,7 @@ class Settings(BaseSettings):
     clarification_policy_json: str | None = None
     automatic_generation_enabled: bool | None = None
     model_provider_profile_json: str | None = None
+    qualified_provider_profiles_json: str | None = None
     model_provider_api_key: SecretStr | None = None
     tenant_secret_keyring_json: SecretStr | None = Field(default=None, repr=False)
     test_semantic_simulator_enabled: bool = False
@@ -245,6 +254,20 @@ class Settings(BaseSettings):
         if self.automatic_generation_enabled is not True:
             raise ProviderConfigurationError("AUTOMATIC_GENERATION_DISABLED")
         return ProviderProfile.parse(self.model_provider_profile_json)
+
+    def qualified_provider_profiles(self) -> tuple[ProviderProfile, ...]:
+        """Deployment-owned qualification catalogue, not tenant self-attestation."""
+        if not self.qualified_provider_profiles_json:
+            return ()
+        try:
+            profiles = TypeAdapter(list[ProviderProfile]).validate_json(
+                self.qualified_provider_profiles_json
+            )
+        except ValidationError as exc:
+            raise ProviderConfigurationError("QUALIFIED_PROFILES_INVALID") from exc
+        if len({profile.profile_id for profile in profiles}) != len(profiles):
+            raise ProviderConfigurationError("QUALIFIED_PROFILES_DUPLICATED")
+        return tuple(profiles)
 
     def model_credential(self) -> str:
         if self.model_provider_api_key is None:

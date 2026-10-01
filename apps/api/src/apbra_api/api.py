@@ -73,6 +73,7 @@ from .tenant_settings import (
     restore_settings,
     settings_history,
     update_settings,
+    validate_qualified_profile,
 )
 
 logger = logging.getLogger("apbra_api")
@@ -199,6 +200,7 @@ def create_app(
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
+    qualified_profiles = settings.qualified_provider_profiles()
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
@@ -250,6 +252,7 @@ def create_app(
         profile = policy.provider_profile
         if profile is None or snapshot.secret_reference_id is None:
             raise ConfigurationUnavailable()
+        validate_qualified_profile(profile, qualified_profiles)
         if credential_store is None:
             raise ConfigurationUnavailable()
         credential = credential_store.resolve(
@@ -379,6 +382,8 @@ def create_app(
             "id": str(snapshot.id),
             "version": snapshot.version,
             "digest": snapshot.digest,
+            "validation_status": snapshot.validation_status,
+            "applicability": "COMPANY_NEW_OR_REVALIDATED_OPERATIONS",
             "settings": snapshot.settings.model_dump(mode="json", by_alias=True),
             "credential": credential_status(
                 db,
@@ -396,6 +401,11 @@ def create_app(
     def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         return {"items": settings_history(db, resolve_actor(db, session_token))}
 
+    @app.get("/api/tenant-settings/qualified-profiles")
+    def get_qualified_profiles(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        admin_settings(db, resolve_actor(db, session_token))
+        return {"items": [profile.model_dump(mode="json") for profile in qualified_profiles]}
+
     @app.put("/api/tenant-settings")
     def put_tenant_settings(
         payload: TenantSettingsUpdate,
@@ -412,6 +422,7 @@ def create_app(
             expected_version=payload.expected_version,
             reason=payload.reason,
             credential_store=credential_store,
+            qualified_profiles=qualified_profiles,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
@@ -436,6 +447,7 @@ def create_app(
             expected_version=payload.expected_version,
             reason=payload.reason,
             credential_store=credential_store,
+            qualified_profiles=qualified_profiles,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_RESTORED", "TENANT_SETTINGS_VERSION", snapshot.id)
@@ -471,6 +483,7 @@ def create_app(
             reason="Credential replaced",
             secret_reference_id=reference,
             credential_store=credential_store,
+            qualified_profiles=qualified_profiles,
         )
         if current.secret_reference_id is not None:
             previous = db.scalar(

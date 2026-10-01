@@ -53,6 +53,7 @@ def test_disabled_automatic_generation_boots_without_provider_configuration(
             "automatic_generation_enabled": False,
             "model_provider_profile_json": None,
             "model_provider_api_key": None,
+            "qualified_provider_profiles_json": None,
         }
     )
     runtime.validate_security_profile()

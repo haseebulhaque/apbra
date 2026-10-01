@@ -12,11 +12,20 @@ test('owner edits and restores a versioned clarification policy without exposing
   await admin.getByText('Tenant Settings · Owner/Admin').click();
   await expect(admin.getByRole('heading',{name:'Tenant Settings'})).toBeVisible();
   await expect(admin.getByText('Not configured')).toBeVisible();
+  await expect(admin.getByText(/Current effective version 1 · Validation PASS · Applies to this company’s new and revalidated operations/)).toBeVisible();
   await expect(admin.getByRole('button',{name:/Reveal|Show key|Copy existing key/i})).toHaveCount(0);
   const turns=admin.getByLabel('Turns per cycle',{exact:false});
   const original=Number(await turns.inputValue());
   await turns.fill(String(original+1));
-  await admin.getByRole('button',{name:'Save new settings version'}).click();
+  await admin.getByRole('button',{name:'Review settings changes'}).click();
+  const review=page.getByRole('dialog',{name:'Review tenant settings changes'});
+  await expect(review).toContainText('max_clarification_rounds_per_cycle');
+  await expect(review).toContainText('future clarification');
+  await expect((await page.request.get('/api/tenant-settings')).json()).resolves.toMatchObject({version:1});
+  await review.getByRole('button',{name:'Cancel'}).click();
+  await expect((await page.request.get('/api/tenant-settings')).json()).resolves.toMatchObject({version:1});
+  await admin.getByRole('button',{name:'Review settings changes'}).click();
+  await review.getByRole('button',{name:'Confirm and save new version'}).click();
   await expect(admin.getByText(/settings version 2 is now effective/i)).toBeVisible();
   await admin.getByText('Settings history').click();
   await admin.getByRole('button',{name:'Review restore'}).click();
@@ -38,21 +47,50 @@ test('ordinary member cannot see owner settings and narrow admin form does not o
   await page.setViewportSize({width:375,height:812});
   const admin=page.getByLabel('Tenant administration');
   await admin.getByText('Tenant Settings · Owner/Admin').click();
-  await expect(admin.getByRole('button',{name:'Save new settings version'})).toBeVisible();
+  await expect(admin.getByRole('button',{name:'Review settings changes'})).toBeVisible();
   const width=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:window.innerWidth}));
   expect(width.document).toBeLessThanOrEqual(width.viewport);
 });
 
-test('owner configures and rotates a synthetic protected credential without revealing it',async({page})=>{
+test('high-impact draft changes show their keys and consequences before any commit on mobile',async({page})=>{
   await signIn(page,'owner');
-  const session=await (await page.request.get('/api/auth/session')).json();
-  const initial=await (await page.request.get('/api/tenant-settings')).json();
-  const profile={profile_id:'synthetic-e2e-profile',protocol:'OPENAI_CHAT_COMPATIBLE',endpoint:'https://provider.invalid/v1/chat/completions',model_or_deployment:'synthetic-e2e-model',api_version:'synthetic-e2e-version',region:'synthetic-e2e-region',prompt_version:'synthetic-e2e-prompt',configuration_id:'synthetic-e2e-configuration',capabilities:{structured_output:true,vision:false},max_calls_per_operation:1,max_input_characters:10000,max_output_tokens:1000,time_budget_seconds:10,request_timeout_seconds:2,retry_limit:0};
-  const configured=await page.request.put('/api/tenant-settings',{headers:{'X-CSRF-Token':session.csrf_token},data:{expected_version:initial.version,settings:{...initial.settings,provider_profile:profile}}});
-  expect(configured.ok()).toBeTruthy();
-  await page.reload();
+  await page.setViewportSize({width:375,height:812});
   const admin=page.getByLabel('Tenant administration');
   await admin.getByText('Tenant Settings · Owner/Admin').click();
+  const before=(await (await page.request.get('/api/tenant-settings')).json()).version;
+  await admin.getByRole('combobox').selectOption('synthetic-e2e-profile');
+  await admin.getByLabel('Calls per operation',{exact:false}).fill('1');
+  await admin.getByLabel('Retry limit',{exact:false}).fill('0');
+  await admin.getByLabel('Visuals per page',{exact:false}).fill('5');
+  await admin.getByLabel('Turns overall',{exact:false}).fill('9');
+  await admin.getByRole('textbox',{name:/^report naming Applies/}).fill('Synthetic test naming convention');
+  await admin.getByRole('checkbox',{name:/Expert assistance/}).uncheck();
+  await admin.getByRole('checkbox',{name:/Automatic intelligent generation/}).check();
+  await admin.getByRole('button',{name:'Review settings changes'}).click();
+  const review=page.getByRole('dialog',{name:'Review tenant settings changes'});
+  for(const key of ['provider_profile','automatic_generation_enabled','generation_policy.governance.maxVisualsPerPage','max_clarification_rounds_overall','conventions.report_naming','expert_escalation_enabled'])await expect(review).toContainText(key);
+  await expect(review).toContainText('protected credential');
+  expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(before);
+  const width=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:window.innerWidth}));
+  expect(width.document).toBeLessThanOrEqual(width.viewport);
+  await review.getByRole('button',{name:'Cancel'}).click();
+  expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(before);
+});
+
+test('owner configures and rotates a synthetic protected credential without revealing it',async({page})=>{
+  await signIn(page,'owner');
+  const initialVersion=(await (await page.request.get('/api/tenant-settings')).json()).version;
+  const admin=page.getByLabel('Tenant administration');
+  await admin.getByText('Tenant Settings · Owner/Admin').click();
+  await admin.getByRole('combobox').selectOption('synthetic-e2e-profile');
+  await expect(admin.getByText(/Qualified deployment: synthetic-e2e-model/)).toBeVisible();
+  await expect(admin.getByLabel('Profile identity')).toHaveCount(0);
+  await admin.getByRole('button',{name:'Review settings changes'}).click();
+  const review=page.getByRole('dialog',{name:'Review tenant settings changes'});
+  await expect(review).toContainText('provider_profile');
+  await expect(review).toContainText('new protected credential');
+  await review.getByRole('button',{name:'Confirm and save new version'}).click();
+  await expect(admin.getByText(`Tenant settings version ${initialVersion+1} is now effective.`,{exact:false})).toBeVisible();
   await admin.getByRole('button',{name:'Configure credential'}).click();
   const dialog=page.getByRole('dialog',{name:'Replace provider credential'});
   await dialog.getByLabel('New credential').fill('synthetic-e2e-secret-first');
@@ -72,6 +110,15 @@ test('owner configures and rotates a synthetic protected credential without reve
     expect(response).not.toContain('synthetic-e2e-secret-second');
   }
   expect(JSON.parse(current).credential.maskedValue).toBe('***');
+  await admin.getByLabel('Calls per operation',{exact:false}).fill('1');
+  await admin.getByLabel('Retry limit',{exact:false}).fill('0');
+  await admin.getByRole('button',{name:'Review settings changes'}).click();
+  const budgetReview=page.getByRole('dialog',{name:'Review tenant settings changes'});
+  await expect(budgetReview).toContainText('provider_profile.max_calls_per_operation');
+  await expect(budgetReview).toContainText('provider_profile.retry_limit');
+  await expect(budgetReview).toContainText('model call, retry, size or time budget');
+  await budgetReview.getByRole('button',{name:'Confirm and save new version'}).click();
+  await expect(admin.getByText('Configured · ***')).toBeVisible();
 });
 
 test('owner settings fit desktop, laptop, tablet and narrow mobile viewports',async({page})=>{
@@ -99,4 +146,5 @@ test('foreign owner sees only their own settings and member has no settings rout
   await expect(page.getByLabel('Tenant administration')).toHaveCount(0);
   expect((await page.request.get('/api/tenant-settings')).status()).toBe(403);
   expect((await page.request.get('/api/tenant-settings/history')).status()).toBe(403);
+  expect((await page.request.get('/api/tenant-settings/qualified-profiles')).status()).toBe(403);
 });

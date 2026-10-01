@@ -108,6 +108,35 @@ class TenantSettingsSnapshot:
     settings: TenantSettings
     digest: str
     secret_reference_id: UUID | None
+    validation_status: Literal["PASS"]
+
+
+_QUALIFIED_IDENTITY_FIELDS = (
+    "profile_id", "protocol", "endpoint", "model_or_deployment", "api_version",
+    "region", "prompt_version", "configuration_id", "capabilities",
+)
+_QUALIFIED_BUDGET_FIELDS = (
+    "max_calls_per_operation", "max_input_characters", "max_output_tokens",
+    "time_budget_seconds", "request_timeout_seconds", "retry_limit",
+)
+
+
+def validate_qualified_profile(
+    profile: ProviderProfile | None, qualified_profiles: tuple[ProviderProfile, ...]
+) -> None:
+    if profile is None:
+        return
+    qualified = next(
+        (item for item in qualified_profiles if item.profile_id == profile.profile_id), None
+    )
+    if qualified is None or any(
+        getattr(profile, field) != getattr(qualified, field)
+        for field in _QUALIFIED_IDENTITY_FIELDS
+    ) or any(
+        getattr(profile, field) > getattr(qualified, field)
+        for field in _QUALIFIED_BUDGET_FIELDS
+    ):
+        raise ConfigurationUnavailable()
 
 
 def _encoded(settings: TenantSettings) -> str:
@@ -117,6 +146,8 @@ def _encoded(settings: TenantSettings) -> str:
 
 
 def _snapshot(row: TenantSettingsVersionRow) -> TenantSettingsSnapshot:
+    if row.validation_status != "PASS":
+        raise ConfigurationUnavailable()
     try:
         settings = TenantSettings.model_validate_json(row.settings_json)
     except ValidationError as exc:
@@ -131,6 +162,7 @@ def _snapshot(row: TenantSettingsVersionRow) -> TenantSettingsSnapshot:
         settings=settings,
         digest=row.settings_digest,
         secret_reference_id=row.secret_reference_id,
+        validation_status="PASS",
     )
 
 
@@ -250,7 +282,9 @@ def _insert_version(
     safe_changes: dict[str, Any],
     reason: str | None,
     restored_from: UUID | None,
+    qualified_profiles: tuple[ProviderProfile, ...],
 ) -> TenantSettingsSnapshot:
+    validate_qualified_profile(settings.provider_profile, qualified_profiles)
     if settings.automatic_generation_enabled and not _valid_secret(
         db, company_id, settings.provider_profile, secret_reference_id, credential_store
     ):
@@ -293,6 +327,7 @@ def update_settings(
     reason: str | None = None,
     secret_reference_id: UUID | None = None,
     credential_store: TenantCredentialStore | None = None,
+    qualified_profiles: tuple[ProviderProfile, ...] = (),
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)
@@ -300,10 +335,18 @@ def update_settings(
         raise Conflict()
     reference = current.secret_reference_id if secret_reference_id is None else secret_reference_id
     # A provider-profile switch cannot silently reuse a credential bound to another profile.
-    if (
-        settings.provider_profile != current.settings.provider_profile
-        and secret_reference_id is None
-    ):
+    next_identity = (
+        tuple(getattr(settings.provider_profile, field) for field in _QUALIFIED_IDENTITY_FIELDS)
+        if settings.provider_profile else None
+    )
+    current_identity = (
+        tuple(
+            getattr(current.settings.provider_profile, field)
+            for field in _QUALIFIED_IDENTITY_FIELDS
+        )
+        if current.settings.provider_profile else None
+    )
+    if next_identity != current_identity and secret_reference_id is None:
         reference = None
     changed, changes = _safe_changes(current.settings, settings)
     if not changed and reference == current.secret_reference_id:
@@ -323,6 +366,7 @@ def update_settings(
         safe_changes=changes,
         reason=reason,
         restored_from=None,
+        qualified_profiles=qualified_profiles,
     )
 
 
@@ -334,6 +378,7 @@ def restore_settings(
     expected_version: int,
     reason: str | None,
     credential_store: TenantCredentialStore | None,
+    qualified_profiles: tuple[ProviderProfile, ...] = (),
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)
@@ -378,6 +423,7 @@ def restore_settings(
         safe_changes=changes,
         reason=reason,
         restored_from=source.id,
+        qualified_profiles=qualified_profiles,
     )
 
 
@@ -465,4 +511,5 @@ def seed_settings(
         safe_changes={},
         reason="Initial validated development/test seed",
         restored_from=None,
+        qualified_profiles=bootstrap.qualified_provider_profiles(),
     )
