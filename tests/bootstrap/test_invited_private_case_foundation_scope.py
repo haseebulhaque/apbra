@@ -331,6 +331,8 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "mvp1-model-led-clarification-flexible-generation-delivery-guide",
             "mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment",
             "mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment",
+            "apbra-175-deployment-model-control-plane",
+            "apbra-175-subscription-entitlement-feature-gating",
         ]
         self.assertEqual([source["id"] for source in self.sources["sources"]], expected_ids)
         source_map = {source["id"]: source for source in self.sources["sources"]}
