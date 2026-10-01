@@ -557,6 +557,7 @@ apps/web/src/reportDesignNormalization.ts
 apps/web/src/style.css
 apps/web/src/tenant.test.ts
 apps/web/src/tenant.ts
+apps/web/vite.config.ts
 compose.yaml
 '''.split())
 MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS = {
@@ -569,11 +570,24 @@ MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS = {
     'tests/bootstrap/test_protected_generation_output_history_scope.py',
     'docs/source-register.json',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '581d6a17cf86cbf2fc0d64bfc1d2ddd179bf1b0c2200d45c8a0d8f9ee74c4e76'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS = {
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
+    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+    'tests/bootstrap/test_protected_generation_output_history_scope.py',
+    'docs/source-register.json',
+}
+MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '0ea066974a680e8c28bbdede922bf10b0e89dcf340691c43df05af7ee5dc4333'
 MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide'
 MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
 MODEL_LED_FLEXIBLE_DELIVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide'
 MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH = MODEL_LED_FLEXIBLE_DELIVERY_BRANCH + '-registration'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-vite-proxy-governance-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256 = '2f2c952e3186bbd77f005dfb17a6e5688022f25a987c8c06dc7152955cfaa41d'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1552,8 +1566,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if (model_led_flexible_delivery_task['task_mode'], model_led_flexible_delivery_task['readiness'],
                         model_led_flexible_delivery_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('APBRA-174 requires issued implementation acceptance')
-                if model_led_flexible_delivery_task['source_ids'] != [MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID]:
-                    extension_errors.append('APBRA-174 requires its specific accepted source')
+                if model_led_flexible_delivery_task['source_ids'] != [
+                    MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID,
+                    MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID,
+                ]:
+                    extension_errors.append('APBRA-174 requires its specific accepted sources')
                 package_source = next((source for source in sources['sources']
                                        if source['id'] == MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID), None)
                 if package_source is None:
@@ -1562,6 +1579,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_source).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256:
                         extension_errors.append('APBRA-174 source differs from accepted provenance')
+                amendment_source = next((source for source in sources['sources']
+                                         if source['id'] == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID), None)
+                if amendment_source is None:
+                    extension_errors.append('APBRA-174 Vite proxy amendment source is missing')
+                else:
+                    canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_amendment_source).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256:
+                        extension_errors.append('APBRA-174 Vite proxy amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 model_led_flexible_delivery_task = None
@@ -1633,7 +1658,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
                          active_branch == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS)):
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-174' and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1713,8 +1741,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-174 registration and implementation changes must remain separate')
             if (active_task_id == 'APBRA-174' and
                     changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
-                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS):
+                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS and
+                    not (active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS)):
                 errors.append('APBRA-174 registration must change exactly its eight governance files')
+            if (active_task_id == 'APBRA-174' and
+                    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
+                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS):
+                errors.append('APBRA-174 Vite proxy amendment must change exactly its eight governance files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1774,8 +1808,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      name in BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS and
                      path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-174' and
-                     name in MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS and
-                     path_allowed(name, task, card))
+                         name in MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-174' and
+                         name in MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS and
+                         path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
         manifest = {}

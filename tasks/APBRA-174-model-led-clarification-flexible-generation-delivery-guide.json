@@ -33,6 +33,7 @@
     "Jira APBRA-174 issue 10274; PLAN comment 10310; actual actor Haseeb Ul Haque authenticated Atlassian account 712020:0dbda746-a3f7-446f-9454-b1bf24eb3501; read 2026-10-01",
     "Confluence 03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract, content 9404417, v3, accepted owner source read 2026-10-01",
     "Verified GitHub origin/main b2fba8d507262cf912e161b491549ab0d5680b0d, containing reviewed APBRA-171 PR #71 merge; no historical task rewrite",
+    "Haseeb's narrow APBRA-174 Vite Tenant Settings proxy governance amendment on 2026-10-01; Jira APBRA-174 comment 10314; controlling Confluence 03.08 page 9404417 v3 unchanged; amendment base 98df6731cefac4b8840802ee60a8e0fa163595fe (merged registration PR #72)",
     "APBRA-143, APBRA-144 and APBRA-171 historical task contracts; current API/React/compiler/guide implementation inspected as migration baseline only"
   ],
   "allowed_paths": [
@@ -101,6 +102,7 @@
     "apps/web/src/style.css",
     "apps/web/src/tenant.test.ts",
     "apps/web/src/tenant.ts",
+    "apps/web/vite.config.ts",
     "compose.yaml"
   ],
   "restricted_paths": [
@@ -117,7 +119,6 @@
     "apps/api/alembic/env.py",
     "apps/web/package.json",
     "apps/web/package-lock.json",
-    "apps/web/vite.config.ts",
     "apps/web/knowledge/**",
     "output/**",
     "artifacts/**",
@@ -169,12 +170,16 @@
   "human_initiator": "Haseeb Ul Haque",
   "base_commit": "b2fba8d507262cf912e161b491549ab0d5680b0d",
   "branch": "agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide",
-  "source_ids": ["mvp1-model-led-clarification-flexible-generation-delivery-guide"],
+  "source_ids": [
+    "mvp1-model-led-clarification-flexible-generation-delivery-guide",
+    "mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment"
+  ],
   "owner_acceptance": "RECORDED",
   "effective_release": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-174 accepted Confluence 03.08 v3",
   "dependencies": [
     "This eight-path registration-only PR must pass hosted CI, receive independent exact-head review and be manually merged by Haseeb before any product implementation. The additional three paths only preserve historical source-order assertions after appending this source. Refresh origin/main and live Jira/Confluence versions at implementation start.",
     "Secret-store architecture/security decision must be recorded before the protected-secret path is implemented; this contract registers bounded code authority but does not approve a storage product, cryptographic key lifecycle or secret reactivation policy.",
-    "APBRA-171 implementation is historical baseline on verified main; its task and its APBRA-143/APBRA-144 predecessors are not rewritten."
+    "APBRA-171 implementation is historical baseline on verified main; its task and its APBRA-143/APBRA-144 predecessors are not rewritten.",
+    "The 2026-10-01 post-registration governance-only amendment preserves all original 66 APBRA-174 implementation paths and adds exactly apps/web/vite.config.ts as path 67. Future implementation may add only the /api/tenant-settings route to the existing Vite server.proxy and preview.proxy APBRA API maps. It does not authorize other Vite plugin, adapter, AI proxy, provider, deployment, dependency, lock, workflow or product changes. The amendment must pass hosted CI and independent exact-head review and be manually merged by Haseeb before the preserved APBRA-174 implementation worktree resumes."
   ]
 }

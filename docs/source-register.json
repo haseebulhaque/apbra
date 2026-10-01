@@ -276,6 +276,15 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417/03.08+-+Model-Led+Clarification+Flexible+Generation+Delivery+Contract",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly directed APBRA-174 governance/task registration on 2026-10-01 for live Jira APBRA-174 issue 10274, In Progress, Highest, parent APBRA-160, and controlling Confluence 03.08 v3. This separate registration changes exactly eight governance files, three of them solely adjusting historical source-order assertions for the appended accepted source, and authorizes a later finite-path implementation of model-led optional clarification, accepted supported-scope generation, server-authoritative versioned Tenant Settings and protected secret references, generic Power BI namespace safety and the version-bound Delivery / Instruction Guide. It makes no product, migration, dependency, workflow, provider, region, cloud secret product or paid-call change. Historical APBRA-143/APBRA-144/APBRA-171 contracts remain unchanged. Hosted CI, independent exact-head review and Haseeb's manual merge are required before implementation authority is effective."
+    },
+    {
+      "id": "mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment",
+      "content_id": "APBRA-174",
+      "version": "Haseeb's narrow governance-only Tenant Settings proxy decision on 2026-10-01; Jira APBRA-174 issue 10274 and PLAN comment 10314; unchanged Confluence 03.08 page 9404417 v3; amendment base 98df6731cefac4b8840802ee60a8e0fa163595fe (merged PR #72)",
+      "section": "APBRA-174 narrow Vite development and preview Tenant Settings API proxy amendment",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-174",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorizes a separate governance-only post-registration amendment preserving all original 66 literal APBRA-174 implementation paths and adding exactly apps/web/vite.config.ts as path 67. This path permits only the future APBRA-174 implementation to forward /api/tenant-settings to the existing APBRA API target in both Vite server.proxy and preview.proxy; the Owner/Admin settings UI and real browser tests otherwise receive 404. This amendment does not implement the proxy or alter the preserved 44 uncommitted implementation changes. It does not broaden authority for Vite plugins, Azure/AI proxy behavior, provider adapters, backend endpoint work, unrelated dev-server configuration, .github/**, workflows, dependencies, locks, deployment, Package D or auto-merge. Existing APBRA-174 requirements, controlling Confluence 03.08 v3, historical task contracts and no-hardcoding rules remain unchanged. Hosted CI, fresh independent exact-head review and Haseeb's manual merge are required before APBRA-174 implementation resumes."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

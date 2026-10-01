@@ -231,8 +231,9 @@ class BusinessFriendlyUxApplicationShellScopeTests(unittest.TestCase):
         ids = [source["id"] for source in json.loads(
             (ROOT / "docs/source-register.json").read_text()
         )["sources"]]
+        source_index = ids.index("mvp1-business-friendly-ux-application-shell")
         self.assertEqual(
-            ids[:-1][-4:-2],
+            ids[source_index:source_index + 2],
             [
                 "mvp1-business-friendly-ux-application-shell",
                 "mvp1-business-friendly-ux-reviewed-design-amendment",
