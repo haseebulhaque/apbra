@@ -243,11 +243,7 @@ def test_provider_owns_question_and_follow_up_analysis_with_full_durable_context
         assert answered.status_code == 200, answered.text
         ready = runtime.post(
             f"/api/cases/{case['id']}/interpretations",
-            json={
-                "expected_context_version": answered.json()["event"][
-                    "semantic_context_version"
-                ]
-            },
+            json={"expected_context_version": answered.json()["event"]["semantic_context_version"]},
             headers=csrf(session),
         )
         assert ready.status_code == 200, ready.text
@@ -263,21 +259,144 @@ def test_provider_owns_question_and_follow_up_analysis_with_full_durable_context
     )
 
 
+def test_optional_model_question_cycle_limits_and_restart_preserve_acceptance(
+    settings: Settings, database: Database
+) -> None:
+    optional = provider_analysis(ready=True)
+    question = cast(list[dict[str, object]], provider_analysis(ready=False)["questions"])[0]
+    question["required"] = False
+    optional["questions"] = [question]
+    provider = DeterministicFakeProvider(
+        provider_profile(), [optional, provider_analysis(ready=True), optional]
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        owner = sign_in(runtime, "owner")
+        current = runtime.get("/api/tenant-settings").json()
+        policy = current["settings"]
+        policy["max_clarification_rounds_per_cycle"] = 1
+        policy["max_clarification_rounds_overall"] = 2
+        changed = runtime.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"expected_version": current["version"], "settings": policy},
+        )
+        assert changed.status_code == 200, changed.text
+        member = sign_in(runtime, "member")
+        case = create_case(runtime, member)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "Metrics.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(member), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        first = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(member),
+        )
+        assert first.status_code == 200, first.text
+        interpretation = first.json()["interpretation"]
+        assert interpretation["state"] == "READY_FOR_CONFIRMATION"
+        assert len(interpretation["questions"]) == 1
+        assert interpretation["clarification"]["rounds_used_in_cycle"] == 1
+        answer = runtime.post(
+            f"/api/cases/{case['id']}/conversation",
+            json={
+                "kind": "RAW_ANSWER",
+                "payload": {
+                    "questionId": question["id"],
+                    "interpretationId": interpretation["id"],
+                    "rawAnswer": "Recorded visits in the supplied file.",
+                    "decision": "FREE_TEXT",
+                },
+                "expected_context_version": interpretation["context_version"],
+                "command_key": "optional-answer-once",
+            },
+            headers=csrf(member),
+        )
+        assert answer.status_code == 200, answer.text
+        answered_version = answer.json()["event"]["semantic_context_version"]
+        second = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": answered_version},
+            headers=csrf(member),
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["interpretation"]["clarification"]["rounds_used_overall"] == 1
+        refinement = {
+            "expected_context_version": answered_version,
+            "command_key": "explicit-cycle-one",
+            "enhancement": "Include the current accepted context.",
+        }
+        cycle = runtime.post(
+            f"/api/cases/{case['id']}/clarification-cycles",
+            json=refinement,
+            headers=csrf(member),
+        )
+        assert cycle.status_code == 200, cycle.text
+        replay = runtime.post(
+            f"/api/cases/{case['id']}/clarification-cycles",
+            json=refinement,
+            headers=csrf(member),
+        )
+        assert replay.status_code == 200
+        assert replay.json()["semantic_context_version"] == cycle.json()["semantic_context_version"]
+        third = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": cycle.json()["semantic_context_version"]},
+            headers=csrf(member),
+        )
+        assert third.status_code == 200, third.text
+        final = third.json()["interpretation"]
+        assert final["state"] == "READY_FOR_CONFIRMATION"
+        assert final["clarification"]["rounds_used_overall"] == 2
+        assert final["clarification"]["overall_limit_reached"] is True
+        accepted = runtime.post(
+            f"/api/cases/{case['id']}/confirm",
+            json={
+                "interpretation_id": final["id"],
+                "expected_context_version": final["context_version"],
+            },
+            headers=csrf(member),
+        )
+        assert accepted.status_code == 200, accepted.text
+        blocked = runtime.post(
+            f"/api/cases/{case['id']}/clarification-cycles",
+            json={
+                "expected_context_version": final["context_version"],
+                "command_key": "blocked-overall-cycle",
+                "enhancement": "Another refinement",
+            },
+            headers=csrf(member),
+        )
+        assert blocked.status_code == 409
+    with TestClient(create_app(settings=settings, database=database)) as restarted:
+        restarted.cookies.update(runtime.cookies)
+        state = restarted.get(f"/api/cases/{case['id']}/acceptance")
+        assert state.status_code == 200
+        assert state.json()["clarification"]["rounds_used_overall"] == 2
+        assert state.json()["confirmed_contract"] is not None
+    context = provider.requests[2].context["materialContext"]
+    assert context["priorInterpretations"]
+    assert context["conversation"]
+
+
 def test_configured_answer_limit_is_enforced_by_the_server(
     settings: Settings, database: Database
 ) -> None:
-    bounded = settings.model_copy(
-        update={
-            "clarification_policy_json": json.dumps(
-                {
-                    "max_rounds": 3,
-                    "max_questions_per_round": 5,
-                    "max_answer_characters": 100,
-                }
-            )
-        }
-    )
-    with TestClient(create_app(settings=bounded, database=database)) as runtime:
+    with TestClient(create_app(settings=settings, database=database)) as runtime:
+        owner = sign_in(runtime, "owner")
+        current = runtime.get("/api/tenant-settings").json()
+        policy = current["settings"]
+        policy["clarification_policy"]["max_answer_characters"] = 100
+        updated = runtime.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"expected_version": current["version"], "settings": policy},
+        )
+        assert updated.status_code == 200, updated.text
         session = sign_in(runtime, "member")
         case, interpretation = prepare_ambiguous_case(runtime, session)
         question = cast(list[dict[str, object]], interpretation["questions"])[0]
@@ -367,12 +486,14 @@ def test_durable_conversation_evidence_and_exact_acceptance(
 
     with database.session() as db:
         contract_count = db.scalar(
-            select(func.count()).select_from(ConfirmedContractRow).where(
-                ConfirmedContractRow.interpretation_id == UUID(interpretation_json["id"])
-            )
+            select(func.count())
+            .select_from(ConfirmedContractRow)
+            .where(ConfirmedContractRow.interpretation_id == UUID(interpretation_json["id"]))
         )
         audit_count = db.scalar(
-            select(func.count()).select_from(AuditEventRow).where(
+            select(func.count())
+            .select_from(AuditEventRow)
+            .where(
                 AuditEventRow.resource_id == UUID(str(case_id)),
                 AuditEventRow.event_type == "REQUIREMENTS_CONFIRMED",
             )
@@ -853,9 +974,7 @@ def test_confirmation_replay_requalifies_the_complete_evidence_set(
     if damage == "ineligible-secondary":
         original_evidence_items = ApplicationSession.evidence_items
 
-        def eligible_items(
-            store: ApplicationSession, case_id: UUID
-        ) -> list[EvidenceRow]:
+        def eligible_items(store: ApplicationSession, case_id: UUID) -> list[EvidenceRow]:
             return [
                 row
                 for row in original_evidence_items(store, case_id)
@@ -899,12 +1018,12 @@ def test_confirmation_replay_requalifies_the_complete_evidence_set(
 
     with database.session() as db:
         retained = db.scalar(
-            select(ConfirmedContractRow).where(
-                ConfirmedContractRow.id == UUID(historical["id"])
-            )
+            select(ConfirmedContractRow).where(ConfirmedContractRow.id == UUID(historical["id"]))
         )
         audit_count = db.scalar(
-            select(func.count()).select_from(AuditEventRow).where(
+            select(func.count())
+            .select_from(AuditEventRow)
+            .where(
                 AuditEventRow.resource_id == UUID(str(case["id"])),
                 AuditEventRow.event_type == "REQUIREMENTS_CONFIRMED",
             )
@@ -1009,9 +1128,7 @@ def test_accepted_choice_is_normalized_and_decline_cannot_authorize_meaning(
     assert any("Visits" in item for item in ready["confirmation_summary"]["kpiDefinitions"])
 
     declined_case, declined_interpretation = prepare_ambiguous_case(client, session)
-    declined_question = cast(
-        list[dict[str, object]], declined_interpretation["questions"]
-    )[0]
+    declined_question = cast(list[dict[str, object]], declined_interpretation["questions"])[0]
     declined = client.post(
         f"/api/cases/{declined_case['id']}/conversation",
         json={
@@ -1201,9 +1318,7 @@ def test_concurrent_conversation_commands_are_idempotent_or_conflict(
     )
     assert [status for status, _identifier, _code in identical] == [200, 200]
     assert len({identifier for _status, identifier, _code in identical}) == 1
-    identical_events = client.get(
-        f"/api/cases/{identical_case['id']}/conversation"
-    ).json()["items"]
+    identical_events = client.get(f"/api/cases/{identical_case['id']}/conversation").json()["items"]
     assert len(identical_events) == 1
 
     conflicting_case = create_case(client, session)
@@ -1214,9 +1329,9 @@ def test_concurrent_conversation_commands_are_idempotent_or_conflict(
     )
     assert sorted(status for status, _identifier, _code in conflicting) == [200, 409]
     assert "IDEMPOTENCY_CONFLICT" in {code for _status, _identifier, code in conflicting}
-    conflicting_events = client.get(
-        f"/api/cases/{conflicting_case['id']}/conversation"
-    ).json()["items"]
+    conflicting_events = client.get(f"/api/cases/{conflicting_case['id']}/conversation").json()[
+        "items"
+    ]
     assert len(conflicting_events) == 1
 
 

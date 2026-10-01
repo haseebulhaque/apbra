@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from test_generation import confirmed_case
 
 from alembic import command
+from apbra_api.bootstrap import bootstrap
 from apbra_api.config import Settings
 from apbra_api.persistence import CaseAccessRow, CaseRow, Database
 
@@ -27,6 +28,10 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
         "reviewed_report_designs",
         "case_reference_materials",
         "automatic_design_attempts",
+        "tenant_settings_versions",
+        "tenant_settings_current",
+        "tenant_secret_records",
+        "case_clarification_cycles",
     }.issubset(set(inspector.get_table_names()))
     assert "uq_generation_case_active" in {
         index["name"] for index in inspector.get_indexes("generation_attempts")
@@ -34,7 +39,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_05"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_06"
 
 
 def test_package_c_to_reviewed_design_upgrade_is_isolated(
@@ -92,7 +97,10 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
         assert historical.reviewed_design_id is None
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_05"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_06"
+    # The deliberate downgrade removed the new tenant-settings tables. Re-seed
+    # only this disposable test tenant before exercising the restored API.
+    bootstrap(settings, database)
     restored = client.get(f"/api/cases/{case['id']}/generation/{original['id']}/artifact")
     assert restored.status_code == 200
     assert restored.content == original_bytes

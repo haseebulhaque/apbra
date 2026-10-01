@@ -1,5 +1,13 @@
 # APBRA MVP-1 web application
 
+## Current APBRA-174 protected experience
+
+The active invited-case workspace permits zero or optional model-generated clarification questions. Optional unanswered questions do not block an otherwise ready acceptance; users can explicitly Clarify/Enhance within the versioned tenant policy (initially two rounds per cycle and ten rounds overall). The accepted interpretation shows supported scope and any omissions/limitations. Material input or settings changes stale acceptance; mandatory blockers still require a supported correction or authorized expert route.
+
+An Owner/Admin settings panel exposes current validated categories, warnings, credential status masked as `***`, edit, version history and restore. A credential replacement goes to the protected server endpoint and never returns plaintext. Member and foreign/revoked actors do not get this administration surface or API authority. Provider/model selection is explicit, with no browser-held key or default. The panel stacks at narrow widths rather than overflowing the viewport.
+
+Final protected candidate ZIPs include `Delivery-Guide.md`, bound to the exact request, accepted meaning, tenant settings, design, generation attempt and candidate digest. The guide records supported/omitted scope, measures, assumptions, standards and handover without claiming deployment. The browser's older lazy PDF described below is historical prototype behavior, not this ZIP artifact.
+
 APBRA-164 extends the APBRA-163 durable case journey from exact confirmation to protected report generation, immutable attempt history and validated candidate download. The browser derives the signed-in actor from `/api/auth/session`; it never supplies authoritative company, membership, role, private-case permission, confirmed semantic claims, validation status or artifact identity.
 
 An active invited member can create a case without a project or file, list only authorized cases, resume after a restart, save immutable request versions, add durable messages and protected evidence, inspect a server-derived understanding and explicitly confirm its exact current meaning. A current confirmation can then build a private candidate through the canonical pipeline. Request, conversation or evidence changes make earlier confirmation stale and prevent it from authorizing a new build.
@@ -14,7 +22,7 @@ It is not the complete `APBRA-PRODUCT-2026-09-22` experience. The current UI and
 
 Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Readiness and confirmation use the same deterministic semantic prerequisites and are bound to the exact interpretation and material input context shown to the user. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
 
-Administrators inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. These remain local prototype settings, not production tenant controls. Reporting cases and their request versions are durable; the separate historical **My Runs** view remains browser-session-only evidence.
+The historical prototype allowed administrators to inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. Those older controls were local browser settings, unlike the APBRA-174 protected, durable tenant settings panel. Reporting cases and their request versions are durable; the separate historical **My Runs** view remains browser-session-only evidence.
 
 ## Accepted product experience — planned
 

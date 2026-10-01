@@ -13,7 +13,7 @@ const inspectPlaywrightConfig=(databaseUrl:string,environment:Record<string,stri
 });
 
 describe('APBRA isolated browser-test configuration',()=>{
-  it('admits only the exact loopback apbra_e2e database target',()=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e');expect(result.status,`${result.stdout}\n${result.stderr}`).toBe(0);expect(result.stdout).toContain('Total: 11 tests')});
+  it('admits only the exact loopback apbra_e2e database target',()=>{const result=inspectPlaywrightConfig('postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_e2e');expect(result.status,`${result.stdout}\n${result.stderr}`).toBe(0);expect(result.stdout).toMatch(/Total: \d+ tests in \d+ files/)});
   it.each([
     'postgresql+psycopg://apbra:unused@localhost:54321/apbra',
     'postgresql+psycopg://apbra:unused@database.internal:5432/apbra_e2e',

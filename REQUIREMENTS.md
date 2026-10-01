@@ -1,5 +1,11 @@
 # APBRA current and target requirements map
 
+## Current APBRA-174 implemented slice
+
+The protected case experience permits zero or optional model-generated clarification questions and explicit bounded Clarify/Enhance cycles. The seeded tenant policy is two clarification rounds per cycle and ten rounds overall; durable server state enforces the active settings version. A ready interpretation may be accepted with optional questions unanswered, but unresolved mandatory blockers cannot be bypassed. Supported partial scope and omissions are shown before exact acceptance; material changes stale earlier acceptance.
+
+Owner/Admin can inspect, edit, version and restore validated tenant settings and replace protected credentials without seeing plaintext. Provider/model/region activation requires qualified explicit configuration. Automatic ReportDesign remains subject to deterministic validation and cannot use a business-specific fallback. The canonical compiler resolves technical measure/column namespace collisions without changing semantic objects. Successful candidate ZIPs include a digest-bound Delivery / Instruction Guide; they are not evidence of Desktop execution, release approval or deployment. Earlier Capstone rows below remain historical evidence.
+
 This repository view separates implemented Capstone behaviour, verified evidence and future product requirements. Confluence remains authoritative for requirements and Jira for delivery intent.
 
 ## Implemented Capstone requirements

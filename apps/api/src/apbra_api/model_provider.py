@@ -107,9 +107,7 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
             "Exact Table.Column bindings. KPI uses none; FILTER and BREAKDOWN use one "
             "or more; TREND uses exactly one date or datetime field."
         ),
-        "pageNames": _string_array(
-            "Only exact names already declared in interpretation.pages."
-        ),
+        "pageNames": _string_array("Only exact names already declared in interpretation.pages."),
         "required": {
             "type": "boolean",
             "description": "Whether confirmation requires this obligation downstream.",
@@ -200,6 +198,22 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
         "audience": {"type": "string"},
         "pages": _string_array(),
         "assumptions": _string_array(),
+        "requestedScope": _string_array(
+            "The user's requested scope, including portions not deliverable now."
+        ),
+        "deliverableScope": _string_array(
+            "Only the meaningful supported scope represented in typed obligations."
+        ),
+        "unsupportedScope": _string_array(
+            "Requested features or semantics unsupported by the active target capability."
+        ),
+        "omittedScope": _string_array(
+            "Requested portions omitted because data, meaning or permission is unavailable."
+        ),
+        "limitations": _string_array("Disclosed caveats and constraints of the deliverable scope."),
+        "suggestedAlternatives": _string_array(
+            "Alternatives offered for user consideration, not silently selected."
+        ),
         "ambiguities": _string_array(),
         "clarifications": {
             "type": "array",
@@ -229,7 +243,11 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
         "category": clarification_fields["category"],
         "question": {"type": "string"},
         "reason": {"type": "string"},
-        "required": {"type": "boolean"},
+        "required": {
+            "type": "boolean",
+            "enum": [False],
+            "description": "Clarification is optional and never gates acceptance.",
+        },
         "suggestions": {
             "type": "array",
             "items": {
@@ -668,9 +686,7 @@ class OpenAICompatibleProvider:
         else:
             headers["Authorization"] = f"Bearer {self._credential}"
             headers["OpenAI-Version"] = self.profile.api_version
-        while calls < min(
-            self.profile.max_calls_per_operation, self.profile.retry_limit + 1
-        ):
+        while calls < min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1):
             if time.monotonic() - started >= self.profile.time_budget_seconds:
                 raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED", observation=observation())
             calls += 1

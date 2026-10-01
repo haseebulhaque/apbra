@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -87,6 +88,122 @@ class MembershipRow(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TenantSecretRow(Base):
+    __tablename__ = "tenant_secret_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_tenant_secret_actor_company",
+        ),
+        UniqueConstraint("id", "company_id", name="uq_tenant_secret_company"),
+        Index("ix_tenant_secret_company_profile", "company_id", "profile_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    profile_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    key_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_by_membership_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class TenantSettingsVersionRow(Base):
+    __tablename__ = "tenant_settings_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["secret_reference_id", "company_id"],
+            ["tenant_secret_records.id", "tenant_secret_records.company_id"],
+            name="fk_tenant_settings_secret_company",
+        ),
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_tenant_settings_actor_company",
+        ),
+        ForeignKeyConstraint(
+            ["restored_from_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_tenant_settings_restore_company",
+        ),
+        UniqueConstraint("company_id", "version", name="uq_tenant_settings_company_version"),
+        UniqueConstraint("id", "company_id", name="uq_tenant_settings_identity_company"),
+        CheckConstraint("version >= 1", name="ck_tenant_settings_version_positive"),
+        CheckConstraint("validation_status = 'PASS'", name="ck_tenant_settings_validated"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    settings_json: Mapped[str] = mapped_column(Text, nullable=False)
+    settings_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    secret_reference_id: Mapped[UUID | None] = mapped_column()
+    created_by_membership_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    changed_keys_json: Mapped[str] = mapped_column(Text, nullable=False)
+    safe_changes_json: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(500))
+    restored_from_version_id: Mapped[UUID | None] = mapped_column()
+    validation_status: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class TenantSettingsCurrentRow(Base):
+    __tablename__ = "tenant_settings_current"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_tenant_current_version_company",
+        ),
+    )
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), primary_key=True)
+    version_id: Mapped[UUID] = mapped_column(nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ClarificationCycleRow(Base):
+    __tablename__ = "case_clarification_cycles"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["case_id", "company_id"],
+            ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_clarification_cycle_case_company",
+        ),
+        ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_clarification_cycle_settings_company",
+        ),
+        ForeignKeyConstraint(
+            ["started_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_clarification_cycle_actor_company",
+        ),
+        UniqueConstraint("case_id", "cycle_number", name="uq_clarification_cycle_number"),
+        UniqueConstraint(
+            "case_id",
+            "started_by_membership_id",
+            "command_key",
+            name="uq_clarification_cycle_command",
+        ),
+        CheckConstraint("cycle_number >= 1", name="ck_clarification_cycle_positive"),
+        CheckConstraint("rounds_used >= 0", name="ck_clarification_rounds_nonnegative"),
+        Index("ix_clarification_cycle_case", "case_id", "cycle_number"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    cycle_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    rounds_used: Mapped[int] = mapped_column(Integer, nullable=False)
+    settings_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    started_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class InvitationRow(Base):
@@ -368,9 +485,7 @@ class ReferenceMaterialRow(Base):
             name="uq_case_request_reference_digest",
         ),
         UniqueConstraint("id", "case_id", "company_id", name="uq_reference_case_company"),
-        CheckConstraint(
-            "media_type IN ('image/png','image/jpeg')", name="ck_reference_media_type"
-        ),
+        CheckConstraint("media_type IN ('image/png','image/jpeg')", name="ck_reference_media_type"),
         CheckConstraint(
             "interpretation_state IN ('NOT_INTERPRETED','VISION_AVAILABLE')",
             name="ck_reference_interpretation_state",
@@ -422,6 +537,11 @@ class InterpretationRow(Base):
             ["memberships.id", "memberships.company_id"],
             name="fk_interpretation_actor_company",
         ),
+        ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_case_interpretation_versions_settings_company",
+        ),
         CheckConstraint(
             "state IN ('NEEDS_CLARIFICATION','READY_FOR_CONFIRMATION')",
             name="ck_interpretation_state",
@@ -433,6 +553,7 @@ class InterpretationRow(Base):
     case_id: Mapped[UUID] = mapped_column(nullable=False)
     company_id: Mapped[UUID] = mapped_column(nullable=False)
     request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version_id: Mapped[UUID | None] = mapped_column()
     evidence_id: Mapped[UUID | None] = mapped_column(ForeignKey("case_evidence_versions.id"))
     context_version: Mapped[int] = mapped_column(Integer, nullable=False)
     session_json: Mapped[str] = mapped_column(Text, nullable=False)
@@ -465,6 +586,11 @@ class ConfirmedContractRow(Base):
             ["memberships.id", "memberships.company_id"],
             name="fk_confirmed_contract_actor_company",
         ),
+        ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_confirmed_requirement_contracts_settings_company",
+        ),
         UniqueConstraint("interpretation_id", name="uq_confirmed_contract_interpretation"),
         UniqueConstraint("id", "case_id", "company_id", name="uq_confirmed_contract_case"),
         CheckConstraint("schema_version = 2", name="ck_confirmed_contract_v2"),
@@ -473,6 +599,7 @@ class ConfirmedContractRow(Base):
     case_id: Mapped[UUID] = mapped_column(nullable=False)
     company_id: Mapped[UUID] = mapped_column(nullable=False)
     interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version_id: Mapped[UUID | None] = mapped_column()
     contract_json: Mapped[str] = mapped_column(Text, nullable=False)
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
     accepted_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
@@ -519,12 +646,22 @@ class AutomaticDesignAttemptRow(Base):
             ["memberships.id", "memberships.company_id"],
             name="fk_design_attempt_actor_company",
         ),
+        ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_automatic_design_attempts_settings_company",
+        ),
         UniqueConstraint(
-            "case_id", "requested_by_membership_id", "command_key",
+            "case_id",
+            "requested_by_membership_id",
+            "command_key",
             name="uq_design_attempt_command",
         ),
         UniqueConstraint(
-            "id", "case_id", "company_id", "confirmed_contract_id",
+            "id",
+            "case_id",
+            "company_id",
+            "confirmed_contract_id",
             name="uq_design_attempt_binding",
         ),
         CheckConstraint(
@@ -532,9 +669,7 @@ class AutomaticDesignAttemptRow(Base):
             name="ck_design_attempt_status",
         ),
         CheckConstraint("semantic_context_version >= 1", name="ck_design_attempt_context"),
-        Index(
-            "ix_design_attempt_case_contract", "case_id", "confirmed_contract_id", "created_at"
-        ),
+        Index("ix_design_attempt_case_contract", "case_id", "confirmed_contract_id", "created_at"),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     company_id: Mapped[UUID] = mapped_column(nullable=False)
@@ -542,6 +677,7 @@ class AutomaticDesignAttemptRow(Base):
     confirmed_contract_id: Mapped[UUID] = mapped_column(nullable=False)
     interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
     request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version_id: Mapped[UUID | None] = mapped_column()
     semantic_context_version: Mapped[int] = mapped_column(Integer, nullable=False)
     requested_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
     command_key: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -619,7 +755,10 @@ class ReviewedReportDesignRow(Base):
             name="fk_reviewed_design_automatic_attempt",
         ),
         UniqueConstraint(
-            "id", "case_id", "company_id", "confirmed_contract_id",
+            "id",
+            "case_id",
+            "company_id",
+            "confirmed_contract_id",
             name="uq_reviewed_design_attempt_binding",
         ),
         CheckConstraint(
@@ -634,7 +773,9 @@ class ReviewedReportDesignRow(Base):
         CheckConstraint("semantic_context_version >= 1", name="ck_reviewed_design_context"),
         Index(
             "ix_reviewed_design_case_contract",
-            "case_id", "confirmed_contract_id", "reviewed_at",
+            "case_id",
+            "confirmed_contract_id",
+            "reviewed_at",
         ),
     )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -711,6 +852,11 @@ class GenerationAttemptRow(Base):
             name="fk_generation_actor_company",
         ),
         ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_generation_attempts_settings_company",
+        ),
+        ForeignKeyConstraint(
             ["artifact_id", "id", "case_id", "company_id"],
             [
                 "generated_artifacts.id",
@@ -744,6 +890,7 @@ class GenerationAttemptRow(Base):
     reviewed_design_id: Mapped[UUID | None] = mapped_column()
     interpretation_id: Mapped[UUID] = mapped_column(nullable=False)
     request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version_id: Mapped[UUID | None] = mapped_column()
     created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
     command_key: Mapped[str] = mapped_column(String(200), nullable=False)
     command_payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -777,6 +924,11 @@ class GeneratedArtifactRow(Base):
             ],
             name="fk_artifact_attempt_case_company",
         ),
+        ForeignKeyConstraint(
+            ["settings_version_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+            name="fk_generated_artifacts_settings_company",
+        ),
         UniqueConstraint("attempt_id", name="uq_artifact_attempt"),
         UniqueConstraint(
             "id",
@@ -793,9 +945,11 @@ class GeneratedArtifactRow(Base):
     attempt_id: Mapped[UUID] = mapped_column(nullable=False)
     case_id: Mapped[UUID] = mapped_column(nullable=False)
     company_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version_id: Mapped[UUID | None] = mapped_column()
     storage_key: Mapped[str] = mapped_column(String(600), nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    guide_digest: Mapped[str | None] = mapped_column(String(64))
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     validation_status: Mapped[str] = mapped_column(String(16), nullable=False, default="PASS")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -886,9 +1040,7 @@ class ApplicationSession(Session):
             )
         )
         if lock:
-            query = query.with_for_update(
-                of=(MembershipRow, ExternalIdentityRow, CompanyRow)
-            )
+            query = query.with_for_update(of=(MembershipRow, ExternalIdentityRow, CompanyRow))
         pair = self.execute(query).one_or_none()
         if pair is None:
             return None
@@ -1317,6 +1469,45 @@ class ApplicationSession(Session):
             ).all()
         )
 
+    def clarification_cycles(self, case_id: UUID) -> list[ClarificationCycleRow]:
+        return list(
+            self.scalars(
+                select(ClarificationCycleRow)
+                .where(ClarificationCycleRow.case_id == case_id)
+                .order_by(ClarificationCycleRow.cycle_number)
+            ).all()
+        )
+
+    def clarification_cycle_by_command(
+        self, case_id: UUID, membership_id: UUID, command_key: str
+    ) -> ClarificationCycleRow | None:
+        return self.scalar(
+            select(ClarificationCycleRow).where(
+                ClarificationCycleRow.case_id == case_id,
+                ClarificationCycleRow.started_by_membership_id == membership_id,
+                ClarificationCycleRow.command_key == command_key,
+            )
+        )
+
+    def create_clarification_cycle(
+        self, actor: Actor, case_id: UUID, settings_version_id: UUID, command_key: str
+    ) -> ClarificationCycleRow:
+        prior = self.clarification_cycles(case_id)
+        if prior and prior[-1].closed_at is None:
+            prior[-1].closed_at = utcnow()
+        row = ClarificationCycleRow(
+            company_id=actor.company_id,
+            case_id=case_id,
+            cycle_number=(prior[-1].cycle_number + 1 if prior else 1),
+            rounds_used=0,
+            settings_version_id=settings_version_id,
+            started_by_membership_id=actor.membership_id,
+            command_key=command_key,
+        )
+        self.add(row)
+        self.flush()
+        return row
+
     def add_evidence(
         self,
         actor: Actor,
@@ -1434,11 +1625,14 @@ class ApplicationSession(Session):
         confirmation_summary_json: str,
         readiness_binding_digest: str,
         state: str,
+        *,
+        settings_version_id: UUID | None = None,
     ) -> InterpretationRow:
         row = InterpretationRow(
             case_id=case_id,
             company_id=actor.company_id,
             request_version_id=request_version_id,
+            settings_version_id=settings_version_id,
             evidence_id=evidence_id,
             context_version=context_version,
             session_json=session_json,
@@ -1466,6 +1660,18 @@ class ApplicationSession(Session):
             .order_by(InterpretationRow.created_at.desc(), InterpretationRow.id.desc())
             .limit(1)
         )
+
+    def earlier_interpretations(
+        self, case_id: UUID, before_context_version: int
+    ) -> list[InterpretationRow]:
+        return list(self.scalars(
+            select(InterpretationRow)
+            .where(
+                InterpretationRow.case_id == case_id,
+                InterpretationRow.context_version < before_context_version,
+            )
+            .order_by(InterpretationRow.context_version)
+        ).all())
 
     def interpretation_for_context(
         self, case_id: UUID, context_version: int
@@ -1495,6 +1701,7 @@ class ApplicationSession(Session):
             case_id=row.case_id,
             company_id=row.company_id,
             interpretation_id=row.id,
+            settings_version_id=row.settings_version_id,
             contract_json=contract_json,
             schema_version=2,
             accepted_by_membership_id=actor.membership_id,
@@ -1558,9 +1765,7 @@ class ApplicationSession(Session):
             design_json=design_json,
             content_digest=content_digest,
             summary_json=summary_json,
-            reviewer_membership_id=(
-                actor.membership_id if origin == "EXPERT_REVIEWED" else None
-            ),
+            reviewer_membership_id=(actor.membership_id if origin == "EXPERT_REVIEWED" else None),
             reviewer_identity_id=(actor.identity_id if origin == "EXPERT_REVIEWED" else None),
             reviewer_role=(actor.role.value if origin == "EXPERT_REVIEWED" else None),
             origin=origin,
@@ -1590,6 +1795,8 @@ class ApplicationSession(Session):
         requirement_binding_digest: str,
         evidence_binding_digest: str,
         reference_binding_digest: str,
+        *,
+        settings_version_id: UUID | None = None,
     ) -> AutomaticDesignAttemptRow:
         row = AutomaticDesignAttemptRow(
             company_id=actor.company_id,
@@ -1597,6 +1804,7 @@ class ApplicationSession(Session):
             confirmed_contract_id=contract_id,
             interpretation_id=interpretation_id,
             request_version_id=request_version_id,
+            settings_version_id=settings_version_id,
             semantic_context_version=semantic_context_version,
             requested_by_membership_id=actor.membership_id,
             command_key=command_key,
@@ -1621,9 +1829,7 @@ class ApplicationSession(Session):
             )
         )
 
-    def design_attempts(
-        self, case_id: UUID, contract_id: UUID
-    ) -> list[AutomaticDesignAttemptRow]:
+    def design_attempts(self, case_id: UUID, contract_id: UUID) -> list[AutomaticDesignAttemptRow]:
         return list(
             self.scalars(
                 select(AutomaticDesignAttemptRow)
@@ -1635,9 +1841,7 @@ class ApplicationSession(Session):
             ).all()
         )
 
-    def reviewed_design(
-        self, case_id: UUID, design_id: UUID
-    ) -> ReviewedReportDesignRow | None:
+    def reviewed_design(self, case_id: UUID, design_id: UUID) -> ReviewedReportDesignRow | None:
         return self.scalar(
             select(ReviewedReportDesignRow).where(
                 ReviewedReportDesignRow.case_id == case_id,
@@ -1645,9 +1849,7 @@ class ApplicationSession(Session):
             )
         )
 
-    def reviewed_designs(
-        self, case_id: UUID, contract_id: UUID
-    ) -> list[ReviewedReportDesignRow]:
+    def reviewed_designs(self, case_id: UUID, contract_id: UUID) -> list[ReviewedReportDesignRow]:
         return list(
             self.scalars(
                 select(ReviewedReportDesignRow)
@@ -1709,6 +1911,7 @@ class ApplicationSession(Session):
         provenance_json: str,
         reviewed_design_id: UUID,
         *,
+        settings_version_id: UUID | None = None,
         retry_of_attempt_id: UUID | None = None,
         supersedes_attempt_id: UUID | None = None,
     ) -> GenerationAttemptRow:
@@ -1724,6 +1927,7 @@ class ApplicationSession(Session):
             reviewed_design_id=reviewed_design_id,
             interpretation_id=interpretation_id,
             request_version_id=request_version_id,
+            settings_version_id=settings_version_id,
             created_by_membership_id=actor.membership_id,
             command_key=command_key,
             command_payload_digest=command_payload_digest,
@@ -1767,15 +1971,18 @@ class ApplicationSession(Session):
         filename: str,
         content_digest: str,
         byte_size: int,
+        guide_digest: str | None = None,
     ) -> GeneratedArtifactRow:
         assert isinstance(attempt, GenerationAttemptRow)
         row = GeneratedArtifactRow(
             attempt_id=attempt.id,
             case_id=attempt.case_id,
             company_id=attempt.company_id,
+            settings_version_id=attempt.settings_version_id,
             storage_key=storage_key,
             filename=filename,
             content_digest=content_digest,
+            guide_digest=guide_digest,
             byte_size=byte_size,
             validation_status="PASS",
         )

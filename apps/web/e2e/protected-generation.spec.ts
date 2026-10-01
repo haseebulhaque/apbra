@@ -37,7 +37,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const clarification=page.getByText('Clarification required',{exact:true});
   if(await clarification.isVisible())await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmationResponse=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm report requirements'}).click();
+  await page.getByRole('button',{name:'Accept & Generate'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('confirmed-understanding.png'),fullPage:true});
@@ -166,7 +166,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const reconfirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm report requirements'}).click();
+  await page.getByRole('button',{name:'Accept & Generate'}).click();
   const newContract=(await (await reconfirmation).json()).confirmed_contract.contract;
   await expect(page.getByLabel('Current report')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
@@ -224,7 +224,7 @@ test('business UI cancels an active attempt and keeps its truthful history',asyn
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm report requirements'}).click();
+  await page.getByRole('button',{name:'Accept & Generate'}).click();
   const confirmed=(await (await confirmation).json()).confirmed_contract;
   let status:'RUNNING'|'CANCELLED'='RUNNING';
   const attempt=()=>({id:'synthetic-running-attempt',case_id:'synthetic-case',confirmed_contract_id:confirmed.id,reviewed_design_id:'synthetic-reviewed-plan',interpretation_id:confirmed.interpretation_id,request_version_id:'synthetic-version',status,attempt_number:1,retry_of_attempt_id:null,supersedes_attempt_id:null,provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',pipeline:'canonical',runtimeEvidence:{}},validation:null,failure:null,created_at:new Date().toISOString(),started_at:new Date().toISOString(),completed_at:null,cancelled_at:status==='CANCELLED'?new Date().toISOString():null,artifact:null});

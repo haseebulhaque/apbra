@@ -50,6 +50,11 @@ from .model_provider import (
     ProviderRequest,
     report_design_schema,
 )
+from .tenant_settings import (
+    TenantSettingsSnapshot,
+    interpretation_material_digest,
+    settings_version,
+)
 
 MAX_BRIDGE_BYTES = 20_000_000
 MAX_BRIDGE_EXECUTABLE_BYTES = 5_000_000
@@ -234,6 +239,16 @@ class GenerationBridge:
                 or len(content.encode()) > MAX_CANDIDATE_TEXT
             ):
                 raise GenerationFailed()
+        if payload.get("operation") == "generate":
+            guide = files.get("Delivery-Guide.md")
+            guide_digest = value.get("guideDigest")
+            if (
+                not isinstance(guide, str)
+                or not guide.strip()
+                or not isinstance(guide_digest, str)
+                or not hmac.compare_digest(hashlib.sha256(guide.encode()).hexdigest(), guide_digest)
+            ):
+                raise GenerationFailed()
         return value
 
     def governed_knowledge(self, payload: dict[str, Any]) -> list[dict[str, str]]:
@@ -242,6 +257,9 @@ class GenerationBridge:
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._call({**payload, "operation": "generate"}, validate_candidate=True)
+
+    def validate_design(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._call({**payload, "operation": "validate-design"}, validate_candidate=True)
 
 
 class GenerationBridgeFailure(GenerationFailed):
@@ -313,9 +331,7 @@ def _apply_provider_observation(attempt: Any, observation: ProviderExecutionObse
     attempt.candidate_digest = observation.candidate_digest
 
 
-def _automatic_design_retry_instruction(
-    exc: Exception, *, max_visuals_per_page: int
-) -> str:
+def _automatic_design_retry_instruction(exc: Exception, *, max_visuals_per_page: int) -> str:
     if (
         isinstance(exc, GenerationBridgeFailure)
         and exc.diagnostic_code == "REPORT_DESIGN_NORMALIZATION_FAILED"
@@ -518,6 +534,7 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
                 "id": str(artifact.id),
                 "filename": artifact.filename,
                 "content_digest": artifact.content_digest,
+                "guide_digest": artifact.guide_digest,
                 "byte_size": artifact.byte_size,
                 "validation_status": artifact.validation_status,
                 "created_at": artifact.created_at.isoformat(),
@@ -560,6 +577,7 @@ class GenerationService:
         reference_objects: LocalEvidenceStore | None = None,
         model_provider: ModelProvider | None = None,
         generation_policy: dict[str, Any] | None = None,
+        tenant_settings: TenantSettingsSnapshot | None = None,
     ) -> None:
         self.bridge = bridge
         self.evidence_objects = evidence_objects
@@ -567,6 +585,7 @@ class GenerationService:
         self.reference_objects = reference_objects
         self.model_provider = model_provider
         self.generation_policy = generation_policy
+        self.tenant_settings = tenant_settings
 
     def _current_payload(
         self,
@@ -578,9 +597,7 @@ class GenerationService:
         lock_access: bool = False,
         require_edit: bool = True,
     ) -> tuple[dict[str, Any], str, str, Any, Any]:
-        authorized_case_access(
-            store, actor, case_id, require_edit=require_edit, lock=lock_access
-        )
+        authorized_case_access(store, actor, case_id, require_edit=require_edit, lock=lock_access)
         case = store.locked_case(case_id)
         contract = store.confirmed_contract_for_case(case_id, contract_id)
         latest = store.latest_interpretation(case_id)
@@ -592,6 +609,14 @@ class GenerationService:
             or latest.request_version_id != case.current_request_version_id
         ):
             raise StaleVersion()
+        if self.tenant_settings is not None and contract.settings_version_id is not None:
+            historic = settings_version(
+                db=store, company_id=actor.company_id, version_id=contract.settings_version_id
+            )
+            if interpretation_material_digest(historic.settings) != interpretation_material_digest(
+                self.tenant_settings.settings
+            ):
+                raise StaleVersion()
         evidence = [
             row
             for row in store.evidence_items(case_id)
@@ -647,8 +672,18 @@ class GenerationService:
                 "referenceMaterial": references,
             },
         }
+        if self.tenant_settings is not None:
+            payload["binding"]["settingsVersionId"] = str(self.tenant_settings.id)
+            payload["binding"]["settingsDigest"] = self.tenant_settings.digest
         if self.generation_policy is not None:
             payload["generationPolicy"] = self.generation_policy
+        if self.tenant_settings is not None:
+            payload["tenantConventions"] = self.tenant_settings.settings.conventions.model_dump(
+                mode="json"
+            )
+            payload["deliveryGuidePolicy"] = (
+                self.tenant_settings.settings.delivery_guide_policy.model_dump(mode="json")
+            )
         return payload, canonical_digest(payload), evidence_digest, case, contract
 
     def history(self, db: object, actor: Actor, case_id: UUID) -> list[dict[str, Any]]:
@@ -688,9 +723,7 @@ class GenerationService:
             or row.semantic_context_version != payload["binding"]["semanticContextVersion"]
             or row.evidence_binding_digest != evidence_digest
             or row.semantic_input_digest != semantic_input_digest
-            or not hmac.compare_digest(
-                row.binding_digest, canonical_digest(payload["binding"])
-            )
+            or not hmac.compare_digest(row.binding_digest, canonical_digest(payload["binding"]))
             or not hmac.compare_digest(
                 row.binding_digest, hashlib.sha256(row.binding_json.encode()).hexdigest()
             )
@@ -735,11 +768,8 @@ class GenerationService:
             design = json.loads(row.design_json)
         except json.JSONDecodeError as exc:
             raise ReviewedDesignRequired() from exc
-        if (
-            not isinstance(design, dict)
-            or not hmac.compare_digest(
-                row.content_digest, hashlib.sha256(row.design_json.encode()).hexdigest()
-            )
+        if not isinstance(design, dict) or not hmac.compare_digest(
+            row.content_digest, hashlib.sha256(row.design_json.encode()).hexdigest()
         ):
             raise ReviewedDesignRequired()
         return row, design
@@ -862,6 +892,7 @@ class GenerationService:
             requirement_digest,
             evidence_digest,
             reference_digest,
+            settings_version_id=(self.tenant_settings.id if self.tenant_settings else None),
         )
         attempt.provider_profile_id = model_provider.profile.profile_id
         attempt.model_or_deployment = model_provider.profile.model_or_deployment
@@ -878,9 +909,7 @@ class GenerationService:
         terminal_validation: dict[str, Any] | None = None
         try:
             governed_knowledge = bridge.governed_knowledge(payload)
-            generation_capabilities = cast(
-                dict[str, Any], generation_policy["generation"]
-            )
+            generation_capabilities = cast(dict[str, Any], generation_policy["generation"])
             governance = cast(dict[str, Any], generation_policy["governance"])
             supported_trend_grains = cast(
                 list[str], generation_capabilities["supportedTrendGrains"]
@@ -935,7 +964,7 @@ class GenerationService:
                     "pipelineExecutableDigest": bridge.pipeline_digest,
                 }
                 try:
-                    result = bridge.generate(validation_payload)
+                    result = bridge.validate_design(validation_payload)
                 except GenerationBridgeFailure as exc:
                     detail = _safe_bridge_diagnostic_detail(exc)
                     if detail is None:
@@ -1041,9 +1070,7 @@ class GenerationService:
             if active_actor is None or active_actor.company_id != actor.company_id:
                 raise GenerationFailed()
             current_payload, current_digest, current_evidence, current_case, _ = (
-                self._current_payload(
-                    store, active_actor, case_id, contract_id, lock_access=True
-                )
+                self._current_payload(store, active_actor, case_id, contract_id, lock_access=True)
             )
             if (
                 not hmac.compare_digest(current_digest, semantic_digest)
@@ -1078,9 +1105,7 @@ class GenerationService:
             binding_json = json.dumps(
                 current_payload["binding"], sort_keys=True, separators=(",", ":")
             )
-            validation_json = json.dumps(
-                validation, sort_keys=True, separators=(",", ":")
-            )
+            validation_json = json.dumps(validation, sort_keys=True, separators=(",", ":"))
             reviewed = store.add_reviewed_design(
                 active_actor,
                 case_id,
@@ -1181,9 +1206,7 @@ class GenerationService:
             "summary": json.loads(row.summary_json),
             "origin": row.origin,
             "provenance_label": (
-                "Automatically eligible"
-                if row.origin == "AUTO_ELIGIBLE"
-                else "Expert reviewed"
+                "Automatically eligible" if row.origin == "AUTO_ELIGIBLE" else "Expert reviewed"
             ),
             "reviewed_at": row.reviewed_at.isoformat(),
         }
@@ -1199,8 +1222,14 @@ class GenerationService:
         for row in store.reviewed_designs(case_id, contract_id):
             try:
                 self._eligible_design(
-                    store, actor, case_id, contract_id, row.id,
-                    payload, semantic_digest, evidence_digest,
+                    store,
+                    actor,
+                    case_id,
+                    contract_id,
+                    row.id,
+                    payload,
+                    semantic_digest,
+                    evidence_digest,
                 )
             except ReviewedDesignRequired:
                 continue
@@ -1237,8 +1266,14 @@ class GenerationService:
         if reviewed_design_id is None:
             raise ReviewedDesignRequired()
         reviewed, report_design = self._eligible_design(
-            store, actor, case_id, contract_id, reviewed_design_id,
-            payload, semantic_input_digest, evidence_digest,
+            store,
+            actor,
+            case_id,
+            contract_id,
+            reviewed_design_id,
+            payload,
+            semantic_input_digest,
+            evidence_digest,
         )
         payload["reportDesign"] = report_design
         semantic_input_digest = canonical_digest(payload)
@@ -1312,6 +1347,8 @@ class GenerationService:
             "evidenceBindingDigest": evidence_digest,
             "reviewedDesignId": str(reviewed.id),
             "reviewedDesignDigest": reviewed.content_digest,
+            "settingsVersionId": str(self.tenant_settings.id) if self.tenant_settings else None,
+            "settingsDigest": self.tenant_settings.digest if self.tenant_settings else None,
             "runtimeEvidence": {
                 "powerBiDesktop": "NOT_RUN",
                 "dax": "NOT_RUN",
@@ -1331,17 +1368,27 @@ class GenerationService:
             evidence_digest,
             json.dumps(provenance, sort_keys=True, separators=(",", ":")),
             reviewed.id,
+            settings_version_id=(self.tenant_settings.id if self.tenant_settings else None),
             retry_of_attempt_id=retry_of,
             supersedes_attempt_id=supersedes,
         )
         row.status = "RUNNING"
         row.started_at = datetime.now(UTC)
+        payload["execution"]["attemptId"] = str(row.id)
+        payload["execution"]["reviewedDesignId"] = str(reviewed.id)
         store.add_audit(actor, "GENERATION_STARTED", "GENERATION_ATTEMPT", row.id)
         cast(Any, db).commit()
         fence = row.fence_token
         try:
             result = self.bridge.generate(payload)
             files = cast(dict[str, str], result["files"])
+            guide = files.get("Delivery-Guide.md")
+            guide_digest = result.get("guideDigest")
+            if guide is not None and (
+                not isinstance(guide_digest, str)
+                or not hmac.compare_digest(hashlib.sha256(guide.encode()).hexdigest(), guide_digest)
+            ):
+                raise GenerationFailed()
             content = _candidate_zip(files)
             filename = f"{result.get('projectName', 'APBRAReport')}.candidate.zip"
             current = store.generation_attempt(case_id, row.id, lock=True)
@@ -1350,14 +1397,18 @@ class GenerationService:
             active_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
             if active_actor is None or active_actor.company_id != actor.company_id:
                 raise GenerationFailed()
-            current_payload, current_digest, current_evidence_digest, _, _ = (
-                self._current_payload(
-                    store, active_actor, case_id, contract_id, lock_access=True
-                )
+            current_payload, current_digest, current_evidence_digest, _, _ = self._current_payload(
+                store, active_actor, case_id, contract_id, lock_access=True
             )
             self._eligible_design(
-                store, active_actor, case_id, contract_id, reviewed.id,
-                current_payload, current_digest, current_evidence_digest,
+                store,
+                active_actor,
+                case_id,
+                contract_id,
+                reviewed.id,
+                current_payload,
+                current_digest,
+                current_evidence_digest,
                 lock_access=True,
             )
             storage_key, digest, size = self.artifact_objects.write(
@@ -1365,7 +1416,8 @@ class GenerationService:
             )
             try:
                 artifact = store.add_generated_artifact(
-                    current, storage_key, filename, digest, size
+                    current, storage_key, filename, digest, size,
+                    guide_digest if guide is not None else None,
                 )
                 current.validation_json = json.dumps(
                     {
@@ -1396,6 +1448,7 @@ class GenerationService:
             return attempt_json(store, current), True
         except Exception as exc:
             cast(Any, db).rollback()
+            logger.warning("Generation attempt failed: type=%s", type(exc).__name__)
             current = store.generation_attempt(case_id, row.id, lock=True)
             if current is not None and current.status == "RUNNING" and current.fence_token == fence:
                 current.status = "FAILED"

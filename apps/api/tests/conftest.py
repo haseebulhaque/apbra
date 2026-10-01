@@ -179,6 +179,23 @@ def settings(database_url: str, tmp_path_factory: pytest.TempPathFactory) -> Set
             }
         ),
         automatic_generation_enabled=False,
+        qualified_provider_profiles_json=json.dumps([{
+            "profile_id": "synthetic-test-profile",
+            "protocol": "OPENAI_CHAT_COMPATIBLE",
+            "endpoint": "https://provider.invalid/v1/chat/completions",
+            "model_or_deployment": "synthetic-test-model",
+            "api_version": "synthetic-test-version",
+            "region": "synthetic-test-region",
+            "prompt_version": "synthetic-test-prompt",
+            "configuration_id": "synthetic-test-configuration",
+            "capabilities": {"structured_output": True, "vision": False},
+            "max_calls_per_operation": 2,
+            "max_input_characters": 10_000,
+            "max_output_tokens": 1_000,
+            "time_budget_seconds": 10,
+            "request_timeout_seconds": 2,
+            "retry_limit": 1,
+        }]),
         test_semantic_simulator_enabled=True,
     )
 

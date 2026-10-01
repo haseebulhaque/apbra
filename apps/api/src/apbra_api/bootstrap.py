@@ -6,6 +6,8 @@ from sqlalchemy import select
 
 from .config import Settings, get_settings
 from .persistence import CompanyRow, Database, ExternalIdentityRow, MembershipRow
+from .tenant_secrets import AesGcmTenantCredentialStore
+from .tenant_settings import seed_settings
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,11 @@ def bootstrap(settings: Settings, database: Database) -> None:
         return
     if settings.profile not in {"development", "test"}:
         raise RuntimeError("bootstrap is restricted to development and test profiles")
+    credential_store = AesGcmTenantCredentialStore.from_bootstrap(
+        settings.tenant_secret_keyring_json.get_secret_value()
+        if settings.tenant_secret_keyring_json
+        else None
+    )
     with database.session() as db:
         companies: dict[str, CompanyRow] = {}
         for item in BOOTSTRAP_IDENTITIES:
@@ -70,6 +77,9 @@ def bootstrap(settings: Settings, database: Database) -> None:
                             role=item.role,
                         )
                     )
+        db.flush()
+        for company in companies.values():
+            seed_settings(db, company, settings, credential_store)
 
 
 def main() -> None:

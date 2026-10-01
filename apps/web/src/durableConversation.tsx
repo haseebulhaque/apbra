@@ -5,6 +5,7 @@ import {DurableGeneration} from './durableGeneration';
 const emptyAcceptance:AcceptanceState={interpretation:null,confirmed_contract:null};
 const eventLabel=(kind:ConversationEvent['kind'])=>({
   USER_MESSAGE:'Additional requirement',RAW_ANSWER:'Your answer',CORRECTION:'Correction',
+  CLARIFICATION_CYCLE_STARTED:'Further clarification',
   CLARIFICATION_QUESTION:'Question',AI_ANALYSIS:'Understanding',
   ALTERNATIVE_PROPOSED:'Suggested alternative',
   ALTERNATIVE_ACCEPTED:'Accepted alternative',
@@ -38,6 +39,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
   const contextVersionRef=useRef(record.semantic_context_version);
   const messageCommand=useRef<{text:string;key:string}|null>(null);
   const answerCommand=useRef<{signature:string;key:string}|null>(null);
+  const refinementCommand=useRef<{text:string;key:string}|null>(null);
 
   const refresh=async()=>{
     const generation=++refreshGeneration.current;
@@ -122,7 +124,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const interpretation=await acceptanceApi.prepare(caseId,current,csrfToken);
-      if(operationIsCurrent(caseId,current))setAcceptance({interpretation,confirmed_contract:null});
+      if(operationIsCurrent(caseId,current))setAcceptance({...await acceptanceApi.state(caseId),interpretation,confirmed_contract:null});
     }catch(error){onError(error)}finally{setBusy(false)}
   }
 
@@ -144,7 +146,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
       setAnswer('');
       const nextInterpretation=await acceptanceApi.prepare(caseId,next,csrfToken);
       if(!operationIsCurrent(caseId,next))return;
-      setAcceptance({interpretation:nextInterpretation,confirmed_contract:null});
+      setAcceptance({...await acceptanceApi.state(caseId),interpretation:nextInterpretation,confirmed_contract:null});
       const transcript=await conversationApi.list(caseId);
       if(operationIsCurrent(caseId,next))setEvents(transcript.items);
     }catch(error){onError(error)}finally{setBusy(false)}
@@ -158,16 +160,40 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
       const caseId=record.id,current=contextVersionRef.current;
       const contract=await acceptanceApi.confirm(caseId,interpretation.id,current,csrfToken);
       if(operationIsCurrent(caseId,current))setAcceptance({
-        interpretation:{...interpretation,state:'CONFIRMED'},confirmed_contract:contract,
+        ...acceptance,interpretation:{...interpretation,state:'CONFIRMED'},confirmed_contract:contract,
       });
+    }catch(error){onError(error)}finally{setBusy(false)}
+  }
+
+  async function refine(){
+    const enhancement=message.trim();
+    if(!refinementCommand.current||refinementCommand.current.text!==enhancement)refinementCommand.current={text:enhancement,key:crypto.randomUUID()};
+    setBusy(true);
+    try{
+      const caseId=record.id,current=contextVersionRef.current;
+      const result=await acceptanceApi.refine(caseId,current,enhancement,refinementCommand.current.key,csrfToken);
+      if(!operationIsCurrent(caseId,current))return;
+      refinementCommand.current=null;
+      changed(result.semantic_context_version);
+      setMessage('');
+      const next=await acceptanceApi.prepare(caseId,result.semantic_context_version,csrfToken);
+      if(operationIsCurrent(caseId,result.semantic_context_version)){
+        const transcript=await conversationApi.list(caseId);
+        setEvents(transcript.items);
+        setAcceptance({interpretation:next,confirmed_contract:null,clarification:(await acceptanceApi.state(caseId)).clarification});
+      }
     }catch(error){onError(error)}finally{setBusy(false)}
   }
 
   const interpretation=acceptance.interpretation;
   const summary=interpretation?.confirmation_summary;
   const stale=Boolean(interpretation&&!interpretation.current);
-  const pendingQuestions=interpretation?.state==='NEEDS_CLARIFICATION'?interpretation.questions:[];
+  const pendingQuestions=interpretation?.questions??[];
   const question=pendingQuestions[0];
+  const clarification=acceptance.clarification;
+  const canRefine=Boolean(clarification?.clarification_enabled&&!clarification.overall_limit_reached);
+  const disclosedScope=interpretation?.interpretation??{};
+  const scopeItems=(key:string)=>Array.isArray(disclosedScope[key])?(disclosedScope[key] as unknown[]).filter((item):item is string=>typeof item==='string'):[];
   const stage=reportReady?5:acceptance.confirmed_contract?.current?4:summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'?3:summary&&!stale||evidence.length?2:events.length?1:0;
   const stages=['Goal','Information','Understanding','Confirm','Build','Report'];
 
@@ -190,8 +216,11 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     <section className="acceptance-panel" aria-label="Review the understanding">
       <div className="step-heading"><span className="step-icon" aria-hidden="true">◇</span><div><span className="eyebrow">Review and confirm</span><h4>Current understanding</h4><p>Check the business meaning before confirming this exact version.</p></div></div>
       {stale&&<p role="status" className="state-callout warning"><strong>Reconfirmation required.</strong> The request, conversation or evidence changed after this understanding was prepared.</p>}
-      {question&&!stale?<div className="clarification-panel"><p><strong>{pendingQuestions.length===1?'One point needs your input':`Next question · ${pendingQuestions.length} model-identified points in this round`}</strong></p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div><p>Choose a supported interpretation:</p>{question.suggestions.map(option=><button key={option.id} disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}<button className="subtle" disabled={busy} onClick={()=>void submitAnswer(question,{rawAnswer:'I decline the proposed supported choices.',decision:'DECLINE'})}>None of these</button></div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={capabilities?.max_answer_characters} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>:summary&&!stale&&interpretation?.state!=='NEEDS_CLARIFICATION'?<div className="understanding-summary"><div className="understanding-objective"><span className="eyebrow">Here’s what APBRA understands</span><strong>{summary.objective}</strong></div><div className="understanding-grid">{([{title:'Business questions',items:summary.businessQuestions},{title:'Measures',items:summary.kpiDefinitions},{title:'Scope and timing',items:summary.scopeAndTime},{title:'Ways to explore',items:summary.dimensionsAndFilters}] as const).filter(group=>group.items.length>0).map(group=><div key={group.title}><h5>{group.title}</h5><ul>{group.items.map((item,index)=><li key={index+'-'+item}>{item}</li>)}</ul></div>)}</div><p className="supporting-copy">APBRA used the complete current report context and qualified data fields. Review the business meaning before confirming it.</p>{['HUMAN_REVIEW_REQUIRED','UNSUPPORTED','OUT_OF_SCOPE'].includes(interpretation?.state??'')&&<div className="state-callout warning" role="status"><strong>Expert assistance is recommended</strong><p>APBRA cannot safely continue automatically with the current meaning. Your requirements and supporting information remain saved.</p></div>}</div>:<div className="understanding-empty"><span aria-hidden="true">◇</span><p>Prepare an understanding after adding supported information. If a material choice is unclear, APBRA will ask you.</p></div>}
-      <div className="command-bar"><button disabled={busy||!evidence.length||Boolean(question&&!stale)} onClick={()=>void prepare()}>{stale?'Review updated requirements':'Review my requirements'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button disabled={busy} onClick={()=>void confirm()}>Confirm report requirements</button>}</div>
+      {summary&&!stale?<div className="understanding-summary"><div className="understanding-objective"><span className="eyebrow">Here’s what APBRA understands</span><strong>{summary.objective}</strong></div><div className="understanding-grid">{([{title:'Business questions',items:summary.businessQuestions},{title:'Measures',items:summary.kpiDefinitions},{title:'Scope and timing',items:summary.scopeAndTime},{title:'Ways to explore',items:summary.dimensionsAndFilters}] as const).filter(group=>group.items.length>0).map(group=><div key={group.title}><h5>{group.title}</h5><ul>{group.items.map((item,index)=><li key={index+'-'+item}>{item}</li>)}</ul></div>)}</div><p className="supporting-copy">Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.</p>{['HUMAN_REVIEW_REQUIRED','UNSUPPORTED','OUT_OF_SCOPE'].includes(interpretation?.state??'')&&<div className="state-callout warning" role="status"><strong>Expert assistance is recommended</strong><p>APBRA cannot safely continue automatically with the current meaning. Your requirements and supporting information remain saved.</p></div>}</div>:<div className="understanding-empty"><span aria-hidden="true">◇</span><p>Prepare an understanding after adding supported information. APBRA may suggest optional refinements.</p></div>}
+      {summary&&!stale&&['requestedScope','deliverableScope','unsupportedScope','omittedScope','limitations','suggestedAlternatives','assumptions'].some(key=>scopeItems(key).length>0)&&<div className="understanding-grid" aria-label="Disclosed report scope">{([['requestedScope','Requested scope'],['deliverableScope','What this candidate can deliver'],['unsupportedScope','Unsupported scope'],['omittedScope','Omitted scope'],['limitations','Limitations'],['suggestedAlternatives','Suggested alternatives'],['assumptions','Assumptions']] as const).filter(([key])=>scopeItems(key).length>0).map(([key,label])=><div key={key}><h5>{label}</h5><ul>{scopeItems(key).map((item,index)=><li key={`${key}-${index}`}>{item}</li>)}</ul></div>)}</div>}
+      {question&&!stale&&<div className="clarification-panel"><p><strong>Optional refinement{pendingQuestions.length>1?'s':''}</strong> · You can accept the current understanding without answering.</p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div>{question.suggestions.map(option=><button key={option.id} disabled={busy||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}</div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={capabilities?.max_answer_characters} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>}
+      {clarification&&<p role="status" className="supporting-copy">Clarification cycle {clarification.cycle_number||1}: {clarification.rounds_used_in_cycle} of {clarification.max_rounds_per_cycle??'—'} turns · {clarification.rounds_used_overall} of {clarification.max_rounds_overall??'—'} overall.{clarification.overall_limit_reached?' Further AI clarification is unavailable; you can still accept the current understanding or ask an expert.':clarification.per_cycle_limit_reached?' Start a new cycle to enhance the requirements.':''}</p>}
+      <div className="command-bar"><button disabled={busy||!evidence.length} onClick={()=>void prepare()}>{stale?'Review updated requirements':'Review my requirements'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button disabled={busy} onClick={()=>void confirm()}>Accept &amp; Generate</button>}{summary&&!stale&&!acceptance.confirmed_contract&&<button className="subtle" disabled={busy||!canRefine} onClick={()=>void refine()}>Clarify / Enhance Requirements</button>}</div>
       {acceptance.confirmed_contract?.current&&<div className="confirmed-state" role="status"><strong>Your report requirements are confirmed</strong><p>Confirmed {new Date(acceptance.confirmed_contract.accepted_at).toLocaleString()}. If the request or supporting information changes, you will need to confirm the revised meaning.</p></div>}
     </section>
     <DurableGeneration caseId={record.id} contract={acceptance.confirmed_contract} csrfToken={csrfToken} actorRole={actorRole} onReportReady={ready=>{setReportReady(ready);onReportReady?.(ready)}} onError={onError}/>
