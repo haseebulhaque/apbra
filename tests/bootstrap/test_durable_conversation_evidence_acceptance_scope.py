@@ -121,8 +121,16 @@ class DurableConversationEvidenceAcceptanceScopeTests(unittest.TestCase):
                 hashlib.sha256(HISTORICAL_CAPACITY_WORKFLOW).hexdigest(),
                 c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256,
             )
+            self.assertIn(
+                'Unexpected runner or unbounded job',
+                c.workflow_errors(HISTORICAL_CAPACITY_WORKFLOW.decode('utf-8')),
+            )
             workflow.write_bytes(HISTORICAL_CAPACITY_WORKFLOW)
             self.assertEqual(self.check(root, expected), [])
+            self.assertIn(
+                'Unexpected runner or unbounded job',
+                self.check(root, expected, branch='agent/APBRA-DEVOPS/APBRA-163-wrong'),
+            )
             mutated = workflow.read_bytes().replace(b"timeout-minutes: 20", b"timeout-minutes: 19")
             self.assertNotEqual(mutated, HISTORICAL_CAPACITY_WORKFLOW)
             workflow.write_bytes(mutated)
