@@ -47,6 +47,11 @@ from .model_provider import (
     requirement_analysis_schema,
 )
 from .semantic_bridge import SemanticBridge
+from .tenant_settings import (
+    TenantSettingsSnapshot,
+    interpretation_material_digest,
+    settings_version,
+)
 
 
 def sha256_text(value: str) -> str:
@@ -324,8 +329,7 @@ class ConversationService:
         self.clarification_policy = clarification_policy
 
     def _validated_answer(
-        self,
-        store: ApplicationPersistence, case: CaseRecord, payload: dict[str, Any]
+        self, store: ApplicationPersistence, case: CaseRecord, payload: dict[str, Any]
     ) -> tuple[dict[str, Any], str | None]:
         if self.clarification_policy is None:
             raise ConfigurationUnavailable()
@@ -359,7 +363,7 @@ class ConversationService:
             interpretation is None
             or interpretation_id != str(interpretation.id)
             or interpretation.context_version != case.semantic_context_version
-            or interpretation.state != "NEEDS_CLARIFICATION"
+            or interpretation.state not in {"NEEDS_CLARIFICATION", "READY_FOR_CONFIRMATION"}
         ):
             raise StaleVersion()
         session = json.loads(interpretation.session_json)
@@ -622,6 +626,7 @@ class AcceptanceService:
         clarification_policy: ClarificationPolicy | None = None,
         generation_policy: dict[str, Any] | None = None,
         allow_test_simulator: bool = False,
+        tenant_settings: TenantSettingsSnapshot | None = None,
     ) -> None:
         self.bridge = bridge
         self.objects = objects
@@ -630,9 +635,101 @@ class AcceptanceService:
         self.clarification_policy = clarification_policy
         self.generation_policy = generation_policy
         self.allow_test_simulator = allow_test_simulator
+        self.tenant_settings = tenant_settings
+
+    def _settings_still_materially_current(
+        self, db: object, interpretation: InterpretationRecord, company_id: UUID
+    ) -> bool:
+        if self.tenant_settings is None or interpretation.settings_version_id is None:
+            # Pre-APBRA-174 historical records remain readable, but new records
+            # carry an explicit immutable settings version.
+            return True
+        historic = settings_version(db, company_id, interpretation.settings_version_id)
+        return interpretation_material_digest(historic.settings) == interpretation_material_digest(
+            self.tenant_settings.settings
+        )
+
+    def clarification_state(self, store: ApplicationPersistence, case_id: UUID) -> dict[str, Any]:
+        cycles = store.clarification_cycles(case_id)
+        current = cycles[-1] if cycles else None
+        overall = sum(item.rounds_used for item in cycles)
+        policy = self.tenant_settings.settings if self.tenant_settings else None
+        per_limit = policy.max_clarification_rounds_per_cycle if policy else None
+        overall_limit = policy.max_clarification_rounds_overall if policy else None
+        return {
+            "cycle_id": str(current.id) if current else None,
+            "cycle_number": current.cycle_number if current else 0,
+            "rounds_used_in_cycle": current.rounds_used if current else 0,
+            "rounds_used_overall": overall,
+            "max_rounds_per_cycle": per_limit,
+            "max_rounds_overall": overall_limit,
+            "clarification_enabled": policy.clarification_enabled if policy else True,
+            "per_cycle_limit_reached": bool(
+                current and per_limit is not None and current.rounds_used >= per_limit
+            ),
+            "overall_limit_reached": bool(overall_limit is not None and overall >= overall_limit),
+        }
+
+    def start_refinement_cycle(
+        self,
+        db: object,
+        actor: Actor,
+        case_id: UUID,
+        *,
+        expected_context_version: int,
+        command_key: str,
+        enhancement: str,
+    ) -> dict[str, Any]:
+        store = cast(ApplicationPersistence, db)
+        authorized_case_access(store, actor, case_id, require_edit=True)
+        case = store.locked_case(case_id)
+        existing = store.clarification_cycle_by_command(case_id, actor.membership_id, command_key)
+        if existing is not None:
+            assert case is not None
+            return {
+                "clarification": self.clarification_state(store, case_id),
+                "semantic_context_version": case.semantic_context_version,
+            }
+        if case is None or case.semantic_context_version != expected_context_version:
+            raise StaleVersion()
+        if self.tenant_settings is None or not self.tenant_settings.settings.clarification_enabled:
+            raise ConfigurationUnavailable()
+        state = self.clarification_state(store, case_id)
+        if state["overall_limit_reached"]:
+            raise Conflict()
+        if (
+            len(enhancement)
+            > self.tenant_settings.settings.clarification_policy.max_answer_characters
+        ):
+            raise Conflict()
+        cycle = store.create_clarification_cycle(
+            actor, case_id, self.tenant_settings.id, command_key
+        )
+        event_kind = "USER_MESSAGE" if enhancement.strip() else "CLARIFICATION_CYCLE_STARTED"
+        event_payload: dict[str, str | int] = (
+            {"text": enhancement.strip()}
+            if enhancement.strip()
+            else {"cycleNumber": cycle.cycle_number}
+        )
+        encoded = json.dumps(event_payload, sort_keys=True, separators=(",", ":"))
+        store.append_conversation_event(
+            actor,
+            case_id,
+            event_kind,
+            encoded,
+            f"{command_key}:cycle",
+            canonical_payload({"kind": event_kind, "payload": event_payload}),
+        )
+        store.advance_semantic_context(case)
+        store.add_audit(actor, "CLARIFICATION_CYCLE_STARTED", "REPORTING_CASE", case_id)
+        return {
+            "clarification": self.clarification_state(store, case_id),
+            "semantic_context_version": case.semantic_context_version,
+        }
 
     def _current_context(
-        self, store: ApplicationPersistence, case: CaseRecord
+        self, store: ApplicationPersistence, case: CaseRecord, *,
+        include_history: bool = False,
     ) -> tuple[dict[str, Any], str, list[EvidenceRecord]]:
         request = store.request_version(case.current_request_version_id)
         if request is None:
@@ -672,9 +769,7 @@ class AcceptanceService:
             if self.reference_objects is None:
                 raise SemanticValidationFailed()
             try:
-                self.reference_objects.read(
-                    reference_row.storage_key, reference_row.content_digest
-                )
+                self.reference_objects.read(reference_row.storage_key, reference_row.content_digest)
             except EvidenceError as exc:
                 raise SemanticValidationFailed() from exc
             references.append(
@@ -688,8 +783,7 @@ class AcceptanceService:
             )
         versions = store.case_versions(case.id)
         original_request = versions[0].request_text if versions else request.request_text
-        binding = json.dumps(
-            {
+        context: dict[str, Any] = {
                 "caseId": str(case.id),
                 "requestVersionId": str(case.current_request_version_id),
                 "requestText": request.request_text,
@@ -714,10 +808,33 @@ class AcceptanceService:
                     for row in evidence
                 ],
                 "referenceMaterial": references,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+            }
+        if include_history:
+            # APBRA-174 explicitly authorises full prior interpretation context
+            # for the tenant's configured model. Project only safe structured
+            # meaning, summary and questions; never provider responses, headers,
+            # credentials, diagnostics, or arbitrary stored session metadata.
+            context["priorInterpretations"] = [
+                {
+                    "contextVersion": prior.context_version,
+                    "state": prior.state,
+                    "interpretation": json.loads(prior.session_json).get("currentInterpretation"),
+                    "summary": json.loads(prior.confirmation_summary_json),
+                    "questions": (
+                        json.loads(prior.session_json)["rounds"][-1]["questions"]
+                        if json.loads(prior.session_json).get("rounds") else []
+                    ),
+                }
+                for prior in store.earlier_interpretations(case.id, case.semantic_context_version)
+            ]
+            if self.tenant_settings is not None:
+                context["settingsMaterialDigest"] = interpretation_material_digest(
+                    self.tenant_settings.settings
+                )
+                context["tenantConventions"] = (
+                    self.tenant_settings.settings.conventions.model_dump(mode="json")
+                )
+        binding = json.dumps(context, sort_keys=True, separators=(",", ":"))
         return structure, binding, evidence
 
     def _validated_interpretation_context(
@@ -727,7 +844,9 @@ class AcceptanceService:
         interpretation: InterpretationRecord,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Re-prove current evidence and the exact context shown to the accepter."""
-        schema, current_context_binding, _evidence = self._current_context(store, case)
+        schema, current_context_binding, _evidence = self._current_context(
+            store, case, include_history=interpretation.settings_version_id is not None
+        )
         try:
             session = json.loads(interpretation.session_json)
         except json.JSONDecodeError as exc:
@@ -787,11 +906,38 @@ class AcceptanceService:
                     if existing_session.get("providerProvenance")
                     else "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
                 ),
+                "clarification": self.clarification_state(store, case_id),
             }
+        if self.tenant_settings is not None:
+            cycles = store.clarification_cycles(case_id)
+            if not cycles:
+                store.create_clarification_cycle(
+                    actor, case_id, self.tenant_settings.id, f"initial:{case_id}"
+                )
+            clarification_state = self.clarification_state(store, case_id)
+            if clarification_state["overall_limit_reached"]:
+                events = store.conversation_events(case_id)
+                # The answer to the final already-asked question may receive a
+                # question-free synthesis; no further clarification is permitted.
+                last_is_answer = bool(
+                    events
+                    and (
+                        events[-1].kind == "RAW_ANSWER"
+                        or (
+                            events[-1].kind in {"ALTERNATIVE_ACCEPTED", "ALTERNATIVE_DECLINED"}
+                            and len(events) >= 2
+                            and events[-2].kind == "RAW_ANSWER"
+                        )
+                    )
+                )
+                if not last_is_answer:
+                    raise Conflict()
         # Re-qualify every retained evidence object before preparing a new
         # interpretation. Persisted metadata alone is not proof that the
         # protected bytes remain available and intact.
-        schema, context_binding, evidence = self._current_context(store, case)
+        schema, context_binding, evidence = self._current_context(
+            store, case, include_history=self.tenant_settings is not None
+        )
         material_context = json.loads(context_binding)
         original_request = material_context.get("originalRequest")
         if not isinstance(original_request, str) or not original_request:
@@ -810,13 +956,22 @@ class AcceptanceService:
                             "durable additions, corrections, accepted answers and "
                             "qualified schema. Support multiple measures and dimensions, "
                             "and express only user- or evidence-established subtraction "
-                            "and ratio semantics with typed operands. Ask only unanswered "
-                            "questions whose ambiguity materially affects meaning, "
-                            "feasibility, governance or security. Return "
-                            "NEEDS_CLARIFICATION whenever questions or unresolved "
-                            "ambiguities remain. Return READY_FOR_CONFIRMATION only with "
-                            "no questions, no unresolved ambiguities and an empty "
-                            "interpretation.ambiguities array. Put iterative questions "
+                            "and ratio semantics with typed operands. Ask only useful "
+                            "unanswered questions. Questions are optional refinements, "
+                            "not prerequisites to accepting a fully disclosed current "
+                            "interpretation. Return READY_FOR_CONFIRMATION when a meaningful "
+                            "supported report scope can be offered, even with optional "
+                            "questions. Disclose assumptions, limitations and omitted "
+                            "unsupported scope; do not invent absent data or business meaning. "
+                            "Populate requestedScope, deliverableScope, unsupportedScope, "
+                            "omittedScope, limitations and suggestedAlternatives explicitly. "
+                            "Only the deliverable scope may become required business questions "
+                            "and typed obligations; never represent omitted scope as generated. "
+                            "Return NEEDS_CLARIFICATION only when no meaningful supported "
+                            "scope is safe to offer. Respect the supplied per-cycle and "
+                            "overall clarification limits: if either is reached, return no "
+                            "new questions and disclose the currently supported scope. "
+                            "Put questions "
                             "only in the top-level questions array and keep the legacy "
                             "interpretation.clarifications array empty in every state. "
                             "When ready, use only exact fully qualified Table.Column "
@@ -846,6 +1001,7 @@ class AcceptanceService:
                         ),
                         context={
                             "materialContext": material_context,
+                            "clarificationState": self.clarification_state(store, case_id),
                             "dataStructure": schema,
                             "clarificationPolicy": {
                                 "maxRounds": self.clarification_policy.max_rounds,
@@ -872,12 +1028,8 @@ class AcceptanceService:
                     analysis=result.value,
                     limits={
                         "maxRounds": self.clarification_policy.max_rounds,
-                        "maxQuestionsPerRound": (
-                            self.clarification_policy.max_questions_per_round
-                        ),
-                        "maxAnswerCharacters": (
-                            self.clarification_policy.max_answer_characters
-                        ),
+                        "maxQuestionsPerRound": (self.clarification_policy.max_questions_per_round),
+                        "maxAnswerCharacters": (self.clarification_policy.max_answer_characters),
                     },
                 ).session
                 session["providerProvenance"] = {
@@ -905,6 +1057,21 @@ class AcceptanceService:
         state = session.get("state")
         if state not in {"NEEDS_CLARIFICATION", "READY_FOR_CONFIRMATION"}:
             raise SemanticValidationFailed()
+        if self.tenant_settings is not None:
+            cycles = store.clarification_cycles(case_id)
+            current_cycle = cycles[-1]
+            latest_questions = (
+                session.get("rounds", [])[-1].get("questions", []) if session.get("rounds") else []
+            )
+            if latest_questions:
+                if (
+                    current_cycle.rounds_used
+                    >= self.tenant_settings.settings.max_clarification_rounds_per_cycle
+                    or sum(item.rounds_used for item in cycles)
+                    >= self.tenant_settings.settings.max_clarification_rounds_overall
+                ):
+                    raise SemanticValidationFailed()
+                current_cycle.rounds_used += 1
         confirmation_summary: dict[str, Any]
         if state == "READY_FOR_CONFIRMATION":
             readiness = self.bridge.readiness(session, schema)
@@ -926,6 +1093,7 @@ class AcceptanceService:
             json.dumps(confirmation_summary, sort_keys=True, separators=(",", ":")),
             readiness_digest,
             state,
+            settings_version_id=(self.tenant_settings.id if self.tenant_settings else None),
         )
         store.add_audit(
             actor,
@@ -953,6 +1121,7 @@ class AcceptanceService:
                 if session.get("providerProvenance")
                 else "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
             ),
+            "clarification": self.clarification_state(store, case_id),
         }
 
     def state(self, db: object, actor: Actor, case_id: UUID) -> dict[str, Any]:
@@ -960,12 +1129,17 @@ class AcceptanceService:
         case, _ = authorized_case_access(store, actor, case_id)
         row = store.latest_interpretation(case_id)
         if row is None:
-            return {"interpretation": None, "confirmed_contract": None}
+            return {
+                "interpretation": None,
+                "confirmed_contract": None,
+                "clarification": self.clarification_state(store, case_id),
+            }
         contract = store.confirmed_contract(row.id)
         session = json.loads(row.session_json)
         current = (
             row.context_version == case.semantic_context_version
             and row.request_version_id == case.current_request_version_id
+            and self._settings_still_materially_current(db, row, actor.company_id)
         )
         if current:
             try:
@@ -1002,6 +1176,7 @@ class AcceptanceService:
                 if contract is not None
                 else None
             ),
+            "clarification": self.clarification_state(store, case_id),
         }
 
     def confirm(
@@ -1028,6 +1203,7 @@ class AcceptanceService:
             or interpretation.context_version != case.semantic_context_version
             or interpretation.request_version_id != case.current_request_version_id
             or interpretation.evidence_id is None
+            or not self._settings_still_materially_current(db, interpretation, actor.company_id)
         ):
             raise StaleVersion()
         schema, session = self._validated_interpretation_context(store, case, interpretation)

@@ -127,6 +127,18 @@ class ConversationEventRecord(Protocol):
     created_at: datetime
 
 
+class ClarificationCycleRecord(Protocol):
+    id: UUID
+    company_id: UUID
+    case_id: UUID
+    cycle_number: int
+    rounds_used: int
+    settings_version_id: UUID
+    command_key: str
+    started_at: datetime
+    closed_at: datetime | None
+
+
 class EvidenceRecord(Protocol):
     id: UUID
     case_id: UUID
@@ -158,6 +170,7 @@ class InterpretationRecord(Protocol):
     id: UUID
     case_id: UUID
     request_version_id: UUID
+    settings_version_id: UUID | None
     evidence_id: UUID | None
     context_version: int
     session_json: str
@@ -172,6 +185,7 @@ class ConfirmedContractRecord(Protocol):
     case_id: UUID
     company_id: UUID
     interpretation_id: UUID
+    settings_version_id: UUID | None
     contract_json: str
     schema_version: int
     accepted_at: datetime
@@ -208,6 +222,7 @@ class AutomaticDesignAttemptRecord(Protocol):
     confirmed_contract_id: UUID
     interpretation_id: UUID
     request_version_id: UUID
+    settings_version_id: UUID | None
     semantic_context_version: int
     requested_by_membership_id: UUID
     command_key: str
@@ -237,6 +252,7 @@ class GenerationAttemptRecord(Protocol):
     reviewed_design_id: UUID | None
     interpretation_id: UUID
     request_version_id: UUID
+    settings_version_id: UUID | None
     created_by_membership_id: UUID
     command_key: str
     command_payload_digest: str
@@ -263,6 +279,8 @@ class GeneratedArtifactRecord(Protocol):
     attempt_id: UUID
     case_id: UUID
     company_id: UUID
+    settings_version_id: UUID | None
+    guide_digest: str | None
     storage_key: str
     filename: str
     content_digest: str
@@ -383,6 +401,16 @@ class ApplicationPersistence(Protocol):
 
     def conversation_events(self, case_id: UUID) -> list[ConversationEventRecord]: ...
 
+    def clarification_cycles(self, case_id: UUID) -> list[ClarificationCycleRecord]: ...
+
+    def clarification_cycle_by_command(
+        self, case_id: UUID, membership_id: UUID, command_key: str
+    ) -> ClarificationCycleRecord | None: ...
+
+    def create_clarification_cycle(
+        self, actor: Actor, case_id: UUID, settings_version_id: UUID, command_key: str
+    ) -> ClarificationCycleRecord: ...
+
     def add_evidence(
         self,
         actor: Actor,
@@ -434,6 +462,8 @@ class ApplicationPersistence(Protocol):
         confirmation_summary_json: str,
         readiness_binding_digest: str,
         state: str,
+        *,
+        settings_version_id: UUID | None = None,
     ) -> InterpretationRecord: ...
 
     def interpretation(
@@ -441,6 +471,10 @@ class ApplicationPersistence(Protocol):
     ) -> InterpretationRecord | None: ...
 
     def latest_interpretation(self, case_id: UUID) -> InterpretationRecord | None: ...
+
+    def earlier_interpretations(
+        self, case_id: UUID, before_context_version: int
+    ) -> list[InterpretationRecord]: ...
 
     def interpretation_for_context(
         self, case_id: UUID, context_version: int
@@ -492,6 +526,8 @@ class ApplicationPersistence(Protocol):
         requirement_binding_digest: str,
         evidence_binding_digest: str,
         reference_binding_digest: str,
+        *,
+        settings_version_id: UUID | None = None,
     ) -> AutomaticDesignAttemptRecord: ...
 
     def design_attempt_by_command(
@@ -534,6 +570,7 @@ class ApplicationPersistence(Protocol):
         provenance_json: str,
         reviewed_design_id: UUID,
         *,
+        settings_version_id: UUID | None = None,
         retry_of_attempt_id: UUID | None = None,
         supersedes_attempt_id: UUID | None = None,
     ) -> GenerationAttemptRecord: ...
@@ -553,6 +590,7 @@ class ApplicationPersistence(Protocol):
         filename: str,
         content_digest: str,
         byte_size: int,
+        guide_digest: str | None = None,
     ) -> GeneratedArtifactRecord: ...
 
 

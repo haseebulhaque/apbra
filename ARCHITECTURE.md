@@ -1,5 +1,13 @@
 # APBRA bounded MVP architecture
 
+## Current protected APBRA-174 slice
+
+The durable FastAPI/PostgreSQL application is distinct from the historical browser-only Capstone described below. An active tenant resolves an immutable current settings version at the server boundary; Owner/Admin edits and restores create new versions, audit the actor, and use optimistic concurrency. Fixed compiler/security invariants remain code contracts. Provider credentials are encrypted behind a provider-neutral secret-store interface using a deployment-supplied keyring and are never returned by settings reads. A missing credential cannot activate intelligent generation.
+
+The current case flow permits a model to ask zero or optional questions, retains answers and explicit Clarify/Enhance cycles, and binds acceptance to the exact interpretation, request, evidence, and settings version. The seeded clarification ceiling is two rounds per cycle and ten rounds overall; those numbers are tenant policy, not implicit model behavior. Supported partial scope is labelled with omissions and limitations; mandatory unsupported meaning is not reinterpreted as success. Existing authorized-expert continuation remains distinct from ordinary member acceptance.
+
+Automatic design remains an untrusted model proposal followed by deterministic validation. The compiler's six-slot grid is an implementation invariant. A generic measure/column collision is resolved by a technical measure-only table and exact binding rewrite, with unchanged measure names and formulas. Final candidate generation emits a `Delivery-Guide.md` bound to the report design, settings, request, validation and attempt digests. A validation-only bridge pass does not pretend a final artifact/guide exists. Candidate download is not release approval or successful deployment.
+
 This document describes the post-Capstone implementation through APBRA-145 and separates it from the accepted `APBRA-PRODUCT-2026-09-22` target architecture. Capstone is complete/submitted; product development continues.
 
 > **GPT-4.1 reasons. The human clarifies and confirms. The typed contract freezes confirmed meaning. Deterministic software validates safety and preservation.**

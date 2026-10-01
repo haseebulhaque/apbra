@@ -20,9 +20,7 @@ def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def resolve_session(
-    db: object, session_token: str | None
-) -> tuple[SessionRecord, IdentityRecord]:
+def resolve_session(db: object, session_token: str | None) -> tuple[SessionRecord, IdentityRecord]:
     if not session_token:
         raise AuthenticationRequired()
     result = cast(ApplicationPersistence, db).active_session(

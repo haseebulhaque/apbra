@@ -80,9 +80,7 @@ class BrandingPolicy(BaseModel):
     accent: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
     report_naming: str = Field(alias="reportNaming", min_length=1, max_length=500)
     page_naming: str = Field(alias="pageNaming", min_length=1, max_length=500)
-    executive_convention: str = Field(
-        alias="executiveConvention", min_length=1, max_length=500
-    )
+    executive_convention: str = Field(alias="executiveConvention", min_length=1, max_length=500)
     theme_name: str = Field(alias="themeName", min_length=1, max_length=200)
 
 
@@ -165,6 +163,7 @@ class Settings(BaseSettings):
     automatic_generation_enabled: bool | None = None
     model_provider_profile_json: str | None = None
     model_provider_api_key: SecretStr | None = None
+    tenant_secret_keyring_json: SecretStr | None = Field(default=None, repr=False)
     test_semantic_simulator_enabled: bool = False
     oidc_issuer: str | None = None
     oidc_audience: str = "apbra-local-client"
@@ -217,11 +216,8 @@ class Settings(BaseSettings):
                 _parsed_absolute_url(endpoint, https_only=True)
             if "local" in self.session_secret.lower():
                 raise ValueError("hosted profile requires a non-development session secret")
-        if self.automatic_generation_enabled is True:
-            profile = self.model_profile()
-            self.model_credential()
-            if not profile.capabilities.structured_output:
-                raise ProviderConfigurationError("STRUCTURED_OUTPUT_UNSUPPORTED")
+        # Provider/profile/credential policy belongs to the effective tenant
+        # settings version. Bootstrap validates it before first activation.
 
     @staticmethod
     def _configured_json(value: str | None, model: type[BaseModel], code: str) -> BaseModel:
@@ -233,9 +229,7 @@ class Settings(BaseSettings):
             raise ProviderConfigurationError(f"{code}_INVALID") from exc
 
     def upload_policy(self) -> UploadPolicy:
-        return self._configured_json(
-            self.upload_policy_json, UploadPolicy, "UPLOAD_POLICY"
-        )  # type: ignore[return-value]
+        return self._configured_json(self.upload_policy_json, UploadPolicy, "UPLOAD_POLICY")  # type: ignore[return-value]
 
     def generation_policy(self) -> GenerationPolicy:
         return self._configured_json(

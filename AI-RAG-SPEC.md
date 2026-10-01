@@ -1,5 +1,11 @@
 # AI and governed retrieval specification
 
+## APBRA-174 current protected application
+
+The qualified model analyzes the current request, schema, accepted answers, reference metadata, and tenant settings. It may return zero clarification questions; optional questions are visible but do not force human review or prevent acceptance of otherwise ready meaning. An explicit Clarify/Enhance request starts a durable bounded cycle. Tenant policy seeds two clarification rounds per cycle and ten rounds overall; counts are enforced server-side across restart and duplicate commands. The model does not acquire business or authorization authority from a question, retrieval result, or prompt.
+
+Provider profile identity and protected credential reference are tenant settings, while the actual credential is encrypted in server-side storage with a deployment keyring. Profile and credential validation precede activation; no provider/model/region is inferred. Governed retrieval and ReportDesign proposals remain untrusted and undergo deterministic validation, including supported-scope and namespace checks. The provider-specific historical evidence below must not be read as a universal provider default.
+
 This document describes the current in-app Capstone implementation and the accepted, separately unimplemented `APBRA-PRODUCT-2026-09-22` AI/knowledge target.
 
 ## Current AI profile

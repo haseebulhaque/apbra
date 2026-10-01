@@ -1,12 +1,17 @@
+import base64
 import json
+import secrets
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from apbra_api.api import create_app
 from apbra_api.config import Settings
 from apbra_api.model_provider import ProviderConfigurationError
-from apbra_api.persistence import Database
+from apbra_api.persistence import CompanyRow, Database
+from apbra_api.tenant_secrets import AesGcmTenantCredentialStore
+from apbra_api.tenant_settings import seed_settings
 
 
 def test_health_requires_live_database(client: TestClient) -> None:
@@ -86,17 +91,33 @@ def test_disabled_automatic_generation_boots_without_provider_configuration(
     ],
 )
 def test_enabled_automatic_generation_requires_valid_provider_configuration(
-    settings: Settings, profile: str | None, credential: str | None, code: str
+    settings: Settings, database: Database, profile: str | None, credential: str | None, code: str
 ) -> None:
     runtime = settings.model_copy(
         update={
             "automatic_generation_enabled": True,
             "model_provider_profile_json": profile,
-            "model_provider_api_key": credential,
+            "model_provider_api_key": SecretStr(credential) if credential else None,
         }
     )
-    with pytest.raises(ProviderConfigurationError, match=code):
-        runtime.validate_security_profile()
+    # Deployment validation no longer selects tenant provider policy. The
+    # one-time tenant seed is the configuration boundary for this path.
+    runtime.validate_security_profile()
+    keyring = AesGcmTenantCredentialStore.from_bootstrap(
+        json.dumps(
+            {
+                "active_version": "synthetic-key-v1",
+                "keys": {"synthetic-key-v1": base64.b64encode(secrets.token_bytes(32)).decode()},
+            }
+        )
+    )
+    assert keyring is not None
+    with database.session() as db:
+        company = CompanyRow(name="Provider configuration boundary test")
+        db.add(company)
+        db.flush()
+        with pytest.raises(ProviderConfigurationError, match=code):
+            seed_settings(db, company, runtime, keyring)
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,13 @@
 # AI-Powered Power BI Report Automation (APBRA)
 
+## Current APBRA-174 implementation boundary
+
+The protected invited-case application now has versioned tenant settings, an Owner/Admin settings surface, and protected tenant credential references. Deployment bootstrap supplies the keyring; tenant settings select a qualified provider profile and enable it only when a usable tenant credential is present. No provider, model, region, credential, or business meaning is chosen by default. A disabled provider leaves intelligent generation unavailable without blocking case access.
+
+Clarification is model-led and may return zero questions. Optional questions do not block acceptance of an otherwise ready interpretation. A user can explicitly Clarify/Enhance with a new bounded cycle; the initial tenant policy is two clarification rounds per cycle and ten rounds overall, with durable counts and exact accepted-version binding. Supported partial scope must disclose omissions and limitations before acceptance; mandatory blockers still fail closed or route to an authorized expert.
+
+The canonical compiler preserves model/column/measure namespace safety without a business-specific name rule. A successful candidate ZIP contains an exact-version-bound `Delivery-Guide.md` alongside the PBIP and ReportDesign artifacts. The guide is handover information, not deployment approval or proof of Power BI Desktop execution. The historical Capstone notes below describe earlier prototype evidence and are not claims about this protected application.
+
 APBRA is a working bounded MVP/prototype with a demonstrated Candidate Ready happy path. It is not production-ready. The Capstone is complete/submitted; MVP and product development continue.
 
 `APBRA-PRODUCT-2026-09-22` is the accepted post-Capstone product-intent baseline. It describes what APBRA is intended to become; the implemented flow and evidence below describe what exists today. See [REQUIREMENTS.md](REQUIREMENTS.md) for all eighteen `PC26-FR` requirements and their Jira mappings.

@@ -1,5 +1,3 @@
-import * as pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
 import type {Content,ContentTable,StyleDictionary,TDocumentDefinitions} from 'pdfmake/interfaces';
 import type {RequirementInterpretation,ReportDesign} from './foundry';
 import type {DataStructure} from './schemaIngestion';
@@ -45,6 +43,20 @@ const colour=(text:string|undefined,fallback:string)=>/^#[0-9a-f]{6}$/i.test(tex
 const list=(items:string[])=>items.map(normalizeDocumentText).filter(Boolean);
 const rlsPattern=/\b(?:RLS|row[- ]level security|security role)\b/i;
 export const DEPLOYMENT_GUIDE_FILENAME='Report-Deployment-Guide.pdf';
+
+export type BoundDeliveryGuideInput={design:ReportDesign;interpretation:Record<string,unknown>;binding:Record<string,unknown>;execution:Record<string,unknown>;settings:Record<string,unknown>;includeHandoverInstructions:boolean;reportDesignDigest:string;candidateFilesDigest:string};
+const guideItems=(value:unknown):string[]=>Array.isArray(value)?value.filter((item):item is string=>typeof item==='string').map(normalizeDocumentText).filter(Boolean):[];
+const guideLine=(label:string,value:unknown)=>`- ${label}: ${normalizeDocumentText(String(value??'Not recorded'))}\n`;
+const guideList=(items:string[],empty='None disclosed')=>items.length?items.map(item=>`- ${item}\n`).join(''):`- ${empty}\n`;
+export function createBoundDeliveryGuideText(input:BoundDeliveryGuideInput):string{
+ const {design,interpretation,binding,execution,settings}=input;
+ const conventions=settings.conventions as Record<string,unknown>|undefined;
+ const pages=design.pages.map(page=>`${page.name}: ${page.purpose}; ${page.visuals.map(visual=>visual.title).join(', ')}`);
+ const measures=design.measures.map(measure=>`${measure.name} (${measure.aggregation}): ${measure.businessDefinition}${measure.field?`; source ${measure.field}`:''}`);
+ const trends=design.pages.flatMap(page=>page.visuals.filter(visual=>visual.timeGrain&&visual.timeGrain!=='NONE').map(visual=>`${visual.title}: ${visual.timeGrain} on ${visual.categoryField}`));
+ const handover=input.includeHandoverInstructions?'- Extract the candidate ZIP and open its .pbip file in a supported Power BI Desktop environment.\n- Validate semantic model, measures, visual bindings, filters and accessibility before approval.\n- Configure approved production sources, credentials, gateway and workspace through authorised deployment processes; none are included in this package.\n- Refresh and verify results with the business owner. Revalidate after any material change.\n- Record separate approval, publishing and successful deployment evidence; this guide does not claim those steps occurred.\n':'- Detailed handover instructions were disabled by the governing tenant policy. The candidate still requires separate validation, approval, production configuration and deployment evidence.\n';
+ return `# Delivery / Instruction Guide\n\nThis guide belongs to this validated candidate only. Generation is not deployment approval or evidence of a successful deployment.\n\n## Version binding\n${guideLine('Generation attempt',execution.attemptId)}${guideLine('Request version',binding.requestVersionId)}${guideLine('Accepted interpretation',binding.interpretationId)}${guideLine('Confirmed requirement',binding.confirmedContractId)}${guideLine('Reviewed ReportDesign',execution.reviewedDesignId)}${guideLine('ReportDesign digest',input.reportDesignDigest)}${guideLine('Tenant settings version',binding.settingsVersionId)}${guideLine('Tenant settings digest',binding.settingsDigest)}${guideLine('Validated candidate files digest',input.candidateFilesDigest)}\n## Report purpose and audience\n${normalizeDocumentText(design.overview)}\n\nAudience: ${normalizeDocumentText(design.audience)}\n\n## Business questions\n${guideList(guideItems(interpretation.businessQuestions))}\n## Requested scope\n${guideList(guideItems(interpretation.requestedScope))}\n## Deliverable scope\n${guideList(guideItems(interpretation.deliverableScope))}\n## Omitted or unsupported scope\n${guideList([...guideItems(interpretation.omittedScope),...guideItems(interpretation.unsupportedScope)])}\n## Pages and analysis\n${guideList(pages)}\n## Measures and calculations\n${guideList(measures)}\n## Dimensions and filters\n${guideList([...guideItems(interpretation.dimensions),...design.filters])}\n## Date and time interpretation\n${guideList(trends)}\n## Accepted assumptions and limitations\n${guideList([...guideItems(interpretation.assumptions),...guideItems(interpretation.limitations),...design.assumptions,...design.warnings])}\n## Tenant reporting and accessibility standards\n${guideList([conventions?.report_naming,conventions?.semantic_modelling,conventions?.accessibility].filter((item):item is string=>typeof item==='string').map(normalizeDocumentText).filter(Boolean))}\n## Evidence and governed standards\n${guideList(design.standardsApplied.map(item=>`${item.citation}: ${item.decision}`))}\n## Handover\n${handover}`;
+}
 
 export function createDeploymentGuideModel(input:DeploymentGuideInput):DeploymentGuideModel{
  const rlsRequirements=list(input.design.generationRequirements).filter(item=>rlsPattern.test(item));
@@ -101,6 +113,7 @@ export function deploymentGuideDocument(model:DeploymentGuideModel):TDocumentDef
 }
 
 export async function generateDeploymentGuide(input:DeploymentGuideInput):Promise<DeploymentGuideArtifact>{
+ const [{default:pdfMake},{default:pdfFonts}]=await Promise.all([import('pdfmake/build/pdfmake'),import('pdfmake/build/vfs_fonts')]);
  const model=createDeploymentGuideModel(input);const definition=deploymentGuideDocument(model);
  const bytes=await new Promise<Uint8Array<ArrayBuffer>>((resolve,reject)=>{try{pdfMake.createPdf(definition,undefined,undefined,pdfFonts).getBuffer(buffer=>resolve(new Uint8Array(buffer)))}catch(error){reject(error)}});
  if(bytes.length<8||new TextDecoder('latin1').decode(bytes.slice(0,8)).slice(0,5)!=='%PDF-')throw new Error('DEPLOYMENT_GUIDE_PDF_INVALID');

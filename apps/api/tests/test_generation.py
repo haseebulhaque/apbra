@@ -295,7 +295,7 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
     )
     assert response.status_code == 201, response.text
     attempt = response.json()["attempt"]
-    assert attempt["status"] == "SUCCEEDED"
+    assert attempt["status"] == "SUCCEEDED", attempt["failure"]
     assert attempt["validation"]["status"] == "PASS"
     assert attempt["provenance"]["mode"] == "LOCAL_DETERMINISTIC_NO_MODEL_CALL"
     download = client.get(f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact")
@@ -306,6 +306,12 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
     with zipfile.ZipFile(BytesIO(download.content)) as archive:
         assert any(name.endswith(".pbip") for name in archive.namelist())
         assert "ReportDesign.json" in archive.namelist()
+        guide = archive.read("Delivery-Guide.md")
+        assert hashlib.sha256(guide).hexdigest() == attempt["artifact"]["guide_digest"]
+        text = guide.decode("utf-8")
+        assert attempt["id"] in text
+        assert contract["id"] in text
+        assert "Generation is not deployment approval" in text
 
 
 def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(

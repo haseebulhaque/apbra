@@ -1,5 +1,13 @@
 # Power BI generation and assurance contract
 
+## APBRA-174 protected candidate behavior
+
+The canonical candidate path validates the exact confirmed interpretation and tenant settings version before compiling. Supported partial scope retains explicit omissions and limitations; unsupported mandatory obligations stop. The six-slot compiler capacity and supported trend grains are fixed capabilities validated against tenant policy. The model chooses business objects; deterministic normalization may only preserve exact object meanings and bindings.
+
+Power BI measure/column names share a namespace within a table. When a generated measure conflicts with a column or another model name under the compiler's case-insensitive comparison, the compiler moves the unchanged measure to a technical measure-only table and rewrites only the qualified reference. No business formula, title, KPI, or visual choice is invented. The candidate validator rejects duplicate names and stale references.
+
+Every successful protected candidate ZIP includes `Delivery-Guide.md`, bound to the exact request, accepted interpretation, ReportDesign, tenant settings, generation attempt and candidate digest. It documents business questions, supported and omitted scope, measures, assumptions, limitations, standards, and handover. It excludes credentials and raw provider responses and does not assert approval or successful deployment. The historical lazy PDF discussed below is separate prototype behavior.
+
 APBRA compiles a bounded structured Report Design into an editable PBIP/PBIR candidate. It does not generate Power BI files directly from free-form model text.
 
 This document first states the verified compiler contract, then the accepted `APBRA-PRODUCT-2026-09-22` delivery direction. Target capabilities are not current compiler claims.

@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import Cookie, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -33,9 +33,10 @@ from .auth_boundary import (
 )
 from .authorization import resolve_actor, resolve_session
 from .bootstrap import BOOTSTRAP_IDENTITIES
-from .config import Settings, UploadPolicy, get_settings
+from .config import ClarificationPolicy, Settings, UploadPolicy, get_settings
 from .domain import (
     AccessLevel,
+    Actor,
     ApplicationError,
     AuthenticationRequired,
     ConfigurationUnavailable,
@@ -52,15 +53,27 @@ from .model_provider import (
 )
 from .oidc_adapter import OidcAdapter
 from .persistence import (
+    ApplicationSession,
     AuthorizationCodeRow,
     AuthTransactionRow,
     Database,
     ExternalIdentityRow,
     MembershipRow,
     SessionRow,
+    TenantSecretRow,
 )
 from .reference_material import ReferenceMaterialService
 from .semantic_bridge import SemanticBridge
+from .tenant_secrets import AesGcmTenantCredentialStore, credential_status
+from .tenant_settings import (
+    TenantSettings,
+    TenantSettingsSnapshot,
+    admin_settings,
+    current_settings,
+    restore_settings,
+    settings_history,
+    update_settings,
+)
 
 logger = logging.getLogger("apbra_api")
 
@@ -111,6 +124,13 @@ class InterpretationConfirm(BaseModel):
     expected_context_version: int = Field(ge=1)
 
 
+class ClarificationCycleCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_context_version: int = Field(ge=1)
+    command_key: str = Field(min_length=8, max_length=200)
+    enhancement: str = Field(default="", max_length=20_000)
+
+
 class GenerationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmed_contract_id: UUID
@@ -130,6 +150,28 @@ class AutomaticDesignCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmed_contract_id: UUID
     command_key: str = Field(min_length=8, max_length=200)
+
+
+class TenantSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    settings: TenantSettings
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class TenantSettingsRestore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_version: int = Field(ge=1)
+    expected_version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=500)
+    confirm_consequences: bool
+
+
+class TenantCredentialReplace(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    new_credential: SecretStr = Field(min_length=1, max_length=16_384)
+    confirm_disruption: bool
 
 
 def error_response(exc: ApplicationError) -> JSONResponse:
@@ -160,35 +202,9 @@ def create_app(
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
-    try:
-        clarification_policy = settings.clarification_policy()
-    except ProviderConfigurationError:
-        clarification_policy = None
-    try:
-        generation_policy = settings.generation_policy().model_dump(by_alias=True)
-    except ProviderConfigurationError:
-        generation_policy = None
-    conversation_service = ConversationService(clarification_policy)
-    try:
-        upload_policy = settings.upload_policy()
-    except ProviderConfigurationError:
-        upload_policy = None
-    evidence_service = (
-        EvidenceService(
-            LocalEvidenceStore(settings.evidence_root, settings.profile), upload_policy
-        )
-        if settings.profile in {"development", "test"} and upload_policy is not None
-        else None
-    )
-    reference_service = (
-        ReferenceMaterialService(
-            LocalEvidenceStore(settings.reference_root, settings.profile), upload_policy
-        )
-        if (
-            settings.profile in {"development", "test"}
-            and settings.reference_root is not None
-            and upload_policy is not None
-        )
+    credential_store = AesGcmTenantCredentialStore.from_bootstrap(
+        settings.tenant_secret_keyring_json.get_secret_value()
+        if settings.tenant_secret_keyring_json
         else None
     )
     artifact_store = (
@@ -199,11 +215,6 @@ def create_app(
     invitation_service = InvitationService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
-
-    if model_provider is None and settings.automatic_generation_enabled is True:
-        model_provider = OpenAICompatibleProvider(
-            settings.model_profile(), settings.model_credential()
-        )
 
     def db_session() -> Iterator[Session]:
         with database.session() as db:
@@ -219,22 +230,59 @@ def create_app(
             exc.public_message = "The request could not be verified. Refresh and try again."
             raise exc
 
-    def local_evidence_service() -> EvidenceService:
-        if evidence_service is None:
-            raise ConfigurationUnavailable()
-        return evidence_service
+    def tenant_snapshot(db: Session, actor: Actor) -> TenantSettingsSnapshot:
+        return current_settings(db, actor.company_id)
 
-    def local_upload_policy() -> UploadPolicy:
-        if upload_policy is None:
+    def tenant_model_provider(
+        db: Session, snapshot: TenantSettingsSnapshot
+    ) -> ModelProvider | None:
+        policy = snapshot.settings
+        if (
+            settings.profile == "test"
+            and settings.test_semantic_simulator_enabled
+            and model_provider is not None
+        ):
+            # Explicit dependency injection exercises deterministic model
+            # contracts without changing persisted tenant policy or making calls.
+            return model_provider
+        if not policy.automatic_generation_enabled:
+            return None
+        profile = policy.provider_profile
+        if profile is None or snapshot.secret_reference_id is None:
             raise ConfigurationUnavailable()
-        return upload_policy
+        if credential_store is None:
+            raise ConfigurationUnavailable()
+        credential = credential_store.resolve(
+            db,
+            company_id=snapshot.company_id,
+            profile_id=profile.profile_id,
+            reference_id=snapshot.secret_reference_id,
+        )
+        return OpenAICompatibleProvider(profile, credential)
 
-    def local_acceptance_service() -> AcceptanceService:
+    def local_evidence_service(snapshot: TenantSettingsSnapshot) -> EvidenceService:
+        if settings.profile not in {"development", "test"}:
+            raise ConfigurationUnavailable()
+        return EvidenceService(
+            LocalEvidenceStore(settings.evidence_root, settings.profile),
+            snapshot.settings.upload_policy,
+        )
+
+    def local_upload_policy(snapshot: TenantSettingsSnapshot) -> UploadPolicy:
+        return snapshot.settings.upload_policy
+
+    def local_acceptance_service(
+        db: Session, snapshot: TenantSettingsSnapshot
+    ) -> AcceptanceService:
         if settings.semantic_timeout_seconds is None:
             raise ConfigurationUnavailable()
-        objects = local_evidence_service().objects
-        if clarification_policy is None or generation_policy is None:
-            raise ConfigurationUnavailable()
+        objects = local_evidence_service(snapshot).objects
+        reference_service = local_reference_service(snapshot)
+        clarification_policy = ClarificationPolicy(
+            max_rounds=snapshot.settings.max_clarification_rounds_per_cycle,
+            max_questions_per_round=snapshot.settings.clarification_policy.max_questions_per_round,
+            max_answer_characters=snapshot.settings.clarification_policy.max_answer_characters,
+        )
         return AcceptanceService(
             SemanticBridge(
                 settings.semantic_bridge_path,
@@ -243,20 +291,26 @@ def create_app(
             ),
             objects,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=model_provider,
+            model_provider=tenant_model_provider(db, snapshot),
             clarification_policy=clarification_policy,
-            generation_policy=generation_policy,
+            generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
+            tenant_settings=snapshot,
             allow_test_simulator=(
                 settings.profile == "test" and settings.test_semantic_simulator_enabled
             ),
         )
 
-    def local_reference_service() -> ReferenceMaterialService:
-        if reference_service is None:
+    def local_reference_service(snapshot: TenantSettingsSnapshot) -> ReferenceMaterialService:
+        if settings.reference_root is None or settings.profile not in {"development", "test"}:
             raise ConfigurationUnavailable()
-        return reference_service
+        return ReferenceMaterialService(
+            LocalEvidenceStore(settings.reference_root, settings.profile),
+            snapshot.settings.upload_policy,
+        )
 
-    def local_generation_service(*, require_bridge: bool = False) -> GenerationService:
+    def local_generation_service(
+        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False
+    ) -> GenerationService:
         if artifact_store is None:
             raise EvidenceInvalid()
         bridge = None
@@ -271,15 +325,15 @@ def create_app(
                 )
             except ValueError as exc:
                 raise ConfigurationUnavailable() from exc
-        if generation_policy is None:
-            raise ConfigurationUnavailable()
+        reference_service = local_reference_service(snapshot)
         return GenerationService(
             bridge,
-            local_evidence_service().objects,
+            local_evidence_service(snapshot).objects,
             artifact_store,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=model_provider,
-            generation_policy=generation_policy,
+            model_provider=tenant_model_provider(db, snapshot),
+            generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
+            tenant_settings=snapshot,
         )
 
     @app.exception_handler(ApplicationError)
@@ -308,20 +362,129 @@ def create_app(
         return {"status": "ok", "database": "ok"}
 
     @app.get("/api/cases/capabilities/uploads")
-    def upload_capabilities(
-        db: DB, session_token: SessionCookie = None
-    ) -> dict[str, Any]:
-        resolve_actor(db, session_token)
-        policy = local_upload_policy()
-        if clarification_policy is None:
-            raise ConfigurationUnavailable()
+    def upload_capabilities(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        snapshot = tenant_snapshot(db, actor)
+        policy = local_upload_policy(snapshot)
         return {
             "data_extensions": policy.data_extensions,
             "reference_extensions": policy.reference_extensions,
             "max_file_bytes": policy.max_file_bytes,
             "max_files_per_selection": policy.max_files_per_selection,
-            "max_answer_characters": clarification_policy.max_answer_characters,
+            "max_answer_characters": snapshot.settings.clarification_policy.max_answer_characters,
         }
+
+    def settings_response(db: Session, snapshot: TenantSettingsSnapshot) -> dict[str, Any]:
+        return {
+            "id": str(snapshot.id),
+            "version": snapshot.version,
+            "digest": snapshot.digest,
+            "settings": snapshot.settings.model_dump(mode="json", by_alias=True),
+            "credential": credential_status(
+                db,
+                company_id=snapshot.company_id,
+                reference_id=snapshot.secret_reference_id,
+            ),
+        }
+
+    @app.get("/api/tenant-settings")
+    def get_tenant_settings(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        return settings_response(db, admin_settings(db, actor))
+
+    @app.get("/api/tenant-settings/history")
+    def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        return {"items": settings_history(db, resolve_actor(db, session_token))}
+
+    @app.put("/api/tenant-settings")
+    def put_tenant_settings(
+        payload: TenantSettingsUpdate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        actor = resolve_actor(db, session_token)
+        snapshot = update_settings(
+            db,
+            actor,
+            payload.settings,
+            expected_version=payload.expected_version,
+            reason=payload.reason,
+            credential_store=credential_store,
+        )
+        assert isinstance(db, ApplicationSession)
+        db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
+        db.commit()
+        return settings_response(db, snapshot)
+
+    @app.post("/api/tenant-settings/restore")
+    def post_tenant_settings_restore(
+        payload: TenantSettingsRestore,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        if not payload.confirm_consequences:
+            raise Conflict()
+        actor = resolve_actor(db, session_token)
+        snapshot = restore_settings(
+            db,
+            actor,
+            source_version=payload.source_version,
+            expected_version=payload.expected_version,
+            reason=payload.reason,
+            credential_store=credential_store,
+        )
+        assert isinstance(db, ApplicationSession)
+        db.add_audit(actor, "TENANT_SETTINGS_RESTORED", "TENANT_SETTINGS_VERSION", snapshot.id)
+        db.commit()
+        return settings_response(db, snapshot)
+
+    @app.post("/api/tenant-settings/credential")
+    def post_tenant_credential(
+        payload: TenantCredentialReplace,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        if not payload.confirm_disruption or credential_store is None:
+            raise ConfigurationUnavailable()
+        actor = resolve_actor(db, session_token)
+        current = admin_settings(db, actor)
+        if current.version != payload.expected_version or current.settings.provider_profile is None:
+            raise Conflict()
+        reference = credential_store.protect(
+            db,
+            company_id=actor.company_id,
+            profile_id=current.settings.provider_profile.profile_id,
+            credential=payload.new_credential.get_secret_value(),
+            actor_membership_id=actor.membership_id,
+        )
+        snapshot = update_settings(
+            db,
+            actor,
+            current.settings,
+            expected_version=payload.expected_version,
+            reason="Credential replaced",
+            secret_reference_id=reference,
+            credential_store=credential_store,
+        )
+        if current.secret_reference_id is not None:
+            previous = db.scalar(
+                select(TenantSecretRow).where(
+                    TenantSecretRow.id == current.secret_reference_id,
+                    TenantSecretRow.company_id == actor.company_id,
+                )
+            )
+            if previous is not None:
+                previous.revoked_at = datetime.now(UTC)
+        assert isinstance(db, ApplicationSession)
+        db.add_audit(actor, "TENANT_CREDENTIAL_REPLACED", "TENANT_SETTINGS_VERSION", snapshot.id)
+        db.commit()
+        return settings_response(db, snapshot)
 
     @app.get("/api/auth/login")
     def login(
@@ -616,9 +779,8 @@ def create_app(
     def list_conversation(
         case_id: UUID, db: DB, session_token: SessionCookie = None
     ) -> dict[str, Any]:
-        return {
-            "items": conversation_service.list_events(db, resolve_actor(db, session_token), case_id)
-        }
+        actor = resolve_actor(db, session_token)
+        return {"items": ConversationService().list_events(db, actor, case_id)}
 
     @app.post("/api/cases/{case_id}/conversation")
     def append_conversation(
@@ -629,9 +791,16 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
-        event = conversation_service.append_event(
+        actor = resolve_actor(db, session_token)
+        snapshot = tenant_snapshot(db, actor)
+        clarification_policy = ClarificationPolicy(
+            max_rounds=snapshot.settings.max_clarification_rounds_per_cycle,
+            max_questions_per_round=snapshot.settings.clarification_policy.max_questions_per_round,
+            max_answer_characters=snapshot.settings.clarification_policy.max_answer_characters,
+        )
+        event = ConversationService(clarification_policy).append_event(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             kind=payload.kind,
             payload=payload.payload,
@@ -643,8 +812,9 @@ def create_app(
 
     @app.get("/api/cases/{case_id}/evidence")
     def list_evidence(case_id: UUID, db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
         return {
-            "items": local_evidence_service().list(db, resolve_actor(db, session_token), case_id)
+            "items": local_evidence_service(tenant_snapshot(db, actor)).list(db, actor, case_id)
         }
 
     @app.post("/api/cases/{case_id}/evidence")
@@ -658,7 +828,9 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
-        policy = local_upload_policy()
+        actor = resolve_actor(db, session_token)
+        snapshot = tenant_snapshot(db, actor)
+        policy = local_upload_policy(snapshot)
         content_length = request.headers.get("content-length")
         if (
             content_length is None
@@ -672,10 +844,10 @@ def create_app(
                 raise EvidenceInvalid()
             content_buffer.extend(chunk)
         content = bytes(content_buffer)
-        objects = local_evidence_service()
+        objects = local_evidence_service(snapshot)
         result, storage_key = objects.add(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             filename=filename,
             content=content,
@@ -693,10 +865,9 @@ def create_app(
     def list_reference_material(
         case_id: UUID, db: DB, session_token: SessionCookie = None
     ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
         return {
-            "items": local_reference_service().list(
-                db, resolve_actor(db, session_token), case_id
-            )
+            "items": local_reference_service(tenant_snapshot(db, actor)).list(db, actor, case_id)
         }
 
     @app.post("/api/cases/{case_id}/reference-material")
@@ -710,7 +881,9 @@ def create_app(
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
-        policy = local_upload_policy()
+        actor = resolve_actor(db, session_token)
+        snapshot = tenant_snapshot(db, actor)
+        policy = local_upload_policy(snapshot)
         content_length = request.headers.get("content-length")
         if (
             content_length is None
@@ -723,10 +896,10 @@ def create_app(
             if len(content_buffer) + len(chunk) > policy.max_file_bytes:
                 raise EvidenceInvalid()
             content_buffer.extend(chunk)
-        service = local_reference_service()
+        service = local_reference_service(snapshot)
         result, storage_key = service.add(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             filename=filename,
             content=bytes(content_buffer),
@@ -749,14 +922,36 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
-        result = local_acceptance_service().create_interpretation(
+        actor = resolve_actor(db, session_token)
+        result = local_acceptance_service(db, tenant_snapshot(db, actor)).create_interpretation(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             expected_context_version=payload.expected_context_version,
         )
         db.commit()
         return {"interpretation": result}
+
+    @app.post("/api/cases/{case_id}/clarification-cycles")
+    def create_clarification_cycle(
+        case_id: UUID,
+        payload: ClarificationCycleCreate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        actor = resolve_actor(db, session_token)
+        result = local_acceptance_service(db, tenant_snapshot(db, actor)).start_refinement_cycle(
+            db,
+            actor,
+            case_id,
+            expected_context_version=payload.expected_context_version,
+            command_key=payload.command_key,
+            enhancement=payload.enhancement,
+        )
+        db.commit()
+        return result
 
     @app.get("/api/cases/{case_id}/acceptance")
     def acceptance_state(
@@ -764,7 +959,8 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
-        return local_acceptance_service().state(db, resolve_actor(db, session_token), case_id)
+        actor = resolve_actor(db, session_token)
+        return local_acceptance_service(db, tenant_snapshot(db, actor)).state(db, actor, case_id)
 
     @app.post("/api/cases/{case_id}/confirm")
     def confirm_interpretation(
@@ -775,9 +971,10 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
-        result = local_acceptance_service().confirm(
+        actor = resolve_actor(db, session_token)
+        result = local_acceptance_service(db, tenant_snapshot(db, actor)).confirm(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             interpretation_id=payload.interpretation_id,
             expected_context_version=payload.expected_context_version,
@@ -810,9 +1007,10 @@ def create_app(
     def generation_history(
         case_id: UUID, db: DB, session_token: SessionCookie = None
     ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
         return {
-            "items": local_generation_service().history(
-                db, resolve_actor(db, session_token), case_id
+            "items": local_generation_service(db, tenant_snapshot(db, actor)).history(
+                db, actor, case_id
             )
         }
 
@@ -823,8 +1021,9 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
-        return local_generation_service().list_reviewed_designs(
-            db, resolve_actor(db, session_token), case_id, confirmed_contract_id
+        actor = resolve_actor(db, session_token)
+        return local_generation_service(db, tenant_snapshot(db, actor)).list_reviewed_designs(
+            db, actor, case_id, confirmed_contract_id
         )
 
     @app.post("/api/cases/{case_id}/reviewed-designs")
@@ -837,9 +1036,10 @@ def create_app(
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
-        reviewed = local_generation_service().intake_reviewed_design(
+        actor = resolve_actor(db, session_token)
+        reviewed = local_generation_service(db, tenant_snapshot(db, actor)).intake_reviewed_design(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             contract_id=payload.confirmed_contract_id,
             report_design=payload.report_design,
@@ -855,10 +1055,13 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
         return {
-            "items": local_generation_service().automatic_design_history(
+            "items": local_generation_service(
+                db, tenant_snapshot(db, actor)
+            ).automatic_design_history(
                 db,
-                resolve_actor(db, session_token),
+                actor,
                 case_id,
                 confirmed_contract_id,
             )
@@ -874,9 +1077,12 @@ def create_app(
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
-        result, created = local_generation_service(require_bridge=True).propose_automatic_design(
+        actor = resolve_actor(db, session_token)
+        result, created = local_generation_service(
+            db, tenant_snapshot(db, actor), require_bridge=True
+        ).propose_automatic_design(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             contract_id=payload.confirmed_contract_id,
             command_key=payload.command_key,
@@ -894,9 +1100,12 @@ def create_app(
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
-        result, created = local_generation_service(require_bridge=True).start(
+        actor = resolve_actor(db, session_token)
+        result, created = local_generation_service(
+            db, tenant_snapshot(db, actor), require_bridge=True
+        ).start(
             db,
-            resolve_actor(db, session_token),
+            actor,
             case_id,
             contract_id=payload.confirmed_contract_id,
             command_key=payload.command_key,
@@ -914,9 +1123,10 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service().get(
-                db, resolve_actor(db, session_token), case_id, attempt_id
+            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).get(
+                db, actor, case_id, attempt_id
             )
         }
 
@@ -929,9 +1139,10 @@ def create_app(
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
+        actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service().cancel(
-                db, resolve_actor(db, session_token), case_id, attempt_id
+            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).cancel(
+                db, actor, case_id, attempt_id
             )
         }
 
@@ -942,9 +1153,10 @@ def create_app(
         db: DB,
         session_token: SessionCookie = None,
     ) -> Response:
-        content, filename, digest_value = local_generation_service().artifact(
-            db, resolve_actor(db, session_token), case_id, attempt_id
-        )
+        actor = resolve_actor(db, session_token)
+        content, filename, digest_value = local_generation_service(
+            db, tenant_snapshot(db, actor)
+        ).artifact(db, actor, case_id, attempt_id)
         safe_filename = "".join(
             character for character in filename if character.isalnum() or character in "._-"
         )
@@ -1006,12 +1218,13 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
+        snapshot = tenant_snapshot(db, actor)
         row, raw_token = invitation_service.issue(
             db,
             actor,
             payload.subject,
             payload.role,
-            payload.expires_in_days or settings.invitation_ttl_days,
+            payload.expires_in_days or snapshot.settings.invitation_ttl_days,
         )
         db.commit()
         return {"invitation": invitation_json(row), "token": raw_token}
