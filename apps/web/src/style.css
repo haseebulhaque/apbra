@@ -119,3 +119,12 @@ html{scroll-behavior:smooth}
 .auth-story .auth-story-headline{max-width:510px;font-size:clamp(32px,3vw,47px);line-height:1.1;letter-spacing:-.045em;font-weight:670;margin:0 0 21px;color:#fff}
 @media(max-width:800px){.auth-story .auth-story-headline{font-size:35px}}
 @media(max-width:500px){.auth-story .auth-story-headline{font-size:31px}}
+
+/* APBRA-171 responsive workspace safeguards. */
+:root{--workspace-topbar-height:70px;--workspace-sticky-gap:10px;--workspace-touch-target:44px;--workspace-content-max:1540px}
+html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{max-width:var(--workspace-content-max)}
+.journey-steps{position:sticky;top:calc(var(--workspace-topbar-height) + var(--workspace-sticky-gap));z-index:4}
+.journey-steps li.unavailable{background:#f7f8f8;color:#7b8785}.journey-steps li.unavailable .step-number{background:#ecefef;color:#788380}
+.case-row-copy,.case-row-copy strong,.case-identity>div,.case-identity h1,.pending-files li>div{min-width:0;overflow-wrap:anywhere}
+.pending-files ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}.pending-files li{display:flex;align-items:center;gap:10px;min-width:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff}.pending-files li>div{display:flex;flex:1;flex-direction:column}.pending-files li small{color:var(--muted)}.pending-files li button{flex:none}.evidence-upload.is-dragging{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand)}
+@media(max-width:768px){button,.primary-link,.upload-button,.button-link,input,select{min-height:var(--workspace-touch-target)}.journey-steps{top:var(--workspace-sticky-gap);grid-template-columns:repeat(6,minmax(128px,1fr));overflow-x:auto;overscroll-behavior-inline:contain}.journey-steps li{border-bottom:0!important;border-right:1px solid var(--border)!important}.journey-steps li:last-child{border-right:0!important}.journey-heading,.section-title{min-width:0}.pending-files li{align-items:flex-start}.pending-files li button{min-width:var(--workspace-touch-target);padding-left:10px;padding-right:10px}}

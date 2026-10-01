@@ -21,25 +21,29 @@ function reviewedSyntheticDesign(contract:any){
 
 test('confirmed meaning and expert-reviewed plan build durable private candidates across reload',async({page,browser},testInfo)=>{
   await signIn(page);
+  await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Compare completed inspections by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({
+  const initialUpload=page.locator('input[type="file"]');
+  await expect(initialUpload).toBeEnabled();
+  await initialUpload.setInputFiles({
     name:'inspections.csv',
     mimeType:'text/csv',
     buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
-  await page.getByRole('button',{name:'Prepare understanding'}).click();
+  await page.getByRole('button',{name:'Add selected files'}).click();
+  await page.getByRole('button',{name:'Review my requirements'}).click();
   const clarification=page.getByText('Clarification required',{exact:true});
   if(await clarification.isVisible())await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmationResponse=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
+  await page.getByRole('button',{name:'Confirm report requirements'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
-  await expect(page.getByText('Your understanding is confirmed')).toBeVisible();
+  await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('confirmed-understanding.png'),fullPage:true});
   const design=JSON.stringify(reviewedSyntheticDesign(confirmed));
-  await expect(page.getByText('Expert review needed',{exact:true})).toBeVisible();
-  await expect(page.getByLabel('Expert report plan JSON')).toHaveCount(0);
+  await expect(page.getByText('Create the report design',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
 
   const expertContext=await browser.newContext();
   const expert=await expertContext.newPage();
@@ -59,21 +63,21 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(expert.locator('.account-controls').getByText('expert',{exact:true})).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
-  await page.getByText('Manage private case access').click();
+  await page.getByText('Manage private report access').click();
   await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
-  await page.getByLabel('Case permission').selectOption('EDITOR');
-  await page.getByRole('button',{name:'Grant case access'}).click();
+  await page.getByLabel('Report permission').selectOption('EDITOR');
+  await page.getByRole('button',{name:'Grant report access'}).click();
   await expert.reload();
   await expert.getByRole('button',{name:new RegExp(request)}).first().click();
   await expert.getByText('Details for experts').last().click();
-  await expert.getByLabel('Expert report plan JSON').fill(design);
-  await expert.getByRole('button',{name:'Submit reviewed plan'}).click();
-  await expect(expert.getByLabel('Reviewed report plan')).toBeVisible();
+  await expert.getByLabel('Expert report design JSON').fill(design);
+  await expert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
+  await expect(expert.getByLabel('Eligible report design')).toBeVisible();
   await expertContext.close();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
-  await expect(page.getByLabel('Reviewed report plan')).toBeVisible();
-  await expect(page.getByLabel('Expert report plan JSON')).toHaveCount(0);
+  await expect(page.getByLabel('Eligible report design')).toBeVisible();
+  await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('reviewed-build-readiness.png'),fullPage:true});
 
   const artifactRoot='/tmp/apbra-164-e2e-artifacts';
@@ -129,18 +133,18 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByRole('button',{name:'Download current report candidate'})).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(1);
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('report-history.png'),fullPage:true});
-  await page.getByText('Manage private case access').click();
+  await page.getByText('Manage private report access').click();
   await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
-  await page.getByLabel('Case permission').selectOption('VIEWER');
-  await page.getByRole('button',{name:'Grant case access'}).click();
+  await page.getByLabel('Report permission').selectOption('VIEWER');
+  await page.getByRole('button',{name:'Grant report access'}).click();
   const viewerContext=await browser.newContext();
   const viewer=await viewerContext.newPage();
   await viewer.goto('/');
   await viewer.getByText('Local development identities').click();
   await viewer.getByRole('link',{name:'member',exact:true}).click();
   await viewer.getByRole('button',{name:new RegExp(request)}).first().click();
-  await expect(viewer.getByLabel('Reviewed report plan')).toBeVisible();
-  await expect(viewer.getByText('building or cancelling a report requires editor access')).toBeVisible();
+  await expect(viewer.getByLabel('Eligible report design')).toBeVisible();
+  await expect(viewer.getByText('building or cancelling requires editor access')).toBeVisible();
   await expect(viewer.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   await expect(viewer.getByRole('button',{name:'Retry failed build'})).toHaveCount(0);
   await viewerContext.close();
@@ -152,14 +156,17 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByLabel('Current report')).toHaveCount(0);
   await expect(page.getByText('No current report yet')).toBeVisible();
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(2);
-  await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({
+  const updatedUpload=page.locator('input[type="file"]');
+  await expect(updatedUpload).toBeEnabled();
+  await updatedUpload.setInputFiles({
     name:'current-inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
-  await page.getByRole('button',{name:'Prepare updated understanding'}).click();
+  await page.getByRole('button',{name:'Add selected files'}).click();
+  await page.getByRole('button',{name:'Review updated requirements'}).click();
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const reconfirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
+  await page.getByRole('button',{name:'Confirm report requirements'}).click();
   const newContract=(await (await reconfirmation).json()).confirmed_contract.contract;
   await expect(page.getByLabel('Current report')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
@@ -168,26 +175,26 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await signIn(currentExpert,'uninvited');
   await currentExpert.getByRole('button',{name:new RegExp(request)}).first().click();
   await currentExpert.getByText('Details for experts').last().click();
-  await currentExpert.getByLabel('Expert report plan JSON').fill(JSON.stringify(reviewedSyntheticDesign(newContract)));
-  await currentExpert.getByRole('button',{name:'Submit reviewed plan'}).click();
-  await expect(currentExpert.getByLabel('Reviewed report plan')).toBeVisible();
+  await currentExpert.getByLabel('Expert report design JSON').fill(JSON.stringify(reviewedSyntheticDesign(newContract)));
+  await currentExpert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
+  await expect(currentExpert.getByLabel('Eligible report design')).toBeVisible();
   await currentExpertContext.close();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await expect(page.getByRole('button',{name:'Build report',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
-  await page.getByText('Manage private case access').click();
+  await page.getByText('Manage private report access').click();
   await page.getByRole('listitem').filter({hasText:'dev-uninvited · editor'}).getByRole('button',{name:'Revoke'}).click();
   await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
-  await page.getByLabel('Case permission').selectOption('VIEWER');
-  await page.getByRole('button',{name:'Grant case access'}).click();
+  await page.getByLabel('Report permission').selectOption('VIEWER');
+  await page.getByRole('button',{name:'Grant report access'}).click();
   const viewerExpertContext=await browser.newContext();
   const viewerExpert=await viewerExpertContext.newPage();
   await signIn(viewerExpert,'uninvited');
   await viewerExpert.getByRole('button',{name:new RegExp(request)}).first().click();
   await viewerExpert.getByText('Details for experts').last().click();
-  await expect(viewerExpert.getByText('Report-plan submission requires expert edit access')).toBeVisible();
-  await expect(viewerExpert.getByLabel('Expert report plan JSON')).toHaveCount(0);
+  await expect(viewerExpert.getByText('Design submission requires expert edit access')).toBeVisible();
+  await expect(viewerExpert.getByLabel('Expert report design JSON')).toHaveCount(0);
   await viewerExpertContext.close();
 
   const foreignContext=await browser.newContext();
@@ -203,17 +210,21 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
 
 test('business UI cancels an active attempt and keeps its truthful history',async({page})=>{
   await signIn(page);
+  await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Compare completed synthetic inspections by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await page.getByLabel('Add CSV or XLSX evidence').setInputFiles({
+  const cancellationUpload=page.locator('input[type="file"]');
+  await expect(cancellationUpload).toBeEnabled();
+  await cancellationUpload.setInputFiles({
     name:'inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
-  await page.getByRole('button',{name:'Prepare understanding'}).click();
+  await page.getByRole('button',{name:'Add selected files'}).click();
+  await page.getByRole('button',{name:'Review my requirements'}).click();
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Confirm this exact meaning'}).click();
+  await page.getByRole('button',{name:'Confirm report requirements'}).click();
   const confirmed=(await (await confirmation).json()).confirmed_contract;
   let status:'RUNNING'|'CANCELLED'='RUNNING';
   const attempt=()=>({id:'synthetic-running-attempt',case_id:'synthetic-case',confirmed_contract_id:confirmed.id,reviewed_design_id:'synthetic-reviewed-plan',interpretation_id:confirmed.interpretation_id,request_version_id:'synthetic-version',status,attempt_number:1,retry_of_attempt_id:null,supersedes_attempt_id:null,provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',pipeline:'canonical',runtimeEvidence:{}},validation:null,failure:null,created_at:new Date().toISOString(),started_at:new Date().toISOString(),completed_at:null,cancelled_at:status==='CANCELLED'?new Date().toISOString():null,artifact:null});

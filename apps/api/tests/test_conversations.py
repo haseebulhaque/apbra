@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 
 from apbra_api.api import create_app
 from apbra_api.config import Settings
+from apbra_api.model_provider import DeterministicFakeProvider, ProviderProfile
 from apbra_api.persistence import (
     ApplicationSession,
     AuditEventRow,
@@ -39,6 +40,116 @@ def session_clone(settings: Settings, database: Database, source: TestClient) ->
     return clone
 
 
+def provider_profile() -> ProviderProfile:
+    return ProviderProfile.model_validate(
+        {
+            "profile_id": "clarification-test-profile",
+            "protocol": "OPENAI_CHAT_COMPATIBLE",
+            "endpoint": "https://provider.invalid/v1/chat/completions",
+            "model_or_deployment": "synthetic-test-model",
+            "api_version": "test-version",
+            "region": "test-region",
+            "prompt_version": "requirements-test-v1",
+            "configuration_id": "clarification-test-configuration",
+            "capabilities": {"structured_output": True, "vision": False},
+            "max_calls_per_operation": 1,
+            "max_input_characters": 200_000,
+            "max_output_tokens": 8_000,
+            "time_budget_seconds": 30,
+            "request_timeout_seconds": 10,
+            "retry_limit": 0,
+        }
+    )
+
+
+def provider_analysis(*, ready: bool) -> dict[str, object]:
+    measure = {
+        "id": "visits",
+        "name": "Visits",
+        "businessDefinition": "Sum of the visits established by the supplied context.",
+        "aggregation": "SUM",
+        "field": "Metrics.Visits",
+        "numeratorMeasureId": "",
+        "denominatorMeasureId": "",
+        "format": "integer",
+        "filterField": "",
+        "filterValue": "",
+        "contextField": "",
+    }
+    kpi = {
+        "id": "visits-kpi",
+        "kind": "KPI",
+        "measureNames": ["Visits"],
+        "fields": [],
+        "pageNames": ["Performance"],
+        "required": True,
+        "minimumRepresentations": 1,
+        "measures": [measure],
+        "timeGrain": "NONE",
+        "lifecycleValues": [],
+    }
+    breakdown = {**kpi, "id": "visits-campus", "kind": "BREAKDOWN", "fields": ["Metrics.Campus"]}
+    question = "Which business definition should the Visits field represent for this report?"
+    interpretation: dict[str, object] = {
+        "request_kind": "POWER_BI_REPORT",
+        "objective": "Understand visits by campus",
+        "businessQuestions": ["How do visits compare by campus?"] if ready else [],
+        "kpis": ["Visits"] if ready else [],
+        "dimensions": ["Campus"] if ready else [],
+        "filters": [],
+        "audience": "Business managers",
+        "pages": ["Performance"] if ready else [],
+        "assumptions": [],
+        "ambiguities": [] if ready else ["The meaning of Visits requires user confirmation."],
+        "clarifications": [],
+        "coverageRequirements": [kpi, breakdown] if ready else [],
+        "businessQuestionCoverage": (
+            [
+                {
+                    "question": "How do visits compare by campus?",
+                    "coverageRequirementIds": ["visits-kpi", "visits-campus"],
+                }
+            ]
+            if ready
+            else []
+        ),
+    }
+    return {
+        "state": "READY_FOR_CONFIRMATION" if ready else "NEEDS_CLARIFICATION",
+        "interpretation": interpretation,
+        "questions": (
+            []
+            if ready
+            else [
+                {
+                    "id": "provider-visits-meaning",
+                    "category": "METRIC_DEFINITION",
+                    "question": question,
+                    "reason": "The request does not establish that business definition.",
+                    "required": True,
+                    "suggestions": [],
+                    "allowFreeText": True,
+                }
+            ]
+        ),
+        "unresolvedAmbiguities": (
+            [] if ready else ["The meaning of Visits requires user confirmation."]
+        ),
+        "confirmationSummary": {
+            "objective": "Understand visits by campus",
+            "businessQuestions": ["How do visits compare by campus?"] if ready else [],
+            "kpiDefinitions": (
+                ["Visits uses the user-confirmed business definition."] if ready else []
+            ),
+            "scopeAndTime": [],
+            "dimensionsAndFilters": ["Campus is the confirmed comparison."] if ready else [],
+            "lifecycleDefinitions": [],
+            "materialPolicyDecisions": [],
+        },
+        "conflictReasons": [],
+    }
+
+
 def prepare_ambiguous_case(
     client: TestClient, session: dict[str, object]
 ) -> tuple[dict[str, object], dict[str, object]]:
@@ -62,6 +173,130 @@ def prepare_ambiguous_case(
     return cast(dict[str, object], created), cast(
         dict[str, object], prepared.json()["interpretation"]
     )
+
+
+def test_normal_runtime_without_a_provider_never_uses_the_test_simulator(
+    settings: Settings, database: Database
+) -> None:
+    runtime_settings = settings.model_copy(update={"test_semantic_simulator_enabled": False})
+    with TestClient(create_app(settings=runtime_settings, database=database)) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "metrics.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        response = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INTELLIGENT_ANALYSIS_UNAVAILABLE"
+
+
+def test_provider_owns_question_and_follow_up_analysis_with_full_durable_context(
+    settings: Settings, database: Database
+) -> None:
+    provider = DeterministicFakeProvider(
+        provider_profile(), [provider_analysis(ready=False), provider_analysis(ready=True)]
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "Metrics.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        first = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert first.status_code == 200, first.text
+        interpretation = first.json()["interpretation"]
+        assert interpretation["simulation"] == "QUALIFIED_SERVER_MODEL"
+        assert interpretation["questions"][0]["question"] == (
+            "Which business definition should the Visits field represent for this report?"
+        )
+        answered = runtime.post(
+            f"/api/cases/{case['id']}/conversation",
+            json={
+                "kind": "RAW_ANSWER",
+                "payload": {
+                    "questionId": "provider-visits-meaning",
+                    "interpretationId": interpretation["id"],
+                    "rawAnswer": "Visits means the recorded visits in the supplied file.",
+                    "decision": "FREE_TEXT",
+                },
+                "expected_context_version": interpretation["context_version"],
+                "command_key": "provider-owned-answer",
+            },
+            headers=csrf(session),
+        )
+        assert answered.status_code == 200, answered.text
+        ready = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={
+                "expected_context_version": answered.json()["event"][
+                    "semantic_context_version"
+                ]
+            },
+            headers=csrf(session),
+        )
+        assert ready.status_code == 200, ready.text
+        assert ready.json()["interpretation"]["state"] == "READY_FOR_CONFIRMATION"
+    assert [request.task for request in provider.requests] == [
+        "REQUIREMENT_ANALYSIS",
+        "REQUIREMENT_ANALYSIS",
+    ]
+    second_context = provider.requests[1].context["materialContext"]
+    assert isinstance(second_context, dict)
+    assert second_context["conversation"][0]["payload"]["rawAnswer"] == (
+        "Visits means the recorded visits in the supplied file."
+    )
+
+
+def test_configured_answer_limit_is_enforced_by_the_server(
+    settings: Settings, database: Database
+) -> None:
+    bounded = settings.model_copy(
+        update={
+            "clarification_policy_json": json.dumps(
+                {
+                    "max_rounds": 3,
+                    "max_questions_per_round": 5,
+                    "max_answer_characters": 100,
+                }
+            )
+        }
+    )
+    with TestClient(create_app(settings=bounded, database=database)) as runtime:
+        session = sign_in(runtime, "member")
+        case, interpretation = prepare_ambiguous_case(runtime, session)
+        question = cast(list[dict[str, object]], interpretation["questions"])[0]
+        rejected = runtime.post(
+            f"/api/cases/{case['id']}/conversation",
+            json={
+                "kind": "RAW_ANSWER",
+                "payload": {
+                    "questionId": question["id"],
+                    "interpretationId": interpretation["id"],
+                    "rawAnswer": "x" * 101,
+                    "decision": "FREE_TEXT",
+                },
+                "expected_context_version": interpretation["context_version"],
+                "command_key": "bounded-answer",
+            },
+            headers=csrf(session),
+        )
+    assert rejected.status_code == 409
 
 
 def test_durable_conversation_evidence_and_exact_acceptance(

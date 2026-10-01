@@ -10,18 +10,28 @@ from pathlib import Path
 from threading import Barrier, Event
 from uuid import uuid4
 
+import httpx
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from apbra_api.api import create_app
 from apbra_api.artifacts import LocalArtifactStore
 from apbra_api.config import Settings
 from apbra_api.domain import GenerationFailed
-from apbra_api.generation import GenerationBridge
-from apbra_api.persistence import ApplicationSession, Database
+from apbra_api.generation import (
+    GenerationBridge,
+    GenerationBridgeFailure,
+    _automatic_design_retry_instruction,
+)
+from apbra_api.model_provider import (
+    DeterministicFakeProvider,
+    OpenAICompatibleProvider,
+    ProviderProfile,
+)
+from apbra_api.persistence import ApplicationSession, AutomaticDesignAttemptRow, Database
 
 
 def confirmed_case(
@@ -222,6 +232,32 @@ def reviewed_synthetic_report_design(snapshot: dict[str, object]) -> dict[str, o
     }
 
 
+def automatic_test_provider(responses: list[dict[str, object]]) -> DeterministicFakeProvider:
+    call_limit = max(1, len(responses))
+    return DeterministicFakeProvider(
+        ProviderProfile.model_validate(
+            {
+                "profile_id": "qualified-test-profile",
+                "protocol": "OPENAI_CHAT_COMPATIBLE",
+                "endpoint": "https://provider.invalid/v1/chat/completions",
+                "model_or_deployment": "qualified-test-model",
+                "api_version": "test-version",
+                "region": "test-region",
+                "prompt_version": "report-design-v1",
+                "configuration_id": "accepted-test-configuration",
+                "capabilities": {"structured_output": True, "vision": False},
+                "max_calls_per_operation": call_limit,
+                "max_input_characters": 200_000,
+                "max_output_tokens": 8_000,
+                "time_budget_seconds": 30,
+                "request_timeout_seconds": 10,
+                "retry_limit": call_limit - 1,
+            }
+        ),
+        responses,
+    )
+
+
 @pytest.mark.parametrize(
     ("business_request", "filename", "content"),
     [
@@ -270,6 +306,267 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
     with zipfile.ZipFile(BytesIO(download.content)) as archive:
         assert any(name.endswith(".pbip") for name in archive.namelist())
         assert "ReportDesign.json" in archive.namelist()
+
+
+def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
+    client: TestClient, settings: Settings, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Compare resolved and unresolved requests by service team.",
+        "requests.csv",
+        b"Team,Resolved,Unresolved\nA,7,2\nB,5,4\n",
+    )
+    provider = automatic_test_provider(
+        [{"untrusted": "not a report design"}, contract["reviewed_report_design"]]
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as automatic_client:
+        automatic_client.cookies.update(client.cookies)
+        proposed = automatic_client.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(session),
+        )
+        assert proposed.status_code == 201, proposed.text
+        result = proposed.json()
+        assert result["attempt"]["status"] == "ELIGIBLE"
+        assert result["attempt"]["validation"]["status"] == "PASS"
+        assert result["attempt"]["provider_profile_id"] == "qualified-test-profile"
+        assert result["attempt"]["usage"]["total_tokens"] == 60
+        assert result["attempt"]["usage"]["call_count"] == 2
+        assert result["reviewed_design"]["origin"] == "AUTO_ELIGIBLE"
+        assert "report_design" not in result["reviewed_design"]
+        assert provider.requests[0].task == "REPORT_DESIGN"
+        assert "credential" not in provider.requests[0].context
+        assert provider.requests[0].context["governedKnowledge"]
+        checklist = provider.requests[0].context["coverageChecklist"]
+        assert checklist["obligations"]
+        assert checklist["dimensions"]
+        assert all(set(item) == {"index"} for item in checklist["dimensions"])
+        assert all(
+            set(item)
+            == {
+                "index",
+                "kind",
+                "required",
+                "minimumRepresentations",
+                "measureCount",
+                "fieldCount",
+                "pageCount",
+            }
+            for item in checklist["obligations"]
+        )
+        prompt = provider.requests[0].system_prompt
+        assert "exact complete canonical measure objects" in prompt
+        assert "every confirmed required page exactly once" in prompt
+        assert "Never create a slicer for a field already listed" in prompt
+        assert "four general visual slots followed by two card-only slots" in prompt
+        assert not any(
+            fixture_term in prompt.lower()
+            for fixture_term in ("retail", "store", "product", "sales")
+        )
+        assert automatic_client.get(f"/api/cases/{case['id']}").json()["case"][
+            "report_title"
+        ] == contract["reviewed_report_design"]["projectName"]
+
+        built = automatic_client.post(
+            f"/api/cases/{case['id']}/generation",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "reviewed_design_id": result["reviewed_design"]["id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(session),
+        )
+        assert built.status_code == 201, built.text
+        assert built.json()["attempt"]["status"] == "SUCCEEDED"
+
+
+def test_invalid_automatic_design_is_failed_safely_without_losing_requirements(
+    client: TestClient, settings: Settings, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Show qualified request totals by service team.",
+        "requests.csv",
+        b"Team,Requests\nA,7\nB,5\n",
+    )
+    provider = automatic_test_provider(
+        [
+            {"untrusted": "first rejected report design"},
+            {"untrusted": "second rejected report design"},
+        ]
+    )
+    command_key = str(uuid4())
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as automatic_client:
+        automatic_client.cookies.update(client.cookies)
+        rejected = automatic_client.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "command_key": command_key,
+            },
+            headers=csrf(session),
+        )
+        assert rejected.status_code == 409
+        assert "untrusted" not in rejected.text
+        history = automatic_client.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert history.status_code == 200
+        failed = history.json()["items"][0]
+        assert failed["status"] == "FAILED"
+        assert failed["provider_profile_id"] == "qualified-test-profile"
+        assert failed["model_or_deployment"] == "qualified-test-model"
+        assert failed["prompt_version"] == "report-design-v1"
+        assert failed["configuration_id"] == "accepted-test-configuration"
+        assert failed["capability_profile"] == {
+            "structured_output": True,
+            "vision": False,
+        }
+        assert failed["usage"] == {
+            "call_count": 2,
+            "completion_tokens": 40,
+            "latency_ms": 2,
+            "prompt_tokens": 20,
+            "total_tokens": 60,
+        }
+        assert failed["validation"] == {
+            "category": "GENERATION_PIPELINE_FAILED",
+            "detail_status": "WITHHELD",
+            "stage": "REPORT_DESIGN_DETERMINISTIC_VALIDATION",
+            "status": "FAILED",
+        }
+        assert failed["failure"]["code"] == "MODEL_CANDIDATE_REJECTED"
+        assert "first rejected" not in history.text
+        assert "second rejected" not in history.text
+        with database.session() as db:
+            persisted = db.scalar(
+                select(AutomaticDesignAttemptRow).where(
+                    AutomaticDesignAttemptRow.command_key == command_key
+                )
+            )
+            assert persisted is not None
+            assert persisted.candidate_digest is not None
+            assert len(persisted.candidate_digest) == 64
+        assert (
+            automatic_client.get(f"/api/cases/{case['id']}/acceptance").json()[
+                "confirmed_contract"
+            ]["current"]
+            is True
+        )
+        designs = automatic_client.get(
+            f"/api/cases/{case['id']}/reviewed-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert designs.status_code == 200
+        assert all(item["origin"] != "AUTO_ELIGIBLE" for item in designs.json()["items"])
+
+    restarted_database = Database(settings.database_url)
+    with TestClient(
+        create_app(settings=settings, database=restarted_database, model_provider=provider)
+    ) as restarted:
+        restarted.cookies.update(client.cookies)
+        durable = restarted.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert durable.status_code == 200
+        assert durable.json()["items"][0]["usage"]["call_count"] == 2
+        assert durable.json()["items"][0]["validation"]["status"] == "FAILED"
+    restarted_database.engine.dispose()
+
+    foreign = TestClient(create_app(settings=settings, database=database, model_provider=provider))
+    try:
+        sign_in(foreign, "foreign")
+        assert (
+            foreign.get(
+                f"/api/cases/{case['id']}/automatic-designs",
+                params={"confirmed_contract_id": contract["id"]},
+            ).status_code
+            == 404
+        )
+    finally:
+        foreign.close()
+
+    with database.session() as db:
+        db.execute(
+            text("UPDATE memberships SET active=false WHERE id=:id"),
+            {"id": session["actor"]["membership_id"]},  # type: ignore[index]
+        )
+    assert client.get(
+        f"/api/cases/{case['id']}/automatic-designs",
+        params={"confirmed_contract_id": contract["id"]},
+    ).status_code in {401, 404}
+
+
+def test_provider_failure_after_real_call_persists_safe_observation_only(
+    client: TestClient, settings: Settings, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Summarise qualified request counts by service group.",
+        "requests.csv",
+        b"Group,Requests\nA,7\nB,5\n",
+    )
+    test_profile = automatic_test_provider([{}]).profile
+    provider = OpenAICompatibleProvider(
+        test_profile,
+        "server-secret",
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(403, text="credential=server-secret hidden-body")
+        ),
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as automatic_client:
+        automatic_client.cookies.update(client.cookies)
+        rejected = automatic_client.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(session),
+        )
+        assert rejected.status_code == 409
+        assert "server-secret" not in rejected.text
+        assert "hidden-body" not in rejected.text
+        history = automatic_client.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        )
+        assert history.status_code == 200
+        failed = history.json()["items"][0]
+        assert failed["status"] == "FAILED"
+        assert failed["provider_profile_id"] == "qualified-test-profile"
+        assert failed["model_or_deployment"] == "qualified-test-model"
+        assert failed["usage"] == {
+            "call_count": 1,
+            "completion_tokens": None,
+            "latency_ms": failed["usage"]["latency_ms"],
+            "prompt_tokens": None,
+            "total_tokens": None,
+        }
+        assert failed["usage"]["latency_ms"] >= 0
+        assert failed["validation"] is None
+        assert failed["failure"]["code"] == "MODEL_PROVIDER_REJECTED"
+        assert "server-secret" not in history.text
+        assert "hidden-body" not in history.text
 
 
 @pytest.mark.parametrize("selector", ["member", "owner"])
@@ -984,8 +1281,8 @@ def test_history_and_artifact_survive_restart_but_remain_company_private(
             },
             headers=csrf(session),
         )
-        assert unavailable.status_code == 422
-        assert unavailable.json()["error"]["code"] == "GENERATION_FAILED"
+        assert unavailable.status_code == 503
+        assert unavailable.json()["error"]["code"] == "CONFIGURATION_UNAVAILABLE"
     restarted_database.engine.dispose()
 
     foreign = TestClient(create_app(settings=settings, database=database))
@@ -1127,6 +1424,52 @@ def test_generation_bridge_rejects_unsafe_executables_timeout_and_malformed_outp
         GenerationBridge(mismatched, node_executable=node, timeout_seconds=2).generate(
             {"binding": {"caseId": "expected"}, "execution": {"inputDigest": "expected"}}
         )
+
+    diagnostic = tmp_path / "diagnostic.mjs"
+    diagnostic.write_text(
+        "process.stdout.write(JSON.stringify({ok:false,error:{"
+        "code:'REPORT_DESIGN_SEMANTICS_FAILED',"
+        "message:'REPORT_DESIGN_SEMANTICS_FAILED: REQUIRED_BREAKDOWN_UNCOVERED'}}));"
+        "process.exitCode=1",
+        encoding="utf-8",
+    )
+    with pytest.raises(GenerationBridgeFailure) as captured:
+        GenerationBridge(diagnostic, node_executable=node, timeout_seconds=2).generate(
+            {"binding": {}, "execution": {}}
+        )
+    assert captured.value.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
+    assert captured.value.diagnostic_message.endswith("REQUIRED_BREAKDOWN_UNCOVERED")
+
+
+def test_layout_retry_is_order_only_and_other_rejections_remain_generic() -> None:
+    layout = _automatic_design_retry_instruction(
+        GenerationBridgeFailure(
+            "REPORT_DESIGN_NORMALIZATION_FAILED",
+            "REPORT_DESIGN_NORMALIZATION_FAILED: LAYOUT_CAPACITY_EXCEEDED",
+        ),
+        max_visuals_per_page=6,
+    )
+    assert "changing only the order" in layout
+    assert "do not add, remove, move between pages" in layout
+    assert "validated 6-visual page limit" in layout
+    assert "physical slots reported as in bounds" in layout
+    semantic = _automatic_design_retry_instruction(
+        GenerationBridgeFailure(
+            "REPORT_DESIGN_SEMANTICS_FAILED",
+            "REPORT_DESIGN_SEMANTICS_FAILED: REQUIRED_BREAKDOWN_UNCOVERED",
+        ),
+        max_visuals_per_page=6,
+    )
+    assert "changing only the order" not in semantic
+    assert "zero-based index" in semantic
+    assert "do not trade one covered requirement for another" in semantic
+    unknown_detail = "credential=must-not-be-forwarded"
+    unknown = _automatic_design_retry_instruction(
+        GenerationBridgeFailure("GENERATION_PIPELINE_FAILED", unknown_detail),
+        max_visuals_per_page=6,
+    )
+    assert "GENERATION_PIPELINE_FAILED" in unknown
+    assert unknown_detail not in unknown
 
 
 def test_authorization_revocation_waits_for_eligibility_commit(

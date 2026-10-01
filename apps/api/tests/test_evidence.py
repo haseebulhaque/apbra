@@ -25,6 +25,23 @@ def test_csv_schema_is_observed_without_inventing_rows() -> None:
     ]
 
 
+def test_csv_schema_infers_iso_dates_from_values_without_field_name_rules() -> None:
+    parsed = parse_evidence(
+        (
+            b"Recorded,Occurred,Label\n"
+            b"2026-06-01,2026-06-01T08:30:00Z,2026-06-01 draft\n"
+            b"2026-08-31,2026-08-31T17:45:00+10:00,not a date\n"
+        ),
+        "observations.csv",
+    )
+    columns = parsed.observed_schema["tables"][0]["columns"]
+    assert [(column["name"], column["type"]) for column in columns] == [
+        ("Recorded", "date"),
+        ("Occurred", "datetime"),
+        ("Label", "text"),
+    ]
+
+
 def test_csv_rejects_populated_cells_without_headers_and_preserves_valid_rows() -> None:
     with pytest.raises(EvidenceError, match="without corresponding headers"):
         parse_evidence(b'Division,Amount\nNorth,12,"unheaded value"\n', "unsafe.csv")
