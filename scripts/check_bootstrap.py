@@ -580,7 +580,21 @@ MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS = {
     'tests/bootstrap/test_protected_generation_output_history_scope.py',
     'docs/source-register.json',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '0ea066974a680e8c28bbdede922bf10b0e89dcf340691c43df05af7ee5dc4333'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS = {
+    '.github/workflows/bootstrap.yml',
+    'scripts/check_bootstrap.py',
+    'scripts/check_ci_policy.py',
+    'tests/bootstrap/test_ci_policy.py',
+    'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
+}
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS = {
+    'docs/source-register.json',
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+}
+MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '2ee6f89d627f6b0cbd87520cc908126af2bf20055aa490d8936db70e72fda8bc'
 MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide'
 MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
 MODEL_LED_FLEXIBLE_DELIVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide'
@@ -588,6 +602,10 @@ MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH = MODEL_LED_FLEXIBLE_DELIVERY_BR
 MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-vite-proxy-governance-amendment'
 MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment'
 MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256 = '2f2c952e3186bbd77f005dfb17a6e5688022f25a987c8c06dc7152955cfaa41d'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-governance-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-implementation'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256 = '6facc17e3cd2f4b7172d8bd13f3337f03c492b0245887599273dbeeaecee58cf'
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -781,7 +799,7 @@ def workflow_errors(text: str) -> list[str]:
     if set(jobs) != {'bootstrap'}:
         errors.append('Unexpected job: review bootstrap CI scope')
     for job in jobs.values():
-        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '20':
+        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '30':
             errors.append('Unexpected runner or unbounded job')
         if 'permissions' in job:
             errors.append('Job permission override prohibited')
@@ -824,7 +842,23 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             return errors, {}
         errors += catalog_errors(catalog)
         errors += task_errors(task, catalog, sources)
-        errors += workflow_errors((root / '.github/workflows/bootstrap.yml').read_text())
+        workflow_path = root / '.github/workflows/bootstrap.yml'
+        workflow_bytes = workflow_path.read_bytes()
+        historical_capacity_fixture = (
+            active_task_id == 'APBRA-163' and
+            active_branch == 'agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acceptance' and
+            changed_paths == DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS and
+            not workflow_path.is_symlink() and
+            hashlib.sha256(workflow_bytes).hexdigest() ==
+            DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256
+        )
+        workflow_text = workflow_bytes.decode('utf-8')
+        if historical_capacity_fixture:
+            # The original bytes are digest-bound above and again in APBRA-163's
+            # scope check below. Validate every other control through the current
+            # checker after normalizing only this historical timeout in memory.
+            workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 30', 1)
+        errors += workflow_errors(workflow_text)
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
         # Explicitly bounded Capstone extensions, not arbitrary task discovery.
         shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
@@ -1561,7 +1595,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected APBRA-174 implementation branch')
                 if model_led_flexible_delivery_task['base_commit'] != 'b2fba8d507262cf912e161b491549ab0d5680b0d':
                     extension_errors.append('Stale APBRA-174 base')
-                if set(model_led_flexible_delivery_task['allowed_paths']) != MODEL_LED_FLEXIBLE_DELIVERY_PATHS:
+                if set(model_led_flexible_delivery_task['allowed_paths']) != (
+                        MODEL_LED_FLEXIBLE_DELIVERY_PATHS | MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS):
                     extension_errors.append('Unexpected APBRA-174 implementation scope')
                 if (model_led_flexible_delivery_task['task_mode'], model_led_flexible_delivery_task['readiness'],
                         model_led_flexible_delivery_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
@@ -1569,6 +1604,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if model_led_flexible_delivery_task['source_ids'] != [
                     MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID,
                     MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID,
+                    MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID,
                 ]:
                     extension_errors.append('APBRA-174 requires its specific accepted sources')
                 package_source = next((source for source in sources['sources']
@@ -1587,6 +1623,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     canonical_amendment_source = json.dumps(amendment_source, sort_keys=True, separators=(',', ':')).encode()
                     if hashlib.sha256(canonical_amendment_source).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256:
                         extension_errors.append('APBRA-174 Vite proxy amendment source differs from accepted provenance')
+                capacity_source = next((source for source in sources['sources']
+                                        if source['id'] == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID), None)
+                if capacity_source is None:
+                    extension_errors.append('APBRA-174 CI capacity amendment source is missing')
+                else:
+                    canonical_capacity_source = json.dumps(capacity_source, sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(canonical_capacity_source).hexdigest() != MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256:
+                        extension_errors.append('APBRA-174 CI capacity amendment source differs from accepted provenance')
             errors += extension_errors
             if extension_errors:
                 model_led_flexible_delivery_task = None
@@ -1661,7 +1705,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
                          active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS)):
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS) and
+                    not (active_task_id == 'APBRA-174' and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-174' and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1743,12 +1793,28 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
                     changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS and
                     not (active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS)):
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS) and
+                    not (active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS) and
+                    not (active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)):
                 errors.append('APBRA-174 registration must change exactly its eight governance files')
             if (active_task_id == 'APBRA-174' and
                     active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
                     changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS):
                 errors.append('APBRA-174 Vite proxy amendment must change exactly its eight governance files')
+            if (active_task_id == 'APBRA-174' and
+                    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
+                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS):
+                errors.append('APBRA-174 CI capacity registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-174' and
+                    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
+                    changed_paths != MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS):
+                errors.append('APBRA-174 CI capacity implementation must change exactly its five functional files')
+            if (active_task_id == 'APBRA-174' and
+                    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_BRANCH and
+                    changed_paths.intersection(MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)):
+                errors.append('APBRA-174 product branch cannot change CI capacity files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1812,6 +1878,17 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-174' and
                          name in MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-174' and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS and
+                         name in MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-174' and active_task is not None and
+                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
+                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS and
+                         name in MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS and
+                         name in active_task['allowed_paths'] and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

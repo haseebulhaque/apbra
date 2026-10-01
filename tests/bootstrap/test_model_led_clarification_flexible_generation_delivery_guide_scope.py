@@ -34,6 +34,8 @@ class ModelLedFlexibleDeliveryScopeTests(unittest.TestCase):
         names.update(c.MODEL_LED_FLEXIBLE_DELIVERY_PATHS)
         names.update(c.MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS)
         names.update(c.MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS)
+        names.update(c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)
+        names.update(c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS)
         for name in names:
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -53,17 +55,20 @@ class ModelLedFlexibleDeliveryScopeTests(unittest.TestCase):
 
     def test_exact_finite_future_authority_and_source_hash(self):
         paths = set(self.task["allowed_paths"])
-        self.assertEqual(len(paths), 67)
-        self.assertEqual(paths, c.MODEL_LED_FLEXIBLE_DELIVERY_PATHS)
+        product_paths = paths - c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS
+        self.assertEqual(len(product_paths), 67)
+        self.assertEqual(len(c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS), 5)
+        self.assertEqual(paths, c.MODEL_LED_FLEXIBLE_DELIVERY_PATHS | c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS)
         self.assertTrue(all("*" not in path for path in paths))
-        self.assertTrue(paths.isdisjoint(c.MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS))
-        self.assertEqual(digest(sorted(paths - {"apps/web/vite.config.ts"})), ORIGINAL_PATHS_SHA256)
+        self.assertTrue(product_paths.isdisjoint(c.MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS))
+        self.assertEqual(digest(sorted(product_paths - {"apps/web/vite.config.ts"})), ORIGINAL_PATHS_SHA256)
         self.assertEqual(digest(self.task["requirements"]), ORIGINAL_REQUIREMENTS_SHA256)
         self.assertEqual(digest(self.task["adrs"]), ORIGINAL_ADRS_SHA256)
         self.assertEqual(digest(self.task["acceptance_criteria"]), ORIGINAL_ACCEPTANCE_SHA256)
         self.assertEqual(
             self.task["source_ids"],
-            [c.MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID, c.MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID],
+            [c.MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID, c.MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID,
+             c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID],
         )
         self.assertEqual(digest(self.task), c.MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256)
         sources = json.loads((ROOT / "docs/source-register.json").read_text())
@@ -76,6 +81,10 @@ class ModelLedFlexibleDeliveryScopeTests(unittest.TestCase):
         self.assertEqual(amendment["status"], "ACCEPTED")
         self.assertEqual(amendment["content_id"], "APBRA-174")
         self.assertEqual(digest(amendment), c.MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256)
+        capacity = next(item for item in sources["sources"] if item["id"] == c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID)
+        self.assertEqual(capacity["status"], "ACCEPTED")
+        self.assertEqual(capacity["content_id"], "APBRA-174")
+        self.assertEqual(digest(capacity), c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256)
         self.assertEqual(self.task["base_commit"], "b2fba8d507262cf912e161b491549ab0d5680b0d")
 
     def test_amendment_is_exact_governance_only_and_implementation_remains_blocked(self):
@@ -112,6 +121,59 @@ class ModelLedFlexibleDeliveryScopeTests(unittest.TestCase):
             errors = self.check(root, registration | {"apps/api/src/apbra_api/api.py"})
             self.assertIn("APBRA-174 registration and implementation changes must remain separate", errors)
 
+    def test_ci_capacity_registration_and_future_branch_are_separate_and_exact(self):
+        registration = c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS
+        future = c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS
+        self.assertEqual(len(registration), 5)
+        self.assertEqual(len(future), 5)
+        self.assertIn("tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py", future)
+        self.assertEqual(c.DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256,
+                         "c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141")
+        self.assertEqual(registration & future, {"scripts/check_bootstrap.py"})
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, registration,
+                                        branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH), [])
+            for omitted in registration:
+                with self.subTest(registration_omitted=omitted):
+                    errors = self.check(root, registration - {omitted},
+                                        branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH)
+                    self.assertIn("APBRA-174 CI capacity registration must change exactly its five governance files", errors)
+            errors = self.check(root, registration | {".github/workflows/bootstrap.yml"},
+                                branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH)
+            self.assertIn("APBRA-174 CI capacity registration must change exactly its five governance files", errors)
+            self.assertEqual(self.check(root, future, branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH), [])
+            for omitted in future:
+                with self.subTest(future_omitted=omitted):
+                    errors = self.check(root, future - {omitted},
+                                        branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH)
+                    self.assertIn("APBRA-174 CI capacity implementation must change exactly its five functional files", errors)
+            errors = self.check(root, future | {"apps/web/vite.config.ts"},
+                                branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH)
+            self.assertIn("APBRA-174 CI capacity implementation must change exactly its five functional files", errors)
+            for path in future:
+                with self.subTest(product_path=path):
+                    errors = self.check(root, {path}, branch=c.MODEL_LED_FLEXIBLE_DELIVERY_BRANCH)
+                    self.assertIn("APBRA-174 product branch cannot change CI capacity files", errors)
+                    if path != "scripts/check_bootstrap.py":
+                        self.assertIn(f"File outside active task scope: {path}", errors)
+
+    def test_ci_capacity_source_tampering_denies_future_authority(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            sources_path = root / "docs/source-register.json"
+            sources = json.loads(sources_path.read_text())
+            source = next(item for item in sources["sources"]
+                          if item["id"] == c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID)
+            source["acceptance"] += " and all workflow files"
+            sources_path.write_text(json.dumps(sources))
+            errors = self.check(root, c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS,
+                                branch=c.MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH)
+            self.assertIn("APBRA-174 CI capacity amendment source differs from accepted provenance", errors)
+            self.assertIn("Unknown or invalid active task authority: APBRA-174", errors)
+
     def test_restricted_paths_stay_restricted(self):
         rejected = (
             ".github/workflows/bootstrap.yml",
@@ -144,7 +206,7 @@ class ModelLedFlexibleDeliveryScopeTests(unittest.TestCase):
             root = Path(directory)
             self.copy_repository(root)
             task = copy.deepcopy(self.task)
-            task["allowed_paths"].append(".github/workflows/bootstrap.yml")
+            task["allowed_paths"].append(".github/workflows/other.yml")
             (root / TASK_PATH).write_text(json.dumps(task))
             errors = self.check(root, {new_path})
             self.assertIn("APBRA-174 contract differs from accepted authority", errors)
