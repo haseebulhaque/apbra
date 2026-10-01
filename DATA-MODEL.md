@@ -8,7 +8,13 @@ This document separates three things that must not be conflated:
 
 Controlling sources at APBRA-159 reconciliation time are [Confluence 11.01 Conceptual, Logical and Physical Data Models v4](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932664), [11.02 Data Dictionary and Lineage v3](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3965422), [02.05 Data, Integration, Identity and Audit Requirements v3](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348), and [02.06 Requirements Traceability Matrix v6](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932382). These sources define logical responsibilities and target requirements; they do not prove that a production database, migration or security control exists.
 
-## Implemented bounded-prototype contracts
+## Current durable local/CI customer-data foundation
+
+Since the APBRA-159 reconciliation, merged protected-case work through APBRA-174 has added PostgreSQL 17-backed invited membership, private cases, immutable request/conversation/evidence and accepted-meaning lineage, generation attempts and validated candidate history, plus immutable Tenant Settings versions and protected credential references. Server-derived actor and company context, current private-case permission and exact settings/acceptance versions govern protected actions. Private local evidence/artifact volumes retain qualified bytes across ordinary restarts. These are bounded local/CI implementations, not a certified production store, hosted isolation, retention/deletion compliance, backup/DR or customer-hosted deployment.
+
+[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) separates future minimum central control-plane organisation/deployment, subscription, entitlement, licence and release metadata from the **selected customer data plane**. Customer users/mappings, Tenant Settings, credentials, source/evidence data, prompts, accepted requirements, reports/Delivery Guides, audit/history and operational content stay in that plane. Licence validation must not require their upload or a central SaaS customer-content database. `deployment_id` identifies an installation/licence lifecycle; `tenant_id` identifies the company authorization domain. One Cloud deployment can host many tenants; Dedicated/Private relationships need explicit qualification. No central control-plane database, entitlement engine or cross-deployment identity mapping is implemented by this document.
+
+## Implemented semantic contracts and historical prototype terms
 
 The application currently has two generations of code and evidence. Their names are not interchangeable aliases.
 
@@ -22,7 +28,7 @@ The application currently has two generations of code and evidence. Their names 
 
 The repository also still contains legacy Capstone fixture types such as `RequirementsSnapshot`, `DesignPlan` and `AIRequirementsSnapshot`. They support historical tests or earlier bounded paths and have not been renamed out of the source tree. They do not supersede `ConfirmedRequirementContract`, and conceptual correspondences below must not be read as literal TypeScript aliases.
 
-The current web prototype does not implement the planned durable product store described in the next sections. Browser state, generated files and engineering evidence are not a substitute for tenant-safe durable case history, transactional audit or production retention/deletion controls.
+The earlier browser-only Capstone did not implement a durable product store. The current protected local/CI application now persists private case history, evidence, settings and generation records in PostgreSQL and private volumes. That bounded implementation is not proof of production-grade retention/deletion, transactional audit coverage, recovery or hosted security operations.
 
 ## Meaning and design authority
 
@@ -38,11 +44,11 @@ original business input and qualified evidence
   -> deterministic preservation, capability, compilation and candidate validation
 ```
 
-In the bounded prototype, original submissions, AI proposals, accepted meaning and subsequent report-design choices remain distinct **semantic stages** with the clarification session nested in confirmation provenance; this is not a durable store of separate business-version records. The planned durable model requires corrections to create new immutable versions rather than rewrite originals and requires acceptance to bind an exact proposal rather than later, stale or materially changed meaning. Durable expert-assignment and actual-continuation records are also planned responsibilities, distinct from business acceptance, inspection, release approval and successful deployment. `ConfirmedRequirementContract` schema version 2 identifies the current contract shape; it is not itself a persisted requirement-version instance.
+In the earlier Capstone, these were distinct **semantic stages** rather than durable business-version records. The current protected local/CI case application persists immutable request and evidence versions, exact-version acceptance, bounded interpretation/design attempts and private candidate history; changes stale earlier acceptance instead of rewriting it. Full production retention/deletion and recovery remain unverified. Authorized expert assignment/continuation must remain distinct from business acceptance, inspection, release approval and successful deployment. `ConfirmedRequirementContract` schema version 2 names a contract shape; it is not automatically an independently persisted requirement-version identity.
 
-## Planned durable logical responsibilities
+## Target logical responsibilities and remaining completeness
 
-The following are target logical concepts. Their names describe responsibilities, not required table names, APIs, services or storage technologies.
+The following target concepts overlap the bounded local/CI foundation in part. Their names describe responsibilities, not required table names, APIs, services or proof that every production lifecycle is complete.
 
 | Logical responsibility | Target meaning |
 | --- | --- |
@@ -77,8 +83,8 @@ The logical model is organised around companies, cases, evidence, accepted meani
 
 ## Delivery boundaries
 
-Relevant delivery work remains separate and must obtain current task authority before implementation: APBRA-34 (versioned requirements and traceability), APBRA-46 (grounded report design), APBRA-77/APBRA-78 (server-derived tenant context and isolation), APBRA-104/APBRA-105/APBRA-106 (durable persistence, tenant-aware schema and transactional audit/outbox recovery), APBRA-114 (retention/deletion propagation), and APBRA-119 (recovery/backup behaviour).
+The earlier delivery mapping identified APBRA-34 (versioned requirements), APBRA-46 (grounded design), APBRA-77/APBRA-78 (tenant context/isolation), APBRA-104/APBRA-105/APBRA-106 (persistence and audit), APBRA-114 (retention/deletion) and APBRA-119 (recovery). The later protected-case local/CI foundation through APBRA-174 implements bounded pieces of those concerns; this historical mapping does not certify every named task or production control as complete. Remaining work needs its own current Jira authority and verification.
 
 The accepted `DATA-001`–`DATA-010` and `DATA-020`–`DATA-023` identifiers remain requirement-traceability labels. This reconciliation clarifies their present implementation status; it does not rename them, mark them delivered or turn their target concepts into an installed schema.
 
-This document does **not** authorise tables, migrations, persistence APIs, model-type renames or source changes. The engineering bootstrap only supplies engineering metadata schemas under `contracts/engineering/`. Planned production persistence, tenant isolation, audit, retention/deletion and recovery remain unimplemented until their own accepted contracts and evidence say otherwise.
+This APBRA-175 document change authorises no tables, migrations, persistence APIs, model-type renames or source changes. Bounded application persistence and authorization already exist in local/CI; production deployment, complete audit/retention/deletion, backup/DR and recovery require separate accepted contracts and evidence. The engineering metadata schemas under `contracts/engineering/` are distinct from the application store.

@@ -10,7 +10,15 @@ Every successful protected candidate ZIP includes `Delivery-Guide.md`, bound to 
 
 APBRA compiles a bounded structured Report Design into an editable PBIP/PBIR candidate. It does not generate Power BI files directly from free-form model text.
 
-This document first states the verified compiler contract, then the accepted `APBRA-PRODUCT-2026-09-22` delivery direction. Target capabilities are not current compiler claims.
+This document states the current bounded Power BI compiler and static validation contract, then future delivery architecture. Local/CI tests and historical Capstone evidence do not establish Power BI Desktop runtime PASS or connected deployment for the current candidate bytes.
+
+## Power BI as the current adapter; ARD as future architecture
+
+Today APBRA generates bounded editable **PBIP/PBIR/TMDL** candidate content and validates supported project, semantic-model and report references deterministically. Power BI is the implemented output family, not the permanent canonical definition of every future APBRA report. No direct PBIX generation, Desktop open/render PASS, refresh, connected publishing or successful deployment is inferred from a candidate ZIP.
+
+[Confluence 03.06 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/7864321) and Jira APBRA-165 approve a future versioned **APBRA Report Definition (ARD)** between confirmed meaning/ReportDesign and platform-specific adapters. A future native renderer, canvas, export or non-Power-BI adapter must define its own capability matrix, security boundary, deterministic validation and runtime evidence. ARD and those adapters are not implemented by this APBRA-175 documentation reconciliation. Unsupported translation must fail explicitly or return for accepted rescope, never silently approximate business meaning.
+
+Power BI-specific constructs remain in the Power BI output contract. Provider-neutral deployment architecture in [04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) does not weaken Microsoft target-platform constraints or substitute customer Power BI/Fabric licensing, workspace permissions, credentials, gateway qualification or release approval. Fixed compiler and validation rules remain fixed; tenant/provider/deployment/commercial choices remain governed rather than hardcoded.
 
 ## Processing contract
 
@@ -68,7 +76,7 @@ Any byte change creates a different candidate and requires validation again. His
 
 ## Handover boundary
 
-A successful run can download the project archive and dynamically generate lazy-loaded `Report-Deployment-Guide.pdf`. The guide explains deployment, configuration and validation actions. It does not publish, configure credentials or prove deployment.
+The protected APBRA-174 candidate ZIP carries an exact-version-bound `Delivery-Guide.md`. Earlier Capstone runs could download a project archive and dynamically generate a lazy-loaded `Report-Deployment-Guide.pdf`. Both guides explain handover, configuration and validation actions within their respective flows. Neither publishes, configures credentials or proves deployment.
 
 ## Accepted delivery direction — planned
 

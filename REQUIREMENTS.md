@@ -8,9 +8,17 @@ Owner/Admin can inspect, edit, version and restore validated tenant settings and
 
 This repository view separates implemented Capstone behaviour, verified evidence and future product requirements. Confluence remains authoritative for requirements and Jira for delivery intent.
 
-## Implemented Capstone requirements
+## Accepted APBRA-175 architecture requirements — future implementation
 
-| Capability | Implemented behaviour | Current evidence boundary |
+[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) refine the target without turning deployment or entitlement runtime into a current MVP gate. APBRA Cloud, Dedicated and qualified Private / On-Premises are target deployment profiles; air-gapped support requires later qualification. Azure is a reference/private-preview option, not a core product requirement. The local/CI PostgreSQL case application does not prove any production profile.
+
+The future central control plane may retain minimum organisation, stable `deployment_id`, subscription/edition, entitlement, licence and release/update metadata. Customer users/mappings, Tenant Settings, protected credentials, uploads, prompts, accepted requirements, generated reports/Delivery Guides and audit/history belong to the selected customer data plane; licence checks do not require content transfer. `deployment_id` identifies an installation, while `tenant_id` identifies the company security domain. A shared Cloud installation may host many tenants; Dedicated/Private relationships require qualification.
+
+Commercial availability follows **Subscription → versioned Entitlements → stable Capabilities**. Effective capability is the intersection of installed platform support, entitlement, Tenant Settings, user/application permission, resource permission and current safety/validation/governance. Paid access cannot waive authorization, tenant isolation, private-resource access, target validity, deterministic checks or release approval. Core product logic should use capability keys rather than marketing plan-name branches. Exact plans, prices, quotas, grace periods, provider and billing choices are undecided; APBRA-153 requires separate implementation authority. Current bounded PBIP/PBIR/TMDL output is not an implemented ARD/native renderer or non-Power-BI adapter; Confluence 03.06 v1 and APBRA-165 govern that future direction.
+
+## Historical Capstone requirements and evidence
+
+| Historical capability | Capstone behaviour | Capstone evidence boundary |
 | --- | --- | --- |
 | Requirement discovery | Free text, CSV/XLSX schema, Business Mode default and optional Advanced/BI preferences | Bounded iterative GPT-4.1 clarification |
 | Requirements confirmation | Immutable raw provenance, business summary and explicit human confirmation | Confirmation precedes authority |
@@ -41,7 +49,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 
 ## Accepted post-Capstone product requirements
 
-`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below summarize Business and Functional Requirements 02.01 v4 and the Jira links reproduce Requirements Traceability Matrix 02.06 v6. Every row is **TARGET / PLANNED unless separately proven in the implemented table above**. A Jira item or target requirement is not implementation evidence.
+`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below preserve the Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 mappings as recorded at the earlier post-Capstone reconciliation. The accepted 04.07 v1 and 04.08 v1 direction above adds deployment and entitlement architecture; this historical mapping is not a claim that those source versions are still the latest. Every row is **TARGET / PLANNED unless separately proven by the current protected slice or historical Capstone evidence above**. A Jira item or target requirement is not implementation evidence.
 
 | Requirement | Accepted target outcome | Existing Jira delivery coverage | Repository documentation home |
 | --- | --- | --- | --- |
@@ -55,18 +63,18 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 | `PC26-FR-008` | Company registration, membership and account/sign-in profiles are distinct from consent to external tenant resources. | APBRA-151, APBRA-77, APBRA-78 | Architecture, web README |
 | `PC26-FR-009` | Projects are optional; later assignment and authorized sharing/collaboration are supported. | APBRA-152, APBRA-13, APBRA-78, APBRA-104 | README, architecture, web README |
 | `PC26-FR-010` | Requirements, outputs, designs, candidates, validation and deployment evidence retain linked histories. | APBRA-152, APBRA-49, APBRA-58, APBRA-71, APBRA-104; APBRA-157 for deployment | Architecture, generation spec, evidence record |
-| `PC26-FR-011` | Subscription, seats, feature entitlements and usage visibility follow a separately accepted commercial model; no price is implied. | APBRA-153, APBRA-83, APBRA-117 | README, acceptance criteria |
+| `PC26-FR-011` | Subscription resolves to versioned capability entitlements and usage visibility under a separately accepted commercial model; no plan name, price or application permission is implied. | APBRA-153, APBRA-83, APBRA-117 | README, acceptance criteria |
 | `PC26-FR-012` | Tenant-governed branding, terminology, organisational standards and configuration influence generation without overriding authority. | APBRA-154, APBRA-35, APBRA-41, APBRA-54, APBRA-72 | Architecture, AI/RAG spec, web README |
 | `PC26-FR-013` | Qualified APBRA-managed and customer-managed model profiles, including approved private/local profiles where supported. | APBRA-155, APBRA-38, APBRA-46, APBRA-114 | AI/RAG spec, architecture |
-| `PC26-FR-014` | Optional customer Azure provisioning requires separate explicit authority; an inference key is not management authority. | APBRA-156, APBRA-77, APBRA-114, APBRA-117 | Architecture, AI/RAG spec, handoff |
+| `PC26-FR-014` | Optional customer Azure provisioning in the Azure reference profile requires separate explicit authority; an inference key is not management authority and Azure is not a universal product dependency. | APBRA-156, APBRA-77, APBRA-114, APBRA-117 | Architecture, AI/RAG spec, handoff |
 | `PC26-FR-015` | Later bounded source discovery and Power BI/Fabric deployment profiles qualify permissions and evidence for publishing, connections, gateways, refresh and applicable security configuration. | APBRA-157, APBRA-50, APBRA-57, APBRA-73, APBRA-110 | Generation spec, architecture, acceptance criteria |
 | `PC26-FR-016` | Optional advanced data-architecture assessment and reviewable scripts remain separate from ordinary report creation; source schemas are not modified automatically. | APBRA-158, APBRA-43, APBRA-46, APBRA-79 | Architecture, generation spec, web README |
 | `PC26-FR-017` | Privacy, tenant isolation, RAG safety, deterministic guardrails, evaluations, red teaming, tracing, reliability and cost controls apply across the product. | APBRA-42, APBRA-59, APBRA-60, APBRA-78, APBRA-80, APBRA-81, APBRA-83, APBRA-87, APBRA-117, APBRA-155, APBRA-157 | Architecture, AI/RAG spec, acceptance criteria |
-| `PC26-FR-018` | “No dead ends” means truthful recovery, supported alternatives and actionable expert continuation—not guaranteed generation or disguised technical failure. | APBRA-150, APBRA-31, APBRA-63, APBRA-82, APBRA-99; APBRA-147 remains a separate planning hold | README, architecture, acceptance criteria |
+| `PC26-FR-018` | “No dead ends” means truthful recovery, supported alternatives and actionable expert continuation—not guaranteed generation or disguised technical failure. | APBRA-150, APBRA-31, APBRA-63, APBRA-82, APBRA-99; APBRA-147 was a separate planning hold at mapping time | README, architecture, acceptance criteria |
 
 ## Target boundary
 
-The accepted target includes company identity and membership, tenant isolation, optional projects and collaboration, licensing/usage visibility, durable governed knowledge, qualified model profiles, separately consented Azure provisioning, broader Power BI discovery/delivery, review/release workflow, reliability/FinOps and privacy/compliance operations. None is marked implemented merely because it appears above.
+The accepted target includes company identity and membership, tenant isolation, optional projects and collaboration, capability-based licensing/usage visibility, durable governed knowledge, qualified model profiles, separately consented Azure provisioning where applicable, broader Power BI discovery/delivery, future ARD/native reporting and other adapters, review/release workflow, reliability/FinOps and privacy/compliance operations. Local/CI invited identity, durable private cases/settings/evidence and bounded Power BI generation already exist; production profiles and entitlement runtime do not follow from those foundations. None is marked implemented merely because it appears above.
 
 The target does not select a delivery milestone, replacement stack, model/provider, region, price, SLA or new numerical limit. Licences, modes, company membership and model keys do not grant private-resource access, trusted-author status or external management authority. Expert assistance, business acceptance, inspection download, release approval and successful deployment remain separate events.
 
