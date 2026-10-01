@@ -20,6 +20,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertTrue(c.validate(yaml.safe_dump(self.doc)))
 
     def test_current_workflow(self):
+        self.assertEqual(self.job['timeout-minutes'], '30')
         self.assertEqual(c.validate(self.text), [])
 
     def test_step_names_are_not_authority(self):
@@ -64,7 +65,7 @@ class CiPolicyTests(unittest.TestCase):
         self.rejected()
 
     def test_timeout_is_exact_capacity_boundary(self):
-        for timeout in ('10', '19', '21'):
+        for timeout in ('10', '19', '20', '21', '29', '31'):
             with self.subTest(timeout=timeout):
                 self.job['timeout-minutes'] = timeout
                 self.rejected()
