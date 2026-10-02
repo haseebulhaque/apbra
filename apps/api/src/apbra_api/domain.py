@@ -35,6 +35,7 @@ class Actor:
     subject: str
     display_name: str
     role: Role
+    provider_profile_id: str
 
 
 @dataclass(frozen=True)
@@ -53,12 +54,15 @@ class IdentityRecord(Protocol):
     subject: str
     display_name: str
     active: bool
+    provider_profile_id: str
 
 
 class SessionRecord(Protocol):
+    id: UUID
     identity_id: UUID
     membership_id: UUID | None
     revoked_at: datetime | None
+    provider_profile_id: str
 
 
 class MembershipRecord(Protocol):
@@ -74,6 +78,7 @@ class InvitationRecord(Protocol):
     company_id: UUID
     invited_issuer: str
     invited_subject: str
+    provider_profile_id: str
     role: str
     token_digest: str
     expires_at: datetime
@@ -291,6 +296,26 @@ class GeneratedArtifactRecord(Protocol):
 
 class ApplicationPersistence(Protocol):
     """Application-facing persistence port implemented by the SQL adapter."""
+
+    def resolve_external_identity(
+        self,
+        profile_id: str,
+        issuer: str,
+        subject: str,
+        display_name: str,
+        *,
+        allow_legacy_local: bool,
+    ) -> tuple[IdentityRecord, bool]: ...
+
+    def add_auth_event(
+        self,
+        profile_id: str,
+        event_type: str,
+        *,
+        identity_id: UUID | None = None,
+        session_id: UUID | None = None,
+        reason: str | None = None,
+    ) -> None: ...
 
     def active_session(
         self, token_digest: str, now: datetime

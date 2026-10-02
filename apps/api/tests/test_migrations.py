@@ -13,7 +13,7 @@ from test_generation import confirmed_case
 from alembic import command
 from apbra_api.bootstrap import bootstrap
 from apbra_api.config import Settings
-from apbra_api.persistence import CaseAccessRow, CaseRow, Database
+from apbra_api.persistence import CaseAccessRow, CaseRow, Database, ExternalIdentityRow
 
 
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
@@ -32,6 +32,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
         "tenant_settings_current",
         "tenant_secret_records",
         "case_clarification_cycles",
+        "authentication_events",
     }.issubset(set(inspector.get_table_names()))
     assert "uq_generation_case_active" in {
         index["name"] for index in inspector.get_indexes("generation_attempts")
@@ -39,7 +40,71 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_06"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+
+
+def test_provider_binding_migration_preserves_legacy_identity_and_round_trips(
+    settings: Settings, database: Database
+) -> None:
+    with database.session() as db:
+        legacy = db.scalar(text("SELECT id FROM external_identities WHERE subject='dev-owner'"))
+        assert legacy is not None
+        profile = db.scalar(
+            text("SELECT provider_profile_id FROM external_identities WHERE id=:id"),
+            {"id": legacy},
+        )
+        assert profile == "legacy-unqualified"
+        membership_count = db.scalar(
+            text("SELECT count(*) FROM memberships WHERE identity_id=:id"), {"id": legacy}
+        )
+        assert membership_count == 1
+    inspector = inspect(database.engine)
+    assert "provider_profile_id" in {
+        column["name"] for column in inspector.get_columns("external_identities")
+    }
+    assert "uq_identity_profile_issuer_subject" in {
+        constraint["name"] for constraint in inspector.get_unique_constraints("external_identities")
+    }
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20261001_06")
+    assert "authentication_events" not in inspect(database.engine).get_table_names()
+    command.upgrade(config, "head")
+    with database.session() as db:
+        assert (
+            db.scalar(
+                text("SELECT count(*) FROM memberships WHERE identity_id=:id"), {"id": legacy}
+            )
+            == 1
+        )
+        assert (
+            db.scalar(
+                text("SELECT provider_profile_id FROM external_identities WHERE id=:id"),
+                {"id": legacy},
+            )
+            == "legacy-unqualified"
+        )
+
+
+def test_provider_binding_downgrade_refuses_legacy_key_collision(
+    settings: Settings, database: Database
+) -> None:
+    with database.session() as db:
+        db.add_all(
+            [
+                ExternalIdentityRow(
+                    provider_profile_id=profile,
+                    issuer="https://issuer.example/tenant",
+                    subject="same-subject",
+                    display_name="Synthetic",
+                )
+                for profile in ("entra-a", "entra-b")
+            ]
+        )
+    config = disposable_alembic_config(settings.database_url)
+    with pytest.raises(RuntimeError, match="legacy issuer/subject key collides"):
+        command.downgrade(config, "20261001_06")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
 
 
 def test_package_c_to_reviewed_design_upgrade_is_isolated(
@@ -47,7 +112,10 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
 ) -> None:
     session = sign_in(client, "member")
     case, contract = confirmed_case(
-        client, session, "Compare completed cases by team.", "cases.csv",
+        client,
+        session,
+        "Compare completed cases by team.",
+        "cases.csv",
         b"Team,Completed\nA,4\nB,7\n",
     )
     generated = client.post(
@@ -88,8 +156,10 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
     with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20260929_04"
         historical = db.execute(
-            text("SELECT status, artifact_id, reviewed_design_id "
-                 "FROM generation_attempts WHERE id=:id"),
+            text(
+                "SELECT status, artifact_id, reviewed_design_id "
+                "FROM generation_attempts WHERE id=:id"
+            ),
             {"id": original["id"]},
         ).one()
         assert historical.status == "SUCCEEDED"
@@ -97,7 +167,7 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
         assert historical.reviewed_design_id is None
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261001_06"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
     # The deliberate downgrade removed the new tenant-settings tables. Re-seed
     # only this disposable test tenant before exercising the restored API.
     bootstrap(settings, database)

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -146,6 +147,60 @@ class ClarificationPolicy(BaseModel):
     max_answer_characters: int = Field(ge=100, le=20_000)
 
 
+class QualifiedIdentityProvider(BaseModel):
+    """Deployment-owned OIDC trust. No company or browser may create this profile."""
+
+    model_config = ConfigDict(extra="forbid")
+    profile_id: str = Field(pattern=r"^[a-z][a-z0-9_-]{2,63}$")
+    display_label: str = Field(min_length=1, max_length=100)
+    provider_kind: Literal["ENTRA_EXTERNAL_ID"]
+    issuer: str
+    discovery_url: str
+    client_id: str = Field(min_length=1, max_length=255)
+    scopes: list[str] = Field(default_factory=lambda: ["openid", "profile"])
+    enabled: bool = True
+    credential_env: str | None = Field(default=None, pattern=r"^APBRA_OIDC_CREDENTIAL_[A-Z0-9_]+$")
+    allowed_endpoint_origins: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_trust(self) -> "QualifiedIdentityProvider":
+        issuer = _parsed_absolute_url(self.issuer, https_only=True)
+        discovery = _parsed_absolute_url(self.discovery_url, https_only=True)
+        if issuer.query or issuer.fragment:
+            raise ValueError("qualified issuer must be an exact HTTPS authority")
+        origins = [f"{issuer.scheme}://{issuer.netloc}"]
+        for value in self.allowed_endpoint_origins:
+            parsed = _parsed_absolute_url(value, https_only=True)
+            if parsed.path not in {"", "/"} or parsed.query:
+                raise ValueError("allowed endpoint origins must be HTTPS origins")
+            origins.append(f"{parsed.scheme}://{parsed.netloc}")
+        if len(set(origins)) != len(origins):
+            raise ValueError("duplicate trusted endpoint origin")
+        if f"{discovery.scheme}://{discovery.netloc}" not in origins:
+            raise ValueError("discovery origin must be qualified")
+        if "openid" not in self.scopes or len(set(self.scopes)) != len(self.scopes):
+            raise ValueError("OIDC scopes must include openid and be unique")
+        if not set(self.scopes).issubset({"openid", "profile", "email"}):
+            raise ValueError("basic APBRA sign-in cannot request integration scopes")
+        self.allowed_endpoint_origins = origins[1:]
+        return self
+
+    def permits_endpoint(self, value: str) -> bool:
+        parsed = _parsed_absolute_url(value, https_only=True)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        trusted = {f"{urlparse(self.issuer).scheme}://{urlparse(self.issuer).netloc}"}
+        trusted.update(self.allowed_endpoint_origins)
+        return origin in trusted and not parsed.fragment
+
+    def credential(self) -> str | None:
+        if self.credential_env is None:
+            return None
+        value = os.environ.get(self.credential_env)
+        if not value:
+            raise ValueError("qualified OIDC credential reference is unavailable")
+        return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APBRA_", env_file=".env", extra="ignore")
 
@@ -180,6 +235,7 @@ class Settings(BaseSettings):
     oidc_authorization_endpoint: str | None = None
     oidc_token_endpoint: str | None = None
     oidc_client_secret: str | None = Field(default=None, repr=False)
+    oidc_profiles_json: str | None = Field(default=None, repr=False)
     oidc_response_issuer_policy: Literal["required", "single_issuer_compatibility"] = "required"
     oidc_authorization_response_iss_parameter_supported: bool = True
 
@@ -207,22 +263,17 @@ class Settings(BaseSettings):
         if self.profile == "hosted":
             if self.bootstrap_enabled:
                 raise ValueError("development bootstrap is forbidden in hosted profile")
-            if not all(
-                (
-                    self.oidc_issuer,
-                    self.oidc_jwks_json,
-                    self.oidc_authorization_endpoint,
-                    self.oidc_token_endpoint,
-                )
+            profiles = self.identity_profiles()
+            if not any(profile.enabled for profile in profiles):
+                raise ValueError("hosted profile requires a qualified enabled identity provider")
+            if (
+                self.oidc_response_issuer_policy == "single_issuer_compatibility"
+                and sum(profile.enabled for profile in profiles) != 1
             ):
-                raise ValueError("hosted profile requires external OIDC endpoints and JWKS")
-            for endpoint in (
-                self.oidc_issuer,
-                self.oidc_authorization_endpoint,
-                self.oidc_token_endpoint,
-            ):
-                assert endpoint is not None
-                _parsed_absolute_url(endpoint, https_only=True)
+                raise ValueError("response-issuer compatibility requires one enabled provider")
+            for provider in profiles:
+                if provider.enabled:
+                    provider.credential()
             if "local" in self.session_secret.lower():
                 raise ValueError("hosted profile requires a non-development session secret")
         # Provider/profile/credential policy belongs to the effective tenant
@@ -277,6 +328,19 @@ class Settings(BaseSettings):
             raise ProviderConfigurationError("MODEL_CREDENTIAL_MISSING")
         return value
 
+    def identity_profiles(self) -> tuple[QualifiedIdentityProvider, ...]:
+        if not self.oidc_profiles_json:
+            return ()
+        try:
+            profiles = TypeAdapter(list[QualifiedIdentityProvider]).validate_json(
+                self.oidc_profiles_json
+            )
+        except ValidationError as exc:
+            raise ValueError("qualified identity provider catalogue is invalid") from exc
+        if len({profile.profile_id for profile in profiles}) != len(profiles):
+            raise ValueError("qualified identity provider IDs are duplicated")
+        return tuple(profiles)
+
     @property
     def issuer(self) -> str:
         if self.profile in {"development", "test"}:
@@ -312,6 +376,24 @@ class Settings(BaseSettings):
                 "token_endpoint": self.oidc_token_endpoint,
                 "jwks": self.oidc_jwks_json,
                 "client_secret": self.oidc_client_secret,
+                "response_issuer_policy": self.oidc_response_issuer_policy,
+                "response_issuer_supported": (
+                    self.oidc_authorization_response_iss_parameter_supported
+                ),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hmac.new(self.session_secret.encode(), payload, hashlib.sha256).hexdigest()
+
+    def identity_profile_digest(self, profile: QualifiedIdentityProvider | None) -> str:
+        if profile is None:
+            return self.oidc_configuration_digest
+        payload = json.dumps(
+            {
+                "profile": profile.model_dump(mode="json"),
+                "credential": profile.credential(),
+                "redirect_uri": self.callback_url,
                 "response_issuer_policy": self.oidc_response_issuer_policy,
                 "response_issuer_supported": (
                     self.oidc_authorization_response_iss_parameter_supported

@@ -50,6 +50,32 @@ def test_single_use_digest_only_invitation_acceptance(
     assert raw not in str(repeated.json())
 
 
+def test_invitation_profile_mismatch_cannot_join_with_same_issuer_subject(
+    settings: Settings, database: Database
+) -> None:
+    owner = TestClient(create_app(settings=settings, database=database))
+    owner_session = sign_in(owner, "owner")
+    issued = owner.post(
+        "/api/invitations",
+        json={"subject": "dev-uninvited", "role": "MEMBER"},
+        headers=csrf(owner_session),
+    ).json()
+    with database.session() as db:
+        row = db.get(InvitationRow, UUID(issued["invitation"]["id"]))
+        assert row is not None and row.provider_profile_id == "legacy-unqualified"
+        row.provider_profile_id = "different-qualified-profile"
+    invited = TestClient(create_app(settings=settings, database=database))
+    invited_session = sign_in(invited, "uninvited")
+    assert (
+        invited.post(
+            "/api/invitations/accept",
+            json={"token": issued["token"]},
+            headers=csrf(invited_session),
+        ).status_code
+        == 410
+    )
+
+
 def test_expired_invitation_is_terminal(settings: Settings, database: Database) -> None:
     owner = TestClient(create_app(settings=settings, database=database))
     session = sign_in(owner, "owner")
@@ -143,9 +169,7 @@ def test_active_member_cannot_accept_cross_company_membership(
         headers=csrf(foreign_session),
     )
     assert rejected.status_code == 409
-    assert sign_in(TestClient(create_app(settings=settings, database=database)), "foreign")[
-        "actor"
-    ]
+    assert sign_in(TestClient(create_app(settings=settings, database=database)), "foreign")["actor"]
 
 
 def test_concurrent_cross_company_acceptance_creates_one_active_membership(
@@ -173,11 +197,15 @@ def test_concurrent_cross_company_acceptance_creates_one_active_membership(
 
     def accept(index: int) -> int:
         barrier.wait()
-        return clients[index].post(
-            "/api/invitations/accept",
-            json={"token": invitations[index]["token"]},
-            headers=csrf(sessions[index]),
-        ).status_code
+        return (
+            clients[index]
+            .post(
+                "/api/invitations/accept",
+                json={"token": invitations[index]["token"]},
+                headers=csrf(sessions[index]),
+            )
+            .status_code
+        )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         statuses = list(pool.map(accept, range(2)))
@@ -199,9 +227,7 @@ def test_concurrent_cross_company_acceptance_creates_one_active_membership(
         rows = list(
             db.scalars(
                 select(InvitationRow).where(
-                    InvitationRow.id.in_(
-                        [UUID(item["invitation"]["id"]) for item in invitations]
-                    )
+                    InvitationRow.id.in_([UUID(item["invitation"]["id"]) for item in invitations])
                 )
             )
         )
@@ -238,11 +264,15 @@ def test_concurrent_distinct_same_company_invitations_conflict_explicitly(
 
     def accept(index: int) -> int:
         barrier.wait()
-        return clients[index].post(
-            "/api/invitations/accept",
-            json={"token": invitations[index]["token"]},
-            headers=csrf(sessions[index]),
-        ).status_code
+        return (
+            clients[index]
+            .post(
+                "/api/invitations/accept",
+                json={"token": invitations[index]["token"]},
+                headers=csrf(sessions[index]),
+            )
+            .status_code
+        )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         statuses = list(pool.map(accept, range(2)))
@@ -264,9 +294,7 @@ def test_concurrent_distinct_same_company_invitations_conflict_explicitly(
         rows = list(
             db.scalars(
                 select(InvitationRow).where(
-                    InvitationRow.id.in_(
-                        [UUID(item["invitation"]["id"]) for item in invitations]
-                    )
+                    InvitationRow.id.in_([UUID(item["invitation"]["id"]) for item in invitations])
                 )
             )
         )

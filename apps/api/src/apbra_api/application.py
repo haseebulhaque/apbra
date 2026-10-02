@@ -272,7 +272,11 @@ class InvitationService:
             raise InvitationInvalid()
         if row.revoked_at is not None or row.expires_at <= datetime.now(UTC):
             raise InvitationInvalid()
-        if row.invited_subject != identity.subject or row.invited_issuer != identity.issuer:
+        if (
+            row.invited_subject != identity.subject
+            or row.invited_issuer != identity.issuer
+            or row.provider_profile_id != identity.provider_profile_id
+        ):
             raise InvitationInvalid()
         store.lock_identity_for_membership(identity.id)
         active_membership = store.active_identity_membership(identity.id)

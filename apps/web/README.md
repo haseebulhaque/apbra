@@ -1,5 +1,13 @@
 # APBRA MVP-1 web application
 
+## APBRA-172 sign-in and membership boundary
+
+The sign-in screen gets qualified provider labels and the local/test identity-selector capability from `GET /api/auth/providers`. Browser hostname, storage, query strings and UI route visibility are not security controls. Hosted mode supplies only deployment-qualified provider labels and has no deterministic selector. A configured Entra External ID email or OTP user flow must be labelled for that actual experience; this UI does not claim workforce Microsoft federation merely because the underlying service is Microsoft.
+
+The browser follows a server-owned authorization-code/PKCE redirect and receives an HttpOnly APBRA session cookie after the server callback. It never stores an external ID/access/refresh token or receives the provider subject in `/api/auth/session`. Existing active membership enters the workspace; multiple active memberships require explicit server-checked selection. An invitation remains exact, single-use and separately accepted. A valid identity without membership sees a truthful **Create Company / Workspace** handoff with a disabled action until APBRA-151 implements the authoritative company and first-owner transaction. Inactive membership cannot use protected resources. Sign out revokes the APBRA session; it does not promise global identity-provider logout.
+
+Browser, API and PostgreSQL tests exercise deterministic OIDC metadata, signing keys, rotation, binding and negative authority cases. They do not establish a live Entra External ID login, real MFA, customer federation or hosted readiness. APBRA-173 deployment and APBRA-151 company creation remain separate.
+
 ## Current APBRA-174 protected experience
 
 The active invited-case workspace permits zero or optional model-generated clarification questions. Optional unanswered questions do not block an otherwise ready acceptance; users can explicitly Clarify/Enhance within the versioned tenant policy (initially two rounds per cycle and ten rounds overall). The accepted interpretation shows supported scope and any omissions/limitations. Material input or settings changes stale acceptance; mandatory blockers still require a supported correction or authorized expert route.
@@ -115,11 +123,11 @@ Expandable technical evidence records run ID, model, latency/tokens, embedding c
 
 Implemented locally/CI does not mean production ready. The current protected credential adapter is not hosted managed-secret qualification. Live Entra qualification, hosted multitenancy, durable knowledge ingestion/indexing, managed secret operations, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.
 
-## Target hosted sign-in and first-company onboarding — not implemented in this local preview
+## Target hosted sign-in and first-company onboarding — qualification and APBRA-151 pending
 
-The local/CI preview still uses its bounded development identity flow. The accepted hosted product direction is provider-neutral: the sign-in surface can present qualified providers, with Microsoft Entra External ID first under APBRA-172 and other providers added only after separate qualification.
+The local/CI preview still uses its bounded development identity flow. The implemented sign-in surface now presents only server-supplied qualified profiles, with an Entra External ID-compatible OIDC adapter first under APBRA-172. Real External ID tenant setup and live sign-in qualification have not occurred. Other providers require separate qualification.
 
-After successful provider authentication, the browser must not decide membership or role. The server resolves an existing APBRA membership or eligible invitation; otherwise the UI may offer **Create Company / Workspace**. Successful creation results in the server-created company and initial `COMPANY_OWNER` membership. Equal email/domain/tenant/group values are not enough to auto-join or elevate a user.
+After successful provider authentication, the browser does not decide membership or role. The server resolves an existing APBRA membership; an exact invitation can be accepted separately. Otherwise the UI shows **Create Company / Workspace** as not yet available. A future APBRA-151 implementation must create the company and initial `COMPANY_OWNER` membership transactionally. Equal email/domain/tenant/group values are not enough to auto-join or elevate a user.
 
 The web experience should clearly distinguish **Sign in**, **Join invited company**, **Create company/workspace**, and later enterprise-managed sign-in. Power BI/Fabric connection consent and Azure management consent remain separate journeys. Verified-domain join, SCIM/JIT and additional social providers are later qualified capabilities, not hidden behavior in the current local selector.
 
