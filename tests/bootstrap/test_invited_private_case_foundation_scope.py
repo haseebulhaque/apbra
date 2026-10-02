@@ -335,6 +335,11 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "apbra-175-subscription-entitlement-feature-gating",
             "apbra-176-owner-onboarding-identity",
             "apbra-176-owner-onboarding-requirements",
+            "apbra-172-identity-rbac",
+            "apbra-172-data-integration-identity-audit",
+            "apbra-172-business-functional-requirements",
+            "apbra-172-multi-tenancy-isolation",
+            "apbra-172-platform-identity-deployment-adrs",
         ]
         self.assertEqual([source["id"] for source in self.sources["sources"]], expected_ids)
         source_map = {source["id"]: source for source in self.sources["sources"]}

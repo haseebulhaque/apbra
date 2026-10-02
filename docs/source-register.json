@@ -235,7 +235,7 @@
     {
       "id": "mvp1-business-friendly-ux-application-shell",
       "content_id": "APBRA-169",
-      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell — Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
+      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell \u2014 Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
       "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-169 business-friendly UX and application shell",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-169",
       "status": "ACCEPTED",
@@ -330,6 +330,51 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362",
       "status": "ACCEPTED",
       "acceptance": "The 2026-10-02 owner refinement maps PC26-FR-008 to APBRA-151 company lifecycle and APBRA-172 provider-neutral SSO with Microsoft Entra External ID first, under APBRA-160. Resolve membership or invitation before Create Company / Workspace; server creates company and initial COMPANY_OWNER atomically. Other providers, verified-domain join and enterprise SSO/SCIM/JIT need separate qualification. Private preview may stay allow-listed. Target requirements are not live Entra, public signup, Power BI Desktop, publishing or production evidence."
+    },
+    {
+      "id": "apbra-172-identity-rbac",
+      "content_id": "4030847",
+      "version": 4,
+      "section": "10.03 - Identity, Authentication, Authorisation & RBAC",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 10.03 - Identity, Authentication, Authorisation & RBAC v4 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
+    },
+    {
+      "id": "apbra-172-data-integration-identity-audit",
+      "content_id": "4063348",
+      "version": 4,
+      "section": "02.05 - Data, Integration, Identity & Audit Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 02.05 - Data, Integration, Identity & Audit Requirements v4 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
+    },
+    {
+      "id": "apbra-172-business-functional-requirements",
+      "content_id": "3932362",
+      "version": 7,
+      "section": "02.01 - Business & Functional Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 02.01 - Business & Functional Requirements v7 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
+    },
+    {
+      "id": "apbra-172-multi-tenancy-isolation",
+      "content_id": "4063408",
+      "version": 5,
+      "section": "04.05 - Multi-Tenant SaaS & Tenant Isolation",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063408",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 04.05 - Multi-Tenant SaaS & Tenant Isolation v5 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
+    },
+    {
+      "id": "apbra-172-platform-identity-deployment-adrs",
+      "content_id": "3932483",
+      "version": 4,
+      "section": "05.06 - Platform / Cloud / Data / Identity / Deployment ADRs",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932483",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 05.06 - Platform / Cloud / Data / Identity / Deployment ADRs v4 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

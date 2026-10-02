@@ -64,7 +64,7 @@ class OwnerOnboardingIdentityDocsScopeTests(unittest.TestCase):
                 self.assertEqual((source["content_id"], source["version"], source["status"]),
                                  (content_id, version, "ACCEPTED"))
                 self.assertEqual(digest(source), expected)
-        self.assertEqual([x["id"] for x in self.sources["sources"][-2:]],
+        self.assertEqual([x["id"] for x in self.sources["sources"][-7:-5]],
                          self.task["source_ids"])
 
     def test_separate_registration_and_docs(self):
@@ -112,7 +112,7 @@ class OwnerOnboardingIdentityDocsScopeTests(unittest.TestCase):
                     self.assertIn("File outside active task scope: README.md", errors)
                     (root / self.task_path).write_text(json.dumps(self.task))
             changed = copy.deepcopy(self.sources)
-            changed["sources"][-1]["acceptance"] += " altered"
+            next(x for x in changed["sources"] if x["id"] == c.OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID)["acceptance"] += " altered"
             (root / self.source_path).write_text(json.dumps(changed))
             errors = self.check(root, {"README.md"})
             self.assertTrue(any("APBRA-176 source differs from accepted provenance" in e for e in errors), errors)
