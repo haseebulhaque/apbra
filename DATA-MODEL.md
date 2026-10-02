@@ -88,3 +88,17 @@ The earlier delivery mapping identified APBRA-34 (versioned requirements), APBRA
 The accepted `DATA-001`–`DATA-010` and `DATA-020`–`DATA-023` identifiers remain requirement-traceability labels. This reconciliation clarifies their present implementation status; it does not rename them, mark them delivered or turn their target concepts into an installed schema.
 
 This APBRA-175 document change authorises no tables, migrations, persistence APIs, model-type renames or source changes. Bounded application persistence and authorization already exist in local/CI; production deployment, complete audit/retention/deletion, backup/DR and recovery require separate accepted contracts and evidence. The engineering metadata schemas under `contracts/engineering/` are distinct from the application store.
+
+## APBRA-176 target identity and company-bootstrap semantics — not yet implemented
+
+The 2 October 2026 owner decision adds target semantics around the existing bounded invited-membership model. These are architecture requirements, not a claim that the current database already contains every field/table below.
+
+- **External identity binding:** persist a stable qualified provider/profile identity key, using validated issuer plus subject/object identity or an equivalent stable provider key. Email/UPN is profile data, not the durable security key.
+- **Company:** an APBRA company/workspace is an application security/governance domain with its own stable identifier. It is not an Entra tenant, Google Workspace, Azure subscription or Power BI workspace.
+- **Membership:** role/capability membership remains APBRA-authoritative. Authentication creates no membership by itself.
+- **Invitation:** an eligible invitation may create the exact intended membership after authentication; expiration, revocation, replay and identity mismatch fail closed.
+- **First-company bootstrap:** if the authenticated user has no applicable membership/invitation and chooses Create Company / Workspace, company creation plus the initial `COMPANY_OWNER` membership must commit transactionally and idempotently with auditable actor provenance.
+- **Resource grant:** private report/case/project access is evaluated separately from company membership and separately from commercial entitlement.
+- **Account linking:** identities from different providers/issuers never merge solely because their email values match. Linking requires an explicit verified process.
+
+Future verified-domain auto-join, enterprise SSO and SCIM/JIT may add mappings/policies but must not overwrite the core provider-neutral identity/company/resource model. Microsoft Entra External ID is the first planned live provider profile, not a required persistence model or Azure-only domain dependency.
