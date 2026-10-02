@@ -14,13 +14,21 @@ An active invited member can create a case without a project or file, list only 
 
 Invitation bearer secrets are accepted only from the URL fragment of an original `/invite#token=...` link, removed from the address immediately, and sent in the body of fixed-path POST requests. A signed-out browser does not persist or forward the token through login; the user must sign in and reopen the original invitation link.
 
-This React/Vite application is a working bounded enterprise Power BI automation prototype. It separates the business workspace from tenant administration.
+This React/Vite application is a working bounded local/CI business workspace with Power BI candidate generation as its current output adapter. It separates business work from protected tenant administration; it is not a production Cloud, Dedicated or Private deployment.
 
 It is not the complete `APBRA-PRODUCT-2026-09-22` experience. The current UI and the accepted target are distinguished below.
 
-## User experience
+## Accepted portable product UX — future
 
-Business users use **Create Report** and **My Runs**. Business Mode is default: a run accepts a free-text requirement and synthetic CSV/XLSX data, asks bounded material business questions, interprets natural-language answers, presents a business summary and requires explicit confirmation before ConfirmedRequirementContract v2. Readiness and confirmation use the same deterministic semantic prerequisites and are bound to the exact interpretation and material input context shown to the user. Advanced/BI Mode accepts optional supported technical preferences without forcing manual report design.
+[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) accepts APBRA Cloud, Dedicated and qualified Private / On-Premises deployment profiles; air-gapped operation remains future and requires explicit qualification. Azure is a reference/private-preview choice, not a required product host. The current browser/API pair is local/CI evidence only. Customer case content, prompts, evidence, reports, Delivery Guides, Tenant Settings and secrets stay in the selected customer data plane; a future central commercial control plane may hold only minimum deployment/licence metadata. `deployment_id` identifies an installation, whereas `tenant_id` identifies its company security domain.
+
+[Confluence 04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) defines future Subscription → versioned Entitlements → stable Capabilities. Effective access also requires installed platform support, Tenant Settings, user/application and resource permissions, and current safety/validation/governance. A future UI should explain whether a capability is commercially unavailable, disabled by policy, unauthorized, technically unsupported or failed validation without leaking protected administrative detail. Paid access never grants private-case, publishing or release authority. The present settings panel is not a subscription/entitlement administration system; exact plans, prices and limits remain undecided.
+
+Current candidate output is bounded PBIP/PBIR/TMDL. [Confluence 03.06 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/7864321) and APBRA-165 describe future ARD/native rendering, live canvas and other adapters; they are not current UI behavior. No Desktop-runtime PASS, PBIX generation or connected publishing is inferred. NO HARDCODING keeps tenant/provider/deployment/commercial choices governed; fixed permission and validation contracts remain fixed.
+
+## Historical Capstone user experience
+
+In the earlier browser prototype, business users used **Create Report** and **My Runs**. Business Mode was default: a run accepted a free-text requirement and synthetic CSV/XLSX data, asked bounded material business questions, interpreted natural-language answers, presented a business summary and required explicit confirmation before ConfirmedRequirementContract v2. Advanced/BI Mode accepted optional supported technical preferences without forcing manual report design. In the later protected application, readiness and confirmation use the same deterministic semantic prerequisites and bind the exact interpretation and material input context shown to the user.
 
 The historical prototype allowed administrators to inspect Tenant Settings, AI & Models, Governed Knowledge, Branding & Report Standards, and Guardrails & Generation. Those older controls were local browser settings, unlike the APBRA-174 protected, durable tenant settings panel. Reporting cases and their request versions are durable; the separate historical **My Runs** view remains browser-session-only evidence.
 
@@ -32,9 +40,11 @@ The target keeps material business decisions understandable and explicit while l
 
 Later account UX still covers public company registration, authorized BI-expert takeover, optional projects, controlled collaboration, report/output histories, licensing/seat entitlement and usage visibility. APBRA-162 implements only invite-bound membership and private reporting cases. Company membership, a mode, licence or model key does not itself grant private-source, tenant-management, release or deployment authority.
 
-Qualified model profiles, separately consented Azure provisioning, connected Power BI delivery and optional advanced data-architecture advice remain future capabilities. The current local administration screens do not prove any of them. APBRA-149–158 are planning items, not implemented UI.
+Qualified tenant provider-profile selection and protected credentials now exist in the local/CI foundation. Additional managed/customer deployment qualification, separately consented Azure provisioning where that reference profile is chosen, connected Power BI delivery and optional advanced data-architecture advice remain future capabilities. The current local administration screens do not prove them. The earlier APBRA-149–158 roadmap list is not implementation evidence for this UI.
 
-## Implemented workflow
+## Historical Capstone reasoning and compiler workflow
+
+The following GPT-4.1/Capstone pipeline is historical evidence. The current protected case path is described at the top; its local/CI Package B/C substitutes are deterministic and make no provider call.
 
 ```text
 requirement + parsed schema
@@ -57,7 +67,7 @@ Changing the request, parsed schema, governed context or interpretation invalida
 
 ## Run locally
 
-Start the local API and PostgreSQL services as described in the repository README. Copy `.env.example` to ignored `.env.local`; `APBRA_API_URL` is a non-secret local proxy target. Existing optional Azure AI configuration remains server-side and is not required for case persistence tests. The browser never displays an API key.
+Start the local API and PostgreSQL services as described in the repository README. Copy `.env.example` to ignored `.env.local`; `APBRA_API_URL` is a non-secret local proxy target. Qualified tenant model-provider configuration remains server-side and is not required for case persistence tests. The browser never displays an API key.
 
 ```sh
 npm ci
@@ -66,7 +76,7 @@ npm run build
 npm run dev
 ```
 
-Vite normally serves `http://127.0.0.1:5173/`. Packages B and C make no paid or live model call. The clearly labelled deterministic local interpretation can proceed directly when the request identifies one observed numeric business measure and one observed comparison category. The Package C adapter maps the resulting typed, confirmed obligations into the existing ReportDesign contract, then runs the existing governed retrieval, normalization, guardrails, compiler and candidate validation. These substitutes prove persistence and control mechanics; successful renamed-field examples do not prove arbitrary business requirements are understood or professionally designed by AI. Real AI integration and semantic-quality evaluation remain pending.
+Vite normally serves `http://127.0.0.1:5173/`. Packages B and C make no paid or live model call. The clearly labelled deterministic local interpretation can proceed directly when the request identifies one observed numeric business measure and one observed comparison category. The Package C adapter maps the resulting typed, confirmed obligations into the existing ReportDesign contract, then runs the existing governed retrieval, normalization, guardrails, compiler and candidate validation. These substitutes prove persistence and control mechanics; successful renamed-field examples do not prove arbitrary business requirements are understood or professionally designed by AI. A qualified real-provider path exists, but these deterministic local/CI substitutes do not establish real-model semantic quality; live provider/model evaluation remains pending.
 
 For a short manual checkpoint, sign in as `member`, create a case without a file, save a message, and add a synthetic CSV or XLSX containing one numeric and one category field. Choose **Prepare understanding**; answer any material clarification, review the labelled local deterministic understanding, and confirm it. Choose **Build report**, inspect the successful version in generation history and download the validated candidate ZIP. Refresh or restart the API and reopen the case to verify the history and download remain. **Build another version** creates a new immutable attempt. Editing the request or adding current-version evidence makes the earlier meaning stale and requires preparation and confirmation before another build.
 
@@ -85,9 +95,9 @@ npm run test:e2e
 
 Test traces are written outside the repository under `/tmp/apbra-164-playwright-output` by default. Test evidence and generated artifacts also use dedicated `/tmp/apbra-164-e2e-*` roots. Set `APBRA_E2E_OUTPUT_DIR` to another disposable location when needed. These tests may reset only the isolated E2E database; they do not stop, reuse or alter the manual preview database or storage.
 
-## AI and governed knowledge
+## Historical Capstone AI and governed knowledge
 
-The chat adapter uses GPT-4.1 through an Azure AI Foundry/Azure OpenAI-compatible endpoint; live evidence observed `gpt-4.1-2025-04-14`. Five fictional Markdown standards under `knowledge/` form a 20-chunk heading-aware governed corpus. `text-embedding-3-small` produces 1,536-dimensional embeddings, and an in-memory exact cosine index returns configurable top-k citations.
+The Capstone chat adapter used GPT-4.1 through an Azure AI Foundry/Azure OpenAI-compatible endpoint; its live evidence observed `gpt-4.1-2025-04-14`. Five fictional Markdown standards under `knowledge/` form a 20-chunk heading-aware governed corpus. `text-embedding-3-small` produces 1,536-dimensional embeddings, and an in-memory exact cosine index returns configurable top-k citations.
 
 This is APBRA's in-app retrieval implementation, not the historical S08 Foundry Knowledge store. Uploaded report schemas remain request-specific context and are not indexed as tenant knowledge.
 
@@ -97,15 +107,10 @@ The bounded compiler supports common cards, bar/column/line charts, tables, slic
 
 Strict integrity checks cover measure identity and operands, dependency cycles, visual references and visual cardinality. Pages use a 1,280 × 720 bounded grid; a layout without deterministic capacity stops before compilation.
 
-Successful runs expose:
-
-- A generated Power BI project candidate for Desktop validation.
-- Lazy-loaded `Report-Deployment-Guide.pdf`, dynamically populated with report-specific handover guidance.
-
-The PDF does not mean deployment occurred. Production publishing, credentials and gateway configuration remain manual/future capabilities.
+The current protected local/CI candidate ZIP contains bounded Power BI project content and an exact-version-bound `Delivery-Guide.md`. Historical Capstone runs separately exposed a generated project candidate and lazy-loaded `Report-Deployment-Guide.pdf`. Neither guide nor candidate means Desktop validation, approval or deployment occurred. Production publishing, credentials and gateway configuration remain manual/future capabilities.
 
 ## Technical evidence and claim boundary
 
 Expandable technical evidence records run ID, model, latency/tokens, embedding calls, retrieval/citations, original and normalized visual counts, normalization actions, integrity findings, guardrails, compiler, validation and final status.
 
-Implemented locally does not mean production ready. Live Entra qualification, hosted multitenancy, durable knowledge ingestion/indexing, managed secrets, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.
+Implemented locally/CI does not mean production ready. The current protected credential adapter is not hosted managed-secret qualification. Live Entra qualification, hosted multitenancy, durable knowledge ingestion/indexing, managed secret operations, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.

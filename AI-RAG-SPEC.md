@@ -6,11 +6,11 @@ The qualified model analyzes the current request, schema, accepted answers, refe
 
 Provider profile identity and protected credential reference are tenant settings, while the actual credential is encrypted in server-side storage with a deployment keyring. Profile and credential validation precede activation; no provider/model/region is inferred. Governed retrieval and ReportDesign proposals remain untrusted and undergo deterministic validation, including supported-scope and namespace checks. The provider-specific historical evidence below must not be read as a universal provider default.
 
-This document describes the current in-app Capstone implementation and the accepted, separately unimplemented `APBRA-PRODUCT-2026-09-22` AI/knowledge target.
+The current protected application is the APBRA-174 local/CI case foundation described above. The provider-specific call and governed-corpus details below preserve historical Capstone evidence; accepted product and deployment architecture remain separate from current runtime support.
 
-## Current AI profile
+## Historical Capstone AI profile
 
-The adapter uses an Azure AI Foundry/Azure OpenAI-compatible endpoint. The configured chat deployment is GPT-4.1; live evidence observed `gpt-4.1-2025-04-14`. Embeddings use `text-embedding-3-small` with 1,536 dimensions. Secrets remain server-side in the ignored local environment configuration.
+The Capstone adapter used an Azure AI Foundry/Azure OpenAI-compatible endpoint. The configured chat deployment is GPT-4.1; live evidence observed `gpt-4.1-2025-04-14`. Embeddings use `text-embedding-3-small` with 1,536 dimensions. Secrets remained server-side in the ignored local environment configuration.
 
 GPT is responsible for domain-neutral requirement interpretation, material-ambiguity detection, bounded iterative clarification, natural-language answer interpretation and grounded ReportDesign. Business Mode is default; Advanced/BI Mode accepts optional preferences. Human confirmation creates the authority boundary; deterministic code decides state validity, obligation preservation, references, measures, capability, guardrails, compiler validity and candidate validity.
 
@@ -56,9 +56,15 @@ These controls describe the accepted target and are **planned**, not capabilitie
 - Mandatory-policy coverage cannot depend only on similarity top-k. Failure to retrieve a mandatory policy is not permission to proceed without it.
 - A compliant revised business approach requires explicit acceptance of its material meaning. User acceptance or BI-expert assignment cannot waive mandatory policy; unresolved policy authority is referred to the authorised policy owner.
 
-The target supports qualified APBRA-managed and customer-managed model profiles, including approved private/local profiles where feasible. Each profile requires explicit provider/model/capability, data-handling, identity, quota, cost and failure-mode qualification. Separately consented customer Azure provisioning is a future management capability; a model inference key, company membership or UI mode grants no such authority.
+The target supports qualified APBRA-managed and customer-managed model profiles, including approved private/local profiles where feasible. Each profile requires explicit provider/model/capability, data-handling, identity, quota, cost and failure-mode qualification. Separately consented customer Azure provisioning applies only where that reference profile is chosen and remains a future management capability; a model inference key, company membership or UI mode grants no such authority.
 
 Cross-cutting controls include prompt-injection and retrieval safety, structured-output evaluation, red teaming, traceability, reliability and cost visibility. No provider, model, region, routing rule, price, SLA or numerical limit is selected merely by documenting the target.
+
+## Deployment-qualified model boundary — accepted future architecture
+
+[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) makes model reachability, egress, identity, storage and protected secrets part of each qualified deployment profile. APBRA Cloud, Dedicated and qualified Private / On-Premises may use different approved model and secret backends; air-gapped inference is future and must be proven without an implicit public-service fallback. Azure AI Foundry/Azure OpenAI is historical Capstone evidence and a possible reference profile, not a mandatory core provider. The current local/CI tenant can select only an explicitly qualified provider profile with a protected credential; an unavailable provider fails visibly rather than silently choosing another model or deterministic business interpretation.
+
+The deployment bootstrap selects infrastructure and trusted provider qualifications; Tenant Settings selects permitted operating policy within that envelope. Customer prompts, conversation, source data, reference content and secrets remain in the selected customer data plane subject to explicitly qualified inference egress. They are not subscription-validation payloads for a future central control plane. Subscription entitlements may bound commercial availability but never grant private-case access, source permission, trusted-author status or a validation waiver. Provider/model/endpoint/region/budget choices must be explicit and governed. NO HARDCODING applies to those customer-varying choices, while typed output, authorization, provenance, safety and deterministic validation remain fixed contracts.
 
 ## Evaluation boundary
 

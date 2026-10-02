@@ -2,9 +2,13 @@
 
 Capstone is complete/submitted. The bounded MVP baseline is working and product development continues. This is not a production-readiness claim.
 
-## Completed Capstone capabilities
+## Current protected local/CI foundation
 
-| Gate | Current result | Evidence boundary |
+Merged protected-case work through APBRA-174 added server-derived invited identity, private-case authorization, PostgreSQL-backed request/conversation/evidence and immutable generation history, Owner/Admin governed Tenant Settings, protected credential references, optional model-led clarification, exact-version acceptance and bounded validated Power BI PBIP/PBIR/TMDL candidates with `Delivery-Guide.md`. Local/CI deterministic tests verify these bounded controls; they do not establish real-provider quality, Desktop runtime PASS, hosted tenant isolation, production recovery or successful deployment. The completed Capstone evidence below is a separate earlier result, not a current provider execution.
+
+## Historical completed Capstone capabilities
+
+| Historical gate | Capstone result | Evidence boundary |
 | --- | --- | --- |
 | AI interpretation | PASS | Real GPT-4.1 interpreted the requirement and supplied schema metadata |
 | Iterative clarification | PASS | Business-language clarification and natural-language answers |
@@ -40,7 +44,15 @@ Test totals are revision-specific and must be refreshed after changes.
 
 ## Production acceptance remains open
 
-The prototype does not satisfy production acceptance for identity/RBAC, multitenancy and tenant isolation, durable knowledge lifecycle, managed secrets, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations or commercial operations.
+The protected local/CI application now has bounded identity, private-case tenant isolation, durable PostgreSQL case/evidence/settings/generation records and encrypted tenant credentials. Production acceptance remains open for hosted identity/tenancy qualification, managed secret/storage operations, durable knowledge lifecycle, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations and commercial operations.
+
+## APBRA-175 architecture is not a current MVP acceptance gate
+
+[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) accepts APBRA Cloud, Dedicated and qualified Private / On-Premises target profiles, with air-gapped operation only after later qualification. Azure is a reference/private-preview choice, not mandatory core infrastructure. A future central commercial control plane holds minimum deployment/licence metadata; customer content remains in its selected data plane, with `deployment_id` separate from `tenant_id`.
+
+[Confluence 04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) accepts Subscription → versioned Entitlements → stable Capabilities. Effective capability intersects installed platform support, entitlement, Tenant Settings, user/application and resource permission, and current safety/validation/governance. Payment never overrides authorization, tenant isolation, target validity or release gates. Plans, prices, quotas, grace periods and billing provider are undecided. No central licensing runtime, customer-hosted production profile or offline licence is required to call the historical Capstone submitted or to validate today's bounded local/CI foundation; each future capability needs its own task, qualification and evidence.
+
+Current bounded PBIP/PBIR/TMDL generation remains the Power BI adapter. Confluence 03.06 v1 and APBRA-165 describe future ARD/native rendering and other adapters; this document does not mark them PASS or claim PBIX or Desktop runtime support.
 
 ## Post-Capstone product acceptance direction — not current PASS
 
@@ -59,6 +71,6 @@ Acceptance of those capabilities requires evidence for authority, isolation, per
 
 For planned governed knowledge, activation requires both required source approval and successful required ingestion/index verification. Current private-resource permissions must be enforced before retrieval eligibility, ranking and model context and rechecked for resumed protected work. Citations must substantively support their associated claims, mandatory-policy coverage cannot rely only on similarity ranking, and neither user acceptance nor BI-expert assignment can waive mandatory policy. Any compliant revised business approach requires explicit material acceptance; unresolved policy authority belongs with the authorised policy owner.
 
-APBRA-147 remains on planning hold. APBRA-149–158 are planning coverage and do not make any row above a PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
+The earlier APBRA-147 planning hold and APBRA-149–158 target items are historical planning context; none makes a future deployment, entitlement, ARD or other target row above a current PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
 
 Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
