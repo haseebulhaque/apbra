@@ -74,3 +74,20 @@ For planned governed knowledge, activation requires both required source approva
 The earlier APBRA-147 planning hold and APBRA-149–158 target items are historical planning context; none makes a future deployment, entitlement, ARD or other target row above a current PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
 
 Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
+
+## APBRA-176 identity/onboarding acceptance boundary — target gates, not current PASS
+
+The 2 October 2026 owner decision changes the intended MVP-1 onboarding path, but these criteria remain **unpassed** until APBRA-151/172/173 produce exact implementation evidence.
+
+A qualified identity/onboarding slice must demonstrate at minimum:
+
+1. a real qualified provider can authenticate a user through the provider-neutral APBRA SSO/session seam, with Microsoft Entra External ID first;
+2. the stable external identity binding does not use mutable email/UPN as the durable security key and does not silently merge equal-email identities across issuers/providers;
+3. an existing active membership resumes correctly, an eligible invitation binds only the intended company membership, and an unrelated authenticated user receives no APBRA authority;
+4. a user with no applicable membership/invitation can choose **Create Company / Workspace**, and the company plus initial `COMPANY_OWNER` membership are created transactionally, idempotently and audibly;
+5. email domain, UPN suffix, external tenant ID and IdP groups cannot manufacture company ownership or private-resource access;
+6. company membership does not grant every private report/case, and entitlement does not bypass permission, validation or governance;
+7. logout/session expiry, membership deactivation/revocation and cross-company/private-resource negative tests fail closed;
+8. hosted-preview evidence is kept separate from deterministic local/CI identity tests, and no public/production readiness claim is made without APBRA-173 qualification.
+
+Verified-domain joining, additional social providers, enterprise SSO and SCIM/JIT are separate acceptance packages. Power BI/Fabric consent and Azure management consent are not part of basic APBRA login.
