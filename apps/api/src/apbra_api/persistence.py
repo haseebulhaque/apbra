@@ -24,6 +24,7 @@ from sqlalchemy import (
     func,
     select,
 )
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
@@ -63,8 +64,21 @@ class CompanyRow(Base):
 
 class ExternalIdentityRow(Base):
     __tablename__ = "external_identities"
-    __table_args__ = (UniqueConstraint("issuer", "subject", name="uq_identity_issuer_subject"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_profile_id",
+            "issuer",
+            "subject",
+            name="uq_identity_profile_issuer_subject",
+        ),
+    )
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="legacy-unqualified",
+        server_default="legacy-unqualified",
+    )
     issuer: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -210,6 +224,12 @@ class InvitationRow(Base):
     __tablename__ = "invitations"
     __table_args__ = (
         UniqueConstraint("token_digest", name="uq_invitation_token_digest"),
+        Index(
+            "ix_invitation_profile_issuer_subject",
+            "provider_profile_id",
+            "invited_issuer",
+            "invited_subject",
+        ),
         ForeignKeyConstraint(
             ["issued_by_membership_id", "company_id"],
             ["memberships.id", "memberships.company_id"],
@@ -222,6 +242,12 @@ class InvitationRow(Base):
     issued_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
     invited_issuer: Mapped[str] = mapped_column(String(500), nullable=False)
     invited_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="legacy-unqualified",
+        server_default="legacy-unqualified",
+    )
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     token_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -961,6 +987,12 @@ class AuthTransactionRow(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     state_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     browser_binding_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="legacy-unqualified",
+        server_default="legacy-unqualified",
+    )
     expected_issuer: Mapped[str] = mapped_column(String(500), nullable=False)
     client_id: Mapped[str] = mapped_column(String(255), nullable=False)
     redirect_uri: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -992,10 +1024,28 @@ class SessionRow(Base):
     __table_args__ = (UniqueConstraint("token_digest", name="uq_session_token"),)
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     token_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_profile_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="legacy-unqualified",
+        server_default="legacy-unqualified",
+    )
     identity_id: Mapped[UUID] = mapped_column(ForeignKey("external_identities.id"), nullable=False)
     membership_id: Mapped[UUID | None] = mapped_column(ForeignKey("memberships.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthenticationEventRow(Base):
+    __tablename__ = "authentication_events"
+    __table_args__ = (Index("ix_auth_event_identity_time", "identity_id", "created_at"),)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    provider_profile_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    identity_id: Mapped[UUID | None] = mapped_column(ForeignKey("external_identities.id"))
+    session_id: Mapped[UUID | None] = mapped_column(ForeignKey("application_sessions.id"))
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -1006,6 +1056,76 @@ class ApplicationSession(Session):
     while application and authorization code depend only on the typed port in
     ``domain.py``.
     """
+
+    def resolve_external_identity(
+        self,
+        profile_id: str,
+        issuer: str,
+        subject: str,
+        display_name: str,
+        *,
+        allow_legacy_local: bool,
+    ) -> tuple[ExternalIdentityRow, bool]:
+        identity = self.scalar(
+            select(ExternalIdentityRow).where(
+                ExternalIdentityRow.provider_profile_id == profile_id,
+                ExternalIdentityRow.issuer == issuer,
+                ExternalIdentityRow.subject == subject,
+            )
+        )
+        if identity is None and allow_legacy_local:
+            identity = self.scalar(
+                select(ExternalIdentityRow).where(
+                    ExternalIdentityRow.provider_profile_id == "legacy-unqualified",
+                    ExternalIdentityRow.issuer == issuer,
+                    ExternalIdentityRow.subject == subject,
+                )
+            )
+        created = False
+        if identity is None:
+            identity_id = uuid4()
+            inserted = self.execute(
+                insert(ExternalIdentityRow)
+                .values(
+                    id=identity_id,
+                    provider_profile_id=profile_id,
+                    issuer=issuer,
+                    subject=subject,
+                    display_name=display_name,
+                    active=True,
+                )
+                .on_conflict_do_nothing(constraint="uq_identity_profile_issuer_subject")
+                .returning(ExternalIdentityRow.id)
+            ).scalar_one_or_none()
+            created = inserted is not None
+            identity = self.scalar(
+                select(ExternalIdentityRow).where(
+                    ExternalIdentityRow.provider_profile_id == profile_id,
+                    ExternalIdentityRow.issuer == issuer,
+                    ExternalIdentityRow.subject == subject,
+                )
+            )
+        assert identity is not None
+        return identity, created
+
+    def add_auth_event(
+        self,
+        profile_id: str,
+        event_type: str,
+        *,
+        identity_id: UUID | None = None,
+        session_id: UUID | None = None,
+        reason: str | None = None,
+    ) -> None:
+        self.add(
+            AuthenticationEventRow(
+                provider_profile_id=profile_id,
+                identity_id=identity_id,
+                session_id=session_id,
+                event_type=event_type,
+                reason=reason,
+            )
+        )
 
     def active_session(
         self, token_digest: str, now: datetime
@@ -1021,6 +1141,11 @@ class ApplicationSession(Session):
             return None
         identity = self.get(ExternalIdentityRow, row.identity_id)
         if identity is None or not identity.active:
+            return None
+        if row.provider_profile_id != identity.provider_profile_id and not (
+            row.provider_profile_id == "local-test"
+            and identity.provider_profile_id == "legacy-unqualified"
+        ):
             return None
         return row, identity
 
@@ -1053,6 +1178,7 @@ class ApplicationSession(Session):
             subject=identity.subject,
             display_name=identity.display_name,
             role=Role(membership.role),
+            provider_profile_id=identity.provider_profile_id,
         )
 
     def case_access(
@@ -1257,6 +1383,7 @@ class ApplicationSession(Session):
             issued_by_membership_id=actor.membership_id,
             invited_issuer=actor.issuer,
             invited_subject=invited_subject,
+            provider_profile_id=actor.provider_profile_id,
             role=role.value,
             token_digest=token_digest,
             expires_at=expires_at,
@@ -1664,14 +1791,16 @@ class ApplicationSession(Session):
     def earlier_interpretations(
         self, case_id: UUID, before_context_version: int
     ) -> list[InterpretationRow]:
-        return list(self.scalars(
-            select(InterpretationRow)
-            .where(
-                InterpretationRow.case_id == case_id,
-                InterpretationRow.context_version < before_context_version,
-            )
-            .order_by(InterpretationRow.context_version)
-        ).all())
+        return list(
+            self.scalars(
+                select(InterpretationRow)
+                .where(
+                    InterpretationRow.case_id == case_id,
+                    InterpretationRow.context_version < before_context_version,
+                )
+                .order_by(InterpretationRow.context_version)
+            ).all()
+        )
 
     def interpretation_for_context(
         self, case_id: UUID, context_version: int

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
@@ -13,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .auth_boundary import pkce_challenge
-from .config import Settings
-from .domain import AuthenticationRequired, OidcClaims
+from .config import QualifiedIdentityProvider, Settings
+from .domain import ApplicationError, AuthenticationRequired, OidcClaims
 from .persistence import AuthorizationCodeRow, sha256_text
 
 logger = logging.getLogger("apbra_api.oidc")
@@ -25,6 +29,12 @@ class OidcValidationError(AuthenticationRequired):
     public_message = "Sign-in could not be validated. Please try again."
 
 
+class OidcProviderUnavailable(ApplicationError):
+    status_code = 503
+    code = "PROVIDER_UNAVAILABLE"
+    public_message = "The sign-in provider is unavailable. Please try again later."
+
+
 class OidcAdapter:
     """Provider boundary; APBRA authorization never consumes provider role/company claims."""
 
@@ -32,18 +42,152 @@ class OidcAdapter:
         self.settings = settings
         self._local_private_key: Any | None = None
         self._local_public_key: Any | None = None
+        self._cache_lock = threading.RLock()
+        self._metadata_cache: dict[str, tuple[float, dict[str, str]]] = {}
+        self._jwks_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         if settings.profile in {"development", "test"}:
             self._local_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             self._local_public_key = self._local_private_key.public_key()
 
-    def _key(self) -> Any:
+    def public_providers(self) -> list[dict[str, str]]:
         if self.settings.profile in {"development", "test"}:
-            return self._local_public_key
-        assert self.settings.oidc_jwks_json
-        key_set = json.loads(self.settings.oidc_jwks_json)
-        if not isinstance(key_set, dict):
+            return [{"profile_id": "local-test", "display_label": "Local development identity"}]
+        return [
+            {"profile_id": profile.profile_id, "display_label": profile.display_label}
+            for profile in self.settings.identity_profiles()
+            if profile.enabled
+        ]
+
+    def profile(self, profile_id: str | None) -> QualifiedIdentityProvider | None:
+        if self.settings.profile in {"development", "test"}:
+            if profile_id not in {None, "local-test"}:
+                raise AuthenticationRequired()
+            return None
+        enabled = [profile for profile in self.settings.identity_profiles() if profile.enabled]
+        if profile_id is None and len(enabled) == 1:
+            return enabled[0]
+        for profile in enabled:
+            if profile.profile_id == profile_id:
+                return profile
+        raise AuthenticationRequired()
+
+    @staticmethod
+    def profile_id(profile: QualifiedIdentityProvider | None) -> str:
+        return profile.profile_id if profile is not None else "local-test"
+
+    def _json_get(self, url: str) -> dict[str, Any]:
+        # Metadata/key GETs may be retried once. Never retry a code exchange.
+        for attempt in range(2):
+            try:
+                response = httpx.get(url, timeout=5.0, follow_redirects=False)
+                response.raise_for_status()
+                break
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                if attempt == 0:
+                    continue
+                raise OidcProviderUnavailable() from exc
+            except httpx.HTTPStatusError as exc:
+                if attempt == 0 and exc.response.status_code >= 500:
+                    continue
+                raise OidcProviderUnavailable() from exc
+            except httpx.HTTPError as exc:
+                raise OidcProviderUnavailable() from exc
+        if len(response.content) > 256_000:
             raise OidcValidationError()
-        return JsonWebKey.import_key_set(key_set)
+        try:
+            value = response.json()
+        except ValueError as exc:
+            raise OidcValidationError() from exc
+        if not isinstance(value, dict):
+            raise OidcValidationError()
+        return value
+
+    def _metadata(
+        self, profile: QualifiedIdentityProvider, *, refresh: bool = False
+    ) -> dict[str, str]:
+        with self._cache_lock:
+            cached = self._metadata_cache.get(profile.profile_id)
+            if not refresh and cached and cached[0] > time.monotonic():
+                return cached[1]
+            raw = self._json_get(profile.discovery_url)
+            if raw.get("issuer") != profile.issuer:
+                raise OidcValidationError()
+            metadata: dict[str, str] = {}
+            for key in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+                value = raw.get(key)
+                if not isinstance(value, str) or not profile.permits_endpoint(value):
+                    raise OidcValidationError()
+                metadata[key] = value
+            supported = raw.get("id_token_signing_alg_values_supported")
+            if supported is not None and (
+                not isinstance(supported, list) or "RS256" not in supported
+            ):
+                raise OidcValidationError()
+            self._metadata_cache[profile.profile_id] = (time.monotonic() + 300, metadata)
+            return metadata
+
+    def _jwks(self, profile: QualifiedIdentityProvider, *, refresh: bool = False) -> dict[str, Any]:
+        with self._cache_lock:
+            cached = self._jwks_cache.get(profile.profile_id)
+            if not refresh and cached and cached[0] > time.monotonic():
+                return cached[1]
+            metadata = self._metadata(profile, refresh=refresh)
+            value = self._json_get(metadata["jwks_uri"])
+            keys = value.get("keys")
+            if not isinstance(keys, list) or not 1 <= len(keys) <= 32:
+                raise OidcValidationError()
+            seen: set[str] = set()
+            for key in keys:
+                if (
+                    not isinstance(key, dict)
+                    or key.get("kty") != "RSA"
+                    or not isinstance(key.get("kid"), str)
+                    or not key["kid"]
+                    or key["kid"] in seen
+                    or key.get("use", "sig") != "sig"
+                    or key.get("alg", "RS256") != "RS256"
+                ):
+                    raise OidcValidationError()
+                seen.add(key["kid"])
+            self._jwks_cache[profile.profile_id] = (time.monotonic() + 300, value)
+            return value
+
+    @staticmethod
+    def _header(token: str) -> dict[str, Any]:
+        if len(token) > 16_384:
+            raise OidcValidationError()
+        try:
+            encoded = token.split(".", 2)[0]
+            if len(encoded) > 2_000:
+                raise OidcValidationError()
+            header = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        except (ValueError, IndexError, binascii.Error) as exc:
+            raise OidcValidationError() from exc
+        if (
+            not isinstance(header, dict)
+            or header.get("alg") != "RS256"
+            or str(header.get("typ", "JWT")).upper() != "JWT"
+            or any(key in header for key in ("jwk", "jku", "x5u", "crit"))
+        ):
+            raise OidcValidationError()
+        return header
+
+    def _key(self, profile: QualifiedIdentityProvider | None, token: str) -> Any:
+        header = self._header(token)
+        if profile is None:
+            return self._local_public_key
+        kid = header.get("kid")
+        if not isinstance(kid, str) or not kid:
+            raise OidcValidationError()
+        for refresh in (False, True):
+            keys = self._jwks(profile, refresh=refresh)["keys"]
+            match = next((key for key in keys if key["kid"] == kid), None)
+            if match is not None:
+                try:
+                    return JsonWebKey.import_key(match)
+                except (JoseError, ValueError) as exc:
+                    raise OidcValidationError() from exc
+        raise OidcValidationError()
 
     def authorization_url(
         self,
@@ -52,25 +196,24 @@ class OidcAdapter:
         nonce: str,
         code_challenge: str,
         identity_selector: str | None = None,
+        profile: QualifiedIdentityProvider | None = None,
     ) -> str:
         endpoint = (
             f"{self.settings.issuer}/authorize"
-            if self.settings.profile in {"development", "test"}
-            else self.settings.oidc_authorization_endpoint
+            if profile is None
+            else self._metadata(profile)["authorization_endpoint"]
         )
-        if not endpoint:
-            raise OidcValidationError()
         params = {
-            "client_id": self.settings.oidc_audience,
+            "client_id": self.settings.oidc_audience if profile is None else profile.client_id,
             "redirect_uri": self.settings.callback_url,
             "response_type": "code",
-            "scope": "openid profile",
+            "scope": "openid profile" if profile is None else " ".join(profile.scopes),
             "state": state,
             "nonce": nonce,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        if self.settings.profile in {"development", "test"} and identity_selector:
+        if profile is None and identity_selector:
             params["identity"] = identity_selector
         return f"{endpoint}?{urlencode(params)}"
 
@@ -82,9 +225,12 @@ class OidcAdapter:
         verifier: str,
         redirect_uri: str,
         expected_nonce: str,
+        profile: QualifiedIdentityProvider | None = None,
     ) -> OidcClaims:
         """Exchange a provider code without exposing provider tokens to the browser."""
-        if self.settings.profile in {"development", "test"}:
+        if profile is None:
+            if self.settings.profile not in {"development", "test"}:
+                raise OidcValidationError()
             row = db.scalar(
                 select(AuthorizationCodeRow)
                 .where(AuthorizationCodeRow.code_digest == sha256_text(code))
@@ -114,25 +260,37 @@ class OidcAdapter:
             token = self.issue_local_id_token(row.subject, row.display_name, expected_nonce)
             return self.validate_id_token(token, expected_nonce)
 
-        if not self.settings.oidc_token_endpoint:
-            raise OidcValidationError()
         form = {
             "grant_type": "authorization_code",
-            "client_id": self.settings.oidc_audience,
+            "client_id": profile.client_id,
             "code": code,
             "code_verifier": verifier,
             "redirect_uri": redirect_uri,
         }
-        if self.settings.oidc_client_secret:
-            form["client_secret"] = self.settings.oidc_client_secret
         try:
-            response = httpx.post(self.settings.oidc_token_endpoint, data=form, timeout=10.0)
+            credential = profile.credential()
+            if credential:
+                form["client_secret"] = credential
+            response = httpx.post(
+                self._metadata(profile)["token_endpoint"],
+                data=form,
+                timeout=10.0,
+                follow_redirects=False,
+            )
             response.raise_for_status()
+            if len(response.content) > 32_000:
+                raise OidcValidationError()
             token = response.json().get("id_token")
             if not isinstance(token, str):
                 raise OidcValidationError()
-            return self.validate_id_token(token, expected_nonce)
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            return self.validate_id_token(token, expected_nonce, profile=profile)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code < 500:
+                raise OidcValidationError() from exc
+            raise OidcProviderUnavailable() from exc
+        except httpx.HTTPError as exc:
+            raise OidcProviderUnavailable() from exc
+        except (ValueError, TypeError) as exc:
             raise OidcValidationError() from exc
 
     def issue_local_id_token(self, subject: str, display_name: str, nonce: str) -> str:
@@ -156,15 +314,25 @@ class OidcAdapter:
         )
         return encoded.decode() if isinstance(encoded, bytes) else str(encoded)
 
-    def validate_id_token(self, token: str, expected_nonce: str) -> OidcClaims:
+    def validate_id_token(
+        self,
+        token: str,
+        expected_nonce: str,
+        *,
+        profile: QualifiedIdentityProvider | None = None,
+    ) -> OidcClaims:
+        if profile is None and self.settings.profile not in {"development", "test"}:
+            profile = self.profile(None)
+        issuer = self.settings.issuer if profile is None else profile.issuer
+        audience_id = self.settings.oidc_audience if profile is None else profile.client_id
         try:
             claims = jwt.decode(
                 token,
-                self._key(),
+                self._key(profile, token),
                 claims_options={
-                    "iss": {"essential": True, "value": self.settings.issuer},
+                    "iss": {"essential": True, "value": issuer},
                     "sub": {"essential": True},
-                    "aud": {"essential": True, "value": self.settings.oidc_audience},
+                    "aud": {"essential": True, "value": audience_id},
                     "iat": {"essential": True},
                     "exp": {"essential": True},
                     "nbf": {"essential": True},
@@ -172,26 +340,25 @@ class OidcAdapter:
                 },
             )
             claims.validate(leeway=5)
-            header = claims.header
-            if header.get("alg") != "RS256":
-                raise OidcValidationError()
             audience = claims["aud"]
             authorized_party = claims.get("azp")
             if isinstance(audience, list):
-                if self.settings.oidc_audience not in audience:
+                if audience_id not in audience:
                     raise OidcValidationError()
-                if len(audience) > 1 and authorized_party != self.settings.oidc_audience:
+                if len(audience) > 1 and authorized_party != audience_id:
                     raise OidcValidationError()
-            elif audience != self.settings.oidc_audience:
+            elif audience != audience_id:
                 raise OidcValidationError()
-            if authorized_party is not None and authorized_party != self.settings.oidc_audience:
+            if authorized_party is not None and authorized_party != audience_id:
                 raise OidcValidationError()
             if not isinstance(claims["sub"], str) or not claims["sub"]:
                 raise OidcValidationError()
+            if not isinstance(claims["iss"], str) or claims["iss"] != issuer:
+                raise OidcValidationError()
             return OidcClaims(
-                issuer=str(claims["iss"]),
+                issuer=claims["iss"],
                 subject=str(claims["sub"]),
-                audience=self.settings.oidc_audience,
+                audience=audience_id,
                 nonce=str(claims["nonce"]),
                 expires_at=datetime.fromtimestamp(int(claims["exp"]), UTC),
                 display_name=str(claims.get("name") or claims["sub"]),

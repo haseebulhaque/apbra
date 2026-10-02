@@ -110,7 +110,8 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   const inviteeContext=await browser.newContext();
   const inviteePage=await inviteeContext.newPage();
   await signIn(inviteePage,'uninvited');
-  await expect(inviteePage.getByRole('heading',{name:'An invitation is required'})).toBeVisible();
+  await expect(inviteePage.getByRole('heading',{name:'Create Company / Workspace'})).toBeVisible();
+  await expect(inviteePage.getByRole('button',{name:'Create Company / Workspace (not yet available)'})).toBeDisabled();
 
   await inviteePage.goto(invitationLink);
   await expect(inviteePage).not.toHaveURL(/token=/);
@@ -119,6 +120,15 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await expect(inviteePage.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
   await expect(inviteePage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
   await inviteeContext.close();
+});
+
+test('hosted provider metadata never exposes deterministic identity controls',async({page})=>{
+  await page.route('**/api/auth/session',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:false})}));
+  await page.route('**/api/auth/providers',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[{profile_id:'entra-qualified',display_label:'External ID email sign-in'}],development_identities:[]})}));
+  await page.goto('/');
+  await expect(page.getByRole('link',{name:/External ID email sign-in/})).toBeVisible();
+  await expect(page.getByText('Local development identities')).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'owner'})).toHaveCount(0);
 });
 
 test('case owner grants and revokes named private access through the real UI',async({page,browser})=>{

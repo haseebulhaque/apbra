@@ -46,6 +46,7 @@ from .domain import (
 )
 from .evidence import LocalEvidenceStore
 from .generation import GenerationBridge, GenerationService
+from .identity_service import IdentityService
 from .model_provider import (
     ModelProvider,
     OpenAICompatibleProvider,
@@ -56,8 +57,8 @@ from .persistence import (
     ApplicationSession,
     AuthorizationCodeRow,
     AuthTransactionRow,
+    CompanyRow,
     Database,
-    ExternalIdentityRow,
     MembershipRow,
     SessionRow,
     TenantSecretRow,
@@ -175,6 +176,11 @@ class TenantCredentialReplace(BaseModel):
     confirm_disruption: bool
 
 
+class CompanySelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    membership_id: UUID
+
+
 def error_response(exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -215,6 +221,7 @@ def create_app(
         else None
     )
     invitation_service = InvitationService()
+    identity_service = IdentityService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
 
@@ -339,14 +346,30 @@ def create_app(
             tenant_settings=snapshot,
         )
 
+    def callback_failure_redirect(reason: str) -> RedirectResponse:
+        response = RedirectResponse(
+            f"{settings.public_origin}/?auth_error={reason}", status_code=302
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.delete_cookie(AUTH_BINDING_COOKIE, path="/api/auth/callback")
+        return response
+
     @app.exception_handler(ApplicationError)
-    async def handle_application_error(_request: Request, exc: ApplicationError) -> JSONResponse:
+    async def handle_application_error(request: Request, exc: ApplicationError) -> Response:
+        if request.url.path == "/api/auth/callback" and "text/html" in request.headers.get(
+            "accept", ""
+        ):
+            return callback_failure_redirect(
+                "unavailable" if exc.code == "PROVIDER_UNAVAILABLE" else "invalid"
+            )
         return error_response(exc)
 
     @app.exception_handler(RequestValidationError)
-    async def handle_validation_error(
-        _request: Request, _exc: RequestValidationError
-    ) -> JSONResponse:
+    async def handle_validation_error(request: Request, _exc: RequestValidationError) -> Response:
+        if request.url.path == "/api/auth/callback" and "text/html" in request.headers.get(
+            "accept", ""
+        ):
+            return callback_failure_redirect("invalid")
         # Validation details can contain bearer credentials (for example an
         # invalid invitation token). Never echo rejected request input.
         return JSONResponse(
@@ -499,25 +522,50 @@ def create_app(
         db.commit()
         return settings_response(db, snapshot)
 
+    @app.get("/api/auth/providers")
+    def auth_providers() -> dict[str, Any]:
+        return {
+            "items": oidc.public_providers(),
+            "development_identities": (
+                [item.selector for item in BOOTSTRAP_IDENTITIES]
+                if settings.profile in {"development", "test"}
+                else []
+            ),
+        }
+
     @app.get("/api/auth/login")
     def login(
         db: DB,
-        identity: str = Query(default="owner"),
+        identity: str | None = Query(default=None),
+        profile_id: str | None = Query(default=None),
         return_to: str = Query(default="/"),
     ) -> Response:
+        profile = oidc.profile(profile_id)
+        selected_profile_id = oidc.profile_id(profile)
         if settings.profile in {"development", "test"}:
             allowed = {item.selector for item in BOOTSTRAP_IDENTITIES}
+            identity = identity or "owner"
             if identity not in allowed:
                 raise AuthenticationRequired()
+        elif identity is not None:
+            raise AuthenticationRequired()
         start = AuthStart.create(return_to)
+        authorization_url = oidc.authorization_url(
+            state=start.state,
+            nonce=start.nonce,
+            code_challenge=pkce_challenge(start.verifier),
+            identity_selector=identity,
+            profile=profile,
+        )
         db.add(
             AuthTransactionRow(
                 state_digest=digest(start.state),
                 browser_binding_digest=digest(start.browser_binding),
-                expected_issuer=settings.issuer,
-                client_id=settings.oidc_audience,
+                provider_profile_id=selected_profile_id,
+                expected_issuer=settings.issuer if profile is None else profile.issuer,
+                client_id=settings.oidc_audience if profile is None else profile.client_id,
                 redirect_uri=settings.callback_url,
-                provider_configuration_digest=settings.oidc_configuration_digest,
+                provider_configuration_digest=settings.identity_profile_digest(profile),
                 response_issuer_required=settings.callback_issuer_required,
                 nonce=start.nonce,
                 code_verifier=start.verifier,
@@ -525,21 +573,12 @@ def create_app(
                 expires_at=start.expires_at,
             )
         )
+        identity_service.record(db, selected_profile_id, "AUTH_LOGIN_STARTED")
         # The browser follows the redirect immediately. Make the one-time
         # transaction visible before returning rather than relying on
         # dependency cleanup after the response has started.
         db.commit()
-        response = RedirectResponse(
-            oidc.authorization_url(
-                state=start.state,
-                nonce=start.nonce,
-                code_challenge=pkce_challenge(start.verifier),
-                identity_selector=(
-                    identity if settings.profile in {"development", "test"} else None
-                ),
-            ),
-            status_code=302,
-        )
+        response = RedirectResponse(authorization_url, status_code=302)
         response.set_cookie(
             AUTH_BINDING_COOKIE,
             start.browser_binding,
@@ -606,18 +645,26 @@ def create_app(
         request: Request,
         db: DB,
         state: str = Query(min_length=1, max_length=500),
-        code: str = Query(min_length=1, max_length=2_000),
+        code: str | None = Query(default=None, min_length=1, max_length=2_000),
+        error: str | None = Query(default=None, min_length=1, max_length=100),
         iss: str | None = Query(default=None, max_length=1_000),
         auth_binding: Annotated[str | None, Cookie(alias=AUTH_BINDING_COOKIE)] = None,
+        prior_session_token: SessionCookie = None,
     ) -> Response:
         state_values = request.query_params.getlist("state")
         code_values = request.query_params.getlist("code")
+        error_values = request.query_params.getlist("error")
         issuer_values = request.query_params.getlist("iss")
         if (
             len(state_values) != 1
-            or len(code_values) != 1
+            or not (
+                (len(code_values) == 1 and not error_values)
+                or (len(error_values) == 1 and not code_values)
+            )
             or len(issuer_values) > 1
-            or any(not value for value in (*state_values, *code_values, *issuer_values))
+            or any(
+                not value for value in (*state_values, *code_values, *error_values, *issuer_values)
+            )
         ):
             logger.warning("OIDC callback rejected: malformed_response_parameters")
             raise AuthenticationRequired()
@@ -627,6 +674,33 @@ def create_app(
             .where(AuthTransactionRow.state_digest == digest(state))
             .with_for_update()
         )
+        profile_valid = transaction is not None
+        try:
+            profile = (
+                oidc.profile(transaction.provider_profile_id) if transaction is not None else None
+            )
+        except AuthenticationRequired:
+            profile = None
+            profile_valid = False
+        expected_issuer = (
+            transaction.expected_issuer
+            if transaction is not None and not profile_valid
+            else settings.issuer
+            if profile is None and transaction is not None
+            else profile.issuer
+            if profile is not None
+            else ""
+        )
+        expected_client = settings.oidc_audience if profile is None else profile.client_id
+        try:
+            current_profile_digest = (
+                settings.identity_profile_digest(profile)
+                if transaction is not None and profile_valid
+                else ""
+            )
+        except ValueError:
+            profile_valid = False
+            current_profile_digest = ""
         rejection = (
             "state_not_found"
             if transaction is None
@@ -640,10 +714,11 @@ def create_app(
             if transaction.expires_at <= now
             else "provider_configuration_changed"
             if (
-                transaction.expected_issuer != settings.issuer
-                or transaction.client_id != settings.oidc_audience
+                not profile_valid
+                or transaction.expected_issuer != expected_issuer
+                or transaction.client_id != expected_client
                 or transaction.redirect_uri != settings.callback_url
-                or transaction.provider_configuration_digest != settings.oidc_configuration_digest
+                or transaction.provider_configuration_digest != current_profile_digest
                 or transaction.response_issuer_required != settings.callback_issuer_required
             )
             else "response_issuer_missing"
@@ -654,51 +729,96 @@ def create_app(
         )
         if rejection is not None:
             logger.warning("OIDC callback rejected: %s", rejection)
+            if transaction is not None:
+                transaction.consumed_at = now
+                identity_service.record(
+                    db, transaction.provider_profile_id, "AUTH_LOGIN_FAILED", reason=rejection
+                )
+            db.commit()
             raise AuthenticationRequired()
         assert transaction is not None
         transaction.consumed_at = now
+        if error is not None:
+            identity_service.record(
+                db,
+                transaction.provider_profile_id,
+                "AUTH_LOGIN_FAILED",
+                reason="PROVIDER_CANCELLED"
+                if error == "access_denied"
+                else "PROVIDER_RESPONSE_ERROR",
+            )
+            db.commit()
+            response = RedirectResponse(
+                f"{settings.public_origin}{transaction.return_to}?auth_error="
+                f"{'cancelled' if error == 'access_denied' else 'invalid'}",
+                status_code=302,
+            )
+            response.delete_cookie(AUTH_BINDING_COOKIE, path="/api/auth/callback")
+            return response
         # Burn the browser-bound state before provider exchange. A malformed
         # or rejected provider response must not make the callback replayable.
         db.commit()
-        claims = oidc.exchange_code(
-            db,
-            code=code,
-            verifier=transaction.code_verifier,
-            redirect_uri=transaction.redirect_uri,
-            expected_nonce=transaction.nonce,
-        )
-        identity = db.scalar(
-            select(ExternalIdentityRow).where(
-                ExternalIdentityRow.issuer == claims.issuer,
-                ExternalIdentityRow.subject == claims.subject,
+        assert code is not None
+        try:
+            claims = oidc.exchange_code(
+                db,
+                code=code,
+                verifier=transaction.code_verifier,
+                redirect_uri=transaction.redirect_uri,
+                expected_nonce=transaction.nonce,
+                profile=profile,
             )
-        )
-        if identity is None:
-            identity = ExternalIdentityRow(
-                issuer=claims.issuer,
-                subject=claims.subject,
-                display_name=claims.display_name,
+            identity = identity_service.resolve(
+                db,
+                profile_id=transaction.provider_profile_id,
+                claims=claims,
+                allow_legacy_local=profile is None,
             )
-            db.add(identity)
-            db.flush()
-        if not identity.active:
-            raise AuthenticationRequired()
+        except ApplicationError as exc:
+            identity_service.record(
+                db, transaction.provider_profile_id, "AUTH_LOGIN_FAILED", reason=exc.code
+            )
+            db.commit()
+            raise
         memberships = db.scalars(
             select(MembershipRow).where(
                 MembershipRow.identity_id == identity.id,
                 MembershipRow.active.is_(True),
             )
         ).all()
-        if len(memberships) > 1:
-            raise AuthenticationRequired()
-        session_token = random_token(48)
-        db.add(
-            SessionRow(
-                token_digest=digest(session_token),
-                identity_id=identity.id,
-                membership_id=memberships[0].id if memberships else None,
-                expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+        if prior_session_token:
+            prior = db.scalar(
+                select(SessionRow).where(SessionRow.token_digest == digest(prior_session_token))
             )
+            if prior is not None and prior.revoked_at is None:
+                prior.revoked_at = now
+                identity_service.record(
+                    db,
+                    prior.provider_profile_id,
+                    "AUTH_SESSION_REVOKED",
+                    identity_id=prior.identity_id,
+                    session_id=prior.id,
+                    reason="ROTATED_ON_SIGN_IN",
+                )
+        session_token = random_token(48)
+        session_row = SessionRow(
+            token_digest=digest(session_token),
+            provider_profile_id=transaction.provider_profile_id,
+            identity_id=identity.id,
+            membership_id=memberships[0].id if len(memberships) == 1 else None,
+            expires_at=now + timedelta(seconds=settings.session_ttl_seconds),
+        )
+        db.add(session_row)
+        db.flush()
+        identity_service.record(
+            db, transaction.provider_profile_id, "AUTH_LOGIN_SUCCEEDED", identity_id=identity.id
+        )
+        identity_service.record(
+            db,
+            transaction.provider_profile_id,
+            "AUTH_SESSION_CREATED",
+            identity_id=identity.id,
+            session_id=session_row.id,
         )
         # The frontend can request its session as soon as it follows this
         # redirect, so persist identity/session state before returning.
@@ -720,6 +840,7 @@ def create_app(
 
     @app.get("/api/auth/session")
     def auth_session(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
         try:
             row, identity = resolve_session(db, session_token)
         except AuthenticationRequired:
@@ -729,20 +850,65 @@ def create_app(
             "identity": {
                 "id": str(identity.id),
                 "display_name": identity.display_name,
-                "subject": identity.subject,
             },
             "csrf_token": csrf_token(session_token or "", settings.session_secret),
         }
         if row.membership_id:
-            actor = resolve_actor(db, session_token)
-            result["actor"] = {
-                "identity_id": str(actor.identity_id),
-                "membership_id": str(actor.membership_id),
-                "company_id": str(actor.company_id),
-                "display_name": actor.display_name,
-                "role": actor.role.value,
-            }
+            actor = db.active_actor(row.membership_id, identity.id)
+            if actor is None:
+                result["membership_state"] = "MEMBERSHIP_INACTIVE"
+            else:
+                result["membership_state"] = "ACTIVE"
+                result["actor"] = {
+                    "identity_id": str(actor.identity_id),
+                    "membership_id": str(actor.membership_id),
+                    "company_id": str(actor.company_id),
+                    "display_name": actor.display_name,
+                    "role": actor.role.value,
+                }
+        else:
+            memberships = db.execute(
+                select(MembershipRow, CompanyRow)
+                .join(CompanyRow, CompanyRow.id == MembershipRow.company_id)
+                .where(
+                    MembershipRow.identity_id == identity.id,
+                    MembershipRow.active.is_(True),
+                    CompanyRow.active.is_(True),
+                )
+            ).all()
+            if memberships:
+                result["membership_state"] = "COMPANY_SELECTION_REQUIRED"
+                result["available_companies"] = [
+                    {"membership_id": str(membership.id), "name": company.name}
+                    for membership, company in memberships
+                ]
+            else:
+                result["membership_state"] = "COMPANY_CREATION_AVAILABLE"
         return result
+
+    @app.post("/api/auth/select-company")
+    def select_company(
+        payload: CompanySelection,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, bool]:
+        assert isinstance(db, ApplicationSession)
+        require_csrf(session_token, csrf)
+        session_row, identity = resolve_session(db, session_token)
+        actor = db.active_actor(payload.membership_id, identity.id)
+        if actor is None:
+            raise AuthenticationRequired()
+        session_row.membership_id = actor.membership_id
+        identity_service.record(
+            db,
+            session_row.provider_profile_id,
+            "MEMBERSHIP_RESOLVED",
+            identity_id=identity.id,
+            session_id=session_row.id,
+        )
+        db.commit()
+        return {"selected": True}
 
     @app.post("/api/auth/logout")
     def logout(
@@ -752,8 +918,20 @@ def create_app(
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, bool]:
         require_csrf(session_token, csrf)
-        row, _ = resolve_session(db, session_token)
-        row.revoked_at = datetime.now(UTC)
+        try:
+            row, identity = resolve_session(db, session_token)
+        except AuthenticationRequired:
+            row = None
+        if row is not None:
+            row.revoked_at = datetime.now(UTC)
+            identity_service.record(
+                db,
+                row.provider_profile_id,
+                "AUTH_LOGOUT",
+                identity_id=identity.id,
+                session_id=row.id,
+            )
+            db.commit()
         response.delete_cookie(SESSION_COOKIE, path="/")
         return {"signed_out": True}
 

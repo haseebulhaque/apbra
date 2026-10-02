@@ -1,5 +1,7 @@
 export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
-export type Session={authenticated:boolean;actor?:Actor;csrf_token?:string};
+export type IdentityProviderOption={profile_id:string;display_label:string};
+export type IdentityProviders={items:IdentityProviderOption[];development_identities:string[]};
+export type Session={authenticated:boolean;identity?:{id:string;display_name:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;name:string}>};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
 export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;report_title?:string;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
@@ -43,8 +45,10 @@ async function request<T>(path:string,init:RequestInit={}):Promise<T>{
 
 function csrfHeaders(csrfToken:string){return{'X-CSRF-Token':csrfToken}}
 export const authApi={
+  providers:()=>request<IdentityProviders>('/api/auth/providers'),
   session:()=>request<Session>('/api/auth/session'),
-  loginUrl:(identity?:string,returnTo='/')=>`/api/auth/login?${new URLSearchParams({...identity?{identity}:{},return_to:returnTo})}`,
+  loginUrl:(options:{profileId?:string;identity?:string;returnTo?:string}={})=>`/api/auth/login?${new URLSearchParams({...options.profileId?{profile_id:options.profileId}:{},...options.identity?{identity:options.identity}:{},return_to:options.returnTo??'/'})}`,
+  selectCompany:(membershipId:string,csrfToken:string)=>request<{selected:boolean}>('/api/auth/select-company',{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({membership_id:membershipId})}),
   logout:(csrfToken:string)=>request<void>('/api/auth/logout',{method:'POST',headers:csrfHeaders(csrfToken)}),
 };
 export const capabilitiesApi={uploads:()=>request<UploadCapabilities>('/api/cases/capabilities/uploads')};
