@@ -627,6 +627,28 @@ ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256 = 'a6c0b507deb0976cd97aac95313d5ecdabc159
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH = 'agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs'
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH = DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH + '-registration'
 
+OWNER_ONBOARDING_IDENTITY_DOCS_PATHS = {
+    'README.md', 'ARCHITECTURE.md', 'REQUIREMENTS.md', 'DATA-MODEL.md',
+    'MVP-ACCEPTANCE-CRITERIA.md', 'SECURITY.md', 'apps/web/README.md',
+    'docs/engineering/codex-handoff.md',
+    'docs/decisions/implementation-baseline.md',
+}
+OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS = {
+    'docs/source-register.json',
+    'tasks/APBRA-176-owner-onboarding-identity-docs.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+}
+OWNER_ONBOARDING_IDENTITY_DOCS_TASK_SHA256 = '031f9451dd61d481e64208559f698557aec1e47a221f8826e7ba784da0abb43c'
+OWNER_ONBOARDING_IDENTITY_SOURCE_ID = 'apbra-176-owner-onboarding-identity'
+OWNER_ONBOARDING_IDENTITY_SOURCE_SHA256 = 'f37ae7cd8abe73321e65c6485b7424f4cbecc93edddefc5a1579d7260838fb59'
+OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID = 'apbra-176-owner-onboarding-requirements'
+OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256 = 'a99f810212fad2e6f5715b94c311f724bb2f24686d4eda35aadb185f497dd0bb'
+OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs'
+OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH = OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1697,6 +1719,49 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 deployment_portability_entitlement_docs_task = None
+        owner_onboarding_identity_docs_task = None
+        owner_onboarding_identity_docs_path = root / 'tasks/APBRA-176-owner-onboarding-identity-docs.json'
+        if owner_onboarding_identity_docs_path.exists():
+            owner_onboarding_identity_docs_task = load_json(owner_onboarding_identity_docs_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), owner_onboarding_identity_docs_task)
+            if not extension_errors:
+                extension_errors += task_errors(owner_onboarding_identity_docs_task, catalog, sources)
+                canonical_task = json.dumps(owner_onboarding_identity_docs_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != OWNER_ONBOARDING_IDENTITY_DOCS_TASK_SHA256:
+                    extension_errors.append('APBRA-176 contract differs from accepted authority')
+                if (owner_onboarding_identity_docs_task['task_id'], owner_onboarding_identity_docs_task['assigned_agent'],
+                        owner_onboarding_identity_docs_task['agent_card_version']) != ('APBRA-176', 'APBRA-DOCS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-176 task or agent identity')
+                if owner_onboarding_identity_docs_task['branch'] != OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH:
+                    extension_errors.append('Unexpected APBRA-176 documentation branch')
+                if owner_onboarding_identity_docs_task['base_commit'] != 'd33e6222aaf902da821de2f59f288005f7f6c709':
+                    extension_errors.append('Stale APBRA-176 registration base')
+                if set(owner_onboarding_identity_docs_task['allowed_paths']) != OWNER_ONBOARDING_IDENTITY_DOCS_PATHS:
+                    extension_errors.append('Unexpected APBRA-176 documentation scope')
+                if (owner_onboarding_identity_docs_task['task_mode'], owner_onboarding_identity_docs_task['readiness'],
+                        owner_onboarding_identity_docs_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-176 requires issued documentation-only acceptance')
+                if owner_onboarding_identity_docs_task['source_ids'] != [
+                    OWNER_ONBOARDING_IDENTITY_SOURCE_ID, OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID,
+                ]:
+                    extension_errors.append('APBRA-176 requires its two accepted sources')
+                for source_id, content_id, version, expected_sha in (
+                    (OWNER_ONBOARDING_IDENTITY_SOURCE_ID, '4030847', 4, OWNER_ONBOARDING_IDENTITY_SOURCE_SHA256),
+                    (OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID, '3932362', 7, OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256),
+                ):
+                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    if package_source is None:
+                        extension_errors.append('APBRA-176 accepted source is missing: ' + source_id)
+                    else:
+                        canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                        if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-176 source differs from accepted provenance: ' + source_id)
+                        if (package_source.get('content_id') != content_id or
+                                package_source.get('version') != version or package_source.get('status') != 'ACCEPTED'):
+                            extension_errors.append('APBRA-176 source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                owner_onboarding_identity_docs_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1736,6 +1801,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
             (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
             (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
+            (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1778,7 +1844,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS) and
                     not (active_task_id == 'APBRA-175' and
                          active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
-                         changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS)):
+                         changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-176' and
+                         active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
+                         changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1894,6 +1963,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH and
                     changed_paths.intersection(DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS)):
                 errors.append('APBRA-175 documentation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-176' and
+                    changed_paths.intersection(OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS) and
+                    changed_paths.intersection(OWNER_ONBOARDING_IDENTITY_DOCS_PATHS)):
+                errors.append('APBRA-176 registration and documentation changes must remain separate')
+            if (active_task_id == 'APBRA-176' and
+                    active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
+                    changed_paths != OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS):
+                errors.append('APBRA-176 registration must change exactly its six governance files')
+            if (active_task_id == 'APBRA-176' and
+                    active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH and
+                    changed_paths.intersection(OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS)):
+                errors.append('APBRA-176 documentation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -1973,6 +2054,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
                          changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS and
                          name in DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-176' and active_task is not None and
+                         active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
+                         changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
+                         name in OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

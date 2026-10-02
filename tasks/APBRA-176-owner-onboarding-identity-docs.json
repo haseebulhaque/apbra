@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-176",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-176-20261002-REG",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DOCS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile exact GitHub documentation with the 2 October 2026 self-service company onboarding and provider-neutral SSO owner decision in a later documentation-only PR; this registration changes governance files only.",
+  "requirements": [
+    "Jira APBRA-176 issue 10276 To Do under APBRA-160; Haseeb owner instruction 2026-10-02 and PLAN comment 10368.",
+    "Controlling Confluence 10.03 page 4030847 v4 and 02.01 page 3932362 v7; cross-check 01.01 v8, 01.10 v6, 01.11 v6, 02.05 v4, 02.06 v8, 03.07 v11, 04.05 v5, 05.06 v4, 04.07 v2, 04.08 v2 and 14.03 v6.",
+    "Target journey: approved-provider authentication, stable validated issuer/subject binding, existing membership or eligible invitation resolution, then self-service Create Company / Workspace with server-transactional initial COMPANY_OWNER.",
+    "APBRA-172 provides provider-neutral SSO/session and qualifies Microsoft Entra External ID first. Other providers, verified-domain joining and enterprise SSO/SCIM/JIT require separate qualification.",
+    "Authentication, membership, exact private report access, Power BI/Fabric consent, Azure management authority and entitlement remain separate; domain, UPN, external tenant and IdP group never automatically grant company authority.",
+    "Distinguish merged local/CI foundation on main d33e6222aaf902da821de2f59f288005f7f6c709 from target live SSO, self-service creation and hosted preview; preserve NO HARDCODING, portability and historical evidence limits."
+  ],
+  "adrs": [
+    "Documentation-only: no application/runtime code, API, schema, migration, dependency, lockfile, workflow, permission or cloud resource change.",
+    "Microsoft Entra External ID is the first qualified live profile, not a core dependency or external-tenant-to-company mapping.",
+    "Company ownership and private-resource grants remain APBRA server authority; sign-in and paid entitlement never bypass them.",
+    "Deployment bootstrap differs from tenant settings; provider-neutral qualified profiles preserve portability without hidden provider, tenant, model or business defaults.",
+    "Keep current local/CI, historical, target and runtime-verified claims separate; no Power BI Desktop PASS, publishing or production claim from prose."
+  ],
+  "architecture_refs": [
+    "Jira APBRA-176 10276 To Do, PLAN comment 10368; APBRA-151/172 To Do, APBRA-160 In Progress; Haseeb owner instruction 2026-10-02.",
+    "Confluence 10.03 page 4030847 v4 and 02.01 page 3932362 v7 accepted 2026-10-02; other page versions in requirements.",
+    "GitHub main d33e6222aaf902da821de2f59f288005f7f6c709 after Haseeb manual merge APBRA-175 PR #78; ruleset 23529228 requires PR and APBRA Bootstrap Checks."
+  ],
+  "allowed_paths": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "DATA-MODEL.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "SECURITY.md",
+    "apps/web/README.md",
+    "docs/engineering/codex-handoff.md",
+    "docs/decisions/implementation-baseline.md"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "apps/api/**",
+    "apps/web/src/**",
+    "apps/web/e2e/**",
+    "apps/web/scripts/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/vite.config.ts",
+    "apps/web/playwright.config.ts",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    "scripts/**",
+    "tests/**",
+    "tasks/**",
+    "contracts/**",
+    "agents/**",
+    "docs/source-register.json",
+    "requirements-bootstrap.txt",
+    "compose.yaml",
+    "artifacts/**",
+    "output/**",
+    "manual-testing/**",
+    "local-data/**",
+    "*.zip",
+    "**/*.zip",
+    ".env*",
+    "**/.env*"
+  ],
+  "acceptance_criteria": [
+    "Later documentation PR changes only nine literal allowed paths; registration PR changes exactly six governance paths and no product documentation.",
+    "Docs state self-service first-user company journey, transactional initial COMPANY_OWNER and provider-neutral SSO with Microsoft Entra External ID first without implying implementation.",
+    "Membership/invitation resolution, private-resource grants, verified-domain opt-in and enterprise SSO/SCIM/JIT boundaries stay explicit.",
+    "Authentication, company membership, Power BI/Fabric consent, Azure management authority and entitlement stay separate; no hardcoded provider/tenant or cross-provider email merge.",
+    "Current main local/CI evidence, target requirements and private hosted preview are distinct; no Power BI Desktop PASS, publishing, public signup or production claim is invented.",
+    "Historical provenance remains intact; no runtime, dependency, workflow, permission, cloud resource, paid call or automatic merge is introduced."
+  ],
+  "verification_required": [
+    "Focused APBRA-176 exact source/task hash, registration separation, finite-path and fail-closed mutation tests.",
+    "Full python -m unittest discover -s tests/bootstrap -v, python scripts/check_bootstrap.py and python scripts/check_ci_policy.py using configured runtime.",
+    "Exact base/head, changed-path and git diff --check audit; history-aware secret scan locally where supported and on hosted Linux x64.",
+    "Hosted APBRA Bootstrap CI on exact PR head and genuinely separate exact-base/exact-head review.",
+    "Haseeb-only manual merge of governance PR before separate documentation branch/PR; Haseeb-only manual merge of documentation PR."
+  ],
+  "out_of_scope": [
+    "Any path beyond nine future documentation paths or any documentation edit in this governance registration PR.",
+    "APBRA-151/172 application implementation, provider provisioning, invitations, public registration, customer tenant setup, cloud resources or production deployment.",
+    "Additional providers, verified-domain join, enterprise SSO/SCIM/JIT, billing runtime or Power BI/Fabric/Azure consent implementation.",
+    "New prices, provider/model/region, numerical limits, Power BI Desktop PASS, publishing or production assertions.",
+    "Historical task/source rewrite, weakened checks, self-approval, direct main write, automatic merge or agent merge."
+  ],
+  "escalate_when": [
+    "A required document path lies beyond nine exact paths or registration needs beyond six exact files.",
+    "Accepted sources conflict materially or a new owner/security/commercial decision is required.",
+    "A mandatory local/hosted validation, secret scan, independent exact-head review or Haseeb manual merge gate is missing, skipped, failed or stale."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "d33e6222aaf902da821de2f59f288005f7f6c709",
+  "branch": "agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs",
+  "source_ids": [
+    "apbra-176-owner-onboarding-identity",
+    "apbra-176-owner-onboarding-requirements"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-176 October 2 onboarding and identity documentation reconciliation",
+  "dependencies": [
+    "Governance-only PR requires hosted CI, separate exact-head review and Haseeb manual merge before documentation authority is effective.",
+    "Later documentation PR begins at newly verified post-registration main and changes only nine allowed documents.",
+    "APBRA-151/172/173 remain pending; APBRA-176 closure waits for Haseeb manual merge of documentation PR."
+  ]
+}

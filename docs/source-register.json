@@ -312,6 +312,24 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized APBRA-175 governance-only registration on 2026-10-02 after manual merge of APBRA-174 PR #74. Accepted future-state 04.08 v1 controls subscription to versioned entitlement to capability and the intersection of platform support, entitlement, tenant settings, user/application and resource permission, and safety/validation/governance. Paid plans never bypass security or target validity; plan-name branching, prices, package names, billing implementation and provider selection are not authorized. This source binds the same later separate nine-path documentation-only task after exact-head hosted CI, independent review and Haseeb-only manual merge of registration; no application, cloud, central customer content or historical source change is authorized."
+    },
+    {
+      "id": "apbra-176-owner-onboarding-identity",
+      "content_id": "4030847",
+      "version": 4,
+      "section": "10.03 - Identity, Authentication, Authorisation & RBAC",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb approved self-service first-user APBRA company creation and provider-neutral SSO on 2026-10-02. APBRA-151 owns transactional company creation and initial COMPANY_OWNER; APBRA-172 owns provider-neutral SSO with Microsoft Entra External ID first. Authentication, membership, exact private-resource grants, Power BI/Fabric consent, Azure management authority and entitlement stay separate. Domain/UPN/external tenant cannot auto-join. APBRA-176 is a documentation-only reconciliation with separate governance registration and later bounded docs PR; no live implementation or production claim."
+    },
+    {
+      "id": "apbra-176-owner-onboarding-requirements",
+      "content_id": "3932362",
+      "version": 7,
+      "section": "02.01 - Business & Functional Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362",
+      "status": "ACCEPTED",
+      "acceptance": "The 2026-10-02 owner refinement maps PC26-FR-008 to APBRA-151 company lifecycle and APBRA-172 provider-neutral SSO with Microsoft Entra External ID first, under APBRA-160. Resolve membership or invitation before Create Company / Workspace; server creates company and initial COMPANY_OWNER atomically. Other providers, verified-domain join and enterprise SSO/SCIM/JIT need separate qualification. Private preview may stay allow-listed. Target requirements are not live Entra, public signup, Power BI Desktop, publishing or production evidence."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
