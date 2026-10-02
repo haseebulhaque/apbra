@@ -28,3 +28,21 @@ References:
 - https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning
 - https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository
 - https://github.com/gitleaks/gitleaks/blob/v8.30.1/LICENSE
+
+## Identity and self-service company onboarding
+
+The accepted target uses provider-neutral federation with Microsoft Entra External ID as the first qualified live provider. External authentication proves the provider identity only; APBRA remains authoritative for company membership, capabilities and exact private-resource grants.
+
+Security invariants:
+
+- validate the qualified provider protocol/tokens according to the provider profile; never trust client-supplied issuer, tenant, role or company claims;
+- persist a stable issuer-plus-subject/object identity binding (or equivalent qualified provider key); mutable email/UPN is not the durable authorization key;
+- do not silently merge accounts from different issuers/providers because their email addresses match;
+- resolve active APBRA membership or an eligible invitation before offering self-service company creation;
+- create a new company/workspace and its initial `COMPANY_OWNER` membership in one server-authoritative, idempotent/auditable transaction;
+- email domain, UPN suffix, external tenant ID or IdP group membership never automatically grants company ownership, membership or resource access;
+- authentication, company membership, private-resource access, commercial entitlement, Power BI/Fabric consent and Azure management authority are distinct checks;
+- verified-domain join, enterprise SSO and SCIM/JIT require explicit company policy and separate qualification; customer-admin action may be required for those enterprise integrations;
+- development/test identity mechanisms must fail closed outside their authorised local/test profile.
+
+This repository documentation does not prove live Entra integration, public signup, hosted isolation or production session security. Those require APBRA-151/172/173 implementation and exact evidence.

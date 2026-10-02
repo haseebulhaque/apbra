@@ -1,12 +1,22 @@
 # APBRA engineering handoff — protected local/CI foundation and portable target
 
-## Execution baseline and authority
+## APBRA-176 current documentation checkpoint
+
+Registration PR #79 was manually merged by Haseeb on 2 October 2026. The APBRA-176 documentation branch starts from verified main `9b1569f2b955aab523f4bacbdcefed2d582ebe0a` and is governed by Jira [APBRA-176](https://arkitektz.atlassian.net/browse/APBRA-176). The current controlling sources are Confluence [10.03 v4](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847) and [02.01 v7](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362), cross-checked against the 2 October product/roadmap/tenancy updates.
+
+This branch may change exactly nine documents: [README](../../README.md), [ARCHITECTURE](../../ARCHITECTURE.md), [REQUIREMENTS](../../REQUIREMENTS.md), [DATA-MODEL](../../DATA-MODEL.md), [MVP acceptance criteria](../../MVP-ACCEPTANCE-CRITERIA.md), [SECURITY](../../SECURITY.md), [web README](../../apps/web/README.md), this handoff, and [implementation baseline](../decisions/implementation-baseline.md). It authorizes no runtime/API/schema/migration/dependency/workflow/cloud change.
+
+The accepted target onboarding flow is provider-neutral authentication → existing APBRA membership or eligible invitation → otherwise self-service Create Company / Workspace with server-transactional initial `COMPANY_OWNER`. Microsoft Entra External ID is the first qualified live provider under APBRA-172, not a mandatory core dependency. Authentication, company membership, exact private-resource access, Power BI/Fabric consent, Azure management authority and commercial entitlement remain separate. Domain/UPN/external-tenant/IdP-group values do not auto-grant company authority. Additional providers, verified-domain joining and enterprise SSO/SCIM/JIT require separate qualification.
+
+The current local/CI product still proves only the bounded invited/development-issuer foundation. APBRA-151/172/173 remain implementation/qualification work. No live Entra sign-in, public signup, hosted production identity or customer-directory setup is established by these documentation edits.
+
+## Historical APBRA-175 execution baseline and authority
 
 At the start of APBRA-175 documentation work on 2 October 2026, verified `origin/main` was `46d9fe60be8854d3570f71cc9ee0eb64ff39c455`. That merge contains APBRA-175 governance registration PR #77, whose reviewed head was `6f6342382326311616b9572f874d6f44b948c110`. APBRA-174 product PR #74 was manually merged earlier at `acf1473ea0a05c5f203d85ed55fdc695515880c8` with final reviewed head `e08fafb4074f37a4435eaf61b3b7a0d0a10be8ad` and hosted APBRA Bootstrap run `36881084290` SUCCESS. APBRA-174 is Done in Jira. These SHAs identify historical evidence and the APBRA-175 documentation base; they are not a permanent claim about the latest main.
 
 Jira [APBRA-175](https://arkitektz.atlassian.net/browse/APBRA-175) governs **documentation only** on branch `agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs`. Its task contract allows exactly nine documents: [README](../../README.md), [ARCHITECTURE](../../ARCHITECTURE.md), [REQUIREMENTS](../../REQUIREMENTS.md), [AI/RAG specification](../../AI-RAG-SPEC.md), [Power BI generation specification](../../POWERBI-GENERATION-SPEC.md), [MVP acceptance criteria](../../MVP-ACCEPTANCE-CRITERIA.md), [DATA-MODEL](../../DATA-MODEL.md), [web README](../../apps/web/README.md) and this handoff. `apps/api/README.md` was deliberately excluded. This task authorizes no runtime, database, migration, dependency, lockfile, workflow, cloud or commercial implementation.
 
-Confluence [04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) are accepted **future-state** deployment and entitlement sources. Confluence [03.06 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/7864321) and Jira APBRA-165 govern future ARD/native-report architecture. Accepted intent is not an implementation or runtime verification result.
+Confluence [04.07 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) are accepted **future-state** deployment and entitlement sources. Confluence [03.06 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/7864321) and Jira APBRA-165 govern future ARD/native-report architecture. Accepted intent is not an implementation or runtime verification result.
 
 ## Current product implementation boundary
 
@@ -28,11 +38,11 @@ Power BI remains a first-class current output adapter. APBRA-165's future versio
 
 ## Governance and next evidence gates
 
-Confluence owns architecture/requirements, Jira owns delivery intent, and GitHub owns code and execution evidence. Use the merged APBRA-175 task/source registration and the current live sources before any further work. Only the nine registered documents may change in this branch. No documentation statement grants new product functionality, commercial authority or cloud spend.
+Confluence owns architecture/requirements, Jira owns delivery intent, and GitHub owns code and execution evidence. APBRA-176 is the active documentation authority for this branch. Exactly the nine registered APBRA-176 documents may change; the merged six-path registration remains historical governance evidence and must not be mixed into the documentation diff. No documentation statement grants new product functionality, commercial authority, customer-directory access or cloud spend.
 
-The accepted solo-owner process is implementation/documentation PR → fresh independent review of the **exact base and head** → passing required hosted checks → **Haseeb manual merge**. Same-session author review is not independent approval. Keep the PR open until that gate; do not enable auto-merge or mark APBRA-175 Done before independent review and manual merge. Preserve the original historical task/source evidence. See [solo-owner process](../decisions/solo-owner-process.md), [repository controls](repository-controls.md) and [security policy](../../SECURITY.md).
+The accepted solo-owner process is documentation PR → fresh independent review of the **exact base and head** → passing required hosted checks → **Haseeb manual merge**. Same-session author review is not independent approval. Keep the PR open until that gate; do not enable auto-merge or mark APBRA-176 Done before independent review and manual merge. Preserve historical APBRA-175 and earlier task/source evidence. See [solo-owner process](../decisions/solo-owner-process.md), [repository controls](repository-controls.md) and [security policy](../../SECURITY.md).
 
-The APBRA-175 documentation validation plan is focused scope tests, full bootstrap suite, standalone bootstrap and CI-policy checkers, exact nine-path and Markdown/link audits, `git diff --check`, history-aware secret scan where locally supported, and hosted APBRA Bootstrap CI on the exact head. The independent reviewer must assess current-versus-future claims and every changed document; green CI alone does not establish architectural truth or production readiness.
+The APBRA-176 documentation validation plan is the focused APBRA-176 scope tests, full bootstrap suite, standalone bootstrap and CI-policy checkers, exact nine-path and Markdown/link audits, `git diff --check`, history-aware secret scan where locally supported, and hosted APBRA Bootstrap CI on the exact final head. Independent review must assess current-versus-target identity/onboarding claims and every changed document; green CI alone does not establish live SSO, production identity or hosted readiness.
 
 ## Historical evidence retained for traceability
 

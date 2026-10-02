@@ -48,9 +48,9 @@ The protected local/CI application now has bounded identity, private-case tenant
 
 ## APBRA-175 architecture is not a current MVP acceptance gate
 
-[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) accepts APBRA Cloud, Dedicated and qualified Private / On-Premises target profiles, with air-gapped operation only after later qualification. Azure is a reference/private-preview choice, not mandatory core infrastructure. A future central commercial control plane holds minimum deployment/licence metadata; customer content remains in its selected data plane, with `deployment_id` separate from `tenant_id`.
+[Confluence 04.07 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) accepts APBRA Cloud, Dedicated and qualified Private / On-Premises target profiles, with air-gapped operation only after later qualification. Azure is a reference/private-preview choice, not mandatory core infrastructure. A future central commercial control plane holds minimum deployment/licence metadata; customer content remains in its selected data plane, with `deployment_id` separate from `tenant_id`.
 
-[Confluence 04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) accepts Subscription → versioned Entitlements → stable Capabilities. Effective capability intersects installed platform support, entitlement, Tenant Settings, user/application and resource permission, and current safety/validation/governance. Payment never overrides authorization, tenant isolation, target validity or release gates. Plans, prices, quotas, grace periods and billing provider are undecided. No central licensing runtime, customer-hosted production profile or offline licence is required to call the historical Capstone submitted or to validate today's bounded local/CI foundation; each future capability needs its own task, qualification and evidence.
+[Confluence 04.08 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) accepts Subscription → versioned Entitlements → stable Capabilities. Effective capability intersects installed platform support, entitlement, Tenant Settings, user/application and resource permission, and current safety/validation/governance. Payment never overrides authorization, tenant isolation, target validity or release gates. Plans, prices, quotas, grace periods and billing provider are undecided. No central licensing runtime, customer-hosted production profile or offline licence is required to call the historical Capstone submitted or to validate today's bounded local/CI foundation; each future capability needs its own task, qualification and evidence.
 
 Current bounded PBIP/PBIR/TMDL generation remains the Power BI adapter. Confluence 03.06 v1 and APBRA-165 describe future ARD/native rendering and other adapters; this document does not mark them PASS or claim PBIX or Desktop runtime support.
 
@@ -74,3 +74,20 @@ For planned governed knowledge, activation requires both required source approva
 The earlier APBRA-147 planning hold and APBRA-149–158 target items are historical planning context; none makes a future deployment, entitlement, ARD or other target row above a current PASS. No milestone, stack replacement, model/provider, region, price, SLA or numerical limit is selected by this document.
 
 Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
+
+## APBRA-176 identity/onboarding acceptance boundary — target gates, not current PASS
+
+The 2 October 2026 owner decision changes the intended MVP-1 onboarding path, but these criteria remain **unpassed** until APBRA-151/172/173 produce exact implementation evidence.
+
+A qualified identity/onboarding slice must demonstrate at minimum:
+
+1. a real qualified provider can authenticate a user through the provider-neutral APBRA SSO/session seam, with Microsoft Entra External ID first;
+2. the stable external identity binding does not use mutable email/UPN as the durable security key and does not silently merge equal-email identities across issuers/providers;
+3. an existing active membership resumes correctly, an eligible invitation binds only the intended company membership, and an unrelated authenticated user receives no APBRA authority;
+4. a user with no applicable membership/invitation can choose **Create Company / Workspace**, and the company plus initial `COMPANY_OWNER` membership are created transactionally, idempotently and audibly;
+5. email domain, UPN suffix, external tenant ID and IdP groups cannot manufacture company ownership or private-resource access;
+6. company membership does not grant every private report/case, and entitlement does not bypass permission, validation or governance;
+7. logout/session expiry, membership deactivation/revocation and cross-company/private-resource negative tests fail closed;
+8. hosted-preview evidence is kept separate from deterministic local/CI identity tests, and no public/production readiness claim is made without APBRA-173 qualification.
+
+Verified-domain joining, additional social providers, enterprise SSO and SCIM/JIT are separate acceptance packages. Power BI/Fabric consent and Azure management consent are not part of basic APBRA login.

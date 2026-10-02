@@ -10,7 +10,7 @@ This repository view separates implemented Capstone behaviour, verified evidence
 
 ## Accepted APBRA-175 architecture requirements — future implementation
 
-[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) refine the target without turning deployment or entitlement runtime into a current MVP gate. APBRA Cloud, Dedicated and qualified Private / On-Premises are target deployment profiles; air-gapped support requires later qualification. Azure is a reference/private-preview option, not a core product requirement. The local/CI PostgreSQL case application does not prove any production profile.
+[Confluence 04.07 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) refine the target without turning deployment or entitlement runtime into a current MVP gate. APBRA Cloud, Dedicated and qualified Private / On-Premises are target deployment profiles; air-gapped support requires later qualification. Azure is a reference/private-preview option, not a core product requirement. The local/CI PostgreSQL case application does not prove any production profile.
 
 The future central control plane may retain minimum organisation, stable `deployment_id`, subscription/edition, entitlement, licence and release/update metadata. Customer users/mappings, Tenant Settings, protected credentials, uploads, prompts, accepted requirements, generated reports/Delivery Guides and audit/history belong to the selected customer data plane; licence checks do not require content transfer. `deployment_id` identifies an installation, while `tenant_id` identifies the company security domain. A shared Cloud installation may host many tenants; Dedicated/Private relationships require qualification.
 
@@ -49,7 +49,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 
 ## Accepted post-Capstone product requirements
 
-`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below preserve the Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 mappings as recorded at the earlier post-Capstone reconciliation. The accepted 04.07 v1 and 04.08 v1 direction above adds deployment and entitlement architecture; this historical mapping is not a claim that those source versions are still the latest. Every row is **TARGET / PLANNED unless separately proven by the current protected slice or historical Capstone evidence above**. A Jira item or target requirement is not implementation evidence.
+`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below preserve the Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 mappings as recorded at the earlier post-Capstone reconciliation. The accepted 04.07 v2 and 04.08 v2 direction above adds deployment and entitlement architecture; this historical mapping is not a claim that those source versions are still the latest. Every row is **TARGET / PLANNED unless separately proven by the current protected slice or historical Capstone evidence above**. A Jira item or target requirement is not implementation evidence.
 
 | Requirement | Accepted target outcome | Existing Jira delivery coverage | Repository documentation home |
 | --- | --- | --- | --- |
@@ -81,3 +81,18 @@ The target does not select a delivery milestone, replacement stack, model/provid
 A future policy-eligible trusted author may omit only a separate human release-review step where an accepted policy explicitly permits it. Trusted-author eligibility does not collapse business acceptance, inspection download, creation of an eligible release package or successful deployment into one event, and it never grants source, tenant or external-management access by itself.
 
 Generated does not mean validated, approved, released or deployed. Missing or skipped mandatory evidence remains incomplete.
+
+## 19. APBRA-176 self-service onboarding and provider-neutral identity refinement — 2 October 2026
+
+Confluence 10.03 v4 and 02.01 v7 refine PC26-FR-008 without creating a new requirement ID:
+
+- approved-provider authentication establishes a person identity but does not itself create APBRA company, role or resource authority;
+- APBRA binds external identities using stable validated provider identifiers such as issuer plus subject/object identity rather than mutable email as the durable security key;
+- after authentication, APBRA resolves an existing active membership or eligible invitation before offering **Create Company / Workspace**;
+- first-company creation and the creator's initial `COMPANY_OWNER` membership are one server-authoritative transactional outcome with idempotent/replay-safe behavior;
+- email domain, UPN suffix, external tenant ID and IdP group membership cannot silently grant company membership or ownership;
+- Microsoft Entra External ID is the first qualified live provider under APBRA-172, while Google, Apple and other approved OIDC/federation providers use the same provider-neutral product model only after separate qualification;
+- verified-domain join, enterprise SSO and SCIM/JIT are later opt-in company policies and may require customer-admin involvement;
+- APBRA authentication, company membership, private-resource access, Power BI/Fabric consent, Azure management authority and commercial entitlement remain separate authorities.
+
+APBRA-176 changes documentation only. APBRA-151/172/173 remain pending implementation/qualification work and no live sign-in, public signup, Power BI Desktop, publishing or production claim follows from this refinement.
