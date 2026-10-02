@@ -1,7 +1,8 @@
 import hashlib
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+import sqlalchemy as sa
 from conftest import csrf, disposable_alembic_config, sign_in, validate_disposable_database_url
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
@@ -107,6 +108,119 @@ def test_provider_binding_downgrade_refuses_legacy_key_collision(
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
 
 
+def _assert_qualified_downgrade_preserves_state(
+    settings: Settings, database: Database, table: str, row_id: object
+) -> None:
+    profile_state = sa.table(table, sa.column("id", sa.Uuid()), sa.column("provider_profile_id"))
+    config = disposable_alembic_config(settings.database_url)
+    with pytest.raises(RuntimeError, match=f"provider-qualified security state in {table}"):
+        command.downgrade(config, "20261001_06")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+        assert (
+            db.scalar(
+                sa.select(profile_state.c.provider_profile_id).where(
+                    profile_state.c.id == UUID(str(row_id))
+                )
+            )
+            == "qualified-entra"
+        )
+    assert "provider_profile_id" in {
+        column["name"] for column in inspect(database.engine).get_columns(table)
+    }
+    assert "authentication_events" in inspect(database.engine).get_table_names()
+
+
+def test_provider_binding_downgrade_refuses_single_qualified_identity(
+    settings: Settings, database: Database
+) -> None:
+    with database.session() as db:
+        identity_id = db.scalar(
+            text("SELECT id FROM external_identities WHERE subject='dev-owner'")
+        )
+        assert identity_id is not None
+        db.execute(
+            text("UPDATE external_identities SET provider_profile_id=:profile WHERE id=:id"),
+            {"profile": "qualified-entra", "id": identity_id},
+        )
+        assert (
+            db.scalar(
+                text(
+                    "SELECT count(*) FROM external_identities "
+                    "WHERE issuer=(SELECT issuer FROM external_identities WHERE id=:id) "
+                    "AND subject=(SELECT subject FROM external_identities WHERE id=:id)"
+                ),
+                {"id": identity_id},
+            )
+            == 1
+        )
+    _assert_qualified_downgrade_preserves_state(
+        settings, database, "external_identities", identity_id
+    )
+    with database.session() as db:
+        assert (
+            db.scalar(
+                text("SELECT count(*) FROM memberships WHERE identity_id=:id"), {"id": identity_id}
+            )
+            == 1
+        )
+
+
+def test_provider_binding_downgrade_refuses_active_qualified_invitation(
+    settings: Settings, database: Database, client: TestClient
+) -> None:
+    owner_session = sign_in(client, "owner")
+    issued = client.post(
+        "/api/invitations",
+        json={"subject": "dev-uninvited", "role": "MEMBER"},
+        headers=csrf(owner_session),
+    )
+    assert issued.status_code == 200, issued.text
+    invitation_id = issued.json()["invitation"]["id"]
+    with database.session() as db:
+        db.execute(
+            text("UPDATE invitations SET provider_profile_id=:profile WHERE id=:id"),
+            {"profile": "qualified-entra", "id": invitation_id},
+        )
+        assert db.execute(
+            text("SELECT consumed_at, revoked_at FROM invitations WHERE id=:id"),
+            {"id": invitation_id},
+        ).one() == (None, None)
+    _assert_qualified_downgrade_preserves_state(settings, database, "invitations", invitation_id)
+    with database.session() as db:
+        assert (
+            db.scalar(
+                text("SELECT token_digest FROM invitations WHERE id=:id"), {"id": invitation_id}
+            )
+            is not None
+        )
+
+
+@pytest.mark.parametrize(
+    "table", ("auth_transactions", "application_sessions", "authentication_events")
+)
+def test_provider_binding_downgrade_refuses_qualified_auth_provenance(
+    settings: Settings, database: Database, client: TestClient, table: str
+) -> None:
+    sign_in(client, "owner")
+    profile_state = sa.table(table, sa.column("id", sa.Uuid()), sa.column("provider_profile_id"))
+    with database.session() as db:
+        # Isolate each guard: local sign-in also creates profile-qualified rows
+        # in the other two tables, which would mask a missing check here.
+        for other in ("auth_transactions", "application_sessions", "authentication_events"):
+            if other != table:
+                legacy_state = sa.table(other, sa.column("provider_profile_id"))
+                db.execute(sa.update(legacy_state).values(provider_profile_id="legacy-unqualified"))
+        row_id = db.scalar(sa.select(profile_state.c.id).limit(1))
+        assert row_id is not None
+        db.execute(
+            sa.update(profile_state)
+            .where(profile_state.c.id == row_id)
+            .values(provider_profile_id="qualified-entra")
+        )
+    _assert_qualified_downgrade_preserves_state(settings, database, table, row_id)
+
+
 def test_package_c_to_reviewed_design_upgrade_is_isolated(
     settings: Settings, database: Database, client: TestClient
 ) -> None:
@@ -133,6 +247,12 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
     original_bytes = client.get(
         f"/api/cases/{case['id']}/generation/{original['id']}/artifact"
     ).content
+    # This test exercises the older generation migration. Its disposable
+    # local-test authentication state has no pre-172 profile representation.
+    with database.session() as db:
+        db.execute(text("DELETE FROM authentication_events"))
+        db.execute(text("DELETE FROM application_sessions"))
+        db.execute(text("DELETE FROM auth_transactions"))
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "20260924_03")
     inspector = inspect(database.engine)
@@ -171,6 +291,7 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
     # The deliberate downgrade removed the new tenant-settings tables. Re-seed
     # only this disposable test tenant before exercising the restored API.
     bootstrap(settings, database)
+    sign_in(client, "member")
     restored = client.get(f"/api/cases/{case['id']}/generation/{original['id']}/artifact")
     assert restored.status_code == 200
     assert restored.content == original_bytes

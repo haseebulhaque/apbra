@@ -68,6 +68,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     connection = op.get_bind()
+    # Keep writes from introducing qualified state between the preflight and
+    # the DDL that removes its authority boundary. PostgreSQL holds these
+    # locks until Alembic's transactional downgrade commits or rolls back.
+    connection.execute(
+        sa.text(
+            "LOCK TABLE external_identities, invitations, auth_transactions, "
+            "application_sessions, authentication_events IN SHARE ROW EXCLUSIVE MODE"
+        )
+    )
     collision = connection.execute(
         sa.text(
             "SELECT issuer, subject FROM external_identities "
@@ -78,6 +87,26 @@ def downgrade() -> None:
         raise RuntimeError(
             "Cannot downgrade provider-qualified identities: legacy issuer/subject key collides"
         )
+    # Pre-172 code has no provider-profile authority boundary. Refuse rollback
+    # before changing the schema if any qualified security state would lose it.
+    # This includes consumed/expired records: a rollback must not silently
+    # relabel their identity, invitation, session, or audit provenance.
+    for table in (
+        "external_identities",
+        "invitations",
+        "auth_transactions",
+        "application_sessions",
+        "authentication_events",
+    ):
+        profile_state = sa.table(table, sa.column("provider_profile_id"))
+        qualified = connection.execute(
+            sa.select(sa.literal(1))
+            .select_from(profile_state)
+            .where(profile_state.c.provider_profile_id != "legacy-unqualified")
+            .limit(1)
+        ).first()
+        if qualified is not None:
+            raise RuntimeError(f"Cannot downgrade provider-qualified security state in {table}")
     op.drop_index("ix_auth_event_identity_time", table_name="authentication_events")
     op.drop_table("authentication_events")
     op.drop_index("ix_invitation_profile_issuer_subject", table_name="invitations")
