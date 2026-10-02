@@ -10,7 +10,7 @@ This repository view separates implemented Capstone behaviour, verified evidence
 
 ## Accepted APBRA-175 architecture requirements — future implementation
 
-[Confluence 04.07 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v1](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) refine the target without turning deployment or entitlement runtime into a current MVP gate. APBRA Cloud, Dedicated and qualified Private / On-Premises are target deployment profiles; air-gapped support requires later qualification. Azure is a reference/private-preview option, not a core product requirement. The local/CI PostgreSQL case application does not prove any production profile.
+[Confluence 04.07 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) and [04.08 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525) refine the target without turning deployment or entitlement runtime into a current MVP gate. APBRA Cloud, Dedicated and qualified Private / On-Premises are target deployment profiles; air-gapped support requires later qualification. Azure is a reference/private-preview option, not a core product requirement. The local/CI PostgreSQL case application does not prove any production profile.
 
 The future central control plane may retain minimum organisation, stable `deployment_id`, subscription/edition, entitlement, licence and release/update metadata. Customer users/mappings, Tenant Settings, protected credentials, uploads, prompts, accepted requirements, generated reports/Delivery Guides and audit/history belong to the selected customer data plane; licence checks do not require content transfer. `deployment_id` identifies an installation, while `tenant_id` identifies the company security domain. A shared Cloud installation may host many tenants; Dedicated/Private relationships require qualification.
 
@@ -49,7 +49,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 
 ## Accepted post-Capstone product requirements
 
-`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below preserve the Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 mappings as recorded at the earlier post-Capstone reconciliation. The accepted 04.07 v1 and 04.08 v1 direction above adds deployment and entitlement architecture; this historical mapping is not a claim that those source versions are still the latest. Every row is **TARGET / PLANNED unless separately proven by the current protected slice or historical Capstone evidence above**. A Jira item or target requirement is not implementation evidence.
+`APBRA-PRODUCT-2026-09-22` is the accepted target-product baseline. The definitions below preserve the Business and Functional Requirements 02.01 v4 and Requirements Traceability Matrix 02.06 v6 mappings as recorded at the earlier post-Capstone reconciliation. The accepted 04.07 v2 and 04.08 v2 direction above adds deployment and entitlement architecture; this historical mapping is not a claim that those source versions are still the latest. Every row is **TARGET / PLANNED unless separately proven by the current protected slice or historical Capstone evidence above**. A Jira item or target requirement is not implementation evidence.
 
 | Requirement | Accepted target outcome | Existing Jira delivery coverage | Repository documentation home |
 | --- | --- | --- | --- |
