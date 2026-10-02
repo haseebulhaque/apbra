@@ -114,3 +114,13 @@ The current protected local/CI candidate ZIP contains bounded Power BI project c
 Expandable technical evidence records run ID, model, latency/tokens, embedding calls, retrieval/citations, original and normalized visual counts, normalization actions, integrity findings, guardrails, compiler, validation and final status.
 
 Implemented locally/CI does not mean production ready. The current protected credential adapter is not hosted managed-secret qualification. Live Entra qualification, hosted multitenancy, durable knowledge ingestion/indexing, managed secret operations, broad compatibility, publishing, reviewer workflow, resilience, monitoring and compliance operations remain future work.
+
+## Target hosted sign-in and first-company onboarding — not implemented in this local preview
+
+The local/CI preview still uses its bounded development identity flow. The accepted hosted product direction is provider-neutral: the sign-in surface can present qualified providers, with Microsoft Entra External ID first under APBRA-172 and other providers added only after separate qualification.
+
+After successful provider authentication, the browser must not decide membership or role. The server resolves an existing APBRA membership or eligible invitation; otherwise the UI may offer **Create Company / Workspace**. Successful creation results in the server-created company and initial `COMPANY_OWNER` membership. Equal email/domain/tenant/group values are not enough to auto-join or elevate a user.
+
+The web experience should clearly distinguish **Sign in**, **Join invited company**, **Create company/workspace**, and later enterprise-managed sign-in. Power BI/Fabric connection consent and Azure management consent remain separate journeys. Verified-domain join, SCIM/JIT and additional social providers are later qualified capabilities, not hidden behavior in the current local selector.
+
+No browser state, route visibility or provider claim is the authorization boundary; every protected operation rechecks current server-side APBRA membership/capability/resource authority.
