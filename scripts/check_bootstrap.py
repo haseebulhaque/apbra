@@ -649,6 +649,39 @@ OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256 = 'a99f810212fad2e6f5715b94c311f724b
 OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs'
 OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH = OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH + '-registration'
 
+PROVIDER_NEUTRAL_SSO_PATHS = {
+    'apps/api/.env.example', 'apps/api/README.md',
+    'apps/api/alembic/versions/20261002_07_provider_neutral_sso.py',
+    'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/auth_boundary.py', 'apps/api/src/apbra_api/authorization.py',
+    'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/identity_service.py', 'apps/api/src/apbra_api/oidc_adapter.py',
+    'apps/api/src/apbra_api/persistence.py',
+    'apps/api/tests/test_authentication.py', 'apps/api/tests/test_authorization.py',
+    'apps/api/tests/test_identity_service.py', 'apps/api/tests/test_invitations.py',
+    'apps/api/tests/test_migrations.py', 'apps/web/README.md',
+    'apps/web/e2e/private-case.spec.ts', 'apps/web/src/api.test.ts',
+    'apps/web/src/api.ts', 'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/privateCases.tsx', 'apps/web/src/style.css',
+}
+PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS = {
+    'docs/source-register.json', 'tasks/APBRA-172-provider-neutral-sso.json',
+    'scripts/check_bootstrap.py', 'tests/bootstrap/test_provider_neutral_sso_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+}
+PROVIDER_NEUTRAL_SSO_TASK_SHA256 = '8edb604b7e9a33c3a7249a71a17b50e8578ad86cf00139f2a9bdfedc9f07a210'
+PROVIDER_NEUTRAL_SSO_SOURCES = (
+    ('apbra-172-identity-rbac', '4030847', 4, 'a0360420eda28492d9cacfba0c5617a4bfd884034e9397c5de984edf4e1eed00'),
+    ('apbra-172-data-integration-identity-audit', '4063348', 4, 'cb3c6716e6784717f5d578614179c257b75364b0087a9f3ca359d20a6a9ccea9'),
+    ('apbra-172-business-functional-requirements', '3932362', 7, 'aa7b6f22711923856d302cd9751baff6a508f9031bced9f0c56585400242232b'),
+    ('apbra-172-multi-tenancy-isolation', '4063408', 5, '5bdeb6e7532139b3759a80bf9e23462b8f8c3e8bc0f0d1b88dbf8ce72f37b0e1'),
+    ('apbra-172-platform-identity-deployment-adrs', '3932483', 4, '81601b05483ced7d44add3cdea5791f6294c7aa5ece0430b249f000a87bf1a8f'),
+)
+PROVIDER_NEUTRAL_SSO_BRANCH = 'agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
+PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH = PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1762,6 +1795,44 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 owner_onboarding_identity_docs_task = None
+        provider_neutral_sso_task = None
+        provider_neutral_sso_path = root / 'tasks/APBRA-172-provider-neutral-sso.json'
+        if provider_neutral_sso_path.exists():
+            provider_neutral_sso_task = load_json(provider_neutral_sso_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), provider_neutral_sso_task)
+            if not extension_errors:
+                extension_errors += task_errors(provider_neutral_sso_task, catalog, sources)
+                canonical_task = json.dumps(provider_neutral_sso_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != PROVIDER_NEUTRAL_SSO_TASK_SHA256:
+                    extension_errors.append('APBRA-172 contract differs from accepted authority')
+                if (provider_neutral_sso_task['task_id'], provider_neutral_sso_task['assigned_agent'],
+                        provider_neutral_sso_task['agent_card_version']) != ('APBRA-172', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-172 task or agent identity')
+                if provider_neutral_sso_task['branch'] != PROVIDER_NEUTRAL_SSO_BRANCH:
+                    extension_errors.append('Unexpected APBRA-172 implementation branch')
+                if provider_neutral_sso_task['base_commit'] != '613e43a9a9040428630d73f6ab12fd930f29d830':
+                    extension_errors.append('Stale APBRA-172 registration base')
+                if set(provider_neutral_sso_task['allowed_paths']) != PROVIDER_NEUTRAL_SSO_PATHS:
+                    extension_errors.append('Unexpected APBRA-172 implementation scope')
+                if (provider_neutral_sso_task['task_mode'], provider_neutral_sso_task['readiness'],
+                        provider_neutral_sso_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-172 requires issued implementation acceptance')
+                if provider_neutral_sso_task['source_ids'] != [source_id for source_id, _, _, _ in PROVIDER_NEUTRAL_SSO_SOURCES]:
+                    extension_errors.append('APBRA-172 requires its five accepted sources')
+                for source_id, content_id, version, expected_sha in PROVIDER_NEUTRAL_SSO_SOURCES:
+                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    if package_source is None:
+                        extension_errors.append('APBRA-172 accepted source is missing: ' + source_id)
+                    else:
+                        canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                        if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-172 source differs from accepted provenance: ' + source_id)
+                        if (package_source.get('content_id') != content_id or
+                                package_source.get('version') != version or package_source.get('status') != 'ACCEPTED'):
+                            extension_errors.append('APBRA-172 source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                provider_neutral_sso_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1802,6 +1873,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
             (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
             (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
+            (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1847,7 +1919,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-176' and
                          active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
-                         changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS)):
+                         changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-172' and
+                         active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
+                         changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -1975,6 +2050,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH and
                     changed_paths.intersection(OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS)):
                 errors.append('APBRA-176 documentation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-172' and
+                    changed_paths.intersection(PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
+                    changed_paths.intersection(PROVIDER_NEUTRAL_SSO_PATHS)):
+                errors.append('APBRA-172 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-172' and
+                    active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
+                    changed_paths != PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS):
+                errors.append('APBRA-172 registration must change exactly its seven governance files')
+            if (active_task_id == 'APBRA-172' and
+                    active_branch == PROVIDER_NEUTRAL_SSO_BRANCH and
+                    changed_paths.intersection(PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS)):
+                errors.append('APBRA-172 implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -2059,6 +2146,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
                          changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
                          name in OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-172' and active_task is not None and
+                         active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
+                         changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS and
+                         name in PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

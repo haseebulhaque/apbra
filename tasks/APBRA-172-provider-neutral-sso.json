@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-172",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-172-20261002-REG",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register a separate, finite future implementation of provider-neutral APBRA authentication/session and Microsoft Entra External ID as the first qualified live OIDC profile; this governance PR changes no application behavior.",
+  "requirements": [
+    "Jira APBRA-172 under APBRA-160; Haseeb owner APBRA-172 package 2026-10-02 and PLAN comment 10385.",
+    "Accepted primary sources: 10.03 page 4030847 v4, 02.05 page 4063348 v4, 02.01 page 3932362 v7, 04.05 page 4063408 v5 and 05.06 page 3932483 v4; context 01.01 v8, 01.10 v6, 01.11 v6, 03.07 v11, 04.07 v2, 04.08 v2, 14.03 v6 and ledger 20.05 v54.",
+    "Authenticate only through a deployment-qualified trusted provider profile. Validate authorization code with PKCE, state, nonce, exact issuer/audience/signature/lifetime/subject and trusted discovery/JWKS; prevent mix-up, replay, open redirect and arbitrary browser-supplied trust.",
+    "Bind validated provider-qualified issuer/subject to durable APBRA identity without email/domain/UPN/IdP-group authority or silent cross-provider account linking. Preserve exact invitation semantics and fail-closed company membership and private-case access.",
+    "Issue APBRA-owned revocable server sessions with secure browser cookies, CSRF protection, expiry and current identity/membership/resource rechecks; avoid provider token retention and do not request Graph, Power BI/Fabric or Azure management scopes for basic login.",
+    "Provide provider-neutral sign-in/session/logout UI; deterministic local/test identity stays local/test-only, hosted mode requires a qualified live provider; no unauthorised first-user company creation in this task."
+  ],
+  "adrs": [
+    "Microsoft Entra External ID is first qualified OIDC adapter, not core identity architecture or a deployment requirement; later providers require separate qualification.",
+    "Provider trust is deployment/bootstrap configuration, not self-qualified Tenant Settings or browser input. Secrets use protected deployment references and never enter source, normal rows, browser, logs or task contracts.",
+    "External authentication, APBRA company membership, exact private-resource grant, entitlement, Power BI/Fabric consent and Azure management authority are distinct.",
+    "APBRA-151 owns server-transactional company creation and initial COMPANY_OWNER; APBRA-172 may expose an authenticated no-membership onboarding state only. APBRA-173 owns hosted Azure preview provisioning.",
+    "Preserve APBRA-175 portability and NO HARDCODING. No customer-varying tenant, issuer, provider endpoint, cloud, region or commercial value is compiled into core logic."
+  ],
+  "architecture_refs": [
+    "Jira APBRA-172 To Do; APBRA-160 In Progress; APBRA-151/173 To Do; APBRA-9/152/153 and completed 162/163/164 reviewed 2026-10-02.",
+    "Five accepted Confluence primary versions registered as source_ids; contextual accepted source versions listed in requirements.",
+    "GitHub origin/main 613e43a9a9040428630d73f6ab12fd930f29d830 after Haseeb manual APBRA-176 PR #80 merge; ruleset 23529228 requires PR, APBRA Bootstrap Checks, resolved threads and no bypass."
+  ],
+  "allowed_paths": [
+    "apps/api/.env.example",
+    "apps/api/README.md",
+    "apps/api/alembic/versions/20261002_07_provider_neutral_sso.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/identity_service.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/tests/test_authentication.py",
+    "apps/api/tests/test_authorization.py",
+    "apps/api/tests/test_identity_service.py",
+    "apps/api/tests/test_invitations.py",
+    "apps/api/tests/test_migrations.py",
+    "apps/web/README.md",
+    "apps/web/e2e/private-case.spec.ts",
+    "apps/web/src/api.test.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/privateCases.test.tsx",
+    "apps/web/src/privateCases.tsx",
+    "apps/web/src/style.css"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "infrastructure/**",
+    "terraform/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "tasks/**",
+    "docs/**",
+    "packages/**",
+    "workers/**",
+    "apps/web/scripts/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/playwright.config.ts",
+    "apps/web/vite.config.ts",
+    "apps/api/requirements*.txt",
+    "apps/api/pyproject.toml",
+    "requirements-bootstrap.txt",
+    "compose.yaml",
+    "artifacts/**",
+    "output/**",
+    "manual-testing/**",
+    "local-data/**",
+    "*.zip",
+    "**/*.zip"
+  ],
+  "acceptance_criteria": [
+    "Later implementation branch changes only the 24 exact literal allowed paths; this registration branch changes only seven governance files and no application/runtime path.",
+    "Entra External ID is a qualified live adapter behind provider-neutral profile/binding/session contracts; deterministic simulator remains local/test-only and hosted fail-closed.",
+    "Cross-provider same-email, mutable profile claims, external tenant/domain/group, invitation mismatch, stale membership and wrong resource cannot grant APBRA role or access.",
+    "Exact issuer/audience/signature/key/lifetime/state/nonce/PKCE and redirect protections, session lifecycle and safe logout have deterministic negative tests and PostgreSQL/browser coverage.",
+    "APBRA-151 company creation and APBRA-173 cloud provisioning remain separate; no automatic company owner, Graph/Power BI/Fabric/ARM consent, other-provider implementation or billing.",
+    "Live Entra qualification is separately evidenced with explicit owner setup and cost/security approval; deterministic tests alone never claim live provider or production readiness."
+  ],
+  "verification_required": [
+    "Focused APBRA-172 exact source/task hash, path and negative mutation tests plus historical source-order tests.",
+    "Full bootstrap suite, standalone scripts/check_bootstrap.py and scripts/check_ci_policy.py; exact changed-path audit, git diff --check, history-aware secret scan where locally supported.",
+    "Later implementation: complete API pytest, Ruff, strict mypy, PostgreSQL 17 migration upgrade/downgrade and integration, web unit/type/build/Playwright and hosted CI.",
+    "Hosted APBRA Bootstrap CI on exact registration PR head, genuinely separate exact-head review, then Haseeb-only manual registration merge before a new implementation branch.",
+    "Later product PR requires hosted CI, separately evidenced real Entra qualification where applicable, independent review and Haseeb-only manual merge."
+  ],
+  "out_of_scope": [
+    "Any application/runtime change in this governance PR; any later path outside the 24 literal allowlist.",
+    "APBRA-151 company creation, initial owner transaction or broad multi-company UX redesign; APBRA-173 IaC, DNS, cloud resources, production deployment and spend.",
+    "Google/Apple/enterprise SAML implementation, SCIM/JIT, domain auto-join, cross-provider account linking, automatic IdP-group roles, entitlement/billing/pricing.",
+    "Microsoft Graph directory discovery, Power BI/Fabric publishing/consent, Azure Resource Manager permissions, paid or live provider calls without separate approval.",
+    "Dependency/lockfile/workflow changes, weakened checks, historical task/source rewrite, self-approval, direct main write, auto-merge or agent merge."
+  ],
+  "escalate_when": [
+    "Any required implementation path, dependency, workflow or governance file lies outside this exact registration and future allowlist.",
+    "Accepted sources conflict, a provider/client credential or cost/security decision is required, or APBRA-151 ownership boundaries cannot be preserved.",
+    "Mandatory validation, hosted CI, independent exact-head review or Haseeb manual merge gate is absent, skipped, failed or stale."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "613e43a9a9040428630d73f6ab12fd930f29d830",
+  "branch": "agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso",
+  "source_ids": [
+    "apbra-172-identity-rbac",
+    "apbra-172-data-integration-identity-audit",
+    "apbra-172-business-functional-requirements",
+    "apbra-172-multi-tenancy-isolation",
+    "apbra-172-platform-identity-deployment-adrs"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-172 provider-neutral SSO and first Entra External ID qualification after registration merge",
+  "dependencies": [
+    "Governance-only registration PR must pass hosted CI and independent exact-head review, then Haseeb manually merges before any application change begins.",
+    "APBRA-151 owns company creation/initial owner; APBRA-172 provides authenticated identity/no-membership handoff without granting company authority.",
+    "APBRA-173 provides qualified hosted preview environment, separate from this registration and application authority."
+  ]
+}
