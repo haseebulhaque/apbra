@@ -64,7 +64,7 @@ class OwnerOnboardingIdentityDocsScopeTests(unittest.TestCase):
                 self.assertEqual((source["content_id"], source["version"], source["status"]),
                                  (content_id, version, "ACCEPTED"))
                 self.assertEqual(digest(source), expected)
-        self.assertEqual([x["id"] for x in self.sources["sources"][-7:-5]],
+        self.assertEqual([x["id"] for x in self.sources["sources"][-14:-12]],
                          self.task["source_ids"])
 
     def test_separate_registration_and_docs(self):
