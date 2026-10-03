@@ -37,12 +37,15 @@ from sqlalchemy.orm import (
 from .domain import (
     AccessLevel,
     Actor,
+    AuthenticationRequired,
     CaseRecord,
+    Forbidden,
     IdentityRecord,
     InterpretationRecord,
     InvitationRecord,
     MembershipRecord,
     Role,
+    SessionRecord,
 )
 
 
@@ -374,6 +377,31 @@ class IdempotencyRow(Base):
     command_key: Mapped[str] = mapped_column(String(200), nullable=False)
     payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     resource_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CompanyCreationCommandRow(Base):
+    """Immutable identity-scoped replay proof for pre-membership creation."""
+
+    __tablename__ = "company_creation_commands"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_company_create_owner_company",
+        ),
+        UniqueConstraint("identity_id", "command_key", name="uq_company_create_identity_key"),
+        UniqueConstraint("company_id", name="uq_company_create_company"),
+        UniqueConstraint("membership_id", name="uq_company_create_membership"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    identity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("external_identities.id"), nullable=False
+    )
+    command_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    membership_id: Mapped[UUID] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -1127,6 +1155,155 @@ class ApplicationSession(Session):
             )
         )
 
+    def lock_active_session_for_creation(
+        self, session_id: UUID, identity_id: UUID, now: datetime
+    ) -> SessionRow:
+        row = self.scalar(
+            select(SessionRow)
+            .where(
+                SessionRow.id == session_id,
+                SessionRow.identity_id == identity_id,
+                SessionRow.revoked_at.is_(None),
+                SessionRow.expires_at > now,
+            )
+            .with_for_update()
+        )
+        if row is None:
+            raise AuthenticationRequired()
+        return row
+
+    def company_creation_command(
+        self, identity_id: UUID, command_key: str
+    ) -> CompanyCreationCommandRow | None:
+        return self.scalar(
+            select(CompanyCreationCommandRow).where(
+                CompanyCreationCommandRow.identity_id == identity_id,
+                CompanyCreationCommandRow.command_key == command_key,
+            )
+        )
+
+    def company(self, company_id: UUID) -> CompanyRow | None:
+        return self.get(CompanyRow, company_id)
+
+    def active_company(self, company_id: UUID, *, lock: bool = False) -> CompanyRow | None:
+        statement = select(CompanyRow).where(
+            CompanyRow.id == company_id, CompanyRow.active.is_(True)
+        )
+        if lock:
+            statement = statement.with_for_update()
+        return self.scalar(statement)
+
+    def create_company_with_owner(
+        self,
+        identity: IdentityRecord,
+        session: SessionRecord,
+        name: str,
+        command_key: str,
+        payload_digest: str,
+    ) -> tuple[CompanyRow, MembershipRow]:
+        # Import at the adapter boundary to avoid a module cycle: the settings
+        # service already depends on the SQL rows defined in this module.
+        from .tenant_settings import create_private_preview_initial_settings
+
+        if session.identity_id != identity.id or session.revoked_at is not None:
+            raise AuthenticationRequired()
+        company = CompanyRow(name=name)
+        self.add(company)
+        self.flush()
+        membership = MembershipRow(
+            company_id=company.id,
+            identity_id=identity.id,
+            role=Role.COMPANY_OWNER.value,
+        )
+        self.add(membership)
+        self.flush()
+        settings = create_private_preview_initial_settings(self, company, membership.id)
+        actor = Actor(
+            identity_id=identity.id,
+            membership_id=membership.id,
+            company_id=company.id,
+            issuer=identity.issuer,
+            subject=identity.subject,
+            display_name=identity.display_name,
+            role=Role.COMPANY_OWNER,
+            provider_profile_id=identity.provider_profile_id,
+        )
+        details = json.dumps(
+            {"initial_settings_version_id": str(settings.id)},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        self.add_audit(actor, "COMPANY_CREATED", "COMPANY", company.id, details)
+        self.add_audit(actor, "MEMBERSHIP_CREATED", "MEMBERSHIP", membership.id)
+        self.add(
+            CompanyCreationCommandRow(
+                identity_id=identity.id,
+                command_key=command_key,
+                payload_digest=payload_digest,
+                company_id=company.id,
+                membership_id=membership.id,
+            )
+        )
+        session.membership_id = membership.id
+        self.flush()
+        return company, membership
+
+    def eligible_invitation_for_identity(self, identity: IdentityRecord, now: datetime) -> bool:
+        return (
+            self.scalar(
+                select(InvitationRow.id)
+                .join(CompanyRow, CompanyRow.id == InvitationRow.company_id)
+                .where(
+                    InvitationRow.provider_profile_id == identity.provider_profile_id,
+                    InvitationRow.invited_issuer == identity.issuer,
+                    InvitationRow.invited_subject == identity.subject,
+                    InvitationRow.revoked_at.is_(None),
+                    InvitationRow.consumed_at.is_(None),
+                    InvitationRow.expires_at > now,
+                    CompanyRow.active.is_(True),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    def update_identity_display_name(
+        self, identity_id: UUID, display_name: str
+    ) -> ExternalIdentityRow:
+        identity = self.scalar(
+            select(ExternalIdentityRow)
+            .where(ExternalIdentityRow.id == identity_id, ExternalIdentityRow.active.is_(True))
+            .with_for_update()
+        )
+        if identity is None:
+            raise AuthenticationRequired()
+        identity.display_name = display_name
+        self.flush()
+        return identity
+
+    def lock_company_for_membership_management(self, company_id: UUID) -> None:
+        company = self.scalar(
+            select(CompanyRow)
+            .where(CompanyRow.id == company_id, CompanyRow.active.is_(True))
+            .with_for_update()
+        )
+        if company is None:
+            raise Forbidden()
+
+    def active_owner_count(self, company_id: UUID) -> int:
+        return int(
+            self.scalar(
+                select(func.count())
+                .select_from(MembershipRow)
+                .where(
+                    MembershipRow.company_id == company_id,
+                    MembershipRow.role == Role.COMPANY_OWNER.value,
+                    MembershipRow.active.is_(True),
+                )
+            )
+            or 0
+        )
+
     def active_session(
         self, token_digest: str, now: datetime
     ) -> tuple[SessionRow, ExternalIdentityRow] | None:
@@ -1165,7 +1342,9 @@ class ApplicationSession(Session):
             )
         )
         if lock:
-            query = query.with_for_update(of=(MembershipRow, ExternalIdentityRow, CompanyRow))
+            query = query.with_for_update(
+                of=(MembershipRow, ExternalIdentityRow, CompanyRow)
+            ).execution_options(populate_existing=True)
         pair = self.execute(query).one_or_none()
         if pair is None:
             return None
@@ -1396,7 +1575,7 @@ class ApplicationSession(Session):
     def invitation(self, token_digest: str, *, lock: bool = False) -> InvitationRow | None:
         statement = select(InvitationRow).where(InvitationRow.token_digest == token_digest)
         if lock:
-            statement = statement.with_for_update()
+            statement = statement.with_for_update().execution_options(populate_existing=True)
         return self.scalar(statement)
 
     def membership(self, company_id: UUID, identity_id: UUID) -> MembershipRow | None:
@@ -1409,20 +1588,29 @@ class ApplicationSession(Session):
 
     def active_identity_membership(self, identity_id: UUID) -> MembershipRow | None:
         return self.scalar(
-            select(MembershipRow).where(
+            select(MembershipRow)
+            .join(CompanyRow, CompanyRow.id == MembershipRow.company_id)
+            .where(
                 MembershipRow.identity_id == identity_id,
                 MembershipRow.active.is_(True),
+                CompanyRow.active.is_(True),
             )
+            .order_by(MembershipRow.created_at, MembershipRow.id)
+            .limit(1)
         )
 
     def lock_identity_for_membership(self, identity_id: UUID) -> None:
         identity = self.scalar(
             select(ExternalIdentityRow)
-            .where(ExternalIdentityRow.id == identity_id)
+            .where(
+                ExternalIdentityRow.id == identity_id,
+                ExternalIdentityRow.active.is_(True),
+            )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        if identity is None:
-            raise RuntimeError("Invitation identity disappeared during acceptance.")
+        if identity is None or not identity.active:
+            raise AuthenticationRequired()
 
     def accept_invitation(self, row: InvitationRecord, identity: IdentityRecord) -> MembershipRow:
         assert isinstance(row, InvitationRow)

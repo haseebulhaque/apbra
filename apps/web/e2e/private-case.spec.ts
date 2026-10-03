@@ -1,6 +1,6 @@
 import {expect,test,type Page} from '@playwright/test';
 
-async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'){
+async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|'creator'){
   await page.goto('/');
   await page.getByText('Local development identities').click();
   await page.getByRole('link',{name:identity,exact:true}).click();
@@ -110,8 +110,8 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   const inviteeContext=await browser.newContext();
   const inviteePage=await inviteeContext.newPage();
   await signIn(inviteePage,'uninvited');
-  await expect(inviteePage.getByRole('heading',{name:'Create Company / Workspace'})).toBeVisible();
-  await expect(inviteePage.getByRole('button',{name:'Create Company / Workspace (not yet available)'})).toBeDisabled();
+  await expect(inviteePage.getByRole('heading',{name:'Open your invitation'})).toBeVisible();
+  await expect(inviteePage.getByRole('textbox',{name:'Company or workspace name'})).toHaveCount(0);
 
   await inviteePage.goto(invitationLink);
   await expect(inviteePage).not.toHaveURL(/token=/);
@@ -120,6 +120,74 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await expect(inviteePage.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
   await expect(inviteePage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
   await inviteeContext.close();
+});
+
+test('an uninvited identity creates one company with owner and approved settings after a lost response',async({page,browser})=>{
+  await signIn(page,'creator');
+  await expect(page.getByRole('heading',{name:'Create Company / Workspace'})).toBeVisible();
+  await expect(page.getByLabel('Company or workspace name')).toBeVisible();
+  await expect(page.getByLabel(/domain|Microsoft tenant|provider|billing|role/i)).toHaveCount(0);
+  const name='Creator Preview Workspace';
+  await page.getByLabel('Company or workspace name').fill(name);
+  let first=true;
+  await page.route('**/api/companies',async route=>{
+    if(!first){await route.continue();return}
+    first=false;
+    const committed=await route.fetch();
+    expect(committed.status()).toBe(201);
+    await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEMPORARY',message:'Synthetic response lost after commit'}})});
+  });
+  await page.getByRole('button',{name:'Create Company / Workspace'}).click();
+  await expect(page.getByRole('alert')).toContainText('Company creation could not be completed. Please try again.');
+  await page.getByRole('button',{name:'Create Company / Workspace'}).click();
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.locator('.account-controls')).toContainText('company owner');
+  const settings=await page.evaluate(async()=>{const response=await fetch('/api/tenant-settings',{credentials:'same-origin'});return{status:response.status,body:await response.json()}});
+  expect(settings.status).toBe(200);
+  expect(settings.body).toMatchObject({version:1,validation_status:'PASS',settings:{automatic_generation_enabled:false,provider_profile:null,generation_policy:{organisation:{name,displayName:name}}}});
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await page.getByText('My profile').click();
+  await page.getByLabel('Display name').fill('Casey Creator');
+  await page.getByRole('button',{name:'Save profile'}).click();
+  await expect(page.locator('.account-controls')).toContainText('Casey Creator');
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Review synthetic preview activity by month.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  const foreignContext=await browser.newContext(),foreignPage=await foreignContext.newPage();
+  await signIn(foreignPage,'foreign');
+  await expect(foreignPage.getByRole('button',{name:/Review synthetic preview activity by month/})).toHaveCount(0);
+  await foreignContext.close();
+});
+
+test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
+  await signIn(page,'owner');
+  await page.getByText('Manage company access').click();
+  const owner=page.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
+  const member=page.locator('.invitation-admin .membership-list li').filter({hasText:'Morgan Member'});
+  await expect(owner.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
+  const role=member.getByLabel('Role for Morgan Member');
+  await role.selectOption('COMPANY_ADMIN');
+  await member.getByRole('button',{name:'Save role'}).click();
+  await expect(member).toContainText('COMPANY ADMIN');
+  try{
+    const adminContext=await browser.newContext(),adminPage=await adminContext.newPage();
+    try{
+      await signIn(adminPage,'member');
+      await adminPage.getByText('Manage company access').click();
+      const ownerAsAdmin=adminPage.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
+      await expect(ownerAsAdmin.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
+      const ownerId=await page.evaluate(async()=>{const response=await fetch('/api/memberships',{credentials:'same-origin'}),body=await response.json() as {items:Array<{id:string;role:string}>};return body.items.find(item=>item.role==='COMPANY_OWNER')?.id});
+      expect(ownerId).toBeTruthy();
+      const denial=await adminPage.evaluate(async membershipId=>{const session=await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {csrf_token:string};const response=await fetch(`/api/memberships/${encodeURIComponent(membershipId)}/deactivate`,{method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':session.csrf_token}});return response.status},ownerId!);
+      expect(denial).toBe(403);
+    }finally{await adminContext.close()}
+  }finally{
+    await role.selectOption('MEMBER');
+    await member.getByRole('button',{name:'Save role'}).click();
+    await expect(member).toContainText('MEMBER');
+  }
 });
 
 test('hosted provider metadata never exposes deterministic identity controls',async({page})=>{

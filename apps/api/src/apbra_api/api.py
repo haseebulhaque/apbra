@@ -1,7 +1,8 @@
 import logging
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import Cookie, Depends, FastAPI, Header, Query, Request, Response
@@ -14,10 +15,12 @@ from sqlalchemy.orm import Session
 from .application import (
     AcceptanceService,
     CaseService,
+    CompanyService,
     ConversationService,
     EvidenceService,
     InvitationService,
     MembershipService,
+    ProfileService,
 )
 from .artifacts import LocalArtifactStore
 from .auth_boundary import (
@@ -181,6 +184,21 @@ class CompanySelection(BaseModel):
     membership_id: UUID
 
 
+class CompanyCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+
+
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    display_name: str
+
+
+class MembershipRoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal[Role.MEMBER, Role.COMPANY_ADMIN]
+
+
 def error_response(exc: ApplicationError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -210,6 +228,8 @@ def create_app(
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
     case_service = CaseService()
+    company_service = CompanyService()
+    profile_service = ProfileService()
     credential_store = AesGcmTenantCredentialStore.from_bootstrap(
         settings.tenant_secret_keyring_json.get_secret_value()
         if settings.tenant_secret_keyring_json
@@ -781,9 +801,12 @@ def create_app(
             db.commit()
             raise
         memberships = db.scalars(
-            select(MembershipRow).where(
+            select(MembershipRow)
+            .join(CompanyRow, CompanyRow.id == MembershipRow.company_id)
+            .where(
                 MembershipRow.identity_id == identity.id,
                 MembershipRow.active.is_(True),
+                CompanyRow.active.is_(True),
             )
         ).all()
         if prior_session_token:
@@ -853,19 +876,16 @@ def create_app(
             },
             "csrf_token": csrf_token(session_token or "", settings.session_secret),
         }
-        if row.membership_id:
-            actor = db.active_actor(row.membership_id, identity.id)
-            if actor is None:
-                result["membership_state"] = "MEMBERSHIP_INACTIVE"
-            else:
-                result["membership_state"] = "ACTIVE"
-                result["actor"] = {
-                    "identity_id": str(actor.identity_id),
-                    "membership_id": str(actor.membership_id),
-                    "company_id": str(actor.company_id),
-                    "display_name": actor.display_name,
-                    "role": actor.role.value,
-                }
+        actor = db.active_actor(row.membership_id, identity.id) if row.membership_id else None
+        if actor is not None:
+            result["membership_state"] = "ACTIVE"
+            result["actor"] = {
+                "identity_id": str(actor.identity_id),
+                "membership_id": str(actor.membership_id),
+                "company_id": str(actor.company_id),
+                "display_name": actor.display_name,
+                "role": actor.role.value,
+            }
         else:
             memberships = db.execute(
                 select(MembershipRow, CompanyRow)
@@ -875,16 +895,70 @@ def create_app(
                     MembershipRow.active.is_(True),
                     CompanyRow.active.is_(True),
                 )
+                .order_by(MembershipRow.created_at, MembershipRow.id)
             ).all()
             if memberships:
                 result["membership_state"] = "COMPANY_SELECTION_REQUIRED"
                 result["available_companies"] = [
-                    {"membership_id": str(membership.id), "name": company.name}
+                    {
+                        "membership_id": str(membership.id),
+                        "company_id": str(company.id),
+                        "name": company.name,
+                    }
                     for membership, company in memberships
                 ]
+            elif db.eligible_invitation_for_identity(identity, datetime.now(UTC)):
+                result["membership_state"] = "INVITATION_AVAILABLE"
             else:
                 result["membership_state"] = "COMPANY_CREATION_AVAILABLE"
         return result
+
+    @app.post("/api/companies")
+    def create_company(
+        payload: CompanyCreate,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+        command_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        require_csrf(session_token, csrf)
+        if command_key is None or re.fullmatch(r"[A-Za-z0-9._:-]{8,200}", command_key) is None:
+            raise Conflict()
+        session_row, identity = resolve_session(db, session_token)
+        result, created = company_service.create(
+            db, session_row, identity, payload.name, command_key
+        )
+        db.commit()
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/api/profile")
+    def get_profile(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+        _session, identity = resolve_session(db, session_token)
+        return {"profile": {"display_name": identity.display_name}}
+
+    @app.patch("/api/profile")
+    def update_profile(
+        payload: ProfileUpdate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        require_csrf(session_token, csrf)
+        session_row, identity = resolve_session(db, session_token)
+        updated = profile_service.update(db, identity, payload.display_name)
+        identity_service.record(
+            db,
+            session_row.provider_profile_id,
+            "PROFILE_UPDATED",
+            identity_id=updated.id,
+            session_id=session_row.id,
+        )
+        db.commit()
+        return {"profile": {"display_name": updated.display_name}}
 
     @app.post("/api/auth/select-company")
     def select_company(
@@ -1465,6 +1539,21 @@ def create_app(
         membership_service.deactivate(db, resolve_actor(db, session_token), membership_id)
         db.commit()
         return {"deactivated": True}
+
+    @app.post("/api/memberships/{membership_id}/role")
+    def change_membership_role(
+        membership_id: UUID,
+        payload: MembershipRoleUpdate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        row = membership_service.change_role(
+            db, resolve_actor(db, session_token), membership_id, Role(payload.role)
+        )
+        db.commit()
+        return {"membership": {"id": str(row.id), "role": row.role, "active": row.active}}
 
     app.state.settings = settings
     app.state.database = database

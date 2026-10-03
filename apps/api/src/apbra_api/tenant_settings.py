@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
@@ -100,6 +101,93 @@ class TenantSettings(BaseModel):
         return self
 
 
+def private_preview_onboarding_settings_v1(company_display_name: str) -> TenantSettings:
+    """Haseeb-approved APBRA-151 private-preview policy (Jira comment 10406).
+
+    This is a versioned customer-onboarding policy, independent of the local
+    development/test ``seed_settings`` and deployment bootstrap configuration.
+    The caller supplies only the validated APBRA company display name.
+    """
+    if (
+        not company_display_name
+        or company_display_name != company_display_name.strip()
+        or any(unicodedata.category(char) == "Cc" for char in company_display_name)
+    ):
+        raise ValueError("company display name is not validated")
+    return TenantSettings.model_validate(
+        {
+            "clarification_enabled": True,
+            "max_clarification_rounds_per_cycle": 2,
+            "max_clarification_rounds_overall": 10,
+            "expert_escalation_enabled": False,
+            "automatic_generation_enabled": False,
+            "invitation_ttl_days": 7,
+            "upload_policy": {
+                "data_extensions": ["CSV", "XLSX"],
+                "reference_extensions": ["PNG", "JPG", "JPEG"],
+                "max_file_bytes": 5_000_000,
+                "max_files_per_selection": 8,
+                "max_data_items_per_report": 20,
+                "max_reference_items_per_report": 20,
+            },
+            "clarification_policy": {
+                "max_questions_per_round": 5,
+                "max_answer_characters": 2_000,
+            },
+            "generation_policy": {
+                "organisation": {
+                    "name": company_display_name,
+                    "displayName": company_display_name,
+                    "locale": "en-AU",
+                    "timezone": "Australia/Sydney",
+                },
+                "branding": {
+                    "primary": "#17635E",
+                    "accent": "#2D7D9A",
+                    "reportNaming": "Concise business report titles",
+                    "pageNaming": "Short page names",
+                    "executiveConvention": "Accessible summaries",
+                    "themeName": "APBRA Default",
+                },
+                "generation": {
+                    "enabled": True,
+                    "supportedCapabilities": [
+                        "KPI cards",
+                        "Bar and column charts",
+                        "Line charts",
+                        "Tables",
+                        "Slicers",
+                        "Multiple pages",
+                        "Explicit measures",
+                    ],
+                    "supportedTrendGrains": ["DAY", "MONTH", "QUARTER", "YEAR"],
+                    "validationRequired": True,
+                    "policy": "Governed candidate generation",
+                },
+                "governance": {
+                    "requireKnowledge": True,
+                    "requireAccessibility": True,
+                    "requireValidation": True,
+                    "maxVisualsPerPage": 6,
+                    "maxPages": 5,
+                    "humanReviewAtVisuals": 6,
+                },
+            },
+            "provider_profile": None,
+            "delivery_guide_policy": {
+                "enabled": True,
+                "include_handover_instructions": True,
+            },
+            "conventions": {
+                "report_naming": "",
+                "semantic_modelling": "",
+                "accessibility": "",
+                "terminology": {},
+            },
+        }
+    )
+
+
 @dataclass(frozen=True)
 class TenantSettingsSnapshot:
     id: UUID
@@ -112,12 +200,23 @@ class TenantSettingsSnapshot:
 
 
 _QUALIFIED_IDENTITY_FIELDS = (
-    "profile_id", "protocol", "endpoint", "model_or_deployment", "api_version",
-    "region", "prompt_version", "configuration_id", "capabilities",
+    "profile_id",
+    "protocol",
+    "endpoint",
+    "model_or_deployment",
+    "api_version",
+    "region",
+    "prompt_version",
+    "configuration_id",
+    "capabilities",
 )
 _QUALIFIED_BUDGET_FIELDS = (
-    "max_calls_per_operation", "max_input_characters", "max_output_tokens",
-    "time_budget_seconds", "request_timeout_seconds", "retry_limit",
+    "max_calls_per_operation",
+    "max_input_characters",
+    "max_output_tokens",
+    "time_budget_seconds",
+    "request_timeout_seconds",
+    "retry_limit",
 )
 
 
@@ -129,12 +228,16 @@ def validate_qualified_profile(
     qualified = next(
         (item for item in qualified_profiles if item.profile_id == profile.profile_id), None
     )
-    if qualified is None or any(
-        getattr(profile, field) != getattr(qualified, field)
-        for field in _QUALIFIED_IDENTITY_FIELDS
-    ) or any(
-        getattr(profile, field) > getattr(qualified, field)
-        for field in _QUALIFIED_BUDGET_FIELDS
+    if (
+        qualified is None
+        or any(
+            getattr(profile, field) != getattr(qualified, field)
+            for field in _QUALIFIED_IDENTITY_FIELDS
+        )
+        or any(
+            getattr(profile, field) > getattr(qualified, field)
+            for field in _QUALIFIED_BUDGET_FIELDS
+        )
     ):
         raise ConfigurationUnavailable()
 
@@ -318,6 +421,30 @@ def _insert_version(
     return _snapshot(row)
 
 
+def create_private_preview_initial_settings(
+    db: Session,
+    company: CompanyRow,
+    creator_membership_id: UUID,
+) -> TenantSettingsSnapshot:
+    """Create validated v1 and its pointer inside the caller's company transaction."""
+    if db.get(TenantSettingsCurrentRow, company.id) is not None:
+        raise Conflict()
+    return _insert_version(
+        db,
+        company.id,
+        private_preview_onboarding_settings_v1(company.name),
+        version=1,
+        actor_id=creator_membership_id,
+        secret_reference_id=None,
+        credential_store=None,
+        changed_keys=list(TenantSettings.model_fields),
+        safe_changes={},
+        reason="APBRA Private Preview Onboarding Tenant Settings Template v1 (Jira 10406)",
+        restored_from=None,
+        qualified_profiles=(),
+    )
+
+
 def update_settings(
     db: Session,
     actor: Actor,
@@ -337,14 +464,16 @@ def update_settings(
     # A provider-profile switch cannot silently reuse a credential bound to another profile.
     next_identity = (
         tuple(getattr(settings.provider_profile, field) for field in _QUALIFIED_IDENTITY_FIELDS)
-        if settings.provider_profile else None
+        if settings.provider_profile
+        else None
     )
     current_identity = (
         tuple(
             getattr(current.settings.provider_profile, field)
             for field in _QUALIFIED_IDENTITY_FIELDS
         )
-        if current.settings.provider_profile else None
+        if current.settings.provider_profile
+        else None
     )
     if next_identity != current_identity and secret_reference_id is None:
         reference = None

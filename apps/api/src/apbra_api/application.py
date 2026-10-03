@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import unicodedata
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -16,6 +17,9 @@ from .domain import (
     Actor,
     ApplicationPersistence,
     CaseRecord,
+    CompanyCreationNotAvailable,
+    CompanyNameInvalid,
+    CompanyRecord,
     ConfigurationUnavailable,
     Conflict,
     EvidenceInvalid,
@@ -27,10 +31,13 @@ from .domain import (
     InterpretationRecord,
     InvitationInvalid,
     InvitationRecord,
+    LastOwnerRequired,
     MembershipRecord,
+    ProfileInvalid,
     RequestVersionRecord,
     Role,
     SemanticValidationFailed,
+    SessionRecord,
     StaleVersion,
 )
 from .evidence import (
@@ -62,6 +69,77 @@ def canonical_payload(payload: dict[str, Any]) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def _safe_display_name(value: str, *, company: bool) -> str:
+    name = unicodedata.normalize("NFC", value.strip())
+    if not name or len(name) > 200 or any(
+        unicodedata.category(character) in {"Cc", "Cf"} for character in name
+    ):
+        raise CompanyNameInvalid() if company else ProfileInvalid()
+    return name
+
+
+def _company_creation_json(company: CompanyRecord, membership: MembershipRecord) -> dict[str, Any]:
+    return {
+        "company": {"id": str(company.id), "name": company.name},
+        "membership": {"id": str(membership.id), "role": membership.role},
+    }
+
+
+class CompanyService:
+    """Bootstrap one company from the server-validated APBRA identity only."""
+
+    def create(
+        self,
+        db: object,
+        session: SessionRecord,
+        identity: IdentityRecord,
+        name: str,
+        command_key: str,
+    ) -> tuple[dict[str, Any], bool]:
+        store = cast(ApplicationPersistence, db)
+        canonical_name = _safe_display_name(name, company=True)
+        payload_digest = canonical_payload({"name": canonical_name})
+        # A row lock serializes both same-key replays and distinct first-company
+        # requests from the same identity across API processes.
+        store.lock_identity_for_membership(identity.id)
+        locked_session = store.lock_active_session_for_creation(
+            session.id, identity.id, datetime.now(UTC)
+        )
+        existing = store.company_creation_command(identity.id, command_key)
+        if existing is not None:
+            if not hmac.compare_digest(existing.payload_digest, payload_digest):
+                raise IdempotencyConflict()
+            actor = store.active_actor(existing.membership_id, identity.id)
+            company = store.company(existing.company_id)
+            membership = store.membership(existing.company_id, identity.id)
+            if (
+                actor is None
+                or company is None
+                or membership is None
+                or not membership.active
+                or membership.id != existing.membership_id
+                or actor.company_id != company.id
+            ):
+                raise CompanyCreationNotAvailable()
+            locked_session.membership_id = actor.membership_id
+            return _company_creation_json(company, membership), False
+
+        if store.active_identity_membership(identity.id) is not None:
+            raise CompanyCreationNotAvailable()
+        if store.eligible_invitation_for_identity(identity, datetime.now(UTC)):
+            raise CompanyCreationNotAvailable()
+        company, membership = store.create_company_with_owner(
+            identity, locked_session, canonical_name, command_key, payload_digest
+        )
+        return _company_creation_json(company, membership), True
+
+
+class ProfileService:
+    def update(self, db: object, identity: IdentityRecord, display_name: str) -> IdentityRecord:
+        name = _safe_display_name(display_name, company=False)
+        return cast(ApplicationPersistence, db).update_identity_display_name(identity.id, name)
 
 
 def request_display_title(request_text: str) -> str:
@@ -231,7 +309,10 @@ class InvitationService:
         role: Role,
         expires_in_days: int,
     ) -> tuple[InvitationRecord, str]:
-        if not actor.role.can_invite:
+        store = cast(ApplicationPersistence, db)
+        store.lock_company_for_membership_management(actor.company_id)
+        current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if current_actor is None or not current_actor.role.can_invite:
             raise Forbidden()
         if role == Role.COMPANY_OWNER:
             raise Forbidden()
@@ -239,8 +320,8 @@ class InvitationService:
         if not subject:
             raise Conflict()
         raw_token = secrets.token_urlsafe(48)
-        row = cast(ApplicationPersistence, db).create_invitation(
-            actor,
+        row = store.create_invitation(
+            current_actor,
             subject,
             role,
             sha256_text(raw_token),
@@ -249,12 +330,14 @@ class InvitationService:
         return row, raw_token
 
     def inspect(self, db: object, raw_token: str) -> InvitationRecord:
-        row = cast(ApplicationPersistence, db).invitation(sha256_text(raw_token))
+        store = cast(ApplicationPersistence, db)
+        row = store.invitation(sha256_text(raw_token))
         if (
             row is None
             or row.revoked_at is not None
             or row.consumed_at is not None
             or row.expires_at <= datetime.now(UTC)
+            or store.active_company(row.company_id) is None
         ):
             raise InvitationInvalid()
         return row
@@ -262,12 +345,26 @@ class InvitationService:
     def accept(self, db: object, identity: IdentityRecord, raw_token: str) -> MembershipRecord:
         store = cast(ApplicationPersistence, db)
         digest = sha256_text(raw_token)
+        # Lock the company before its invitation so issuer revocation and
+        # acceptance share a stable order with company-scoped mutations.
+        preliminary = store.invitation(digest)
+        if preliminary is None or store.active_company(preliminary.company_id, lock=True) is None:
+            raise InvitationInvalid()
         row = store.invitation(digest, lock=True)
-        if row is None or not hmac.compare_digest(row.token_digest, digest):
+        if (
+            row is None
+            or row.company_id != preliminary.company_id
+            or not hmac.compare_digest(row.token_digest, digest)
+        ):
             raise InvitationInvalid()
         if row.consumed_at is not None:
             existing = store.membership(row.company_id, identity.id)
-            if row.consumed_by_identity_id == identity.id and existing is not None:
+            if (
+                row.consumed_by_identity_id == identity.id
+                and existing is not None
+                and existing.active
+                and store.active_actor(existing.id, identity.id, lock=True) is not None
+            ):
                 return existing
             raise InvitationInvalid()
         if row.revoked_at is not None or row.expires_at <= datetime.now(UTC):
@@ -288,21 +385,26 @@ class InvitationService:
         return store.accept_invitation(row, identity)
 
     def revoke(self, db: object, actor: Actor, invitation_id: UUID) -> None:
-        if not actor.role.can_invite:
-            raise Forbidden()
         store = cast(ApplicationPersistence, db)
+        store.lock_company_for_membership_management(actor.company_id)
+        current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if current_actor is None or not current_actor.role.can_invite:
+            raise Forbidden()
         row = store.lock_company_invitation(actor.company_id, invitation_id)
         if row is None or row.consumed_at is not None:
             raise InvitationInvalid()
         row.revoked_at = datetime.now(UTC)
-        store.add_audit(actor, "INVITATION_REVOKED", "INVITATION", row.id)
+        store.add_audit(current_actor, "INVITATION_REVOKED", "INVITATION", row.id)
 
 
 class MembershipService:
     def list(self, db: object, actor: Actor) -> list[dict[str, Any]]:
-        if not actor.role.can_invite:
+        store = cast(ApplicationPersistence, db)
+        store.lock_company_for_membership_management(actor.company_id)
+        current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if current_actor is None or not current_actor.role.can_invite:
             raise Forbidden()
-        rows = cast(ApplicationPersistence, db).company_memberships(actor.company_id)
+        rows = store.company_memberships(actor.company_id)
         return [
             {
                 "id": str(membership.id),
@@ -315,15 +417,57 @@ class MembershipService:
         ]
 
     def deactivate(self, db: object, actor: Actor, membership_id: UUID) -> None:
-        if not actor.role.can_invite or membership_id == actor.membership_id:
-            raise Forbidden()
         store = cast(ApplicationPersistence, db)
+        store.lock_company_for_membership_management(actor.company_id)
+        current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if current_actor is None or not current_actor.role.can_invite:
+            raise Forbidden()
         membership = store.lock_company_membership(actor.company_id, membership_id)
         if membership is None:
             raise Forbidden()
+        if membership_id == actor.membership_id:
+            raise Forbidden()
+        if membership.role == Role.COMPANY_OWNER.value:
+            if current_actor.role != Role.COMPANY_OWNER:
+                raise Forbidden()
+            if store.active_owner_count(actor.company_id) <= 1:
+                raise LastOwnerRequired()
         if membership.active:
             membership.active = False
-            store.add_audit(actor, "MEMBERSHIP_DEACTIVATED", "MEMBERSHIP", membership.id)
+            store.add_audit(current_actor, "MEMBERSHIP_DEACTIVATED", "MEMBERSHIP", membership.id)
+
+    def change_role(
+        self, db: object, actor: Actor, membership_id: UUID, role: Role
+    ) -> MembershipRecord:
+        if role not in {Role.MEMBER, Role.COMPANY_ADMIN}:
+            raise Forbidden()
+        store = cast(ApplicationPersistence, db)
+        store.lock_company_for_membership_management(actor.company_id)
+        current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if current_actor is None or current_actor.role != Role.COMPANY_OWNER:
+            raise Forbidden()
+        membership = store.lock_company_membership(actor.company_id, membership_id)
+        if membership is None or not membership.active:
+            raise Forbidden()
+        if membership.role == Role.COMPANY_OWNER.value:
+            raise LastOwnerRequired()
+        if membership.role not in {Role.MEMBER.value, Role.COMPANY_ADMIN.value}:
+            raise Forbidden()
+        if membership.role != role.value:
+            previous = membership.role
+            membership.role = role.value
+            store.add_audit(
+                current_actor,
+                "MEMBERSHIP_ROLE_CHANGED",
+                "MEMBERSHIP",
+                membership.id,
+                json.dumps(
+                    {"previous_role": previous, "current_role": role.value},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            )
+        return membership
 
 
 class ConversationService:
