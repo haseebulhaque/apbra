@@ -50,8 +50,19 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
         )[0]
 
     def test_exact_task_and_seven_accepted_sources(self):
-        self.assertEqual(len(c.COMPANY_LIFECYCLE_PATHS), 19)
+        self.assertEqual(len(c.COMPANY_LIFECYCLE_PATHS), 20)
+        self.assertEqual(len(self.task["allowed_paths"]), 20)
+        self.assertIn("apps/web/vite.config.ts", c.COMPANY_LIFECYCLE_PATHS)
+        self.assertNotIn("apps/web/vite.config.ts", self.task["restricted_paths"])
         self.assertEqual(len(c.COMPANY_LIFECYCLE_REGISTRATION_PATHS), 8)
+        self.assertEqual(
+            c.COMPANY_LIFECYCLE_AMENDMENT_PATHS,
+            {
+                "tasks/APBRA-151-company-lifecycle.json",
+                "scripts/check_bootstrap.py",
+                "tests/bootstrap/test_company_lifecycle_scope.py",
+            },
+        )
         self.assertEqual(set(self.task["allowed_paths"]), c.COMPANY_LIFECYCLE_PATHS)
         self.assertTrue(c.COMPANY_LIFECYCLE_PATHS.isdisjoint(c.COMPANY_LIFECYCLE_REGISTRATION_PATHS))
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
@@ -107,6 +118,117 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
             self.assertIn(
                 "APBRA-151 implementation branch cannot change governance registration files", errors
             )
+
+    def test_amendment_branch_changes_exactly_three_governance_files(self):
+        amendment = c.COMPANY_LIFECYCLE_AMENDMENT_PATHS
+        branch = c.COMPANY_LIFECYCLE_AMENDMENT_BRANCH
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, amendment, branch), [])
+            for omitted in amendment:
+                with self.subTest(omitted=omitted):
+                    self.assertTrue(self.check(root, amendment - {omitted}, branch))
+            for extra in (
+                "docs/source-register.json",
+                "apps/web/vite.config.ts",
+                "apps/api/src/apbra_api/api.py",
+                "apps/web/src/App.tsx",
+            ):
+                with self.subTest(extra=extra):
+                    errors = self.check(root, amendment | {extra}, branch)
+                    self.assertTrue(errors)
+                    self.assertIn("File outside active task scope: " + extra, errors)
+            for governance_path in amendment:
+                with self.subTest(implementation_governance=governance_path):
+                    errors = self.check(root, {governance_path})
+                    self.assertIn(
+                        "APBRA-151 implementation branch cannot change governance registration files",
+                        errors,
+                    )
+
+    def test_vite_scope_mutations_fail_even_if_task_digest_is_recomputed(self):
+        vite = "apps/web/vite.config.ts"
+        other_paths = [path for path in self.task["allowed_paths"] if path != vite]
+        mutations = {
+            "remove Vite": other_paths,
+            "replace Vite with web wildcard": other_paths + ["apps/web/**"],
+            "add another Vite file": self.task["allowed_paths"] + ["apps/web/vite.extra.ts"],
+            "add Playwright config": self.task["allowed_paths"] + ["apps/web/playwright.config.ts"],
+            "add web package": self.task["allowed_paths"] + ["apps/web/package.json"],
+            "add web lockfile": self.task["allowed_paths"] + ["apps/web/package-lock.json"],
+            "duplicate Vite": self.task["allowed_paths"] + [vite],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for mutation, allowed_paths in mutations.items():
+                with self.subTest(mutation=mutation):
+                    changed = copy.deepcopy(self.task)
+                    changed["allowed_paths"] = allowed_paths
+                    (root / self.task_path).write_text(json.dumps(changed))
+                    with patch.object(c, "COMPANY_LIFECYCLE_TASK_SHA256", digest(changed)):
+                        errors = self.check(root, {vite})
+                    if mutation == "duplicate Vite":
+                        self.assertTrue(any("non-unique elements" in error for error in errors), errors)
+                    else:
+                        self.assertIn("Unexpected APBRA-151 implementation scope", errors)
+                    self.assertIn("File outside active task scope: " + vite, errors)
+            (root / self.task_path).write_text(json.dumps(self.task))
+
+    def test_vite_authority_requires_separate_amendment_merge_gate(self):
+        required_fragments = {
+            "verification_required": (
+                "apps/web/vite.config.ts authority requires this separate governance amendment",
+                "hosted APBRA Bootstrap CI on its exact head",
+                "fresh independent exact-head review",
+                "manually merged by Haseeb",
+                "post-amendment main verified before any product edit",
+            ),
+            "dependencies": (
+                "apps/web/vite.config.ts authority is unavailable for product implementation",
+                "exact-head hosted CI and separate review",
+                "Haseeb manually merges it",
+                "post-amendment main is verified",
+            ),
+        }
+        self.assertEqual(set(required_fragments), set(c.COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256))
+        for field, fragments in required_fragments.items():
+            with self.subTest(field=field):
+                matches = [item for item in self.task[field] if all(fragment in item for fragment in fragments)]
+                self.assertEqual(len(matches), 1)
+                self.assertEqual(
+                    hashlib.sha256(matches[0].encode()).hexdigest(),
+                    c.COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256[field],
+                )
+
+    def test_removed_or_weakened_vite_merge_gate_fails_even_if_task_rehashed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for field, gate_sha in c.COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256.items():
+                original = next(
+                    item for item in self.task[field]
+                    if hashlib.sha256(item.encode()).hexdigest() == gate_sha
+                )
+                for mutation in ("remove", "weaken"):
+                    with self.subTest(field=field, mutation=mutation):
+                        changed = copy.deepcopy(self.task)
+                        if mutation == "remove":
+                            changed[field].remove(original)
+                        elif field == "verification_required":
+                            changed[field][changed[field].index(original)] = original.replace("requires", "may", 1)
+                        else:
+                            changed[field][changed[field].index(original)] = original.replace("unavailable", "available", 1)
+                        (root / self.task_path).write_text(json.dumps(changed))
+                        with patch.object(c, "COMPANY_LIFECYCLE_TASK_SHA256", digest(changed)):
+                            errors = self.check(root, {"apps/web/vite.config.ts"})
+                        self.assertIn(
+                            "APBRA-151 Vite amendment merge gate missing or weakened: " + field,
+                            errors,
+                        )
+                        self.assertIn("File outside active task scope: apps/web/vite.config.ts", errors)
+            (root / self.task_path).write_text(json.dumps(self.task))
 
     def test_initial_settings_gate_is_explicit_in_each_contract_section(self):
         required_fragments = {

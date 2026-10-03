@@ -693,7 +693,7 @@ COMPANY_LIFECYCLE_PATHS = {
     'apps/web/README.md', 'apps/web/e2e/private-case.spec.ts',
     'apps/web/src/api.ts', 'apps/web/src/api.test.ts',
     'apps/web/src/privateCases.tsx', 'apps/web/src/privateCases.test.tsx',
-    'apps/web/src/style.css',
+    'apps/web/src/style.css', 'apps/web/vite.config.ts',
 }
 COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'docs/source-register.json', 'tasks/APBRA-151-company-lifecycle.json',
@@ -703,12 +703,16 @@ COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-COMPANY_LIFECYCLE_TASK_SHA256 = 'fb6f84e62903220a6d6252d61093ec7320ad531f56b33044c64f41db0a099bc6'
+COMPANY_LIFECYCLE_TASK_SHA256 = '672d0997a7b1ac31562e09ef015ec6bff80b152ec04134ccb2f5ad71d61794ca'
 COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {
     'requirements': '7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79',
     'acceptance_criteria': '652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95',
     'dependencies': 'b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630',
     'escalate_when': 'c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc',
+}
+COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256 = {
+    'verification_required': '37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407',
+    'dependencies': '92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5',
 }
 COMPANY_LIFECYCLE_SOURCES = (
     ('apbra-151-mvp-scope', '4063307', 6, '8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
@@ -721,6 +725,12 @@ COMPANY_LIFECYCLE_SOURCES = (
 )
 COMPANY_LIFECYCLE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
 COMPANY_LIFECYCLE_REGISTRATION_BRANCH = COMPANY_LIFECYCLE_BRANCH + '-registration'
+COMPANY_LIFECYCLE_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
+COMPANY_LIFECYCLE_AMENDMENT_PATHS = {
+    'tasks/APBRA-151-company-lifecycle.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_company_lifecycle_scope.py',
+}
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1887,6 +1897,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
                                for item in company_lifecycle_task[field]):
                         extension_errors.append('APBRA-151 initial Tenant Settings gate missing or weakened: ' + field)
+                for field, expected_sha in COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256.items():
+                    if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
+                               for item in company_lifecycle_task[field]):
+                        extension_errors.append('APBRA-151 Vite amendment merge gate missing or weakened: ' + field)
                 if (company_lifecycle_task['task_id'], company_lifecycle_task['assigned_agent'],
                         company_lifecycle_task['agent_card_version']) != ('APBRA-151', 'APBRA-DEVOPS', '0.1'):
                     extension_errors.append('Unexpected APBRA-151 task or agent identity')
@@ -1894,7 +1908,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected APBRA-151 implementation branch')
                 if company_lifecycle_task['base_commit'] != '9e90bcc3c716dc2d24bb58192096d2429d531043':
                     extension_errors.append('Stale APBRA-151 registration base')
-                if set(company_lifecycle_task['allowed_paths']) != COMPANY_LIFECYCLE_PATHS:
+                if (set(company_lifecycle_task['allowed_paths']) != COMPANY_LIFECYCLE_PATHS or
+                        len(company_lifecycle_task['allowed_paths']) != len(COMPANY_LIFECYCLE_PATHS)):
                     extension_errors.append('Unexpected APBRA-151 implementation scope')
                 if (company_lifecycle_task['task_mode'], company_lifecycle_task['readiness'],
                         company_lifecycle_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
@@ -2008,7 +2023,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-151' and
                          active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS)):
+                         changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-151' and
+                         active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -2157,6 +2175,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths != COMPANY_LIFECYCLE_REGISTRATION_PATHS):
                 errors.append('APBRA-151 registration must change exactly its eight governance files')
             if (active_task_id == 'APBRA-151' and
+                    active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
+                    changed_paths != COMPANY_LIFECYCLE_AMENDMENT_PATHS):
+                errors.append('APBRA-151 Vite amendment must change exactly its three governance files')
+            if (active_task_id == 'APBRA-151' and
                     active_branch == COMPANY_LIFECYCLE_BRANCH and
                     changed_paths.intersection(COMPANY_LIFECYCLE_REGISTRATION_PATHS)):
                 errors.append('APBRA-151 implementation branch cannot change governance registration files')
@@ -2254,6 +2276,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
                          changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS and
                          name in COMPANY_LIFECYCLE_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-151' and active_task is not None and
+                         active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS and
+                         name in COMPANY_LIFECYCLE_AMENDMENT_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
