@@ -51,7 +51,7 @@ class ProviderNeutralSsoScopeTests(unittest.TestCase):
         self.assertEqual(digest(self.task), c.PROVIDER_NEUTRAL_SSO_TASK_SHA256)
         self.assertEqual(self.task["source_ids"], [row[0] for row in c.PROVIDER_NEUTRAL_SSO_SOURCES])
         source_map = {source["id"]: source for source in self.sources["sources"]}
-        self.assertEqual([source["id"] for source in self.sources["sources"][-5:]], self.task["source_ids"])
+        self.assertEqual([source["id"] for source in self.sources["sources"][-12:-7]], self.task["source_ids"])
         for source_id, content_id, version, expected in c.PROVIDER_NEUTRAL_SSO_SOURCES:
             with self.subTest(source_id=source_id):
                 source = source_map[source_id]

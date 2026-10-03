@@ -682,6 +682,40 @@ PROVIDER_NEUTRAL_SSO_SOURCES = (
 PROVIDER_NEUTRAL_SSO_BRANCH = 'agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
 PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH = PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
 
+COMPANY_LIFECYCLE_PATHS = {
+    'apps/api/README.md',
+    'apps/api/alembic/versions/20261003_08_company_lifecycle.py',
+    'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/bootstrap.py', 'apps/api/src/apbra_api/domain.py',
+    'apps/api/src/apbra_api/persistence.py', 'apps/api/src/apbra_api/tenant_settings.py',
+    'apps/api/tests/test_bootstrap.py', 'apps/api/tests/test_company_lifecycle.py',
+    'apps/api/tests/test_migrations.py', 'apps/api/tests/test_tenant_settings.py',
+    'apps/web/README.md', 'apps/web/e2e/private-case.spec.ts',
+    'apps/web/src/api.ts', 'apps/web/src/api.test.ts',
+    'apps/web/src/privateCases.tsx', 'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/style.css',
+}
+COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
+    'docs/source-register.json', 'tasks/APBRA-151-company-lifecycle.json',
+    'scripts/check_bootstrap.py', 'tests/bootstrap/test_company_lifecycle_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+    'tests/bootstrap/test_provider_neutral_sso_scope.py',
+    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+}
+COMPANY_LIFECYCLE_TASK_SHA256 = '86714d470b636a1015c9514a7773e4799759944589d32c10a29d13dda2d9d1f1'
+COMPANY_LIFECYCLE_SOURCES = (
+    ('apbra-151-mvp-scope', '4063307', 6, '8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
+    ('apbra-151-business-functional-requirements', '3932362', 8, '002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
+    ('apbra-151-data-identity-audit', '4063348', 5, 'ce65429bcb00e2421f05f8909d95d1813909ac4d72066fcf224b01336cc3d5b1'),
+    ('apbra-151-self-service-direction', '8519682', 12, '7533cb4e801480cd7cb40c41c5c36733f8f2ff16fd2d227199d42eae6845ee4e'),
+    ('apbra-151-multi-tenancy-isolation', '4063408', 5, '5a614a1f802d306f766d28b3a98c81c39c11a169759f7ec6e834c583fdd2f1ec'),
+    ('apbra-151-platform-identity-adrs', '3932483', 4, '69ec3923199b0d0f9b0796002ce2897ef20ddd5b8d9154d19f7a4564b2241ec3'),
+    ('apbra-151-identity-rbac', '4030847', 5, '57c91915719f98df0cdfd7d5d2aca8c463ea89dbaf9808b3791c258c27c3c7b0'),
+)
+COMPANY_LIFECYCLE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
+COMPANY_LIFECYCLE_REGISTRATION_BRANCH = COMPANY_LIFECYCLE_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1833,6 +1867,44 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 provider_neutral_sso_task = None
+        company_lifecycle_task = None
+        company_lifecycle_path = root / 'tasks/APBRA-151-company-lifecycle.json'
+        if company_lifecycle_path.exists():
+            company_lifecycle_task = load_json(company_lifecycle_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), company_lifecycle_task)
+            if not extension_errors:
+                extension_errors += task_errors(company_lifecycle_task, catalog, sources)
+                canonical_task = json.dumps(company_lifecycle_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != COMPANY_LIFECYCLE_TASK_SHA256:
+                    extension_errors.append('APBRA-151 contract differs from accepted authority')
+                if (company_lifecycle_task['task_id'], company_lifecycle_task['assigned_agent'],
+                        company_lifecycle_task['agent_card_version']) != ('APBRA-151', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-151 task or agent identity')
+                if company_lifecycle_task['branch'] != COMPANY_LIFECYCLE_BRANCH:
+                    extension_errors.append('Unexpected APBRA-151 implementation branch')
+                if company_lifecycle_task['base_commit'] != '9e90bcc3c716dc2d24bb58192096d2429d531043':
+                    extension_errors.append('Stale APBRA-151 registration base')
+                if set(company_lifecycle_task['allowed_paths']) != COMPANY_LIFECYCLE_PATHS:
+                    extension_errors.append('Unexpected APBRA-151 implementation scope')
+                if (company_lifecycle_task['task_mode'], company_lifecycle_task['readiness'],
+                        company_lifecycle_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-151 requires issued implementation acceptance')
+                if company_lifecycle_task['source_ids'] != [source_id for source_id, _, _, _ in COMPANY_LIFECYCLE_SOURCES]:
+                    extension_errors.append('APBRA-151 requires its seven accepted sources')
+                for source_id, content_id, version, expected_sha in COMPANY_LIFECYCLE_SOURCES:
+                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    if package_source is None:
+                        extension_errors.append('APBRA-151 accepted source is missing: ' + source_id)
+                    else:
+                        canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                        if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-151 source differs from accepted provenance: ' + source_id)
+                        if (package_source.get('content_id') != content_id or
+                                package_source.get('version') != version or package_source.get('status') != 'ACCEPTED'):
+                            extension_errors.append('APBRA-151 source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                company_lifecycle_task = None
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
@@ -1874,6 +1946,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
             (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
             (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
+            (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -1922,7 +1995,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-172' and
                          active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
-                         changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS)):
+                         changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-151' and
+                         active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -2062,6 +2138,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == PROVIDER_NEUTRAL_SSO_BRANCH and
                     changed_paths.intersection(PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS)):
                 errors.append('APBRA-172 implementation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-151' and
+                    changed_paths.intersection(COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
+                    changed_paths.intersection(COMPANY_LIFECYCLE_PATHS)):
+                errors.append('APBRA-151 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-151' and
+                    active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
+                    changed_paths != COMPANY_LIFECYCLE_REGISTRATION_PATHS):
+                errors.append('APBRA-151 registration must change exactly its eight governance files')
+            if (active_task_id == 'APBRA-151' and
+                    active_branch == COMPANY_LIFECYCLE_BRANCH and
+                    changed_paths.intersection(COMPANY_LIFECYCLE_REGISTRATION_PATHS)):
+                errors.append('APBRA-151 implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-162' and
                     'tests/bootstrap/test_bootstrap.py' in changed_paths):
                 bootstrap_fix = root / 'tests/bootstrap/test_bootstrap.py'
@@ -2151,6 +2239,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
                          changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS and
                          name in PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-151' and active_task is not None and
+                         active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS and
+                         name in COMPANY_LIFECYCLE_REGISTRATION_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

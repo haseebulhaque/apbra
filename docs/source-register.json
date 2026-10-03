@@ -375,6 +375,69 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932483",
       "status": "ACCEPTED",
       "acceptance": "Haseeb explicitly authorized APBRA-172 governance-only registration on 2026-10-02 from verified main 613e43a9a9040428630d73f6ab12fd930f29d830. 05.06 - Platform / Cloud / Data / Identity / Deployment ADRs v4 controls provider-neutral authentication, Entra External ID as the first qualified live provider, durable validated identity binding and APBRA-owned session with server-authoritative company/resource access. This source contributes to a finite later 24-path implementation; registration changes seven governance files only and no runtime, dependency, workflow, cloud, paid-provider or customer-data operation. Hosted CI, separate exact-head review and Haseeb manual registration merge are prerequisites."
+    },
+    {
+      "id": "apbra-151-mvp-scope",
+      "content_id": "4063307",
+      "version": 6,
+      "section": "01.10 - MVP Scope & Product Boundaries",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 self-service company owner decision and 2026-10-03 APBRA-151 mission authorize a governance-only registration of this current page as MVP-1 scope: authenticated user, existing membership or eligible invitation, then Create Company / Workspace with server-transactional initial COMPANY_OWNER. The private preview may remain allow-listed. This acceptance is for the finite later APBRA-151 task, not a claim that Confluence exposes an approval status or that company creation is implemented. Hosted CI, independent exact-head review and Haseeb's manual registration merge precede runtime authority."
+    },
+    {
+      "id": "apbra-151-business-functional-requirements",
+      "content_id": "3932362",
+      "version": 8,
+      "section": "02.01 - Business & Functional Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of current PC26-FR-008 and related requirements: APBRA company registration and membership use stable validated identity, server-created initial COMPANY_OWNER and separate private-resource authority. No email, domain, external tenant or paid plan confers membership. This scoped source acceptance creates no runtime authority until hosted CI, independent exact-head review and Haseeb's manual registration merge; it does not claim Confluence has an approval-status field."
+    },
+    {
+      "id": "apbra-151-data-identity-audit",
+      "content_id": "4063348",
+      "version": 5,
+      "section": "02.05 - Data, Integration, Identity & Audit Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of current IAM, tenant and audit requirements for validated APBRA identity, server-authoritative company membership and creator provenance. External-provider claims and commercial entitlement cannot grant company or private-resource authority. This scoped source acceptance is not Confluence approval metadata and does not permit runtime changes before hosted CI, independent exact-head review and Haseeb's manual registration merge."
+    },
+    {
+      "id": "apbra-151-self-service-direction",
+      "content_id": "8519682",
+      "version": 12,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of the current self-service onboarding direction: resolve existing membership and eligible invitation before offering server-authoritative Create Company / Workspace; the earlier invite-only preview is a rollout constraint, not the target identity architecture. This scoped source acceptance is not evidence of public signup or live Entra and does not permit runtime changes before hosted CI, independent exact-head review and Haseeb's manual registration merge."
+    },
+    {
+      "id": "apbra-151-multi-tenancy-isolation",
+      "content_id": "4063408",
+      "version": 5,
+      "section": "04.05 - Multi-Tenant SaaS & Tenant Isolation Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063408",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of the current tenant model: APBRA company ID and membership are distinct from Entra tenancy, email domain, Azure subscription and Power BI workspace; initial COMPANY_OWNER is established atomically, and private-resource grants remain exact. No domain auto-join or cross-company authority is inferred. This source contributes only to a later finite implementation after hosted CI, independent exact-head review and Haseeb's manual registration merge."
+    },
+    {
+      "id": "apbra-151-platform-identity-adrs",
+      "content_id": "3932483",
+      "version": 4,
+      "section": "05.06 - Platform, Cloud, Data, Identity & Deployment ADRs",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932483",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of the current ADR applicability: provider-neutral identity and company authority, Entra External ID as first qualified provider only, no external-tenant-to-company mapping, and separate Power BI/Fabric and Azure consent. This scoped acceptance does not authorize identity-provider reimplementation, cloud resources, paid use or APBRA-151 runtime edits before hosted CI, independent exact-head review and Haseeb's manual registration merge."
+    },
+    {
+      "id": "apbra-151-identity-rbac",
+      "content_id": "4030847",
+      "version": 5,
+      "section": "10.03 - Identity, Authentication, Authorisation & RBAC",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of the current RBAC boundary: authenticated person, existing membership or invitation, server-transactional company and first COMPANY_OWNER, then current server-side membership/capability/exact-resource checks. No email, UPN, IdP group, external tenant or entitlement may manufacture authority. This scoped acceptance is not Confluence approval metadata and requires hosted CI, independent exact-head review and Haseeb's manual registration merge before runtime authority."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
