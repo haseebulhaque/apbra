@@ -161,6 +161,91 @@ test('an uninvited identity creates one company with owner and approved settings
   await foreignContext.close();
 });
 
+test('an existing company member accepts a second exact invitation and selects each company on fresh sign-in',async({page,browser})=>{
+  await signIn(page,'creator');
+  await expect(page.getByRole('heading',{name:/Create Company \/ Workspace|Clarity starts with a question\./})).toBeVisible();
+  if(await page.getByRole('heading',{name:'Create Company / Workspace'}).isVisible()){
+    await page.getByLabel('Company or workspace name').fill('Creator Invitation Preview Workspace');
+    await page.getByRole('button',{name:'Create Company / Workspace'}).click();
+  }
+  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  const originalSession=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string;role:string}});
+  expect(originalSession.actor.role).toBe('COMPANY_OWNER');
+
+  const privateRequest='Review synthetic creator-only activity by week.';
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill(privateRequest);
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  const privateCaseId=await page.evaluate(async request=>{
+    const response=await fetch('/api/cases',{credentials:'same-origin'});
+    const body=await response.json() as {items:Array<{id:string;current_request:{request_text:string}}>};
+    return body.items.find(item=>item.current_request.request_text===request)?.id;
+  },privateRequest);
+  expect(privateCaseId).toBeTruthy();
+
+  const inviterContext=await browser.newContext();
+  try{
+    const inviterPage=await inviterContext.newPage();
+    await signIn(inviterPage,'foreign');
+    await expect(inviterPage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    const targetSession=await inviterPage.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
+    expect(targetSession.actor.company_id).not.toBe(originalSession.actor.company_id);
+    await inviterPage.getByText('Manage company access').click();
+    await inviterPage.getByLabel('External subject').fill('dev-creator');
+    await inviterPage.getByLabel('Application role').selectOption('MEMBER');
+    await inviterPage.getByRole('button',{name:'Issue invitation'}).click();
+    const invitationLink=await inviterPage.getByLabel('One-time invitation link').inputValue();
+    expect(invitationLink).toMatch(/\/invite#token=/);
+
+    await page.goto(invitationLink);
+    await expect(page).not.toHaveURL(/token=/);
+    await expect(page.getByRole('heading',{name:'Accept company invitation'})).toBeVisible();
+    await page.getByRole('button',{name:'Accept invitation'}).click();
+    await expect(page.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
+    const accepted=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor:{company_id:string;membership_id:string;role:string}});
+    expect(accepted.membership_state).toBe('ACTIVE');
+    expect(accepted.actor.company_id).toBe(targetSession.actor.company_id);
+    expect(accepted.actor.role).toBe('MEMBER');
+    expect(accepted.actor.membership_id).not.toBe(originalSession.actor.membership_id);
+    await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
+    expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
+    await page.reload();
+    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    const refreshed=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
+    expect(refreshed.actor.company_id).toBe(targetSession.actor.company_id);
+
+    await page.getByRole('button',{name:'Sign out'}).click();
+    await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+    await signIn(page,'creator');
+    await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
+    const fresh=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor?:unknown;available_companies:Array<{company_id:string;membership_id:string;name:string}>});
+    expect(fresh.membership_state).toBe('COMPANY_SELECTION_REQUIRED');
+    expect(fresh.actor).toBeUndefined();
+    const original=fresh.available_companies.find(company=>company.company_id===originalSession.actor.company_id);
+    const target=fresh.available_companies.find(company=>company.company_id===targetSession.actor.company_id);
+    expect(original).toBeTruthy();
+    expect(target).toBeTruthy();
+    expect(fresh.available_companies).toHaveLength(2);
+    await page.locator('.company-selection button').filter({hasText:original!.name}).click();
+    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    const selectedOriginal=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
+    expect(selectedOriginal.actor.membership_id).toBe(originalSession.actor.membership_id);
+    await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
+
+    await page.getByRole('button',{name:'Sign out'}).click();
+    await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+    await signIn(page,'creator');
+    await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
+    await page.locator('.company-selection button').filter({hasText:target!.name}).click();
+    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    const selectedTarget=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
+    expect(selectedTarget.actor.membership_id).toBe(accepted.actor.membership_id);
+    await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
+    expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
+  }finally{await inviterContext.close()}
+});
+
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
   await signIn(page,'owner');
   await page.getByText('Manage company access').click();

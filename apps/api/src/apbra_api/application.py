@@ -376,9 +376,6 @@ class InvitationService:
         ):
             raise InvitationInvalid()
         store.lock_identity_for_membership(identity.id)
-        active_membership = store.active_identity_membership(identity.id)
-        if active_membership is not None and active_membership.company_id != row.company_id:
-            raise Conflict()
         existing = store.membership(row.company_id, identity.id)
         if existing is not None:
             raise Conflict()
