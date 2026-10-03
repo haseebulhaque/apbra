@@ -7,14 +7,143 @@ import json
 import secrets
 from copy import deepcopy
 
+import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import select
 
+import apbra_api.tenant_settings as tenant_settings_module
 from apbra_api.api import create_app
 from apbra_api.config import Settings
-from apbra_api.persistence import Database, MembershipRow, TenantSettingsVersionRow
+from apbra_api.domain import Conflict
+from apbra_api.persistence import (
+    CompanyRow,
+    Database,
+    ExternalIdentityRow,
+    MembershipRow,
+    TenantSettingsCurrentRow,
+    TenantSettingsVersionRow,
+)
+from apbra_api.tenant_settings import (
+    create_private_preview_initial_settings,
+    private_preview_onboarding_settings_v1,
+)
+
+
+def test_private_preview_onboarding_template_v1_matches_owner_decision() -> None:
+    settings = private_preview_onboarding_settings_v1("Aurora Research")
+    assert settings.clarification_enabled is True
+    assert (
+        settings.max_clarification_rounds_per_cycle,
+        settings.max_clarification_rounds_overall,
+    ) == (2, 10)
+    assert settings.expert_escalation_enabled is False
+    assert settings.automatic_generation_enabled is False
+    assert settings.provider_profile is None
+    assert settings.invitation_ttl_days == 7
+    assert settings.upload_policy.model_dump() == {
+        "data_extensions": ["CSV", "XLSX"],
+        "reference_extensions": ["PNG", "JPG", "JPEG"],
+        "max_file_bytes": 5_000_000,
+        "max_files_per_selection": 8,
+        "max_data_items_per_report": 20,
+        "max_reference_items_per_report": 20,
+    }
+    assert settings.clarification_policy.model_dump() == {
+        "max_questions_per_round": 5,
+        "max_answer_characters": 2_000,
+    }
+    assert settings.delivery_guide_policy.model_dump() == {
+        "enabled": True,
+        "include_handover_instructions": True,
+    }
+    assert settings.conventions.model_dump() == {
+        "report_naming": "",
+        "semantic_modelling": "",
+        "accessibility": "",
+        "terminology": {},
+    }
+    generation = settings.generation_policy.model_dump(by_alias=True)
+    assert generation["organisation"] == {
+        "name": "Aurora Research",
+        "displayName": "Aurora Research",
+        "locale": "en-AU",
+        "timezone": "Australia/Sydney",
+    }
+    assert generation["branding"] == {
+        "primary": "#17635E",
+        "accent": "#2D7D9A",
+        "reportNaming": "Concise business report titles",
+        "pageNaming": "Short page names",
+        "executiveConvention": "Accessible summaries",
+        "themeName": "APBRA Default",
+    }
+    assert generation["generation"] == {
+        "enabled": True,
+        "supportedCapabilities": [
+            "KPI cards",
+            "Bar and column charts",
+            "Line charts",
+            "Tables",
+            "Slicers",
+            "Multiple pages",
+            "Explicit measures",
+        ],
+        "supportedTrendGrains": ["DAY", "MONTH", "QUARTER", "YEAR"],
+        "validationRequired": True,
+        "policy": "Governed candidate generation",
+    }
+    assert generation["governance"] == {
+        "requireKnowledge": True,
+        "requireAccessibility": True,
+        "requireValidation": True,
+        "maxVisualsPerPage": 6,
+        "maxPages": 5,
+        "humanReviewAtVisuals": 6,
+    }
+    for invalid in ("", " ", " Aurora Research", "Aurora Research ", "Aurora\x00Research"):
+        with pytest.raises(ValueError):
+            private_preview_onboarding_settings_v1(invalid)
+
+
+def test_initial_private_preview_settings_are_versioned_and_never_seeded(
+    database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def forbidden_seed(*args: object, **kwargs: object) -> None:
+        raise AssertionError("development seed must not create customer settings")
+
+    monkeypatch.setattr(tenant_settings_module, "seed_settings", forbidden_seed)
+    monkeypatch.setenv("APBRA_UPLOAD_POLICY_JSON", "not customer policy")
+    monkeypatch.setenv("APBRA_GENERATION_POLICY_JSON", "not customer policy")
+    monkeypatch.setenv("APBRA_CLARIFICATION_POLICY_JSON", "not customer policy")
+    with database.session() as db:
+        creator = db.scalar(
+            select(ExternalIdentityRow).where(ExternalIdentityRow.subject == "dev-creator")
+        )
+        assert creator is not None
+        company = CompanyRow(name="Aurora Research")
+        db.add(company)
+        db.flush()
+        membership = MembershipRow(
+            company_id=company.id, identity_id=creator.id, role="COMPANY_OWNER"
+        )
+        db.add(membership)
+        db.flush()
+        snapshot = create_private_preview_initial_settings(db, company, membership.id)
+        assert snapshot.version == 1
+        assert snapshot.validation_status == "PASS"
+        assert snapshot.secret_reference_id is None
+        assert snapshot.settings.provider_profile is None
+        assert snapshot.settings.automatic_generation_enabled is False
+        assert snapshot.settings.generation_policy.branding.primary == "#17635E"
+        row = db.get(TenantSettingsVersionRow, snapshot.id)
+        pointer = db.get(TenantSettingsCurrentRow, company.id)
+        assert row is not None and pointer is not None
+        assert row.created_by_membership_id == membership.id
+        assert pointer.version_id == snapshot.id and pointer.version == 1
+        with pytest.raises(Conflict):
+            create_private_preview_initial_settings(db, company, membership.id)
 
 
 def _synthetic_profile() -> dict[str, object]:
@@ -351,11 +480,14 @@ def test_restore_does_not_reactivate_a_credential_without_its_current_key(
     assert activation.status_code == 200
     disabled = deepcopy(activation.json()["settings"])
     disabled["automatic_generation_enabled"] = False
-    assert protected.put(
-        "/api/tenant-settings",
-        headers=csrf(owner),
-        json={"expected_version": 4, "settings": disabled},
-    ).status_code == 200
+    assert (
+        protected.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"expected_version": 4, "settings": disabled},
+        ).status_code
+        == 200
+    )
 
     unavailable_keyring = {
         "active_version": "synthetic-test-key-v2",
@@ -378,11 +510,14 @@ def test_restore_does_not_reactivate_a_credential_without_its_current_key(
     assert rejected.status_code == 503
     assert "synthetic-restore-secret" not in rejected.text
     assert restarted.get("/api/tenant-settings").json()["version"] == 5
-    assert restarted.put(
-        "/api/tenant-settings",
-        headers=csrf(restarted_owner),
-        json={"expected_version": 5, "settings": enabled},
-    ).status_code == 503
+    assert (
+        restarted.put(
+            "/api/tenant-settings",
+            headers=csrf(restarted_owner),
+            json={"expected_version": 5, "settings": enabled},
+        ).status_code
+        == 503
+    )
     restored_disabled = restarted.post(
         "/api/tenant-settings/restore",
         headers=csrf(restarted_owner),
@@ -391,6 +526,4 @@ def test_restore_does_not_reactivate_a_credential_without_its_current_key(
     assert restored_disabled.status_code == 200
     assert restored_disabled.json()["credential"]["status"] == "NOT_CONFIGURED"
     assert "synthetic-restore-secret" not in restored_disabled.text
-    assert "synthetic-restore-secret" not in restarted.get(
-        "/api/tenant-settings/history"
-    ).text
+    assert "synthetic-restore-secret" not in restarted.get("/api/tenant-settings/history").text

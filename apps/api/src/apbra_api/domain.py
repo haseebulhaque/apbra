@@ -73,6 +73,19 @@ class MembershipRecord(Protocol):
     active: bool
 
 
+class CompanyRecord(Protocol):
+    id: UUID
+    name: str
+    active: bool
+
+
+class CompanyCreationRecord(Protocol):
+    identity_id: UUID
+    company_id: UUID
+    membership_id: UUID
+    payload_digest: str
+
+
 class InvitationRecord(Protocol):
     id: UUID
     company_id: UUID
@@ -320,6 +333,39 @@ class ApplicationPersistence(Protocol):
     def active_session(
         self, token_digest: str, now: datetime
     ) -> tuple[SessionRecord, IdentityRecord] | None: ...
+
+    def lock_active_session_for_creation(
+        self, session_id: UUID, identity_id: UUID, now: datetime
+    ) -> SessionRecord: ...
+
+    def company_creation_command(
+        self, identity_id: UUID, command_key: str
+    ) -> CompanyCreationRecord | None: ...
+
+    def company(self, company_id: UUID) -> CompanyRecord | None: ...
+
+    def active_company(
+        self, company_id: UUID, *, lock: bool = False
+    ) -> CompanyRecord | None: ...
+
+    def create_company_with_owner(
+        self,
+        identity: IdentityRecord,
+        session: SessionRecord,
+        name: str,
+        command_key: str,
+        payload_digest: str,
+    ) -> tuple[CompanyRecord, MembershipRecord]: ...
+
+    def eligible_invitation_for_identity(self, identity: IdentityRecord, now: datetime) -> bool: ...
+
+    def update_identity_display_name(
+        self, identity_id: UUID, display_name: str
+    ) -> IdentityRecord: ...
+
+    def lock_company_for_membership_management(self, company_id: UUID) -> None: ...
+
+    def active_owner_count(self, company_id: UUID) -> int: ...
 
     def active_actor(
         self, membership_id: UUID, identity_id: UUID, *, lock: bool = False
@@ -657,6 +703,28 @@ class StaleVersion(Conflict):
 class IdempotencyConflict(Conflict):
     code = "IDEMPOTENCY_CONFLICT"
     public_message = "That command key was already used for different content."
+
+
+class CompanyCreationNotAvailable(Conflict):
+    code = "COMPANY_CREATION_NOT_AVAILABLE"
+    public_message = "Company creation is not available for this account right now."
+
+
+class CompanyNameInvalid(ApplicationError):
+    status_code = 422
+    code = "COMPANY_NAME_INVALID"
+    public_message = "Enter a valid company name of at most 200 characters."
+
+
+class ProfileInvalid(ApplicationError):
+    status_code = 422
+    code = "PROFILE_INVALID"
+    public_message = "Enter a valid display name of at most 200 characters."
+
+
+class LastOwnerRequired(Conflict):
+    code = "LAST_OWNER_REQUIRED"
+    public_message = "This company must retain an active owner."
 
 
 class InvitationInvalid(ApplicationError):

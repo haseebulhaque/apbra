@@ -12,9 +12,16 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from test_generation import confirmed_case
 
 from alembic import command
+from apbra_api.api import create_app
 from apbra_api.bootstrap import bootstrap
 from apbra_api.config import Settings
-from apbra_api.persistence import CaseAccessRow, CaseRow, Database, ExternalIdentityRow
+from apbra_api.persistence import (
+    CaseAccessRow,
+    CaseRow,
+    CompanyCreationCommandRow,
+    Database,
+    ExternalIdentityRow,
+)
 
 
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
@@ -41,7 +48,108 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+
+
+def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
+    settings: Settings, database: Database
+) -> None:
+    before: dict[str, int] = {}
+    count_queries = {
+        "companies": text("SELECT count(*) FROM companies"),
+        "memberships": text("SELECT count(*) FROM memberships"),
+        "external_identities": text("SELECT count(*) FROM external_identities"),
+        "tenant_settings_versions": text("SELECT count(*) FROM tenant_settings_versions"),
+        "tenant_settings_current": text("SELECT count(*) FROM tenant_settings_current"),
+        "application_sessions": text("SELECT count(*) FROM application_sessions"),
+    }
+    with database.session() as db:
+        for table, query in count_queries.items():
+            before[table] = int(db.scalar(query) or 0)
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+    assert "company_creation_commands" in inspect(database.engine).get_table_names()
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20261002_07")
+    assert "company_creation_commands" not in inspect(database.engine).get_table_names()
+    with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+    command.upgrade(config, "head")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+        for table, query in count_queries.items():
+            assert db.scalar(query) == before[table]
+
+
+def test_company_lifecycle_downgrade_refuses_live_creation_and_keeps_revision(
+    settings: Settings, database: Database
+) -> None:
+    client = TestClient(create_app(settings=settings, database=database))
+    session = sign_in(client, "creator")
+    created = client.post(
+        "/api/companies",
+        json={"name": "Preserved Company"},
+        headers={**csrf(session), "Idempotency-Key": "migration-company-001"},
+    )
+    assert created.status_code == 201, created.text
+    company_id = created.json()["company"]["id"]
+    membership_id = created.json()["membership"]["id"]
+    with database.session() as db:
+        original = db.scalar(
+            text("SELECT id FROM company_creation_commands WHERE company_id=:company_id"),
+            {"company_id": company_id},
+        )
+        assert original is not None
+        settings_id = db.scalar(
+            text("SELECT version_id FROM tenant_settings_current WHERE company_id=:company_id"),
+            {"company_id": company_id},
+        )
+        assert settings_id is not None
+    config = disposable_alembic_config(settings.database_url)
+    with pytest.raises(RuntimeError, match="Cannot downgrade committed company creation"):
+        command.downgrade(config, "20261002_07")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+        assert db.scalar(text(
+            "SELECT id FROM company_creation_commands WHERE company_id=:company_id"
+        ), {"company_id": company_id}) == original
+        assert db.scalar(text(
+            "SELECT version_id FROM tenant_settings_current WHERE company_id=:company_id"
+        ), {"company_id": company_id}) == settings_id
+        assert db.scalar(text(
+            "SELECT id FROM memberships WHERE id=:membership_id AND active=true"
+        ), {"membership_id": membership_id}) is not None
+    assert "company_creation_commands" in inspect(database.engine).get_table_names()
+
+
+def test_company_creation_command_is_unique_and_immutable(
+    settings: Settings, database: Database
+) -> None:
+    client = TestClient(create_app(settings=settings, database=database))
+    session = sign_in(client, "creator")
+    created = client.post(
+        "/api/companies",
+        json={"name": "Unique Company"},
+        headers={**csrf(session), "Idempotency-Key": "unique-company-001"},
+    )
+    assert created.status_code == 201, created.text
+    with database.session() as db:
+        command_row = db.scalar(sa.select(CompanyCreationCommandRow))
+        assert command_row is not None
+        command_id = command_row.id
+    with pytest.raises(DBAPIError, match="company creation commands are immutable"):
+        with database.session() as db:
+            db.execute(text(
+                "UPDATE company_creation_commands SET command_key='changed' WHERE id=:id"
+            ), {"id": command_id})
+    with pytest.raises(IntegrityError):
+        with database.session() as db:
+            db.execute(text(
+                "INSERT INTO company_creation_commands "
+                "(id, identity_id, command_key, payload_digest, company_id, "
+                "membership_id, created_at) "
+                "SELECT :new_id, identity_id, command_key, payload_digest, company_id, "
+                "membership_id, created_at FROM company_creation_commands WHERE id=:id"
+            ), {"id": command_id, "new_id": uuid4()})
 
 
 def test_provider_binding_migration_preserves_legacy_identity_and_round_trips(
@@ -105,7 +213,7 @@ def test_provider_binding_downgrade_refuses_legacy_key_collision(
     with pytest.raises(RuntimeError, match="legacy issuer/subject key collides"):
         command.downgrade(config, "20261001_06")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
 
 
 def _assert_qualified_downgrade_preserves_state(
@@ -116,7 +224,7 @@ def _assert_qualified_downgrade_preserves_state(
     with pytest.raises(RuntimeError, match=f"provider-qualified security state in {table}"):
         command.downgrade(config, "20261001_06")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
         assert (
             db.scalar(
                 sa.select(profile_state.c.provider_profile_id).where(
@@ -287,7 +395,7 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
         assert historical.reviewed_design_id is None
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
     # The deliberate downgrade removed the new tenant-settings tables. Re-seed
     # only this disposable test tenant before exercising the restored API.
     bootstrap(settings, database)

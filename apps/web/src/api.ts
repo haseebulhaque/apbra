@@ -1,7 +1,7 @@
 export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
 export type IdentityProviderOption={profile_id:string;display_label:string};
 export type IdentityProviders={items:IdentityProviderOption[];development_identities:string[]};
-export type Session={authenticated:boolean;identity?:{id:string;display_name:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;name:string}>};
+export type Session={authenticated:boolean;identity?:{id:string;display_name:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'INVITATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;company_id:string;name:string}>};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
 export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;report_title?:string;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
@@ -9,6 +9,9 @@ export type Invitation={id:string;company_id:string;subject:string;role:string;e
 export type InvitationInspection={invitation:Invitation;status?:string};
 export type IssuedInvitation={invitation:Invitation;token:string};
 export type Membership={id:string;display_name:string;subject:string;role:string;active:boolean};
+export type MembershipRoleChange={id:string;role:'MEMBER'|'COMPANY_ADMIN';active:boolean};
+export type CompanyCreation={company:{id:string;name:string};membership:{id:string;role:'COMPANY_OWNER'}};
+export type Profile={display_name:string};
 export type CaseAccess={membership_id:string;display_name:string;subject:string;access_level:'OWNER'|'EDITOR'|'VIEWER';active:boolean};
 export type ConversationEvent={id:string;sequence:number;kind:'USER_MESSAGE'|'RAW_ANSWER'|'CORRECTION'|'CLARIFICATION_CYCLE_STARTED'|'CLARIFICATION_QUESTION'|'AI_ANALYSIS'|'ALTERNATIVE_PROPOSED'|'ALTERNATIVE_ACCEPTED'|'ALTERNATIVE_DECLINED';payload:Record<string,unknown>;created_at:string;semantic_context_version?:number};
 export type ObservedEvidenceSchema={kind:'REQUEST_DATA_STRUCTURE';tables:Array<{name:string;rowCount:number;columns:Array<{name:string;type:string}>}>};
@@ -51,6 +54,13 @@ export const authApi={
   selectCompany:(membershipId:string,csrfToken:string)=>request<{selected:boolean}>('/api/auth/select-company',{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({membership_id:membershipId})}),
   logout:(csrfToken:string)=>request<void>('/api/auth/logout',{method:'POST',headers:csrfHeaders(csrfToken)}),
 };
+export const companiesApi={
+  create:(name:string,idempotencyKey:string,csrfToken:string)=>request<CompanyCreation>('/api/companies',{method:'POST',headers:{...csrfHeaders(csrfToken),'Idempotency-Key':idempotencyKey},body:JSON.stringify({name})}),
+};
+export const profileApi={
+  current:()=>request<{profile:Profile}>('/api/profile').then(value=>value.profile),
+  update:(displayName:string,csrfToken:string)=>request<{profile:Profile}>('/api/profile',{method:'PATCH',headers:csrfHeaders(csrfToken),body:JSON.stringify({display_name:displayName})}).then(value=>value.profile),
+};
 export const capabilitiesApi={uploads:()=>request<UploadCapabilities>('/api/cases/capabilities/uploads')};
 export const tenantSettingsApi={
   current:()=>request<TenantSettingsVersion>('/api/tenant-settings'),
@@ -79,6 +89,7 @@ export const invitationsApi={
 export const membershipsApi={
   list:()=>request<{items:Membership[]}>('/api/memberships'),
   deactivate:(membershipId:string,csrfToken:string)=>request<{deactivated:boolean}>(`/api/memberships/${encodeURIComponent(membershipId)}/deactivate`,{method:'POST',headers:csrfHeaders(csrfToken)}),
+  changeRole:(membershipId:string,role:'MEMBER'|'COMPANY_ADMIN',csrfToken:string)=>request<{membership:MembershipRoleChange}>(`/api/memberships/${encodeURIComponent(membershipId)}/role`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({role})}).then(value=>value.membership),
 };
 export const conversationApi={
   list:(caseId:string)=>request<{items:ConversationEvent[]}>(`/api/cases/${encodeURIComponent(caseId)}/conversation`),
