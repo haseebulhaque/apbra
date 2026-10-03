@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import Settings, get_settings
-from .persistence import CompanyRow, Database, ExternalIdentityRow, MembershipRow
+from .persistence import (
+    CompanyCreationCommandRow,
+    CompanyRow,
+    Database,
+    ExternalIdentityRow,
+    MembershipRow,
+)
 from .tenant_secrets import AesGcmTenantCredentialStore
 from .tenant_settings import seed_settings
 
@@ -48,8 +54,9 @@ BOOTSTRAP_IDENTITIES = (
 def _legacy_fixture_company(db: Session, item: BootstrapIdentity, issuer: str) -> CompanyRow | None:
     """Recognize old local fixtures by exact synthetic identity and membership.
 
-    A matching company display name alone never identifies a fixture. This
-    bounded compatibility path does not migrate or claim a customer company.
+    A matching company display name alone never identifies a fixture. A
+    durable APBRA-151 creation command proves that the company was created by
+    a user, even if that user is also a synthetic development identity.
     """
     assert item.company is not None and item.role is not None
     identity = db.scalar(
@@ -74,6 +81,11 @@ def _legacy_fixture_company(db: Session, item: BootstrapIdentity, issuer: str) -
         if (company := db.get(CompanyRow, membership.company_id)) is not None
         and company.active
         and company.name == item.company
+        and db.scalar(
+            select(CompanyCreationCommandRow.id).where(
+                CompanyCreationCommandRow.company_id == company.id
+            )
+        ) is None
     ]
     return candidates[0] if len(candidates) == 1 else None
 

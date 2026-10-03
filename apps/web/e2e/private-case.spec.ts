@@ -148,7 +148,7 @@ test('an uninvited identity creates one company with owner and approved settings
   await page.reload();
   await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
   await page.getByText('My profile').click();
-  await page.getByLabel('Display name').fill('Casey Creator');
+  await page.locator('.profile-editor').getByLabel('Display name').fill('Casey Creator');
   await page.getByRole('button',{name:'Save profile'}).click();
   await expect(page.locator('.account-controls')).toContainText('Casey Creator');
   await page.getByRole('button',{name:'Create report'}).first().click();
