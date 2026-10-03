@@ -17,7 +17,8 @@
     "Company creation must be replay-safe and concurrency-safe: the same actor, idempotency key and materially identical command yield the same committed result; a reused key with a different command fails; concurrent requests cannot produce duplicate or ownerless companies.",
     "Provide bounded company name or handle validation and disambiguation without treating a familiar organisation name as legal ownership. Do not invent globally exclusive commercial names, reserved customer names, numerical rate ceilings, public terms or pricing absent accepted policy.",
     "Support the accepted company membership and bounded user-profile lifecycle with server-authoritative owner permissions, invitation integration, role/deactivation checks and last-owner protection. Preserve exact private-case grants, multi-company selection and tenant isolation after company creation.",
-    "Keep local/test bootstrap from binding a synthetic identity to a user-created company merely because its display name matches a fixture. The bootstrap correction is limited to the two exact bootstrap paths in the future allowlist; it is not live account migration or runtime tenant auto-join."
+    "Keep local/test bootstrap from binding a synthetic identity to a user-created company merely because its display name matches a fixture. The bootstrap correction is limited to the two exact bootstrap paths in the future allowlist; it is not live account migration or runtime tenant auto-join.",
+    "The sole apps/web/vite.config.ts authority permits forwarding /api/companies and /api/profile to the API service in both Vite development and preview proxy maps. It does not permit Azure AI adapter redesign, identity-provider changes, arbitrary proxy additions, cloud routing, production reverse-proxy architecture, dependency changes or unrelated Vite configuration changes."
   ],
   "adrs": [
     "Reuse the existing APBRA company/tenant, identity, session, invitation and audit structures where safe; do not create a duplicate organisation security aggregate or a second authentication stack.",
@@ -51,7 +52,8 @@
     "apps/web/src/api.test.ts",
     "apps/web/src/privateCases.tsx",
     "apps/web/src/privateCases.test.tsx",
-    "apps/web/src/style.css"
+    "apps/web/src/style.css",
+    "apps/web/vite.config.ts"
   ],
   "restricted_paths": [
     ".github/**",
@@ -74,7 +76,6 @@
     "apps/web/package.json",
     "apps/web/package-lock.json",
     "apps/web/playwright.config.ts",
-    "apps/web/vite.config.ts",
     "requirements-bootstrap.txt",
     "compose.yaml",
     "artifacts/**",
@@ -85,7 +86,7 @@
     "**/*.zip"
   ],
   "acceptance_criteria": [
-    "Later implementation branch changes only the 19 exact literal allowed paths; this registration branch changes governance files only and no application/runtime path.",
+    "Later implementation branch changes only the 20 exact literal allowed paths; this registration branch changes governance files only and no application/runtime path.",
     "Authenticated no-membership user can create a company through a server-authoritative, atomic, idempotent and concurrency-safe transaction with its creator's initial COMPANY_OWNER membership and once-only audit provenance.",
     "Real-company creation must use only Haseeb's accepted validated onboarding-settings template/policy or explicit validated creation inputs to atomically commit Tenant Settings version 1; missing or invalid initial-settings authority must fail closed and roll back company, owner membership, settings, idempotency and audit state. Development/test seeds must not become customer policy.",
     "Existing membership and eligible invitation states remain truthful; company creation cannot silently accept an invitation, merge accounts, auto-join by provider/email/domain, invent private-resource grants or cross companies.",
@@ -99,10 +100,11 @@
     "Full bootstrap suite, standalone scripts/check_bootstrap.py and scripts/check_ci_policy.py; exact changed-path audit, git diff --check and history-aware secret scan where locally supported.",
     "Later implementation: full PostgreSQL 17 API suite, targeted creation/role/profile/idempotency/concurrency/isolation tests, migration upgrade/downgrade and rollback, Ruff, strict mypy, full web unit/type/build/Playwright and all governed bootstrap checks.",
     "Hosted APBRA Bootstrap CI on the exact registration PR head and independent exact-head review; Haseeb-only manual registration merge before the separate implementation branch.",
-    "Later implementation PR also requires hosted CI and fresh independent exact-head review before Haseeb-only manual merge; APBRA-151 remains In Progress until its own acceptance gates are met."
+    "Later implementation PR also requires hosted CI and fresh independent exact-head review before Haseeb-only manual merge; APBRA-151 remains In Progress until its own acceptance gates are met.",
+    "The apps/web/vite.config.ts authority requires this separate governance amendment to pass hosted APBRA Bootstrap CI on its exact head, receive fresh independent exact-head review, be manually merged by Haseeb, and have post-amendment main verified before any product edit to that path."
   ],
   "out_of_scope": [
-    "Any application/runtime change in this governance PR; any later path outside the 19 literal future implementation paths or any dependency, lockfile or workflow edit.",
+    "Any application/runtime change in this governance PR; any later path outside the 20 literal future implementation paths or any dependency, lockfile or workflow edit.",
     "Reimplementing APBRA-172 OIDC, changing qualified provider trust, adding other social/enterprise providers, verified-domain auto-join, SCIM/JIT or silent account linking.",
     "APBRA-173 Azure infrastructure, live identity tenant, DNS, external invitations, paid resources, production deployment or public signup qualification.",
     "APBRA-153 billing, pricing and entitlement enforcement; Power BI/Fabric or Azure management consent, publishing, broad platform administration and private-resource grant by membership alone.",
@@ -131,11 +133,12 @@
     "apbra-151-identity-rbac"
   ],
   "owner_acceptance": "RECORDED",
-  "effective_release": "APBRA-151 bounded company and membership lifecycle after governance registration merge",
+  "effective_release": "APBRA-151 bounded company and membership lifecycle after governance registration merge; the Vite proxy path only after its separate governance amendment merge",
   "dependencies": [
     "Governance-only registration PR must pass hosted CI and receive genuinely separate independent exact-head review, then Haseeb manually merges it before any application implementation begins.",
-    "Future implementation branch starts from newly verified post-registration main and modifies only 19 literal allowed paths; registration and implementation histories remain separate.",
+    "Future implementation branch starts from newly verified post-registration main and modifies only 20 literal allowed paths; registration and implementation histories remain separate.",
     "Registration may be reviewed and merged while Haseeb's initial Tenant Settings choice remains unresolved, but product implementation must not select, synthesize or persist real-company version-one settings until Haseeb records one of the two accepted validated sources. An implementation agent must escalate the owner decision rather than copy development/test seed_settings() values or bootstrap configuration.",
-    "APBRA-172 supplies validated APBRA identity and session; APBRA-153 entitlement and APBRA-173 hosted preview remain separate workstreams."
+    "APBRA-172 supplies validated APBRA identity and session; APBRA-153 entitlement and APBRA-173 hosted preview remain separate workstreams.",
+    "The newly added apps/web/vite.config.ts authority is unavailable for product implementation until this amendment PR passes exact-head hosted CI and separate review, Haseeb manually merges it, and the post-amendment main is verified."
   ]
 }
