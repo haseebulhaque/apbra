@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -106,6 +107,68 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
             self.assertIn(
                 "APBRA-151 implementation branch cannot change governance registration files", errors
             )
+
+    def test_initial_settings_gate_is_explicit_in_each_contract_section(self):
+        required_fragments = {
+            "requirements": (
+                "Haseeb must first record either",
+                "tenant_settings.seed_settings() is local/development/test bootstrap only",
+                "company creation must fail closed",
+            ),
+            "acceptance_criteria": (
+                "only Haseeb's accepted validated onboarding-settings template/policy",
+                "roll back company, owner membership, settings, idempotency and audit state",
+                "Development/test seeds must not become customer policy",
+            ),
+            "dependencies": (
+                "Registration may be reviewed and merged",
+                "product implementation must not select, synthesize or persist",
+                "must escalate the owner decision",
+            ),
+            "escalate_when": (
+                "product implementation must stop before enabled company creation",
+                "must not copy seed_settings()",
+                "leave partial company state",
+            ),
+        }
+        self.assertEqual(set(required_fragments), set(c.COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256))
+        for field, fragments in required_fragments.items():
+            with self.subTest(field=field):
+                matches = [item for item in self.task[field] if all(fragment in item for fragment in fragments)]
+                self.assertEqual(len(matches), 1)
+                self.assertEqual(
+                    hashlib.sha256(matches[0].encode()).hexdigest(),
+                    c.COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256[field],
+                )
+
+    def test_removed_or_weakened_initial_settings_gate_fails_even_if_task_rehashed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for field, gate_sha in c.COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256.items():
+                original = next(
+                    item for item in self.task[field]
+                    if hashlib.sha256(item.encode()).hexdigest() == gate_sha
+                )
+                for mutation in ("remove", "weaken"):
+                    with self.subTest(field=field, mutation=mutation):
+                        changed = copy.deepcopy(self.task)
+                        if mutation == "remove":
+                            changed[field].remove(original)
+                        else:
+                            changed[field][changed[field].index(original)] = original.replace("must", "may", 1)
+                        (root / self.task_path).write_text(json.dumps(changed))
+                        with patch.object(c, "COMPANY_LIFECYCLE_TASK_SHA256", digest(changed)):
+                            errors = self.check(root, {"apps/api/src/apbra_api/tenant_settings.py"})
+                        self.assertIn(
+                            "APBRA-151 initial Tenant Settings gate missing or weakened: " + field,
+                            errors,
+                        )
+                        self.assertIn(
+                            "File outside active task scope: apps/api/src/apbra_api/tenant_settings.py",
+                            errors,
+                        )
+            (root / self.task_path).write_text(json.dumps(self.task))
 
     def test_unregistered_paths_and_wrong_branch_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

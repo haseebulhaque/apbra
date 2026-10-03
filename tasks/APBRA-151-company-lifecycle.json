@@ -13,6 +13,7 @@
     "Accepted scoped primary sources: 01.10 page 4063307 v6, 02.01 page 3932362 v8, 02.05 page 4063348 v5, 03.07 page 8519682 v12, 04.05 page 4063408 v5, 05.06 page 3932483 v4 and 10.03 page 4030847 v5. Context refreshed: 01.01 page 3965201 v9, 01.11 page 4030687 v7, 02.06 page 3932382 v9, 14.03 page 3965562 v6 and 20.05 page 6422580 v55.",
     "Consume an APBRA-172 validated, active application identity and session. Resolve existing active membership and eligible invitation before the ordinary no-membership Create Company / Workspace handoff; never reimplement OIDC or use external claims, email, domain, UPN or IdP group as company authority.",
     "A server-authoritative PostgreSQL transaction creates an immutable internal APBRA company ID and exactly its creator's initial COMPANY_OWNER membership with safe audit provenance. Browser input cannot select creator identity, role, provider subject or another company's authority.",
+    "Real-company creation must atomically establish a validated Tenant Settings version 1 and current pointer with its company, creator COMPANY_OWNER membership, idempotency record and audit provenance. Haseeb must first record either an accepted validated onboarding-settings template/policy or an accepted contract for explicit validated settings inputs during company creation. tenant_settings.seed_settings() is local/development/test bootstrap only; seeded values and bootstrap configuration are not customer runtime defaults or authority. If that accepted policy/input contract is missing, company creation must fail closed without any partially configured company or invented settings.",
     "Company creation must be replay-safe and concurrency-safe: the same actor, idempotency key and materially identical command yield the same committed result; a reused key with a different command fails; concurrent requests cannot produce duplicate or ownerless companies.",
     "Provide bounded company name or handle validation and disambiguation without treating a familiar organisation name as legal ownership. Do not invent globally exclusive commercial names, reserved customer names, numerical rate ceilings, public terms or pricing absent accepted policy.",
     "Support the accepted company membership and bounded user-profile lifecycle with server-authoritative owner permissions, invitation integration, role/deactivation checks and last-owner protection. Preserve exact private-case grants, multi-company selection and tenant isolation after company creation.",
@@ -86,6 +87,7 @@
   "acceptance_criteria": [
     "Later implementation branch changes only the 19 exact literal allowed paths; this registration branch changes governance files only and no application/runtime path.",
     "Authenticated no-membership user can create a company through a server-authoritative, atomic, idempotent and concurrency-safe transaction with its creator's initial COMPANY_OWNER membership and once-only audit provenance.",
+    "Real-company creation must use only Haseeb's accepted validated onboarding-settings template/policy or explicit validated creation inputs to atomically commit Tenant Settings version 1; missing or invalid initial-settings authority must fail closed and roll back company, owner membership, settings, idempotency and audit state. Development/test seeds must not become customer policy.",
     "Existing membership and eligible invitation states remain truthful; company creation cannot silently accept an invitation, merge accounts, auto-join by provider/email/domain, invent private-resource grants or cross companies.",
     "Membership and bounded profile lifecycle preserve current session and resource rechecks, role authority, deactivation and last-owner safety; active multi-company memberships remain server-authorised.",
     "Name/slug handling prevents ambiguous routing and injection without implying legal ownership; unresolved public-launch policies remain explicit decisions, not hardcoded commercial or customer rules.",
@@ -110,6 +112,7 @@
   "escalate_when": [
     "A necessary implementation, migration, test, dependency, governance or workflow path lies outside this exact future allowlist.",
     "Current accepted sources conflict, a name/slug or public-launch legal/abuse decision becomes necessary for bounded implementation, or safe company authority cannot be preserved.",
+    "If Haseeb has not recorded an accepted validated initial Tenant Settings template/policy or explicit validated creation-input contract, product implementation must stop before enabled company creation; it must not copy seed_settings(), promote bootstrap configuration, invent customer defaults or leave partial company state.",
     "Mandatory validation, hosted CI, independent exact-head review or Haseeb manual merge is absent, skipped, failed or stale."
   ],
   "task_mode": "IMPLEMENTATION",
@@ -132,6 +135,7 @@
   "dependencies": [
     "Governance-only registration PR must pass hosted CI and receive genuinely separate independent exact-head review, then Haseeb manually merges it before any application implementation begins.",
     "Future implementation branch starts from newly verified post-registration main and modifies only 19 literal allowed paths; registration and implementation histories remain separate.",
+    "Registration may be reviewed and merged while Haseeb's initial Tenant Settings choice remains unresolved, but product implementation must not select, synthesize or persist real-company version-one settings until Haseeb records one of the two accepted validated sources. An implementation agent must escalate the owner decision rather than copy development/test seed_settings() values or bootstrap configuration.",
     "APBRA-172 supplies validated APBRA identity and session; APBRA-153 entitlement and APBRA-173 hosted preview remain separate workstreams."
   ]
 }

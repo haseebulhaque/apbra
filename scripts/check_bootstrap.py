@@ -703,7 +703,13 @@ COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-COMPANY_LIFECYCLE_TASK_SHA256 = '86714d470b636a1015c9514a7773e4799759944589d32c10a29d13dda2d9d1f1'
+COMPANY_LIFECYCLE_TASK_SHA256 = 'fb6f84e62903220a6d6252d61093ec7320ad531f56b33044c64f41db0a099bc6'
+COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {
+    'requirements': '7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79',
+    'acceptance_criteria': '652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95',
+    'dependencies': 'b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630',
+    'escalate_when': 'c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc',
+}
 COMPANY_LIFECYCLE_SOURCES = (
     ('apbra-151-mvp-scope', '4063307', 6, '8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
     ('apbra-151-business-functional-requirements', '3932362', 8, '002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
@@ -1877,6 +1883,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 canonical_task = json.dumps(company_lifecycle_task, sort_keys=True, separators=(',', ':')).encode()
                 if hashlib.sha256(canonical_task).hexdigest() != COMPANY_LIFECYCLE_TASK_SHA256:
                     extension_errors.append('APBRA-151 contract differs from accepted authority')
+                for field, expected_sha in COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256.items():
+                    if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
+                               for item in company_lifecycle_task[field]):
+                        extension_errors.append('APBRA-151 initial Tenant Settings gate missing or weakened: ' + field)
                 if (company_lifecycle_task['task_id'], company_lifecycle_task['assigned_agent'],
                         company_lifecycle_task['agent_card_version']) != ('APBRA-151', 'APBRA-DEVOPS', '0.1'):
                     extension_errors.append('Unexpected APBRA-151 task or agent identity')
