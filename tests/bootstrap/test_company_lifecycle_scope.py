@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
+INVITATION_TEST_PATH = "apps/api/tests/test_invitations.py"
 SPEC = importlib.util.spec_from_file_location("bootstrap_apbra151", ROOT / "scripts/check_bootstrap.py")
 c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
@@ -50,8 +51,10 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
         )[0]
 
     def test_exact_task_and_seven_accepted_sources(self):
-        self.assertEqual(len(c.COMPANY_LIFECYCLE_PATHS), 20)
-        self.assertEqual(len(self.task["allowed_paths"]), 20)
+        self.assertEqual(len(c.COMPANY_LIFECYCLE_PATHS), 21)
+        self.assertEqual(len(self.task["allowed_paths"]), 21)
+        self.assertIn(INVITATION_TEST_PATH, c.COMPANY_LIFECYCLE_PATHS)
+        self.assertEqual(self.task["allowed_paths"].count(INVITATION_TEST_PATH), 1)
         self.assertIn("apps/web/vite.config.ts", c.COMPANY_LIFECYCLE_PATHS)
         self.assertNotIn("apps/web/vite.config.ts", self.task["restricted_paths"])
         self.assertEqual(len(c.COMPANY_LIFECYCLE_REGISTRATION_PATHS), 8)
@@ -62,6 +65,10 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
                 "scripts/check_bootstrap.py",
                 "tests/bootstrap/test_company_lifecycle_scope.py",
             },
+        )
+        self.assertEqual(
+            c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS,
+            c.COMPANY_LIFECYCLE_AMENDMENT_PATHS,
         )
         self.assertEqual(set(self.task["allowed_paths"]), c.COMPANY_LIFECYCLE_PATHS)
         self.assertTrue(c.COMPANY_LIFECYCLE_PATHS.isdisjoint(c.COMPANY_LIFECYCLE_REGISTRATION_PATHS))
@@ -147,6 +154,159 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
                         errors,
                     )
 
+    def test_invitation_test_amendment_branch_changes_exactly_three_governance_files(self):
+        amendment = c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS
+        branch = c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH
+        self.assertEqual(
+            branch,
+            "agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment",
+        )
+        self.assertNotEqual(branch, c.COMPANY_LIFECYCLE_AMENDMENT_BRANCH)
+        self.assertEqual(amendment, c.COMPANY_LIFECYCLE_AMENDMENT_PATHS)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, amendment, branch), [])
+            for omitted in amendment:
+                with self.subTest(omitted=omitted):
+                    errors = self.check(root, amendment - {omitted}, branch)
+                    self.assertIn(
+                        "APBRA-151 invitation-test amendment must change exactly its three governance files",
+                        errors,
+                    )
+            for extra in (
+                INVITATION_TEST_PATH,
+                "apps/api/src/apbra_api/application.py",
+                "docs/source-register.json",
+            ):
+                with self.subTest(extra=extra):
+                    errors = self.check(root, amendment | {extra}, branch)
+                    self.assertIn(
+                        "APBRA-151 invitation-test amendment must change exactly its three governance files",
+                        errors,
+                    )
+                    self.assertIn("File outside active task scope: " + extra, errors)
+            for governance_path in amendment:
+                with self.subTest(implementation_governance=governance_path):
+                    errors = self.check(root, {governance_path})
+                    self.assertIn(
+                        "APBRA-151 implementation branch cannot change governance registration files",
+                        errors,
+                    )
+
+    def test_invitation_test_scope_mutations_fail_even_if_task_digest_is_recomputed(self):
+        other_paths = [path for path in self.task["allowed_paths"] if path != INVITATION_TEST_PATH]
+        mutations = {
+            "remove invitation test": other_paths,
+            "replace invitation test with tests wildcard": other_paths + ["apps/api/tests/**"],
+            "replace invitation test with API wildcard": other_paths + ["apps/api/**"],
+            "add authentication test": self.task["allowed_paths"] + ["apps/api/tests/test_authentication.py"],
+            "add authorization test": self.task["allowed_paths"] + ["apps/api/tests/test_authorization.py"],
+            "add identity service test": self.task["allowed_paths"] + ["apps/api/tests/test_identity_service.py"],
+            "duplicate invitation test": self.task["allowed_paths"] + [INVITATION_TEST_PATH],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, {INVITATION_TEST_PATH}), [])
+            for mutation, allowed_paths in mutations.items():
+                with self.subTest(mutation=mutation):
+                    changed = copy.deepcopy(self.task)
+                    changed["allowed_paths"] = allowed_paths
+                    (root / self.task_path).write_text(json.dumps(changed))
+                    with patch.object(c, "COMPANY_LIFECYCLE_TASK_SHA256", digest(changed)):
+                        errors = self.check(root, {INVITATION_TEST_PATH})
+                    if mutation == "duplicate invitation test":
+                        self.assertTrue(any("non-unique elements" in error for error in errors), errors)
+                    else:
+                        self.assertIn("Unexpected APBRA-151 implementation scope", errors)
+                    self.assertIn("File outside active task scope: " + INVITATION_TEST_PATH, errors)
+            (root / self.task_path).write_text(json.dumps(self.task))
+
+    def test_invitation_test_authority_preserves_multi_company_security_boundary(self):
+        requirements = (
+            "multiple active company memberships",
+            "exact eligible invitation",
+            "current session",
+            "fresh session",
+            "independent private-resource grants",
+            "email, domain, external tenant ID and IdP group are not authority",
+        )
+        acceptance = (
+            "active memberships in other companies",
+            "leaves all other memberships unchanged",
+            "fresh session with multiple active memberships",
+            "active target membership creates no duplicate",
+            "inactive target membership is not reactivated",
+            "provider-qualified identity matching",
+            "one-time consumption, audit and exact private-resource grants",
+        )
+        for field, fragments in (("requirements", requirements), ("acceptance_criteria", acceptance)):
+            with self.subTest(field=field):
+                self.assertEqual(
+                    len([item for item in self.task[field] if all(fragment in item for fragment in fragments)]),
+                    1,
+                )
+
+    def test_invitation_test_authority_requires_separate_amendment_merge_gate(self):
+        required_fragments = {
+            "verification_required": (
+                "apps/api/tests/test_invitations.py authority requires this distinct invitation-test governance amendment",
+                "hosted APBRA Bootstrap CI on its exact head",
+                "fresh genuinely separate independent exact-head review",
+                "manually merged by Haseeb",
+                "post-amendment main verified before any product edit to that path",
+            ),
+            "dependencies": (
+                "apps/api/tests/test_invitations.py authority is unavailable for product implementation",
+                "exact-head hosted APBRA Bootstrap CI",
+                "fresh genuinely separate independent exact-head review",
+                "Haseeb manually merges it",
+                "post-amendment main is verified",
+                "Product PR #85 must remain unchanged until then",
+            ),
+        }
+        self.assertEqual(
+            set(required_fragments),
+            set(c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256),
+        )
+        for field, fragments in required_fragments.items():
+            with self.subTest(field=field):
+                matches = [item for item in self.task[field] if all(fragment in item for fragment in fragments)]
+                self.assertEqual(len(matches), 1)
+                self.assertEqual(
+                    hashlib.sha256(matches[0].encode()).hexdigest(),
+                    c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256[field],
+                )
+
+    def test_removed_or_weakened_invitation_test_gate_fails_even_if_task_rehashed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for field, gate_sha in c.COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256.items():
+                original = next(
+                    item for item in self.task[field]
+                    if hashlib.sha256(item.encode()).hexdigest() == gate_sha
+                )
+                for mutation in ("remove", "weaken"):
+                    with self.subTest(field=field, mutation=mutation):
+                        changed = copy.deepcopy(self.task)
+                        if mutation == "remove":
+                            changed[field].remove(original)
+                        elif field == "verification_required":
+                            changed[field][changed[field].index(original)] = original.replace("requires", "may", 1)
+                        else:
+                            changed[field][changed[field].index(original)] = original.replace("unavailable", "available", 1)
+                        (root / self.task_path).write_text(json.dumps(changed))
+                        with patch.object(c, "COMPANY_LIFECYCLE_TASK_SHA256", digest(changed)):
+                            errors = self.check(root, {INVITATION_TEST_PATH})
+                        self.assertIn(
+                            "APBRA-151 invitation-test amendment merge gate missing or weakened: " + field,
+                            errors,
+                        )
+                        self.assertIn("File outside active task scope: " + INVITATION_TEST_PATH, errors)
+            (root / self.task_path).write_text(json.dumps(self.task))
+
     def test_vite_scope_mutations_fail_even_if_task_digest_is_recomputed(self):
         vite = "apps/web/vite.config.ts"
         other_paths = [path for path in self.task["allowed_paths"] if path != vite]
@@ -177,6 +337,17 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
             (root / self.task_path).write_text(json.dumps(self.task))
 
     def test_vite_authority_requires_separate_amendment_merge_gate(self):
+        self.assertEqual(
+            c.COMPANY_LIFECYCLE_AMENDMENT_BRANCH,
+            "agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment",
+        )
+        self.assertEqual(
+            c.COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256,
+            {
+                "verification_required": "37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407",
+                "dependencies": "92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5",
+            },
+        )
         required_fragments = {
             "verification_required": (
                 "apps/web/vite.config.ts authority requires this separate governance amendment",
@@ -231,6 +402,15 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
             (root / self.task_path).write_text(json.dumps(self.task))
 
     def test_initial_settings_gate_is_explicit_in_each_contract_section(self):
+        self.assertEqual(
+            c.COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256,
+            {
+                "requirements": "7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79",
+                "acceptance_criteria": "652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95",
+                "dependencies": "b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630",
+                "escalate_when": "c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc",
+            },
+        )
         required_fragments = {
             "requirements": (
                 "Haseeb must first record either",

@@ -689,6 +689,7 @@ COMPANY_LIFECYCLE_PATHS = {
     'apps/api/src/apbra_api/bootstrap.py', 'apps/api/src/apbra_api/domain.py',
     'apps/api/src/apbra_api/persistence.py', 'apps/api/src/apbra_api/tenant_settings.py',
     'apps/api/tests/test_bootstrap.py', 'apps/api/tests/test_company_lifecycle.py',
+    'apps/api/tests/test_invitations.py',
     'apps/api/tests/test_migrations.py', 'apps/api/tests/test_tenant_settings.py',
     'apps/web/README.md', 'apps/web/e2e/private-case.spec.ts',
     'apps/web/src/api.ts', 'apps/web/src/api.test.ts',
@@ -703,7 +704,7 @@ COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-COMPANY_LIFECYCLE_TASK_SHA256 = '672d0997a7b1ac31562e09ef015ec6bff80b152ec04134ccb2f5ad71d61794ca'
+COMPANY_LIFECYCLE_TASK_SHA256 = '0aac6448de867336932cb2d8dc41dcb79be79d166f98e197e0c14aa501311f97'
 COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {
     'requirements': '7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79',
     'acceptance_criteria': '652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95',
@@ -713,6 +714,10 @@ COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {
 COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256 = {
     'verification_required': '37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407',
     'dependencies': '92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5',
+}
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256 = {
+    'verification_required': '0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9',
+    'dependencies': 'ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db',
 }
 COMPANY_LIFECYCLE_SOURCES = (
     ('apbra-151-mvp-scope', '4063307', 6, '8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
@@ -731,6 +736,8 @@ COMPANY_LIFECYCLE_AMENDMENT_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_company_lifecycle_scope.py',
 }
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment'
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS = COMPANY_LIFECYCLE_AMENDMENT_PATHS
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1901,6 +1908,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
                                for item in company_lifecycle_task[field]):
                         extension_errors.append('APBRA-151 Vite amendment merge gate missing or weakened: ' + field)
+                for field, expected_sha in COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256.items():
+                    if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
+                               for item in company_lifecycle_task[field]):
+                        extension_errors.append('APBRA-151 invitation-test amendment merge gate missing or weakened: ' + field)
                 if (company_lifecycle_task['task_id'], company_lifecycle_task['assigned_agent'],
                         company_lifecycle_task['agent_card_version']) != ('APBRA-151', 'APBRA-DEVOPS', '0.1'):
                     extension_errors.append('Unexpected APBRA-151 task or agent identity')
@@ -2026,7 +2037,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-151' and
                          active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS)):
+                         changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS) and
+                    not (active_task_id == 'APBRA-151' and
+                         active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-148' and
@@ -2179,6 +2193,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths != COMPANY_LIFECYCLE_AMENDMENT_PATHS):
                 errors.append('APBRA-151 Vite amendment must change exactly its three governance files')
             if (active_task_id == 'APBRA-151' and
+                    active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
+                    changed_paths != COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS):
+                errors.append('APBRA-151 invitation-test amendment must change exactly its three governance files')
+            if (active_task_id == 'APBRA-151' and
                     active_branch == COMPANY_LIFECYCLE_BRANCH and
                     changed_paths.intersection(COMPANY_LIFECYCLE_REGISTRATION_PATHS)):
                 errors.append('APBRA-151 implementation branch cannot change governance registration files')
@@ -2281,6 +2299,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
                          changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS and
                          name in COMPANY_LIFECYCLE_AMENDMENT_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-151' and active_task is not None and
+                         active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
+                         changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS and
+                         name in COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
