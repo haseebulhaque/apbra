@@ -16,6 +16,7 @@ from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
+from test_content_storage import MemoryArtifactStore
 
 from apbra_api.api import create_app
 from apbra_api.artifacts import ArtifactError, LocalArtifactStore
@@ -1818,3 +1819,64 @@ def test_database_failure_after_artifact_write_removes_uncommitted_bytes(
     assert response.json()["attempt"]["status"] == "FAILED"
     assert response.json()["attempt"]["artifact"] is None
     assert set(settings.artifact_root.rglob("*.zip")) == prior_artifacts
+
+
+@pytest.mark.parametrize("adapter", ["local", "alternate"])
+def test_lost_artifact_commit_acknowledgment_preserves_successful_bytes(
+    settings: Settings,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    adapter: str,
+) -> None:
+    backing: dict[str, bytes] = {}
+    objects = (
+        LocalArtifactStore(settings.artifact_root, "test")
+        if adapter == "local"
+        else MemoryArtifactStore(backing)
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, artifact_objects=objects)
+    ) as client:
+        session = sign_in(client, "member")
+        case, contract = confirmed_case(
+            client,
+            session,
+            "Compare synthetic balances by group.",
+            "balances.csv",
+            b"Group,Balance\nCurrent,31\nReserve,12\n",
+        )
+        original_add = ApplicationSession.add_generated_artifact
+        original_commit = ApplicationSession.commit
+
+        def mark_artifact(self: ApplicationSession, *args: object, **kwargs: object) -> object:
+            result = original_add(self, *args, **kwargs)
+            self.info["synthetic_artifact_commit"] = True
+            return result
+
+        def commit_with_lost_ack(self: ApplicationSession) -> None:
+            original_commit(self)
+            if self.info.pop("synthetic_artifact_commit", False):
+                raise RuntimeError("synthetic lost artifact commit acknowledgment")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(ApplicationSession, "add_generated_artifact", mark_artifact)
+            scoped.setattr(ApplicationSession, "commit", commit_with_lost_ack)
+            response = client.post(
+                f"/api/cases/{case['id']}/generation",
+                json={
+                    "confirmed_contract_id": contract["id"],
+                    "reviewed_design_id": contract["reviewed_design_id"],
+                    "command_key": str(uuid4()),
+                },
+                headers=csrf(session),
+            )
+
+        assert response.status_code == 201
+        attempt = response.json()["attempt"]
+        assert attempt["status"] == "SUCCEEDED"
+        assert attempt["artifact"] is not None
+        download = client.get(
+            f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact"
+        )
+        assert download.status_code == 200
+        assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]

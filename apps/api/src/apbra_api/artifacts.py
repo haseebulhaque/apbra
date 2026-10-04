@@ -118,6 +118,7 @@ class LocalArtifactStore:
         key = f"{uuid4().hex}.zip"
         temporary_key = f".{uuid4().hex}.writing"
         published = False
+        temporary_created = False
         try:
             descriptor = os.open(
                 temporary_key,
@@ -125,6 +126,7 @@ class LocalArtifactStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            temporary_created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
@@ -140,9 +142,13 @@ class LocalArtifactStore:
             )
             published = True
             os.unlink(temporary_key, dir_fd=directory_descriptor)
+            temporary_created = False
             os.fsync(directory_descriptor)
         except Exception:
-            for candidate in ((key, temporary_key) if published else (temporary_key,)):
+            owned_keys = ([key] if published else []) + (
+                [temporary_key] if temporary_created else []
+            )
+            for candidate in owned_keys:
                 try:
                     os.unlink(candidate, dir_fd=directory_descriptor)
                 except FileNotFoundError:

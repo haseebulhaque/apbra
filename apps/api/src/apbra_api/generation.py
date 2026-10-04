@@ -1456,11 +1456,13 @@ class GenerationService:
                         separators=(",", ":"),
                     ),
                 )
-                cast(Any, db).commit()
             except Exception:
                 cast(Any, db).rollback()
                 cleanup_uncommitted_artifact(self.artifact_objects, storage_key)
                 raise
+            # A commit exception is ambiguous: the artifact row may already
+            # be durable, so do not delete the bytes referenced by that row.
+            cast(Any, db).commit()
             return attempt_json(store, current), True
         except Exception as exc:
             cast(Any, db).rollback()

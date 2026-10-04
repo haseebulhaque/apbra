@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from apbra_api.api import create_app
 from apbra_api.artifacts import ArtifactError, LocalArtifactStore, read_verified_artifact
@@ -22,6 +23,102 @@ from apbra_api.content_storage import (
 )
 from apbra_api.evidence import EvidenceError, LocalEvidenceStore, read_verified_evidence
 from apbra_api.persistence import ApplicationSession, Database
+
+
+@pytest.mark.parametrize("object_class", ["evidence", "reference"])
+@pytest.mark.parametrize("adapter", ["local", "alternate"])
+@pytest.mark.parametrize("failure", ["precommit", "committed_without_ack"])
+def test_upload_commit_outcome_preserves_only_potentially_committed_bytes(
+    settings: Settings,
+    database: Database,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    object_class: str,
+    adapter: str,
+    failure: str,
+) -> None:
+    backing: dict[str, bytes] = {}
+    objects: EvidenceObjectStore = (
+        LocalEvidenceStore(tmp_path / object_class, "test")
+        if adapter == "local"
+        else MemoryEvidenceStore(backing)
+    )
+    injected = (
+        {"evidence_objects": objects}
+        if object_class == "evidence"
+        else {"reference_objects": objects}
+    )
+    content = (
+        b"kind,value\nA,1\n"
+        if object_class == "evidence"
+        else b"\x89PNG\r\n\x1a\nsynthetic-reference"
+    )
+    endpoint = "evidence" if object_class == "evidence" else "reference-material"
+    filename = "synthetic.csv" if object_class == "evidence" else "synthetic.png"
+    add_name = "add_evidence" if object_class == "evidence" else "add_reference_material"
+
+    with TestClient(create_app(settings=settings, database=database, **injected)) as client:
+        session = sign_in(client, "owner")
+        created = client.post(
+            "/api/cases",
+            json={"request_text": "Inspect synthetic activity."},
+            headers={**csrf(session), "Idempotency-Key": str(uuid4())},
+        )
+        assert created.status_code == 201
+        case_id = created.json()["case"]["id"]
+        original_add = getattr(ApplicationSession, add_name)
+        original_commit = ApplicationSession.commit
+
+        def add_with_failure(self: ApplicationSession, *args: object, **kwargs: object) -> object:
+            if failure == "precommit":
+                raise RuntimeError("synthetic metadata failure")
+            result = original_add(self, *args, **kwargs)
+            self.info["synthetic_upload_commit"] = True
+            return result
+
+        def commit_with_lost_ack(self: ApplicationSession) -> None:
+            original_commit(self)
+            if self.info.pop("synthetic_upload_commit", False):
+                raise RuntimeError("synthetic lost commit acknowledgment")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(ApplicationSession, add_name, add_with_failure)
+            if failure == "committed_without_ack":
+                scoped.setattr(ApplicationSession, "commit", commit_with_lost_ack)
+            with pytest.raises(RuntimeError, match="synthetic"):
+                client.post(
+                    f"/api/cases/{case_id}/{endpoint}",
+                    params={"filename": filename, "expected_context_version": 1},
+                    content=content,
+                    headers={**csrf(session), "Content-Type": "application/octet-stream"},
+                )
+
+        with database.session() as db:
+            query = (
+                text(
+                    "SELECT storage_key, content_digest FROM case_evidence_versions "
+                    "WHERE case_id=:id"
+                )
+                if object_class == "evidence"
+                else text(
+                    "SELECT storage_key, content_digest FROM case_reference_materials "
+                    "WHERE case_id=:id"
+                )
+            )
+            rows = db.execute(query, {"id": case_id}).all()
+        if failure == "precommit":
+            assert rows == []
+            if adapter == "alternate":
+                assert not backing
+            else:
+                assert isinstance(objects, LocalEvidenceStore)
+                assert not list(objects.root.rglob("*.bin"))
+        else:
+            assert len(rows) == 1
+            key, digest = rows[0]
+            assert read_verified_evidence(objects, key, digest) == content
+            listed = client.get(f"/api/cases/{case_id}/{endpoint}")
+            assert listed.status_code == 200 and len(listed.json()["items"]) == 1
 
 
 class MemoryEvidenceStore:

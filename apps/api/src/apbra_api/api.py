@@ -40,7 +40,6 @@ from .config import ClarificationPolicy, Settings, UploadPolicy, get_settings
 from .content_storage import (
     ArtifactObjectStore,
     EvidenceObjectStore,
-    cleanup_uncommitted_evidence,
 )
 from .domain import (
     AccessLevel,
@@ -1123,7 +1122,7 @@ def create_app(
             content_buffer.extend(chunk)
         content = bytes(content_buffer)
         objects = local_evidence_service(snapshot)
-        result, storage_key = objects.add(
+        result, _storage_key = objects.add(
             db,
             actor,
             case_id,
@@ -1131,12 +1130,10 @@ def create_app(
             content=content,
             expected_context_version=expected_context_version,
         )
-        try:
-            db.commit()
-        except Exception:
-            if storage_key is not None:
-                cleanup_uncommitted_evidence(objects.objects, storage_key)
-            raise
+        # A commit may have succeeded before its acknowledgement was lost. The
+        # service cleans known pre-commit failures; an uncertain commit must
+        # retain bytes until authoritative reconciliation can prove orphanhood.
+        db.commit()
         return {"evidence": result}
 
     @app.get("/api/cases/{case_id}/reference-material")
@@ -1175,7 +1172,7 @@ def create_app(
                 raise EvidenceInvalid()
             content_buffer.extend(chunk)
         service = local_reference_service(snapshot)
-        result, storage_key = service.add(
+        result, _storage_key = service.add(
             db,
             actor,
             case_id,
@@ -1183,12 +1180,7 @@ def create_app(
             content=bytes(content_buffer),
             expected_context_version=expected_context_version,
         )
-        try:
-            db.commit()
-        except Exception:
-            if storage_key is not None:
-                cleanup_uncommitted_evidence(service.objects, storage_key)
-            raise
+        db.commit()
         return {"reference_material": result}
 
     @app.post("/api/cases/{case_id}/interpretations")

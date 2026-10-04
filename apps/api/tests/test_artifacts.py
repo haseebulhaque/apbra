@@ -106,3 +106,20 @@ def test_artifact_key_collision_never_replaces_committed_bytes(
         store.write(company_id, case_id, attempt_id, b"different candidate")
     assert store.read(key, digest, size) == b"first candidate"
     assert not list(store.root.rglob("*.writing"))
+
+
+def test_artifact_temporary_collision_preserves_unowned_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = LocalArtifactStore(tmp_path / "artifacts", "test")
+    company_id, case_id, attempt_id = uuid4(), uuid4(), uuid4()
+    fixed = uuid4()
+    monkeypatch.setattr(artifacts_module, "uuid4", lambda: fixed)
+    directory = store.root / str(company_id) / str(case_id) / str(attempt_id)
+    directory.mkdir(parents=True)
+    temporary = directory / f".{fixed.hex}.writing"
+    temporary.write_bytes(b"pre-existing temporary bytes")
+    with pytest.raises(FileExistsError):
+        store.write(company_id, case_id, attempt_id, b"different candidate")
+    assert temporary.read_bytes() == b"pre-existing temporary bytes"
+    assert not list(directory.glob("*.zip"))

@@ -483,6 +483,7 @@ class LocalEvidenceStore:
         case = str(case_id)
         directory_descriptor = self._open_directory((company, case), create=True)
         key = f"{uuid4().hex}.bin"
+        created = False
         try:
             descriptor = os.open(
                 key,
@@ -490,15 +491,17 @@ class LocalEvidenceStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
         except Exception:
-            try:
-                os.unlink(key, dir_fd=directory_descriptor)
-            except FileNotFoundError:
-                pass
+            if created:
+                try:
+                    os.unlink(key, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
             raise
         finally:
             os.close(directory_descriptor)
@@ -542,6 +545,7 @@ class LocalEvidenceStore:
             raise EvidenceError("Evidence recovery target does not match the case.")
         directory_descriptor = self._open_directory((company, case), create=False)
         temporary_key = f".{uuid4().hex}.recovering"
+        temporary_created = False
         try:
             descriptor = os.open(
                 temporary_key,
@@ -549,6 +553,7 @@ class LocalEvidenceStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            temporary_created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
@@ -565,12 +570,14 @@ class LocalEvidenceStore:
                 src_dir_fd=directory_descriptor,
                 dst_dir_fd=directory_descriptor,
             )
+            temporary_created = False
             os.fsync(directory_descriptor)
         except Exception:
-            try:
-                os.unlink(temporary_key, dir_fd=directory_descriptor)
-            except FileNotFoundError:
-                pass
+            if temporary_created:
+                try:
+                    os.unlink(temporary_key, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
             raise
         finally:
             os.close(directory_descriptor)
