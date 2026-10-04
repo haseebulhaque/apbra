@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-177",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-177-20261004-REG",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DOCS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Register a finite documentation-only reconciliation of stale current-state repository claims after merged APBRA-151/172 and APBRA-173A, without modifying documents in this registration.",
+  "requirements": [
+    "APBRA-177 is In Progress for current-state documentation audit and separate governance registration. Jira comment 10481 identifies the nine finite document paths; APBRA-160 checkpoint 10482 leaves APBRA-160/173 In Progress. Haseeb manually merged APBRA-173A PR #90 at a0085713f2cc007db2f53939c7a46082c6799be0 with reviewed head 8896633a61112ea0cc95b57c3849ddc8115ad837 (Jira 10488 and controller 10503). Hosted #153 passed on that head; no new main test suite is claimed.",
+    "Reconcile merged APBRA-151 self-service company creation, initial COMPANY_OWNER, invitations and bounded profile/membership lifecycle and merged APBRA-172 provider-neutral OIDC/application sessions as local/CI implementation. Never infer live Entra, public signup, Azure hosted isolation or production qualification.",
+    "Label historical snapshots and commits as historical; update only misleading present-tense/current-state statements. Preserve requirement IDs, original acceptance evidence, fixed security/compiler controls and exact private-resource authority.",
+    "Keep Azure Container Apps/Job, PostgreSQL, Blob, Key Vault, ACR and monitoring as an owner-selected reference deployment direction, not implemented core dependency. AWS/other/private deployment profiles remain future separate qualification, not current support.",
+    "Qualified provider/model configuration and protected credential references remain versioned, validated, permissioned Tenant Settings within deployment envelopes. Layout, theme, branding and report standards are phased configurable direction; no arbitrary customer/provider/region hardcoding or claim of implemented options.",
+    "APBRA-173A registration PR #89 and implementation PR #90 are merged at the current documentation registration base. The portable storage foundation does not prove Azure Blob, hosted durability/recovery or 173B–F completion.",
+    "Live Canvas/ARD/APBRA-165/APBRA-166 remain research/backlog outside MVP-1. APBRA-160 remains In Progress; no Desktop PASS, real-model quality, connected publishing, commercial billing or production readiness is inferred.",
+    "Registration changes only five exact governance paths; the later documentation implementation changes only nine literal document paths after hosted CI, genuinely independent exact-head registration review, Haseeb manual merge and post-merge main verification."
+  ],
+  "adrs": [
+    "Documentation-only reconciliation: no runtime/API/schema/migration/dependency/lockfile/workflow/cloud/permission change.",
+    "APBRA company membership and exact private-resource grants remain server-owned; external identity, entitlement and provider claims never substitute for authority.",
+    "Portable product core and qualified deployment adapters remain distinct. Azure is first reference profile, not universal APBRA business logic or evidence of AWS/private-hosted support.",
+    "Current implementation, deterministic test evidence, owner-approved direction, live qualification and production readiness are separate claims."
+  ],
+  "architecture_refs": [
+    "Jira APBRA-177 current description and comments 10481/10489/10498, APBRA-160 checkpoint 10482, APBRA-173 owner decision 10471 and controller post-PR-90 merge dispatch 10503; APBRA-151/172/108 merged bounded status.",
+    "Current Confluence 01.10 v12, 03.07 v21, 04.07 v2, 10.03 v7, 04.08 v2, 02.05 v6 are the seven registered bindings including Jira APBRA-177. Controller post-merge status updates changed current-state versions only; historical registration provenance remains unchanged. Cross-check 01.01 v13, 02.01 v9, 02.06 v16, 01.11 v8, 20.05 v60, 03.06 v1.",
+    "GitHub exact refreshed registration base a0085713f2cc007db2f53939c7a46082c6799be0 contains reviewed APBRA-173A implementation PR #90 head 8896633a61112ea0cc95b57c3849ddc8115ad837; documentation registration PR #91 remains separate."
+  ],
+  "allowed_paths": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "REQUIREMENTS.md",
+    "DATA-MODEL.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "SECURITY.md",
+    "apps/web/README.md",
+    "docs/engineering/codex-handoff.md",
+    "docs/decisions/implementation-baseline.md"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "apps/api/**",
+    "apps/web/src/**",
+    "apps/web/e2e/**",
+    "apps/web/scripts/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/vite.config.ts",
+    "apps/web/playwright.config.ts",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    "scripts/**",
+    "tests/**",
+    "tasks/**",
+    "contracts/**",
+    "agents/**",
+    "docs/source-register.json",
+    "requirements-bootstrap.txt",
+    "compose.yaml",
+    "artifacts/**",
+    "output/**",
+    "manual-testing/**",
+    "local-data/**",
+    "*.zip",
+    "**/*.zip",
+    ".env*",
+    "**/.env*"
+  ],
+  "acceptance_criteria": [
+    "Registration PR changes exactly five governance paths and no product document/runtime file. Later implementation changes exactly nine literal documentation paths; no wildcard, additional document or API path.",
+    "Present-tense repository statements truthfully describe merged APBRA-151/172 local/CI behavior, APBRA-173A registration/implementation state at the later exact branch base, and remaining live Entra/hosted/recovery/production gates.",
+    "Historical checkpoints and source provenance remain intact and distinguish earlier branches/base SHAs from current main.",
+    "Platform-independent core, Azure reference deployment and future separately qualified AWS/other profiles remain distinct; qualified tenant-configurable models/providers and phased theme/layout configuration are not misreported as implemented.",
+    "Authentication, company membership, exact private-resource access, external consent and entitlement stay separate. Live Canvas/ARD and APBRA-165/166 remain research/backlog outside MVP-1.",
+    "No Power BI Desktop PASS, connected publishing, live model quality, Azure deployment, billing, backup/recovery or production claim is invented.",
+    "Separate exact-head hosted CI, independent review and Haseeb-only manual merge gate both registration and later documentation PR; APBRA-177 stays In Progress until implementation merge/verification."
+  ],
+  "verification_required": [
+    "Focused APBRA-177 source/task/hash/path and fail-closed mutation tests; full bootstrap suite, standalone checker and CI policy checker.",
+    "Exact five registration-path and nine future document-path audit, git diff --check and available secret check.",
+    "Hosted APBRA Bootstrap on exact registration head, genuinely separate independent exact-head review, Haseeb manual merge and verified post-merge main before any document edit.",
+    "Later documentation PR needs current source/PR/main refresh, content-specific review, exact-head hosted CI and Haseeb-only manual merge."
+  ],
+  "out_of_scope": [
+    "Any product document edit in this registration or any implementation outside nine exact future documentation paths.",
+    "APBRA-173A storage product code, Azure resources, infrastructure, cloud spend, live Entra, model/provider activation, Power BI/Fabric publishing or billing.",
+    "APBRA-175/176 historical task/source rewrites; Live Canvas/ARD/APBRA-165/166 MVP inclusion; mass-closing overlapping tickets.",
+    "Self-approval, direct main write, auto-merge, force-push or Codex merge."
+  ],
+  "escalate_when": [
+    "A needed documentation correction requires a tenth path or registration requires a sixth governance file.",
+    "Current Jira/Confluence source or GitHub merge evidence conflicts materially or source provenance cannot be verified.",
+    "Any mandatory local/hosted check, independent exact-head review, Haseeb manual merge or post-merge main verification is absent, stale or failed."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "a0085713f2cc007db2f53939c7a46082c6799be0",
+  "branch": "agent/APBRA-DOCS/APBRA-177-current-state-docs",
+  "source_ids": [
+    "apbra-177-mvp-scope",
+    "apbra-177-preview-direction",
+    "apbra-177-deployment-portability",
+    "apbra-177-identity-rbac",
+    "apbra-177-entitlement-boundary",
+    "apbra-177-data-identity",
+    "apbra-177-owner-doc-clarification"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Finite documentation-only authority after hosted registration CI, independent exact-head review, Haseeb manual merge and verified post-merge main",
+  "dependencies": [
+    "APBRA-177 registration is governance-only; hosted CI, independent exact-head review, Haseeb manual merge and post-merge verification precede a separate documentation implementation PR.",
+    "APBRA-173A PR #90 was independently reviewed PASS at exact head 8896633a61112ea0cc95b57c3849ddc8115ad837 (Jira 10488 / GitHub 5980634576, hosted #153 SUCCESS) and manually merged at a0085713f2cc007db2f53939c7a46082c6799be0. Later documentation wording must preserve the local/CI versus hosted qualification boundary.",
+    "Confluence 01.10 v12, 03.07 v21, 04.07 v2, 10.03 v7, 04.08 v2, 02.05 v6 and Jira APBRA-177 owner clarification form bounded source provenance."
+  ]
+}

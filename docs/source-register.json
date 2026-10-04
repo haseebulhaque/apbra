@@ -235,7 +235,7 @@
     {
       "id": "mvp1-business-friendly-ux-application-shell",
       "content_id": "APBRA-169",
-      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell \u2014 Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
+      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell — Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
       "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-169 business-friendly UX and application shell",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-169",
       "status": "ACCEPTED",
@@ -519,6 +519,69 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10471",
       "status": "ACCEPTED",
       "acceptance": "Haseeb Ul Haque's explicit owner comment 10471 approves the full-journey Azure Container Apps/Job, PostgreSQL Flexible Server, Blob, Key Vault, ACR and bounded Monitor/Application Insights reference direction while preserving deployment portability. Package 173A registers only a portable protected byte-storage seam; 173D owns Azure Blob and infrastructure. Region, spend, sizing, networking, URL, live Entra, provider costs and recovery targets remain undecided. Separate hosted CI, independent exact-head review and Haseeb manual merge precede product work."
+    },
+    {
+      "id": "apbra-177-mvp-scope",
+      "content_id": "4063307",
+      "version": 12,
+      "section": "01.10 - MVP Scope & Product Boundaries",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481, refreshed by controller post-merge dispatch 10503, bind this exact current source version for finite repository current-state reconciliation only. Confluence 01.10 v12 records merged bounded APBRA-151/172 behavior and Haseeb's verified APBRA-173A PR #90 merge at a0085713f2cc007db2f53939c7a46082c6799be0, separate from live Entra, hosted preview, Power BI and production qualification. Registration changes governance only; documentation implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-preview-direction",
+      "content_id": "8519682",
+      "version": 21,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481, refreshed by controller post-merge dispatch 10503, bind this exact current source version for finite repository current-state reconciliation only. Confluence 03.07 v21 records self-service onboarding, the full preview sequence and Haseeb's verified APBRA-173A PR #90 merge; the portable storage foundation is not hosted deployment evidence. Registration changes governance only; documentation implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-deployment-portability",
+      "content_id": "9568258",
+      "version": 2,
+      "section": "04.07 - Deployment Models, Control Plane & Customer-Hosted Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481 bind this exact current source version for finite repository current-state reconciliation only. Confluence 04.07 v2 preserves platform-independent core, Azure as first reference deployment and future separately qualified AWS, other cloud and private deployment profiles. Registration changes governance only; implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-identity-rbac",
+      "content_id": "4030847",
+      "version": 7,
+      "section": "10.03 - Identity, Authentication, Authorisation & RBAC",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481 bind this exact current source version for finite repository current-state reconciliation only. Confluence 10.03 v7 distinguishes merged local/CI APBRA-151/172 identity and membership controls from live Entra and hosted security qualification. Registration changes governance only; implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-entitlement-boundary",
+      "content_id": "9535525",
+      "version": 2,
+      "section": "04.08 - Subscription, Entitlement & Feature-Gating Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481 bind this exact current source version for finite repository current-state reconciliation only. Confluence 04.08 v2 separates tenant-configurable qualified provider/model settings, commercial entitlement and fixed APBRA security and resource authority. Registration changes governance only; implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-data-identity",
+      "content_id": "4063348",
+      "version": 6,
+      "section": "02.05 - Data, Integration, Identity & Audit Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-177 documentation cleanup request and Jira audit/dispatch 10481 bind this exact current source version for finite repository current-state reconciliation only. Confluence 02.05 v6 binds immutable data, audit and identity distinctions without claiming future hosted recovery or production controls. Registration changes governance only; implementation waits for exact-head CI, independent review, Haseeb manual merge and verified main."
+    },
+    {
+      "id": "apbra-177-owner-doc-clarification",
+      "content_id": "APBRA-177",
+      "version": "Jira owner clarification and controller comment 10481, 2026-10-04",
+      "section": "APBRA-177 current-state documentation reconciliation",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-177?focusedCommentId=10481",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested a separate governed cleanup of stale repository current-state statements. Jira APBRA-177 and controller audit 10481 identify nine exact document paths and require historical checkpoints, portability, future configurable providers/themes, and live/hosted claim limits to remain explicit. No APBRA-173A runtime or Azure/Canvas implementation authority follows; separate registration CI/review/manual merge precedes documentation edits."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
