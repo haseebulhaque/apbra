@@ -10,6 +10,7 @@ import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
 
+import apbra_api.evidence as evidence_module
 from apbra_api.config import Settings
 from apbra_api.evidence import EvidenceError, LocalEvidenceStore, parse_evidence
 from apbra_api.persistence import ApplicationSession
@@ -621,6 +622,35 @@ def test_local_store_is_private_and_integrity_bound(tmp_path: Path) -> None:
     target.write_bytes(b"tampered")
     with pytest.raises(EvidenceError):
         store.read(key, digest)
+
+
+@pytest.mark.parametrize("object_class", ["evidence", "reference"])
+def test_local_exclusive_collision_preserves_existing_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, object_class: str
+) -> None:
+    store = LocalEvidenceStore(tmp_path / object_class, "test")
+    company_id, case_id, fixed = uuid4(), uuid4(), uuid4()
+    monkeypatch.setattr(evidence_module, "uuid4", lambda: fixed)
+    key, digest = store.write(company_id, case_id, b"original bytes")
+    with pytest.raises(FileExistsError):
+        store.write(company_id, case_id, b"replacement bytes")
+    assert store.read(key, digest) == b"original bytes"
+
+
+def test_local_restore_temporary_collision_preserves_existing_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = LocalEvidenceStore(tmp_path / "objects", "test")
+    company_id, case_id = uuid4(), uuid4()
+    key, digest = store.write(company_id, case_id, b"original bytes")
+    fixed = uuid4()
+    monkeypatch.setattr(evidence_module, "uuid4", lambda: fixed)
+    temporary = store.root / str(company_id) / str(case_id) / f".{fixed.hex}.recovering"
+    temporary.write_bytes(b"pre-existing recovery bytes")
+    with pytest.raises(FileExistsError):
+        store.restore(company_id, case_id, key, b"original bytes", digest)
+    assert temporary.read_bytes() == b"pre-existing recovery bytes"
+    assert store.read(key, digest) == b"original bytes"
 
 
 def test_local_store_rejects_symlink_root(tmp_path: Path) -> None:

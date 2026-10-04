@@ -12,6 +12,7 @@ from uuid import UUID
 
 from .authorization import authorized_case_access
 from .config import ClarificationPolicy, UploadPolicy
+from .content_storage import EvidenceObjectStore, cleanup_uncommitted_evidence
 from .domain import (
     AccessLevel,
     Actor,
@@ -42,9 +43,9 @@ from .domain import (
 )
 from .evidence import (
     EvidenceError,
-    LocalEvidenceStore,
     ParsedEvidence,
     parse_evidence,
+    read_verified_evidence,
     schema_digest,
 )
 from .model_provider import (
@@ -174,11 +175,11 @@ def case_json(db: ApplicationPersistence, row: CaseRecord) -> dict[str, Any]:
 
 
 def qualify_evidence_object(
-    objects: LocalEvidenceStore, row: EvidenceRecord
+    objects: EvidenceObjectStore, row: EvidenceRecord
 ) -> tuple[ParsedEvidence, dict[str, Any]]:
     """Re-prove that retained bytes still match their qualified schema."""
     try:
-        content = objects.read(row.storage_key, row.content_digest)
+        content = read_verified_evidence(objects, row.storage_key, row.content_digest)
         parsed = parse_evidence(content, row.filename)
         schema = json.loads(row.observed_schema_json)
     except (EvidenceError, json.JSONDecodeError) as exc:
@@ -661,7 +662,7 @@ class ConversationService:
 
 
 class EvidenceService:
-    def __init__(self, objects: LocalEvidenceStore, policy: UploadPolicy) -> None:
+    def __init__(self, objects: EvidenceObjectStore, policy: UploadPolicy) -> None:
         self.objects = objects
         self.policy = policy
 
@@ -730,14 +731,24 @@ class EvidenceService:
             try:
                 qualify_evidence_object(self.objects, duplicate)
             except EvidenceError:
-                self.objects.restore(duplicate.storage_key, content, duplicate.content_digest)
+                self.objects.restore(
+                    actor.company_id, case_id, duplicate.storage_key, content,
+                    duplicate.content_digest,
+                )
+                qualify_evidence_object(self.objects, duplicate)
                 store.add_audit(actor, "EVIDENCE_OBJECT_RESTORED", "REPORTING_CASE", case_id)
             result = self._json(duplicate)
             result["semantic_context_version"] = case.semantic_context_version
             return result, None
         storage_key, stored_digest = self.objects.write(actor.company_id, case_id, content)
-        assert hmac.compare_digest(digest, stored_digest)
+        if not hmac.compare_digest(digest, stored_digest):
+            cleanup_uncommitted_evidence(self.objects, storage_key)
+            raise ConfigurationUnavailable()
         try:
+            if not hmac.compare_digest(
+                read_verified_evidence(self.objects, storage_key, digest), content
+            ):
+                raise ConfigurationUnavailable()
             schema_json = json.dumps(parsed.observed_schema, sort_keys=True, separators=(",", ":"))
             row = store.add_evidence(
                 actor,
@@ -753,7 +764,7 @@ class EvidenceService:
             store.advance_semantic_context(case)
             store.add_audit(actor, "EVIDENCE_ADDED", "REPORTING_CASE", case_id)
         except Exception:
-            self.objects.delete(storage_key)
+            cleanup_uncommitted_evidence(self.objects, storage_key)
             raise
         result = self._json(row)
         result["semantic_context_version"] = case.semantic_context_version
@@ -764,9 +775,9 @@ class AcceptanceService:
     def __init__(
         self,
         bridge: SemanticBridge,
-        objects: LocalEvidenceStore,
+        objects: EvidenceObjectStore,
         *,
-        reference_objects: LocalEvidenceStore | None = None,
+        reference_objects: EvidenceObjectStore | None = None,
         model_provider: ModelProvider | None = None,
         clarification_policy: ClarificationPolicy | None = None,
         generation_policy: dict[str, Any] | None = None,
@@ -914,7 +925,9 @@ class AcceptanceService:
             if self.reference_objects is None:
                 raise SemanticValidationFailed()
             try:
-                self.reference_objects.read(reference_row.storage_key, reference_row.content_digest)
+                read_verified_evidence(
+                    self.reference_objects, reference_row.storage_key, reference_row.content_digest
+                )
             except EvidenceError as exc:
                 raise SemanticValidationFailed() from exc
             references.append(
