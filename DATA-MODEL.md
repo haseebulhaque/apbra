@@ -10,7 +10,7 @@ Controlling sources at APBRA-159 reconciliation time are [Confluence 11.01 Conce
 
 ## Current durable local/CI customer-data foundation
 
-Since the APBRA-159 reconciliation, merged protected-case work through APBRA-174 has added PostgreSQL 17-backed invited membership, private cases, immutable request/conversation/evidence and accepted-meaning lineage, generation attempts and validated candidate history, plus immutable Tenant Settings versions and protected credential references. Server-derived actor and company context, current private-case permission and exact settings/acceptance versions govern protected actions. Private local evidence/artifact volumes retain qualified bytes across ordinary restarts. These are bounded local/CI implementations, not a certified production store, hosted isolation, retention/deletion compliance, backup/DR or customer-hosted deployment.
+Since the APBRA-159 reconciliation, merged protected-case work through APBRA-174 and APBRA-151/172 has added PostgreSQL 17-backed provider-qualified identity, first-company owner bootstrap, multi-company membership, private cases, immutable request/conversation/evidence and accepted-meaning lineage, generation attempts and validated candidate history, plus immutable Tenant Settings versions and protected credential references. Server-derived actor and company context, current private-case permission and exact settings/acceptance versions govern protected actions. APBRA-173A now provides a portable protected-content contract with secure local and deterministic alternate adapter evidence. Local volumes retain qualified bytes across ordinary restarts; no Azure Blob or hosted recovery is claimed. These are bounded local/CI implementations, not a certified production store, hosted isolation, retention/deletion compliance, backup/DR or customer-hosted deployment.
 
 [Confluence 04.07 v2](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258) separates future minimum central control-plane organisation/deployment, subscription, entitlement, licence and release metadata from the **selected customer data plane**. Customer users/mappings, Tenant Settings, credentials, source/evidence data, prompts, accepted requirements, reports/Delivery Guides, audit/history and operational content stay in that plane. Licence validation must not require their upload or a central SaaS customer-content database. `deployment_id` identifies an installation/licence lifecycle; `tenant_id` identifies the company authorization domain. One Cloud deployment can host many tenants; Dedicated/Private relationships need explicit qualification. No central control-plane database, entitlement engine or cross-deployment identity mapping is implemented by this document.
 
@@ -89,15 +89,15 @@ The accepted `DATA-001`–`DATA-010` and `DATA-020`–`DATA-023` identifiers rem
 
 This APBRA-175 document change authorises no tables, migrations, persistence APIs, model-type renames or source changes. Bounded application persistence and authorization already exist in local/CI; production deployment, complete audit/retention/deletion, backup/DR and recovery require separate accepted contracts and evidence. The engineering metadata schemas under `contracts/engineering/` are distinct from the application store.
 
-## APBRA-176 target identity and company-bootstrap semantics — not yet implemented
+## APBRA-176 identity design and later bounded implementation
 
-The 2 October 2026 owner decision adds target semantics around the existing bounded invited-membership model. These are architecture requirements, not a claim that the current database already contains every field/table below.
+The 2 October 2026 owner decision refined the earlier invited-membership model. APBRA-151/172 subsequently implemented the bounded local/CI identity, company and membership contracts below; future integrations still require separate qualification.
 
 - **External identity binding:** persist a stable qualified provider/profile identity key, using validated issuer plus subject/object identity or an equivalent stable provider key. Email/UPN is profile data, not the durable security key.
 - **Company:** an APBRA company/workspace is an application security/governance domain with its own stable identifier. It is not an Entra tenant, Google Workspace, Azure subscription or Power BI workspace.
 - **Membership:** role/capability membership remains APBRA-authoritative. Authentication creates no membership by itself.
-- **Invitation:** an eligible invitation may create the exact intended membership after authentication; expiration, revocation, replay and identity mismatch fail closed.
-- **First-company bootstrap:** if the authenticated user has no applicable membership/invitation and chooses Create Company / Workspace, company creation plus the initial `COMPANY_OWNER` membership must commit transactionally and idempotently with auditable actor provenance.
+- **Invitation:** an eligible invitation may create the exact intended membership after authentication even when another active company membership exists; expiration, revocation, replay and identity mismatch fail closed.
+- **First-company bootstrap:** if the authenticated user has no applicable membership/invitation and chooses Create Company / Workspace, company creation plus the initial `COMPANY_OWNER` membership and Tenant Settings v1 commit transactionally and idempotently with auditable actor provenance.
 - **Resource grant:** private report/case/project access is evaluated separately from company membership and separately from commercial entitlement.
 - **Account linking:** identities from different providers/issuers never merge solely because their email values match. Linking requires an explicit verified process.
 

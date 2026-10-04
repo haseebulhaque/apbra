@@ -45,4 +45,4 @@ Security invariants:
 - verified-domain join, enterprise SSO and SCIM/JIT require explicit company policy and separate qualification; customer-admin action may be required for those enterprise integrations;
 - development/test identity mechanisms must fail closed outside their authorised local/test profile.
 
-This repository documentation does not prove live Entra integration, public signup, hosted isolation or production session security. Those require APBRA-151/172/173 implementation and exact evidence.
+Merged APBRA-151/172 provide bounded local/CI company lifecycle and provider-neutral session implementation; APBRA-173A provides a portable protected-content storage foundation. This repository documentation does not prove live Entra integration, public signup, Azure Blob or hosted durability/recovery, hosted isolation or production session security. Those require separate APBRA-173 qualification and exact evidence.
