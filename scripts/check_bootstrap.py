@@ -739,6 +739,20 @@ COMPANY_LIFECYCLE_AMENDMENT_PATHS = {
 COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment'
 COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS = COMPANY_LIFECYCLE_AMENDMENT_PATHS
 
+CANDIDATE_SOURCE_SAFETY_PATHS = {'apps/web/src/genericPowerBI.test.ts', 'apps/web/src/genericPowerBI.ts', 'apps/api/tests/test_generation.py'}
+CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS = {
+    'docs/source-register.json',
+    'tasks/APBRA-108-candidate-source-safety.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_candidate_source_safety_scope.py',
+    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+}
+CANDIDATE_SOURCE_SAFETY_TASK_SHA256 = 'e4b2bf150019db34f848a9e94105ac9497a71ee67694348dffe8f3ad0ce17b46'
+CANDIDATE_SOURCE_SAFETY_SOURCES = (('apbra-108-pbip-pbir-structure', '3965362', 3, '3dfd8a68066547944885370e7091c0605b6db155c171b74bedbe0b181f78b2d2'), ('apbra-108-connections-source-boundary', '4063608', 3, 'c517844c225c801e8a6653a02fa334ce0e925a0915bfdee47ce5036f4034f9d5'), ('apbra-108-candidate-validation', '4063628', 4, 'ec89a4c144e52de5bf0ee122cf630005a3a57c51de71b14a893b97cfb57c1efe'))
+CANDIDATE_SOURCE_SAFETY_GATE_SHA256 = {'requirements': '4f5ddef9ea03936295604fe8eff1d49a5464315ad3296bda0ecc6db6a09da8c0', 'acceptance_criteria': '1b9e5046c9f168a5edb8dcedbc5b611503346ecfe054155ca3905ac01b0092af', 'verification_required': '5c81450d1198062a55a8a7a93273b4c7f70274af3add4bcd0ad4f168dba11623', 'dependencies': '19890e30139c836c46452801cb7af7b3947a095d34700476886eb143d2cb3feb'}
+CANDIDATE_SOURCE_SAFETY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety'
+CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH = CANDIDATE_SOURCE_SAFETY_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -1852,6 +1866,48 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 owner_onboarding_identity_docs_task = None
+        candidate_source_safety_task = None
+        candidate_source_safety_path = root / 'tasks/APBRA-108-candidate-source-safety.json'
+        if candidate_source_safety_path.exists():
+            candidate_source_safety_task = load_json(candidate_source_safety_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), candidate_source_safety_task)
+            if not extension_errors:
+                extension_errors += task_errors(candidate_source_safety_task, catalog, sources)
+                canonical_task = json.dumps(candidate_source_safety_task, sort_keys=True, separators=(',', ':')).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != CANDIDATE_SOURCE_SAFETY_TASK_SHA256:
+                    extension_errors.append('APBRA-108 contract differs from accepted authority')
+                if (candidate_source_safety_task['task_id'], candidate_source_safety_task['assigned_agent'],
+                        candidate_source_safety_task['agent_card_version']) != ('APBRA-108', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-108 task or agent identity')
+                if candidate_source_safety_task['branch'] != CANDIDATE_SOURCE_SAFETY_BRANCH:
+                    extension_errors.append('Unexpected APBRA-108 implementation branch')
+                if candidate_source_safety_task['base_commit'] != 'a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf':
+                    extension_errors.append('Stale APBRA-108 registration base')
+                if (set(candidate_source_safety_task['allowed_paths']) != CANDIDATE_SOURCE_SAFETY_PATHS or
+                        len(candidate_source_safety_task['allowed_paths']) != len(CANDIDATE_SOURCE_SAFETY_PATHS)):
+                    extension_errors.append('Unexpected APBRA-108 implementation scope')
+                if (candidate_source_safety_task['task_mode'], candidate_source_safety_task['readiness'],
+                        candidate_source_safety_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-108 requires issued implementation acceptance')
+                if candidate_source_safety_task['source_ids'] != [row[0] for row in CANDIDATE_SOURCE_SAFETY_SOURCES]:
+                    extension_errors.append('APBRA-108 requires exact accepted sources')
+                for section, expected in CANDIDATE_SOURCE_SAFETY_GATE_SHA256.items():
+                    actual = json.dumps(candidate_source_safety_task[section], sort_keys=True, separators=(',', ':')).encode()
+                    if hashlib.sha256(actual).hexdigest() != expected:
+                        extension_errors.append('APBRA-108 safety/review gate differs: ' + section)
+                for source_id, content_id, version, expected_sha in CANDIDATE_SOURCE_SAFETY_SOURCES:
+                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    if package_source is None:
+                        extension_errors.append('APBRA-108 accepted source is missing: ' + source_id)
+                    else:
+                        canonical_source = json.dumps(package_source, sort_keys=True, separators=(',', ':')).encode()
+                        if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-108 source differs from accepted provenance: ' + source_id)
+                        if (package_source.get('content_id'), package_source.get('version'), package_source.get('status')) != (content_id, version, 'ACCEPTED'):
+                            extension_errors.append('APBRA-108 source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                candidate_source_safety_task = None
         provider_neutral_sso_task = None
         provider_neutral_sso_path = root / 'tasks/APBRA-172-provider-neutral-sso.json'
         if provider_neutral_sso_path.exists():
@@ -1983,6 +2039,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
             (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
             (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
+            (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2032,6 +2089,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (active_task_id == 'APBRA-172' and
                          active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
                          changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-108' and
+                         active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
+                         changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-151' and
                          active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
                          changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
@@ -2168,6 +2228,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH and
                     changed_paths.intersection(OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS)):
                 errors.append('APBRA-176 documentation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-108' and
+                    changed_paths.intersection(CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
+                    changed_paths.intersection(CANDIDATE_SOURCE_SAFETY_PATHS)):
+                errors.append('APBRA-108 registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-108' and
+                    active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
+                    changed_paths != CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS):
+                errors.append('APBRA-108 registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-108' and
+                    active_branch == CANDIDATE_SOURCE_SAFETY_BRANCH and
+                    changed_paths.intersection(CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS)):
+                errors.append('APBRA-108 implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-172' and
                     changed_paths.intersection(PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
                     changed_paths.intersection(PROVIDER_NEUTRAL_SSO_PATHS)):
@@ -2284,6 +2356,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
                          changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
                          name in OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-108' and active_task is not None and
+                         active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
+                         changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
+                         name in CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-172' and active_task is not None and
                          active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and

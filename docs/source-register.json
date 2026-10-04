@@ -296,6 +296,33 @@
       "acceptance": "Haseeb authorizes a separate governance-only registration for a later CI capacity correction required to complete already-authorized APBRA-174 hosted validation. The original 67 exact APBRA-174 product implementation paths and PR #74 remain unchanged. Future functional authority is restricted to exactly .github/workflows/bootstrap.yml, scripts/check_ci_policy.py, tests/bootstrap/test_ci_policy.py, scripts/check_bootstrap.py and tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py on a separate CI implementation branch. The first four may only change the current APBRA Bootstrap whole-job timeout from 20 to 30 minutes and matching exact policy, mutation-test and bootstrap-workflow assertions. The fifth may only preserve APBRA-163's exact historical 20-minute compressed workflow fixture, original SHA-256 binding and negative mutation rejection while distinguishing it narrowly from the new current 30-minute requirement; no generic 20-or-30 acceptance or validation bypass is authorized. The historical APBRA-163 task decision and accepted source provenance remain unchanged. This governance PR retains the live 20-minute workflow and every current functional timeout assertion. The future change may not alter test commands, order, coverage, security/API/governance/Playwright checks, runner, permissions, action pins, PostgreSQL service, environment, artifact retention, concurrency, failure semantics, retries, path filtering, parallelism, job structure, caching, dependencies, lockfiles, application code, or unrelated CI behavior. Hosted CI, independent exact-head review and Haseeb's manual merge of this governance PR are required before the future implementation authority becomes effective. No merge or auto-merge is authorized."
     },
     {
+      "id": "apbra-108-pbip-pbir-structure",
+      "content_id": "3965362",
+      "version": 3,
+      "section": "08.04 - PBIP, PBIR, Visuals, Pages & Themes",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3965362",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb authorised APBRA-108 governance-only registration on 2026-10-04 from verified main a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf. This current source controls bounded PBIP/source or exact-candidate validation for the independently evidenced P1 unsafe source-construction finding in Jira comment 10461. Registration changes governance files only. A future three-path correction requires this registration to pass hosted CI, fresh separate exact-head review and Haseeb manual merge with post-merge main verification. No Desktop execution, production qualification, cloud, paid provider or customer data is claimed."
+    },
+    {
+      "id": "apbra-108-connections-source-boundary",
+      "content_id": "4063608",
+      "version": 3,
+      "section": "08.05 - RLS, Connections, Gateways & Refresh Guidance",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063608",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb authorised APBRA-108 governance-only registration on 2026-10-04 from verified main a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf. This current source controls bounded PBIP/source or exact-candidate validation for the independently evidenced P1 unsafe source-construction finding in Jira comment 10461. Registration changes governance files only. A future three-path correction requires this registration to pass hosted CI, fresh separate exact-head review and Haseeb manual merge with post-merge main verification. No Desktop execution, production qualification, cloud, paid provider or customer data is claimed."
+    },
+    {
+      "id": "apbra-108-candidate-validation",
+      "content_id": "4063628",
+      "version": 4,
+      "section": "08.06 - Validation Engine & Unsupported Feature Matrix",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063628",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb authorised APBRA-108 governance-only registration on 2026-10-04 from verified main a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf. This current source controls bounded PBIP/source or exact-candidate validation for the independently evidenced P1 unsafe source-construction finding in Jira comment 10461. Registration changes governance files only. A future three-path correction requires this registration to pass hosted CI, fresh separate exact-head review and Haseeb manual merge with post-merge main verification. No Desktop execution, production qualification, cloud, paid provider or customer data is claimed."
+    },
+    {
       "id": "apbra-175-deployment-model-control-plane",
       "content_id": "9568258",
       "version": 1,

@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-108",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-108-20261004-REG",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register only the exact finite authority for a later fail-closed correction of untrusted source/schema names reaching generated Power Query M and receiving inaccurate deterministic candidate PASS; no product code changes in this registration.",
+  "requirements": [
+    "Jira APBRA-108 (parent APBRA-107) and synthetic P1 evidence comment 10461 were refreshed 2026-10-04. APBRA-108 remains To Do; APBRA-160 In Progress and APBRA-173 To Do. The finding proves unsafe emitted M source and false deterministic PASS, not Desktop execution, network access, exfiltration or customer impact.",
+    "Separate source data and metadata from executable or structural tokens. Qualify each untrusted table, column, measure, filename and source-mapping value at its Power Query M identifier/text-literal, TMDL, DAX and candidate-file-key context; no generic escape-everything substitution or domain-specific column recipe.",
+    "The current bounded embedded-CSV path must fail closed for unsupported names without silently stripping, normalising, renaming, dropping or executing source metadata. Preserve original evidence and actionable failure. A broader source-name mapping, connector or parameter mode requires separate accepted authority.",
+    "Exact final candidate bytes must satisfy complete mandatory source/model/structure/path validation before PASS. A structurally packaged candidate is not safe merely because files exist. Preserve stronger protected archive/path controls and align lower-level validation without weakening them.",
+    "A rejected synthetic header must not yield a protected API PASS candidate, ZIP, downloadable artifact or stale approval; preserve the original submission, failed attempt and safe audit provenance. A changed candidate requires fresh digest-bound validation and applicable governance.",
+    "Test quotes, brackets, M quoted identifiers, # characters, CR/LF, tabs, comments, expression fragments, operators, slashes and backslashes, dot/reserved path components, Unicode/normalization collisions, empty/duplicate headers and DAX/TMDL delimiters; ordinary safe labels and four unrelated renamed synthetic domains must remain valid.",
+    "APBRA-108 is not an APBRA-160 child. Its P1 safety correction is prerequisite to APBRA-173 exposing arbitrary upload-to-candidate-to-download to colleagues. Haseeb selected the full journey; no reduced identity/case-only preview is selected. Live Canvas, ARD, APBRA-165 and APBRA-166 remain research/backlog and are neither MVP scope nor a completion gate."
+  ],
+  "adrs": [
+    "Deterministic code, not AI or a field/header name, owns generation grammar, validation, release eligibility and safe failure. Exact accepted meaning and original evidence remain intact.",
+    "Power Query M, TMDL, DAX and archive paths have distinct syntax/trust contexts. Each needs context-specific construction and final validation; source data can contain dangerous-looking text without becoming executable source.",
+    "Do not infer Desktop parseability or runtime behavior from static PASS. Missing, skipped or failed mandatory checks are incomplete or failure, never PASS.",
+    "Registration and implementation are separate branches and reviews. APBRA-PBI is the logical compiler subject-matter role; APBRA-DEVOPS is the repository task actor because its existing card can register and gate the exact apps/web compiler and apps/api test paths. APBRA-QA/APBRA-SEC supply separate review evidence."
+  ],
+  "architecture_refs": [
+    "Confluence 08.04 page 3965362 v3, 08.05 page 4063608 v3 and 08.06 page 4063628 v4 refreshed live 2026-10-04; current page state is not itself an implementation PASS.",
+    "Exact merged GitHub main a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf. Source trace: evidence.py retains CSV/XLSX headers, generation.py forwards data structure, genericPowerBI.ts emits M/TMDL/DAX and currently validates mostly structure; Jira 10461 records the bounded synthetic proof.",
+    "Jira APBRA-173 comments 10460 and 10462 are planning evidence; this registration does not approve hosted architecture. APBRA-160 remains In Progress; APBRA-151 Done."
+  ],
+  "allowed_paths": [
+    "apps/api/tests/test_generation.py",
+    "apps/web/src/genericPowerBI.test.ts",
+    "apps/web/src/genericPowerBI.ts"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/api/src/**",
+    "apps/api/alembic/**",
+    "apps/api/pyproject.toml",
+    "apps/api/requirements*.txt",
+    "apps/web/scripts/**",
+    "apps/web/src/archive.ts",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/vite.config.ts",
+    "apps/web/playwright.config.ts",
+    "compose.yaml",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**"
+  ],
+  "acceptance_criteria": [
+    "The registration PR changes exactly five governance paths and no runtime/product file. The later implementation changes only three exact literal paths after verified governance merge.",
+    "Synthetic untrusted CSV header metadata cannot alter emitted M/TMDL/DAX syntax or receive deterministic candidate PASS. Unsupported metadata fails safely while original evidence and failed-attempt history remain available.",
+    "Direct compiler/validator negatives cover the named language, path and Unicode contexts, including unused observed headers; positive safe labels and four unrelated renamed synthetic domains still compile.",
+    "The protected API synthetic regression proves no PASS artifact/ZIP/download for the rejected input and no weakened company/case authority.",
+    "Final candidate validation checks exact source/model bytes and safe keys in the declared supported grammar; modified bytes invalidate prior validation/digest/governance evidence. Stronger existing path/archive controls remain intact.",
+    "No Power BI Desktop PASS, M evaluation, exfiltration or runtime exploitation claim is inferred from deterministic tests."
+  ],
+  "verification_required": [
+    "Registration: focused exact-source/task/path tests and negative mutations, complete bootstrap suite, standalone bootstrap and CI policy checkers, exact five-path audit, git diff --check and available history-aware secret scan.",
+    "Registration: hosted APBRA Bootstrap on exact PR head, genuinely separate independent exact-head review and Haseeb-only manual merge; verify post-merge main before any product edit.",
+    "Later implementation: focused compiler/validator and protected API negative regressions; full web unit/type/build/Playwright and PostgreSQL API suites; Ruff, strict mypy, migration/bootstrap/governance checks where applicable; exact path and secret scans; hosted CI on exact head.",
+    "Later implementation: fresh APBRA-PBI/QA/SEC exact-head adversarial review of emitted candidate text and validation evidence before Haseeb-only manual product merge. Desktop/runtime tests stay NOT_RUN unless actually performed."
+  ],
+  "out_of_scope": [
+    "Any runtime/product fix in this registration; any fourth later implementation path without a separately reviewed governance amendment. No dependency, lockfile, workflow, cloud, provider, paid-use or customer-data change.",
+    "Live Canvas, ARD, APBRA-165, APBRA-166 and changing APBRA-160 scope/status; a reduced identity/case-only preview is not the selected APBRA-173 journey.",
+    "General source-template/connector expansion, Power BI publishing/refresh, Desktop qualification, customer credentials or new network destinations.",
+    "Self-approval, direct main write, automatic merge, force-push and Haseeb merge authority delegation."
+  ],
+  "escalate_when": [
+    "A safe correction or mandatory regression requires a file outside the three exact implementation paths, a new dependency or an unaccepted source/template mode.",
+    "Current Jira/Confluence architecture conflicts with this bounded P1 correction or future validation cannot fail closed without losing original evidence.",
+    "Mandatory local/hosted CI, separate exact-head review, post-registration merge verification or Haseeb manual merge is absent, failed, stale or skipped."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "a9fa15de2fa51331e8069eb4519cc6deaf7e6ccf",
+  "branch": "agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety",
+  "source_ids": [
+    "apbra-108-pbip-pbir-structure",
+    "apbra-108-connections-source-boundary",
+    "apbra-108-candidate-validation"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Bounded APBRA-108 implementation authority only after this governance PR passes exact-head hosted CI and genuinely separate review, Haseeb manually merges it, and post-merge main is verified",
+  "dependencies": [
+    "Registration PR is governance-only and remains unmerged until hosted CI, separate exact-head review and Haseeb manual merge. No APBRA-108 product edit may start before verified post-registration main.",
+    "APBRA-108 P1 correction must be completed and reviewed before APBRA-173 exposes the full arbitrary-upload-to-candidate-to-download journey; APBRA-173 live hosting and Entra qualification remain separate.",
+    "Current APBRA-50 supported-mode authority controls any expanded source template or connector mode; this safety correction is limited to already implemented embedded-CSV generation."
+  ]
+}
