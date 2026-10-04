@@ -37,6 +37,11 @@ from .auth_boundary import (
 from .authorization import resolve_actor, resolve_session
 from .bootstrap import BOOTSTRAP_IDENTITIES
 from .config import ClarificationPolicy, Settings, UploadPolicy, get_settings
+from .content_storage import (
+    ArtifactObjectStore,
+    EvidenceObjectStore,
+    cleanup_uncommitted_evidence,
+)
 from .domain import (
     AccessLevel,
     Actor,
@@ -221,6 +226,9 @@ def create_app(
     database: Database | None = None,
     oidc: OidcAdapter | None = None,
     model_provider: ModelProvider | None = None,
+    evidence_objects: EvidenceObjectStore | None = None,
+    reference_objects: EvidenceObjectStore | None = None,
+    artifact_objects: ArtifactObjectStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
@@ -235,11 +243,16 @@ def create_app(
         if settings.tenant_secret_keyring_json
         else None
     )
-    artifact_store = (
-        LocalArtifactStore(settings.artifact_root, settings.profile)
-        if settings.profile in {"development", "test"}
-        else None
-    )
+    artifact_store: ArtifactObjectStore | None = artifact_objects
+    evidence_store: EvidenceObjectStore | None = evidence_objects
+    reference_store: EvidenceObjectStore | None = reference_objects
+    if settings.profile in {"development", "test"}:
+        if artifact_store is None:
+            artifact_store = LocalArtifactStore(settings.artifact_root, settings.profile)
+        if evidence_store is None:
+            evidence_store = LocalEvidenceStore(settings.evidence_root, settings.profile)
+        if reference_store is None and settings.reference_root is not None:
+            reference_store = LocalEvidenceStore(settings.reference_root, settings.profile)
     invitation_service = InvitationService()
     identity_service = IdentityService()
     membership_service = MembershipService()
@@ -291,10 +304,10 @@ def create_app(
         return OpenAICompatibleProvider(profile, credential)
 
     def local_evidence_service(snapshot: TenantSettingsSnapshot) -> EvidenceService:
-        if settings.profile not in {"development", "test"}:
+        if evidence_store is None:
             raise ConfigurationUnavailable()
         return EvidenceService(
-            LocalEvidenceStore(settings.evidence_root, settings.profile),
+            evidence_store,
             snapshot.settings.upload_policy,
         )
 
@@ -331,10 +344,10 @@ def create_app(
         )
 
     def local_reference_service(snapshot: TenantSettingsSnapshot) -> ReferenceMaterialService:
-        if settings.reference_root is None or settings.profile not in {"development", "test"}:
+        if reference_store is None:
             raise ConfigurationUnavailable()
         return ReferenceMaterialService(
-            LocalEvidenceStore(settings.reference_root, settings.profile),
+            reference_store,
             snapshot.settings.upload_policy,
         )
 
@@ -1122,7 +1135,7 @@ def create_app(
             db.commit()
         except Exception:
             if storage_key is not None:
-                objects.objects.delete(storage_key)
+                cleanup_uncommitted_evidence(objects.objects, storage_key)
             raise
         return {"evidence": result}
 
@@ -1174,7 +1187,7 @@ def create_app(
             db.commit()
         except Exception:
             if storage_key is not None:
-                service.objects.delete(storage_key)
+                cleanup_uncommitted_evidence(service.objects, storage_key)
             raise
         return {"reference_material": result}
 

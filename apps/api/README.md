@@ -81,6 +81,33 @@ Every login transaction is bound to the initiating browser, qualified profile, i
 
 The bounded compatibility path has deterministic offline coverage using controlled provider metadata, signed test tokens and a substituted token transport through the real callback. It is not live Microsoft Entra External ID interoperability evidence, and it does not authorize a hosted service, real credentials or cloud spend.
 
+## Protected content storage (APBRA-173A)
+
+Evidence, reference images and generated candidate ZIPs use behavior-level
+`EvidenceObjectStore` and `ArtifactObjectStore` contracts. The application
+constructs hardened local adapters only in development/test. A hosted runtime
+must inject separately qualified durable adapters through `create_app`; without
+them, protected content operations fail closed. APBRA-173A does not implement an
+Azure Blob adapter or qualify hosted durability.
+
+The database remains authoritative for company, case, evidence, attempt and
+artifact identity. Services authorize against current membership and private
+resource grants before resolving an opaque storage key. A key is never a
+download credential. Returned bytes are checked against database-bound SHA-256
+digests and artifact size even when an adapter reports a successful read.
+Writes are verified before metadata commit. On a database failure, uncommitted
+bytes are deleted on a best-effort basis; a process failure may leave unreachable
+bytes for later governed cleanup. This is not a distributed transaction. Exact
+evidence/reference restoration retains the original database identity and
+digest. No public object URLs, browser storage credentials or Tenant Settings
+storage secrets are introduced.
+
+Existing storage keys and database columns remain unchanged, so this package
+has no database migration or third-party dependency. Local filesystem adapters
+remain development/test-only and retain private-root, no-symlink and integrity
+checks. Hosted backup, object lifecycle and recovery qualification are separate
+APBRA-173 work.
+
 ## Backend verification
 
 Use the committed lock and a real PostgreSQL 17 database. SQLite and in-memory persistence are not substitutes for these tests.

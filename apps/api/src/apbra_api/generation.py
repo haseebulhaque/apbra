@@ -17,8 +17,13 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
 
-from .artifacts import ArtifactError, LocalArtifactStore
+from .artifacts import ArtifactError, read_verified_artifact
 from .authorization import authorized_case_access
+from .content_storage import (
+    ArtifactObjectStore,
+    EvidenceObjectStore,
+    cleanup_uncommitted_artifact,
+)
 from .domain import (
     Actor,
     ApplicationPersistence,
@@ -37,10 +42,10 @@ from .domain import (
 )
 from .evidence import (
     EvidenceError,
-    LocalEvidenceStore,
     _cell_coordinate,
     _xml,
     parse_evidence,
+    read_verified_evidence,
     schema_digest,
 )
 from .model_provider import (
@@ -420,13 +425,13 @@ def _xlsx_rows(content: bytes) -> list[tuple[str, list[list[str]]]]:
 
 
 def _evidence_tables(
-    objects: LocalEvidenceStore, evidence: list[Any]
+    objects: EvidenceObjectStore, evidence: list[Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     tables: list[dict[str, Any]] = []
     bindings: list[dict[str, str]] = []
     names: set[str] = set()
     for row in evidence:
-        content = objects.read(row.storage_key, row.content_digest)
+        content = read_verified_evidence(objects, row.storage_key, row.content_digest)
         parsed = parse_evidence(content, row.filename)
         schema = json.loads(row.observed_schema_json)
         if (
@@ -571,10 +576,10 @@ class GenerationService:
     def __init__(
         self,
         bridge: GenerationBridge | None,
-        evidence_objects: LocalEvidenceStore,
-        artifact_objects: LocalArtifactStore,
+        evidence_objects: EvidenceObjectStore,
+        artifact_objects: ArtifactObjectStore,
         *,
-        reference_objects: LocalEvidenceStore | None = None,
+        reference_objects: EvidenceObjectStore | None = None,
         model_provider: ModelProvider | None = None,
         generation_policy: dict[str, Any] | None = None,
         tenant_settings: TenantSettingsSnapshot | None = None,
@@ -645,7 +650,9 @@ class GenerationService:
             if self.reference_objects is None:
                 raise GenerationUnavailable()
             try:
-                self.reference_objects.read(row.storage_key, row.content_digest)
+                read_verified_evidence(
+                    self.reference_objects, row.storage_key, row.content_digest
+                )
             except EvidenceError as exc:
                 raise GenerationUnavailable() from exc
             references.append(
@@ -1415,6 +1422,15 @@ class GenerationService:
                 actor.company_id, case_id, row.id, content
             )
             try:
+                if (
+                    not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest)
+                    or size != len(content)
+                    or not hmac.compare_digest(
+                        read_verified_artifact(self.artifact_objects, storage_key, digest, size),
+                        content,
+                    )
+                ):
+                    raise ArtifactError("Artifact integrity verification failed.")
                 artifact = store.add_generated_artifact(
                     current, storage_key, filename, digest, size,
                     guide_digest if guide is not None else None,
@@ -1443,7 +1459,7 @@ class GenerationService:
                 cast(Any, db).commit()
             except Exception:
                 cast(Any, db).rollback()
-                self.artifact_objects.delete_uncommitted(storage_key)
+                cleanup_uncommitted_artifact(self.artifact_objects, storage_key)
                 raise
             return attempt_json(store, current), True
         except Exception as exc:
@@ -1495,7 +1511,8 @@ class GenerationService:
         ):
             raise ArtifactUnavailable()
         try:
-            content = self.artifact_objects.read(
+            content = read_verified_artifact(
+                self.artifact_objects,
                 artifact.storage_key, artifact.content_digest, artifact.byte_size
             )
         except ArtifactError as exc:
