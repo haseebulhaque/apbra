@@ -69,6 +69,19 @@ class CurrentStateDocsScopeTests(unittest.TestCase):
                              (source_id, content_id, version, "ACCEPTED"))
             self.assertEqual(digest(row), expected)
 
+    def test_current_controller_source_and_review_checkpoint(self):
+        versions = {row["id"]: row["version"] for row in self.sources["sources"]}
+        self.assertEqual(versions["apbra-177-mvp-scope"], 11)
+        self.assertEqual(versions["apbra-177-preview-direction"], 20)
+        refs = " ".join(self.task["architecture_refs"])
+        requirements = " ".join(self.task["requirements"])
+        self.assertIn("01.01 v12", refs)
+        self.assertIn("02.06 v15", refs)
+        self.assertIn("20.05 v59", refs)
+        self.assertIn("8896633a61112ea0cc95b57c3849ddc8115ad837", requirements)
+        self.assertIn("independently reviewed PASS", requirements)
+        self.assertIn("unmerged", requirements)
+
     def test_registration_is_exact_and_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

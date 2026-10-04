@@ -828,12 +828,12 @@ CURRENT_STATE_DOCS_REGISTRATION_PATHS = {
     'tests/bootstrap/test_current_state_docs_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
-CURRENT_STATE_DOCS_TASK_SHA256 = '63a9d3fe844ef3500ec2b26249b3f4982786eb4e7565fa3eeae0ddff0bb94905'
+CURRENT_STATE_DOCS_TASK_SHA256 = '79b94c7fa8dc694dd6220690dd7cc5f7c02a33d589cdcfa48a812425b330dbb7'
 CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT = 59
 CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256 = '2b82ef1b9074116bdf2939b89e7a47dc7ceddc2ca5e17836eaf4c8d8aa9956d5'
 CURRENT_STATE_DOCS_SOURCES = (
-    ('apbra-177-mvp-scope', '4063307', 10, '149c4850f2cb170e10e78e49f7aeb92495d6272c018827620e3cacc618d3dba3'),
-    ('apbra-177-preview-direction', '8519682', 19, 'bd8a86912b489ac5f5cbab9919cf19d1da832d4147debf33f6820cb1905990da'),
+    ('apbra-177-mvp-scope', '4063307', 11, '3a1e05f9892a221e6ed4b6808a04e8b08816f3ffda6693d6af885caf15f054b8'),
+    ('apbra-177-preview-direction', '8519682', 20, '0dd22afd9f6f38b3576f0c91a5cea978483e160666cc4090e60b29d393c4b5ae'),
     ('apbra-177-deployment-portability', '9568258', 2, 'e06c67fee11d6e0fa6a223c193f0087944aed092214d4e85c92ce28e0656eb4c'),
     ('apbra-177-identity-rbac', '4030847', 7, '72b866668380680da72719d6cd0bfca176c2066988c95dd56069aa61054e3285'),
     ('apbra-177-entitlement-boundary', '9535525', 2, '5a7f0592d93de23f5ed2c658e25086071bc40f411a83725ac581619a16302e96'),
@@ -841,15 +841,15 @@ CURRENT_STATE_DOCS_SOURCES = (
     ('apbra-177-owner-doc-clarification', 'APBRA-177', 'Jira owner clarification and controller comment 10481, 2026-10-04', 'dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
 )
 CURRENT_STATE_DOCS_GATE_SHA256 = {
-    'requirements': 'f99d5ab85f6cda54ed1c41341de616a2524c8a72a38bb9e6004ae9ac01cf485c',
+    'requirements': '271abc3bcf4d4ba6f803248baa5161255292688b5d07147fd3dcc116e98c91db',
     'adrs': '07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318',
-    'architecture_refs': 'bf494e901bcd54ececf7886088e1b1bc7ae971715f36b0623c898d15b33030b0',
+    'architecture_refs': 'c4f6703734327b20fb35a3744c209c83ca43ed420ba5894b59339e11e88abdb4',
     'restricted_paths': '34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e',
     'acceptance_criteria': '56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9',
     'verification_required': '00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631',
     'out_of_scope': 'ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c',
     'escalate_when': 'b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c',
-    'dependencies': 'f84814fd9c8003faca7096ea870c74c9c17ac45e5e350365b686dc48a4fe75de',
+    'dependencies': '9f081c76ede81ad52c99c706afefd4a64eaa56a1b8ea97c171ac6e330796a396',
 }
 CURRENT_STATE_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-177-current-state-docs'
 CURRENT_STATE_DOCS_REGISTRATION_BRANCH = CURRENT_STATE_DOCS_BRANCH + '-registration'
