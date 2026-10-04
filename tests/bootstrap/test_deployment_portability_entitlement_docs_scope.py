@@ -76,7 +76,10 @@ class DeploymentPortabilityEntitlementDocsScopeTests(unittest.TestCase):
                 source = source_map[source_id]
                 self.assertEqual((source["content_id"], source["version"], source["status"]), (content_id, 1, "ACCEPTED"))
                 self.assertEqual(digest(source), expected_digest)
-        self.assertEqual([source["id"] for source in self.sources["sources"][-16:-14]], self.task["source_ids"])
+        source_ids = [source["id"] for source in self.sources["sources"]]
+        self.assertEqual(source_ids.count(self.task["source_ids"][0]), 1)
+        start = source_ids.index(self.task["source_ids"][0])
+        self.assertEqual(source_ids[start:start + len(self.task["source_ids"])], self.task["source_ids"])
 
     def test_documentation_and_registration_are_separately_admitted(self):
         with tempfile.TemporaryDirectory() as directory:
