@@ -357,7 +357,10 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             "apbra-173a-mvp-scope",
             "apbra-173a-owner-reference-decision",
         ]
-        self.assertEqual([source["id"] for source in self.sources["sources"]], expected_ids)
+        source_ids = [source["id"] for source in self.sources["sources"]]
+        # Historical provenance is an exact prefix; later accepted rows append.
+        self.assertEqual(source_ids[:len(expected_ids)], expected_ids)
+        self.assertEqual(len(source_ids), len(set(source_ids)))
         source_map = {source["id"]: source for source in self.sources["sources"]}
         current = source_map["mvp1-invited-private-case-foundation"]
         self.assertEqual(current["content_id"], "APBRA-162")
