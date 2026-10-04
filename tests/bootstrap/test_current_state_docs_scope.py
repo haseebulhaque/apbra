@@ -71,16 +71,17 @@ class CurrentStateDocsScopeTests(unittest.TestCase):
 
     def test_current_controller_source_and_review_checkpoint(self):
         versions = {row["id"]: row["version"] for row in self.sources["sources"]}
-        self.assertEqual(versions["apbra-177-mvp-scope"], 11)
-        self.assertEqual(versions["apbra-177-preview-direction"], 20)
+        self.assertEqual(versions["apbra-177-mvp-scope"], 12)
+        self.assertEqual(versions["apbra-177-preview-direction"], 21)
         refs = " ".join(self.task["architecture_refs"])
         requirements = " ".join(self.task["requirements"])
-        self.assertIn("01.01 v12", refs)
-        self.assertIn("02.06 v15", refs)
-        self.assertIn("20.05 v59", refs)
+        self.assertIn("01.01 v13", refs)
+        self.assertIn("02.06 v16", refs)
+        self.assertIn("20.05 v60", refs)
+        self.assertEqual(self.task["base_commit"], "a0085713f2cc007db2f53939c7a46082c6799be0")
         self.assertIn("8896633a61112ea0cc95b57c3849ddc8115ad837", requirements)
-        self.assertIn("independently reviewed PASS", requirements)
-        self.assertIn("unmerged", requirements)
+        self.assertIn("manually merged", requirements)
+        self.assertIn("no new main test suite is claimed", requirements)
 
     def test_registration_is_exact_and_separate(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -145,6 +146,25 @@ class CurrentStateDocsScopeTests(unittest.TestCase):
                         errors = self.check(root, {"README.md"})
                     self.assertTrue(any("APBRA-177 safety/review gate differs: " + section in x
                                         for x in errors), errors)
+
+    def test_old_base_or_premerge_claim_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            changed = copy.deepcopy(self.task)
+            changed["base_commit"] = "c5e852e499fd4e09bb3d6c838a7f7a0f96145043"
+            (root / self.task_path).write_text(json.dumps(changed))
+            with patch.object(c, "CURRENT_STATE_DOCS_TASK_SHA256", digest(changed)):
+                self.assertIn("Stale APBRA-177 registration base", self.check(root, {"README.md"}))
+
+            changed = copy.deepcopy(self.task)
+            changed["requirements"][0] = changed["requirements"][0].replace(
+                "Haseeb manually merged APBRA-173A PR #90", "APBRA-173A PR #90 remains unmerged"
+            )
+            (root / self.task_path).write_text(json.dumps(changed))
+            with patch.object(c, "CURRENT_STATE_DOCS_TASK_SHA256", digest(changed)):
+                errors = self.check(root, {"README.md"})
+            self.assertIn("APBRA-177 safety/review gate differs: requirements", errors)
 
     def test_historical_and_new_source_mutations_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:

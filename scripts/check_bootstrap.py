@@ -828,12 +828,12 @@ CURRENT_STATE_DOCS_REGISTRATION_PATHS = {
     'tests/bootstrap/test_current_state_docs_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
-CURRENT_STATE_DOCS_TASK_SHA256 = '79b94c7fa8dc694dd6220690dd7cc5f7c02a33d589cdcfa48a812425b330dbb7'
+CURRENT_STATE_DOCS_TASK_SHA256 = '987a8bbf4bfec6e8897fc97cdda6c0739c079d481c876f133cb65490d5ca062a'
 CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT = 59
 CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256 = '2b82ef1b9074116bdf2939b89e7a47dc7ceddc2ca5e17836eaf4c8d8aa9956d5'
 CURRENT_STATE_DOCS_SOURCES = (
-    ('apbra-177-mvp-scope', '4063307', 11, '3a1e05f9892a221e6ed4b6808a04e8b08816f3ffda6693d6af885caf15f054b8'),
-    ('apbra-177-preview-direction', '8519682', 20, '0dd22afd9f6f38b3576f0c91a5cea978483e160666cc4090e60b29d393c4b5ae'),
+    ('apbra-177-mvp-scope', '4063307', 12, 'b57a5f862983532c9424893168c9b38b20935d3714d9da0d7cab90c60654f227'),
+    ('apbra-177-preview-direction', '8519682', 21, '9ba429a6e15118994f749fffaa2fbdf1209bffc0181dd2a6033e10d0073c10e3'),
     ('apbra-177-deployment-portability', '9568258', 2, 'e06c67fee11d6e0fa6a223c193f0087944aed092214d4e85c92ce28e0656eb4c'),
     ('apbra-177-identity-rbac', '4030847', 7, '72b866668380680da72719d6cd0bfca176c2066988c95dd56069aa61054e3285'),
     ('apbra-177-entitlement-boundary', '9535525', 2, '5a7f0592d93de23f5ed2c658e25086071bc40f411a83725ac581619a16302e96'),
@@ -841,15 +841,15 @@ CURRENT_STATE_DOCS_SOURCES = (
     ('apbra-177-owner-doc-clarification', 'APBRA-177', 'Jira owner clarification and controller comment 10481, 2026-10-04', 'dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
 )
 CURRENT_STATE_DOCS_GATE_SHA256 = {
-    'requirements': '271abc3bcf4d4ba6f803248baa5161255292688b5d07147fd3dcc116e98c91db',
+    'requirements': 'ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22',
     'adrs': '07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318',
-    'architecture_refs': 'c4f6703734327b20fb35a3744c209c83ca43ed420ba5894b59339e11e88abdb4',
+    'architecture_refs': 'ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428',
     'restricted_paths': '34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e',
     'acceptance_criteria': '56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9',
     'verification_required': '00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631',
     'out_of_scope': 'ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c',
     'escalate_when': 'b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c',
-    'dependencies': '9f081c76ede81ad52c99c706afefd4a64eaa56a1b8ea97c171ac6e330796a396',
+    'dependencies': '9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74',
 }
 CURRENT_STATE_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-177-current-state-docs'
 CURRENT_STATE_DOCS_REGISTRATION_BRANCH = CURRENT_STATE_DOCS_BRANCH + '-registration'
@@ -2148,7 +2148,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected APBRA-177 task or agent identity')
                 if current_state_docs_task['branch'] != CURRENT_STATE_DOCS_BRANCH:
                     extension_errors.append('Unexpected APBRA-177 documentation branch')
-                if current_state_docs_task['base_commit'] != 'c5e852e499fd4e09bb3d6c838a7f7a0f96145043':
+                if current_state_docs_task['base_commit'] != 'a0085713f2cc007db2f53939c7a46082c6799be0':
                     extension_errors.append('Stale APBRA-177 registration base')
                 if (
                     set(current_state_docs_task['allowed_paths']) != CURRENT_STATE_DOCS_PATHS
