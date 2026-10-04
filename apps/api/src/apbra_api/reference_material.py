@@ -8,8 +8,15 @@ from uuid import UUID
 
 from .authorization import authorized_case_access
 from .config import UploadPolicy
-from .domain import Actor, ApplicationPersistence, EvidenceInvalid, StaleVersion
-from .evidence import EvidenceError, LocalEvidenceStore
+from .content_storage import EvidenceObjectStore, cleanup_uncommitted_evidence
+from .domain import (
+    Actor,
+    ApplicationPersistence,
+    ConfigurationUnavailable,
+    EvidenceInvalid,
+    StaleVersion,
+)
+from .evidence import EvidenceError, read_verified_evidence
 
 
 def qualified_image(content: bytes, filename: str, policy: UploadPolicy) -> str:
@@ -28,7 +35,7 @@ def qualified_image(content: bytes, filename: str, policy: UploadPolicy) -> str:
 class ReferenceMaterialService:
     """Retains private image references without claiming semantic interpretation."""
 
-    def __init__(self, objects: LocalEvidenceStore, policy: UploadPolicy) -> None:
+    def __init__(self, objects: EvidenceObjectStore, policy: UploadPolicy) -> None:
         self.objects = objects
         self.policy = policy
 
@@ -53,7 +60,7 @@ class ReferenceMaterialService:
             if row.request_version_id != case.current_request_version_id:
                 continue
             try:
-                self.objects.read(row.storage_key, row.content_digest)
+                read_verified_evidence(self.objects, row.storage_key, row.content_digest)
             except EvidenceError:
                 continue
             result.append(self._json(row))
@@ -88,17 +95,29 @@ class ReferenceMaterialService:
         )
         if duplicate is not None:
             try:
-                self.objects.read(duplicate.storage_key, duplicate.content_digest)
+                read_verified_evidence(
+                    self.objects, duplicate.storage_key, duplicate.content_digest
+                )
             except EvidenceError:
-                self.objects.restore(duplicate.storage_key, content, duplicate.content_digest)
+                self.objects.restore(
+                    actor.company_id, case_id, duplicate.storage_key, content,
+                    duplicate.content_digest,
+                )
+                read_verified_evidence(
+                    self.objects, duplicate.storage_key, duplicate.content_digest
+                )
             result = self._json(duplicate)
             result["semantic_context_version"] = case.semantic_context_version
             return result, None
         storage_key, stored_digest = self.objects.write(actor.company_id, case_id, content)
         if not hmac.compare_digest(digest, stored_digest):
-            self.objects.delete(storage_key)
-            raise EvidenceInvalid()
+            cleanup_uncommitted_evidence(self.objects, storage_key)
+            raise ConfigurationUnavailable()
         try:
+            if not hmac.compare_digest(
+                read_verified_evidence(self.objects, storage_key, digest), content
+            ):
+                raise ConfigurationUnavailable()
             row = store.add_reference_material(
                 actor,
                 case_id,
@@ -113,7 +132,7 @@ class ReferenceMaterialService:
             store.advance_semantic_context(case)
             store.add_audit(actor, "REFERENCE_MATERIAL_ADDED", "REPORTING_CASE", case_id)
         except Exception:
-            self.objects.delete(storage_key)
+            cleanup_uncommitted_evidence(self.objects, storage_key)
             raise
         result = self._json(row)
         result["semantic_context_version"] = case.semantic_context_version

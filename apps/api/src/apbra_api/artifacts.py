@@ -3,15 +3,37 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import stat
 from pathlib import Path
 from uuid import UUID, uuid4
+
+from .content_storage import ArtifactObjectStore
 
 MAX_ARTIFACT_BYTES = 25_000_000
 
 
 class ArtifactError(ValueError):
     pass
+
+
+def read_verified_artifact(
+    objects: ArtifactObjectStore, storage_key: str, expected_digest: str, expected_size: int
+) -> bytes:
+    """Verify exact returned bytes independent of the storage implementation."""
+    try:
+        content = objects.read(storage_key, expected_digest, expected_size)
+    except ArtifactError:
+        raise
+    except Exception as exc:
+        raise ArtifactError("Artifact object is unavailable.") from exc
+    if (
+        len(content) != expected_size
+        or len(content) > MAX_ARTIFACT_BYTES
+        or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), expected_digest)
+    ):
+        raise ArtifactError("Artifact integrity verification failed.")
+    return content
 
 
 class LocalArtifactStore:
@@ -58,8 +80,8 @@ class LocalArtifactStore:
         parts = tuple(storage_key.split("/"))
         if (
             len(parts) != 4
-            or any(not part or part in {".", ".."} for part in parts)
-            or not parts[-1].endswith(".zip")
+            or any(not re.fullmatch(r"[0-9a-f-]{36}", part) for part in parts[:3])
+            or not re.fullmatch(r"[A-Za-z0-9_-]+\.zip", parts[-1])
         ):
             raise ArtifactError("Artifact object path is unsafe.")
         return parts[0], parts[1], parts[2], parts[3]
@@ -95,7 +117,8 @@ class LocalArtifactStore:
         directory_descriptor = self._open_directory(directories, create=True)
         key = f"{uuid4().hex}.zip"
         temporary_key = f".{uuid4().hex}.writing"
-        renamed = False
+        published = False
+        temporary_created = False
         try:
             descriptor = os.open(
                 temporary_key,
@@ -103,23 +126,33 @@ class LocalArtifactStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            temporary_created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
-            os.rename(
+            # Hard-link publication fails if the final key already exists; rename
+            # would silently replace committed bytes on a key collision.
+            os.link(
                 temporary_key,
                 key,
                 src_dir_fd=directory_descriptor,
                 dst_dir_fd=directory_descriptor,
+                follow_symlinks=False,
             )
-            renamed = True
+            published = True
+            os.unlink(temporary_key, dir_fd=directory_descriptor)
+            temporary_created = False
             os.fsync(directory_descriptor)
         except Exception:
-            try:
-                os.unlink(key if renamed else temporary_key, dir_fd=directory_descriptor)
-            except FileNotFoundError:
-                pass
+            owned_keys = ([key] if published else []) + (
+                [temporary_key] if temporary_created else []
+            )
+            for candidate in owned_keys:
+                try:
+                    os.unlink(candidate, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
             raise
         finally:
             os.close(directory_descriptor)

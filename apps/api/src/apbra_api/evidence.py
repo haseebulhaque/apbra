@@ -21,6 +21,8 @@ from xml.etree.ElementTree import Element
 from defusedxml import ElementTree
 from defusedxml.common import DefusedXmlException
 
+from .content_storage import EvidenceObjectStore
+
 MAX_EVIDENCE_BYTES = 5_000_000
 MAX_ARCHIVE_ENTRIES = 200
 MAX_UNCOMPRESSED_BYTES = 25_000_000
@@ -56,6 +58,23 @@ SUPPORTED_RELATIONSHIP_TYPE_NAMES = {
 
 class EvidenceError(ValueError):
     pass
+
+
+def read_verified_evidence(
+    objects: EvidenceObjectStore, storage_key: str, expected_digest: str
+) -> bytes:
+    """Verify a portable adapter's returned bytes at the application boundary."""
+    try:
+        content = objects.read(storage_key, expected_digest)
+    except EvidenceError:
+        raise
+    except Exception as exc:
+        raise EvidenceError("Evidence object is unavailable.") from exc
+    if len(content) > MAX_EVIDENCE_BYTES or not hmac.compare_digest(
+        hashlib.sha256(content).hexdigest(), expected_digest
+    ):
+        raise EvidenceError("Evidence integrity verification failed.")
+    return content
 
 
 @dataclass(frozen=True)
@@ -429,7 +448,11 @@ class LocalEvidenceStore:
     @staticmethod
     def _storage_parts(storage_key: str) -> tuple[str, str, str]:
         parts = tuple(storage_key.split("/"))
-        if len(parts) != 3 or any(not part or part in {".", ".."} for part in parts):
+        if (
+            len(parts) != 3
+            or any(not re.fullmatch(r"[0-9a-f-]{36}", part) for part in parts[:2])
+            or not re.fullmatch(r"[A-Za-z0-9_-]+\.bin", parts[-1])
+        ):
             raise EvidenceError("Evidence object path is unsafe.")
         return parts[0], parts[1], parts[2]
 
@@ -460,6 +483,7 @@ class LocalEvidenceStore:
         case = str(case_id)
         directory_descriptor = self._open_directory((company, case), create=True)
         key = f"{uuid4().hex}.bin"
+        created = False
         try:
             descriptor = os.open(
                 key,
@@ -467,15 +491,17 @@ class LocalEvidenceStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
                 os.fsync(stream.fileno())
         except Exception:
-            try:
-                os.unlink(key, dir_fd=directory_descriptor)
-            except FileNotFoundError:
-                pass
+            if created:
+                try:
+                    os.unlink(key, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
             raise
         finally:
             os.close(directory_descriptor)
@@ -503,13 +529,23 @@ class LocalEvidenceStore:
             raise EvidenceError("Evidence integrity verification failed.")
         return content
 
-    def restore(self, storage_key: str, content: bytes, expected_digest: str) -> None:
+    def restore(
+        self,
+        company_id: UUID,
+        case_id: UUID,
+        storage_key: str,
+        content: bytes,
+        expected_digest: str,
+    ) -> None:
         """Atomically restore the exact immutable object named by an evidence record."""
         if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), expected_digest):
             raise EvidenceError("Evidence recovery bytes do not match the retained identity.")
         company, case, key = self._storage_parts(storage_key)
+        if company != str(company_id) or case != str(case_id):
+            raise EvidenceError("Evidence recovery target does not match the case.")
         directory_descriptor = self._open_directory((company, case), create=False)
         temporary_key = f".{uuid4().hex}.recovering"
+        temporary_created = False
         try:
             descriptor = os.open(
                 temporary_key,
@@ -517,6 +553,7 @@ class LocalEvidenceStore:
                 0o600,
                 dir_fd=directory_descriptor,
             )
+            temporary_created = True
             with os.fdopen(descriptor, "wb") as stream:
                 stream.write(content)
                 stream.flush()
@@ -533,12 +570,14 @@ class LocalEvidenceStore:
                 src_dir_fd=directory_descriptor,
                 dst_dir_fd=directory_descriptor,
             )
+            temporary_created = False
             os.fsync(directory_descriptor)
         except Exception:
-            try:
-                os.unlink(temporary_key, dir_fd=directory_descriptor)
-            except FileNotFoundError:
-                pass
+            if temporary_created:
+                try:
+                    os.unlink(temporary_key, dir_fd=directory_descriptor)
+                except FileNotFoundError:
+                    pass
             raise
         finally:
             os.close(directory_descriptor)

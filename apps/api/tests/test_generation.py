@@ -8,7 +8,7 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from io import BytesIO
 from pathlib import Path
 from threading import Barrier, Event
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -16,9 +16,10 @@ from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
+from test_content_storage import MemoryArtifactStore
 
 from apbra_api.api import create_app
-from apbra_api.artifacts import LocalArtifactStore
+from apbra_api.artifacts import ArtifactError, LocalArtifactStore
 from apbra_api.config import Settings
 from apbra_api.domain import GenerationFailed
 from apbra_api.generation import (
@@ -1337,6 +1338,74 @@ def test_history_and_artifact_survive_restart_but_remain_company_private(
         foreign.close()
 
 
+def test_portable_artifact_adapter_preserves_generation_download_and_isolation(
+    settings: Settings, database: Database
+) -> None:
+    backing: dict[str, bytes] = {}
+
+    class SharedArtifacts:
+        def write(
+            self, company_id: UUID, case_id: UUID, attempt_id: UUID, content: bytes
+        ) -> tuple[str, str, int]:
+            key = f"{company_id}/{case_id}/{attempt_id}/{uuid4().hex}.zip"
+            assert key not in backing
+            backing[key] = content
+            return key, hashlib.sha256(content).hexdigest(), len(content)
+
+        def read(self, storage_key: str, expected_digest: str, expected_size: int) -> bytes:
+            content = backing.get(storage_key)
+            if content is None or len(content) != expected_size:
+                raise ArtifactError("Artifact object is unavailable.")
+            if hashlib.sha256(content).hexdigest() != expected_digest:
+                raise ArtifactError("Artifact integrity verification failed.")
+            return content
+
+        def delete_uncommitted(self, storage_key: str) -> None:
+            backing.pop(storage_key, None)
+
+    with TestClient(
+        create_app(settings=settings, database=database, artifact_objects=SharedArtifacts())
+    ) as client:
+        session = sign_in(client, "member")
+        case, contract = confirmed_case(
+            client,
+            session,
+            "Compare synthetic orders by zone.",
+            "synthetic.csv",
+            b"Zone,Orders\nNorth,4\nSouth,6\n",
+        )
+        result = client.post(
+            f"/api/cases/{case['id']}/generation",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "reviewed_design_id": contract["reviewed_design_id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(session),
+        )
+        assert result.status_code == 201, result.text
+        attempt = result.json()["attempt"]
+        assert attempt["status"] == "SUCCEEDED"
+        assert len(backing) == 1
+
+    with TestClient(
+        create_app(settings=settings, database=database, artifact_objects=SharedArtifacts())
+    ) as restarted:
+        sign_in(restarted, "member")
+        path = f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact"
+        download = restarted.get(path)
+        assert download.status_code == 200
+        assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
+        with TestClient(restarted.app) as foreign:
+            sign_in(foreign, "foreign")
+            assert foreign.get(path).status_code == 404
+        key = next(iter(backing))
+        backing[key] = b"altered"
+        assert restarted.get(path).status_code == 404
+        backing.pop(key)
+        assert restarted.get(path).status_code == 404
+
+
 def test_artifact_integrity_failure_is_fail_closed(
     client: TestClient, settings: Settings, database: Database
 ) -> None:
@@ -1750,3 +1819,64 @@ def test_database_failure_after_artifact_write_removes_uncommitted_bytes(
     assert response.json()["attempt"]["status"] == "FAILED"
     assert response.json()["attempt"]["artifact"] is None
     assert set(settings.artifact_root.rglob("*.zip")) == prior_artifacts
+
+
+@pytest.mark.parametrize("adapter", ["local", "alternate"])
+def test_lost_artifact_commit_acknowledgment_preserves_successful_bytes(
+    settings: Settings,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    adapter: str,
+) -> None:
+    backing: dict[str, bytes] = {}
+    objects = (
+        LocalArtifactStore(settings.artifact_root, "test")
+        if adapter == "local"
+        else MemoryArtifactStore(backing)
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, artifact_objects=objects)
+    ) as client:
+        session = sign_in(client, "member")
+        case, contract = confirmed_case(
+            client,
+            session,
+            "Compare synthetic balances by group.",
+            "balances.csv",
+            b"Group,Balance\nCurrent,31\nReserve,12\n",
+        )
+        original_add = ApplicationSession.add_generated_artifact
+        original_commit = ApplicationSession.commit
+
+        def mark_artifact(self: ApplicationSession, *args: object, **kwargs: object) -> object:
+            result = original_add(self, *args, **kwargs)
+            self.info["synthetic_artifact_commit"] = True
+            return result
+
+        def commit_with_lost_ack(self: ApplicationSession) -> None:
+            original_commit(self)
+            if self.info.pop("synthetic_artifact_commit", False):
+                raise RuntimeError("synthetic lost artifact commit acknowledgment")
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(ApplicationSession, "add_generated_artifact", mark_artifact)
+            scoped.setattr(ApplicationSession, "commit", commit_with_lost_ack)
+            response = client.post(
+                f"/api/cases/{case['id']}/generation",
+                json={
+                    "confirmed_contract_id": contract["id"],
+                    "reviewed_design_id": contract["reviewed_design_id"],
+                    "command_key": str(uuid4()),
+                },
+                headers=csrf(session),
+            )
+
+        assert response.status_code == 201
+        attempt = response.json()["attempt"]
+        assert attempt["status"] == "SUCCEEDED"
+        assert attempt["artifact"] is not None
+        download = client.get(
+            f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact"
+        )
+        assert download.status_code == 200
+        assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
