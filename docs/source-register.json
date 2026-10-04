@@ -465,6 +465,60 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847",
       "status": "ACCEPTED",
       "acceptance": "Haseeb's 2026-10-02 owner decision and 2026-10-03 APBRA-151 mission authorize governance-only registration of the current RBAC boundary: authenticated person, existing membership or invitation, server-transactional company and first COMPANY_OWNER, then current server-side membership/capability/exact-resource checks. No email, UPN, IdP group, external tenant or entitlement may manufacture authority. This scoped acceptance is not Confluence approval metadata and requires hosted CI, independent exact-head review and Haseeb's manual registration merge before runtime authority."
+    },
+    {
+      "id": "apbra-173a-self-service-hosted-preview",
+      "content_id": "8519682",
+      "version": 18,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-173 owner decision comment 10471 and 2026-10-04 registration instruction bind current 03.07 v18 only to package 173A's portable protected content seam for the full private-preview journey. Registration changes governance only; later product work requires hosted CI, separate exact-head review, Haseeb manual merge and verified main. No hosted durability, Azure adapter, cloud spend or production claim follows."
+    },
+    {
+      "id": "apbra-173a-deployment-portability",
+      "content_id": "9568258",
+      "version": 2,
+      "section": "04.07 - Deployment Models, Control Plane & Customer-Hosted Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-173 owner decision comment 10471 and 2026-10-04 registration instruction bind current 04.07 v2 to a portable customer-content data-plane contract. Azure Blob is a later reference adapter, not core business logic. This row grants only finite 173A authority after exact-head hosted CI, independent review, manual registration merge and verified main; it selects no region, SKU, network, credential or customer-hosted qualification."
+    },
+    {
+      "id": "apbra-173a-entitlement-separation",
+      "content_id": "9535525",
+      "version": 2,
+      "section": "04.08 - Subscription, Entitlement & Feature-Gating Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-173 owner decision comment 10471 and 2026-10-04 registration instruction bind current 04.08 v2 solely to the boundary that a storage backend, capability entitlement or paid plan cannot replace APBRA membership and exact private-resource authorization. No billing or entitlement runtime implementation is authorized. Registration remains governance-only until hosted CI, separate exact-head review and Haseeb manual merge."
+    },
+    {
+      "id": "apbra-173a-data-integrity",
+      "content_id": "4063348",
+      "version": 6,
+      "section": "02.05 - Data, Integration, Identity & Audit Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-173 owner decision comment 10471 and 2026-10-04 registration instruction bind current 02.05 v6 DATA-001/002/004/005/006/007/009/020 and INT-001/002 to protected bytes, database metadata authority, integrity, provenance, retention boundary and portable adapters. No schema migration, cloud adapter or hosted restore claim follows. Product authority waits for exact-head hosted CI, independent review and Haseeb manual merge."
+    },
+    {
+      "id": "apbra-173a-mvp-scope",
+      "content_id": "4063307",
+      "version": 9,
+      "section": "01.10 - MVP Scope & Product Boundaries",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb's APBRA-173 owner decision comment 10471 and 2026-10-04 registration instruction bind current 01.10 v9 to the selected full business-user hosted-preview journey and separate APBRA-173 package gates. Live Canvas, ARD, APBRA-165 and APBRA-166 remain outside MVP-1; this registration does not alter them, prove a hosted preview, or create product authority before CI, independent review and manual merge."
+    },
+    {
+      "id": "apbra-173a-owner-reference-decision",
+      "content_id": "APBRA-173",
+      "version": "Jira owner comment 10471, 2026-10-04",
+      "section": "APBRA-173 package 173A owner architecture decision",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10471",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb Ul Haque's explicit owner comment 10471 approves the full-journey Azure Container Apps/Job, PostgreSQL Flexible Server, Blob, Key Vault, ACR and bounded Monitor/Application Insights reference direction while preserving deployment portability. Package 173A registers only a portable protected byte-storage seam; 173D owns Azure Blob and infrastructure. Region, spend, sizing, networking, URL, live Entra, provider costs and recovery targets remain undecided. Separate hosted CI, independent exact-head review and Haseeb manual merge precede product work."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",

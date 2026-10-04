@@ -77,10 +77,10 @@ class CompanyLifecycleScopeTests(unittest.TestCase):
         self.assertEqual(self.task["branch"], c.COMPANY_LIFECYCLE_BRANCH)
         self.assertEqual(digest(self.task), c.COMPANY_LIFECYCLE_TASK_SHA256)
         self.assertEqual(self.task["source_ids"], [row[0] for row in c.COMPANY_LIFECYCLE_SOURCES])
-        self.assertEqual(
-            [source["id"] for source in self.sources["sources"][-7:]],
-            self.task["source_ids"],
-        )
+        source_ids = [source["id"] for source in self.sources["sources"]]
+        self.assertEqual(source_ids.count(self.task["source_ids"][0]), 1)
+        start = source_ids.index(self.task["source_ids"][0])
+        self.assertEqual(source_ids[start:start + len(self.task["source_ids"])], self.task["source_ids"])
         source_map = {source["id"]: source for source in self.sources["sources"]}
         for source_id, content_id, version, expected in c.COMPANY_LIFECYCLE_SOURCES:
             with self.subTest(source_id=source_id):
