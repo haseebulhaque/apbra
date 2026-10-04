@@ -314,6 +314,40 @@ def test_three_unrelated_domains_use_one_protected_generation_path(
         assert "Generation is not deployment approval" in text
 
 
+def test_unsafe_unused_csv_header_cannot_yield_a_protected_pass_artifact(
+    client: TestClient,
+) -> None:
+    session = sign_in(client, "member")
+    header = 'Unused", each 1), Injected = 1 //'
+    content = b'Category,Cost,"Unused"", each 1), Injected = 1 //"\nA,10,x\nB,20,y\n'
+    case, contract = confirmed_case(
+        client, session, "Show total cost by category.", "costs.csv", content
+    )
+    response = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": contract["reviewed_design_id"],
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert response.status_code == 201, response.text
+    attempt = response.json()["attempt"]
+    assert attempt["status"] == "FAILED"
+    assert attempt["artifact"] is None
+    artifact = client.get(f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact")
+    assert artifact.status_code == 404
+    history = client.get(f"/api/cases/{case['id']}/generation").json()["items"]
+    assert history[0]["id"] == attempt["id"]
+    assert header not in response.text
+    assert header in [
+        column["name"]
+        for table in contract["contract"]["provenance"]["dataStructure"]["tables"]
+        for column in table["columns"]
+    ]
+
+
 def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
     client: TestClient, settings: Settings, database: Database
 ) -> None:

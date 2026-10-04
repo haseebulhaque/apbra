@@ -9,6 +9,68 @@ const defaultTenantSettings=structuredClone(unvalidatedTenantSettings);defaultTe
 const data=(name='Orders'):DataStructure=>({kind:'REQUEST_DATA_STRUCTURE',fileName:`${name}.csv`,format:'CSV',parsedAt:'2026-01-01',tables:[{name,sourceName:name,rowCount:2,rows:[['North','100','O1','Open','2026-01-01'],['South','200','O2','Closed','2026-02-01']],columns:[{name:'Region',sourceName:'Region',type:'text',nullable:false,sampleValues:['North','South']},{name:'Revenue',sourceName:'Revenue',type:'integer',nullable:false,sampleValues:['100','200']},{name:'OrderId',sourceName:'OrderId',type:'text',nullable:false,sampleValues:['O1','O2']},{name:'Status',sourceName:'Status',type:'text',nullable:false,sampleValues:['Open','Closed']},{name:'Date',sourceName:'Date',type:'date',nullable:false,sampleValues:['2026-01-01','2026-02-01']}]}],relationships:[]});
 const design=(table='Orders'):ReportDesign=>({artifact_kind:'ReportDesign',schema_version:1,projectName:`${table}Performance`,overview:'Performance report',audience:'Leaders',dataModel:{factTables:[table],dimensionTables:[],relationships:[]},measures:[{id:'revenue',name:'Total Revenue',businessDefinition:'Revenue',aggregation:'SUM',field:`${table}.Revenue`,numeratorMeasureId:'',denominatorMeasureId:'',format:'currency'},{id:'orders',name:'Total Orders',businessDefinition:'Orders',aggregation:'DISTINCTCOUNT',field:`${table}.OrderId`,numeratorMeasureId:'',denominatorMeasureId:'',format:'integer'}],pages:[{id:'summary',name:'Summary',purpose:'Overview',visuals:[{id:'card',type:'card',title:'Total Revenue',categoryField:'',measureIds:['revenue'],fields:[],altText:'Total revenue'},{id:'region',type:'bar',title:'Revenue by region',categoryField:`${table}.Region`,measureIds:['revenue'],fields:[],altText:'Revenue by region'},{id:'filter',type:'slicer',title:'Region',categoryField:'',measureIds:[],fields:[`${table}.Region`],altText:'Region filter'}]}],filters:[`${table}.Region`],branding:{themeName:'Tenant',primary:'#005A9C',accent:'#2D7D9A'},accessibility:['Titles'],standardsApplied:[{citation:'local:test#1',decision:'Use standard visuals'}],assumptions:[],warnings:[],generationRequirements:[]});
 const trendDesign=(grain:'DAY'|'MONTH'|'QUARTER'|'YEAR')=>{const value=design(),trend=value.pages[0].visuals[1];trend.categoryField='Orders.Date';trend.timeGrain=grain;return value};
+it('rejects an unused source header that breaks out of the Power Query M text literal',()=>{
+ const source=data(),plan=design(),header='Unused", each 1), Injected = 1 //';
+ source.tables[0].columns.push({name:header,sourceName:header,type:'text',nullable:true,sampleValues:[]});
+ expect(()=>compilePowerBI(plan,source,defaultTenantSettings)).toThrow('UNSUPPORTED_SOURCE_NAME');
+});
+it('rejects unsafe candidate keys even when the other generated files exist',()=>{
+ const source=data(),plan=design(),candidate=compilePowerBI(plan,source,defaultTenantSettings);
+ candidate.files['data/..\\outside.csv']='unsafe';
+ expect(validateGenericCandidate(candidate,plan,source).status).toBe('FAIL');
+});
+it('rejects an unexpected but lexically safe extra file from the exact candidate',()=>{
+ const source=data(),plan=design(),candidate=compilePowerBI(plan,source,defaultTenantSettings);
+ candidate.files['data/Extra.csv']='x';
+ expect(validateGenericCandidate(candidate,plan,source).checks.find(item=>item.id==='EXACT_SOURCE_CANDIDATE')?.status).toBe('FAIL');
+});
+it.each([
+ 'Quote"',"Apostrophe'",'Bracket]','M#(lf)','Carriage\rReturn','Line\nFeed','Tab\tName',
+ 'Expr", each 1)','Comment//Field','Block/*Field','Add(1+2)','Slash/Name','Back\\Name',
+ '..','.Hidden','Trailing.','', 'NomÉ', 'Cafe\u0301', 'name: value', 'let',
+])('fails closed on unsupported unused source column %j',name=>{
+ const source=data(),plan=design();source.tables[0].columns.push({name,sourceName:name,type:'text',nullable:true,sampleValues:[]});
+ expect(()=>compilePowerBI(plan,source,defaultTenantSettings)).toThrow('UNSUPPORTED_SOURCE_NAME');
+});
+it.each(['A/B','A\\B','A]B','A#B','A\nB','..','', 'Café'])('rejects source table names outside the bare TMDL/DAX and file-key profile: %j',name=>{
+ const source=data(),plan=design();source.tables[0].name=name;plan.dataModel.factTables=[name];
+ expect(()=>compilePowerBI(plan,source,defaultTenantSettings)).toThrow();
+});
+it.each(['Measure]Break','Measure\nBreak','Measure #(lf)','A/B',''])('rejects unsafe measure names at TMDL and DAX references: %j',name=>{
+ const source=data(),plan=design();plan.measures[0].name=name;
+ expect(()=>compilePowerBI(plan,source,defaultTenantSettings)).toThrow();
+});
+it.each(['data/..\\outside.csv','/absolute.tmdl','data/../outside.csv','data//outside.csv','data/./outside.csv','data/trailing/','data/%2e%2e.csv'])('rejects unsafe candidate key %j',key=>{
+ const source=data(),plan=design(),candidate=compilePowerBI(plan,source,defaultTenantSettings);candidate.files[key]='synthetic';
+ expect(validateGenericCandidate(candidate,plan,source).checks.find(item=>item.id==='EXACT_SOURCE_CANDIDATE')?.status).toBe('FAIL');
+});
+it('rejects exact generated M, DAX/TMDL, relationship and embedded CSV tampering',()=>{
+ const source=data(),plan=design();
+ for(const [path,oldText,newText] of [
+  ['OrdersPerformance.SemanticModel/definition/tables/Orders.tmdl','type text','each 1'],
+  ['OrdersPerformance.SemanticModel/definition/tables/Orders.tmdl','SUM(Orders[Revenue])','SUM(Orders[Status])'],
+  ['OrdersPerformance.SemanticModel/definition/model.tmdl','ref table Orders','ref table Other'],
+  ['data/Orders.csv','North','Other'],
+ ] as const){const candidate=compilePowerBI(plan,source,defaultTenantSettings);candidate.files[path]=candidate.files[path].replace(oldText,newText);expect(validateGenericCandidate(candidate,plan,source).checks.find(item=>item.id==='EXACT_SOURCE_CANDIDATE')?.status).toBe('FAIL')}
+});
+it('preserves four unrelated renamed synthetic domains under one source grammar',()=>{
+ for(const [table,dimension,amount,id] of [
+  ['ClinicAppointments','Clinic','Duration','AppointmentId'],
+  ['WarehouseMoves','Zone','Units','MoveId'],
+  ['CourseEnrollments','Campus','EnrollmentCount','EnrollmentId'],
+  ['EquipmentMaintenance','Workshop','ServiceHours','WorkOrderId'],
+ ] as const){
+  const source=data(),plan=design();source.tables[0].name=table;source.tables[0].sourceName=table;source.fileName=`${table}.csv`;
+  for(const [index,name] of [[0,dimension],[1,amount],[2,id]] as const){source.tables[0].columns[index].name=name;source.tables[0].columns[index].sourceName=name}
+  plan.projectName=`${table}Performance`;plan.dataModel.factTables=[table];
+  plan.measures[0].field=`${table}.${amount}`;plan.measures[1].field=`${table}.${id}`;
+  plan.pages[0].visuals[1].categoryField=`${table}.${dimension}`;
+  plan.pages[0].visuals[2].fields=[`${table}.${dimension}`];plan.filters=[`${table}.${dimension}`];
+  const candidate=compilePowerBI(plan,source,defaultTenantSettings);
+  expect(validateGenericCandidate(candidate,plan,source).status,table).toBe('PASS');
+  expect(candidate.files[`${table}Performance.SemanticModel/definition/tables/${table}.tmdl`]).toContain(`table ${table}`);
+ }
+});
 it('compiles a structured generic design into validated PBIP/PBIR source',()=>{const source=data(),plan=design(),candidate=compilePowerBI(plan,source,defaultTenantSettings),validation=validateGenericCandidate(candidate,plan,source);expect(validation.status).toBe('PASS');expect(candidate.files['OrdersPerformance.pbip']).toContain('OrdersPerformance.Report');expect(Object.keys(candidate.files).filter(path=>path.endsWith('/visual.json'))).toHaveLength(3);expect(Object.values(candidate.files).join('\n')).toContain('SUM(Orders[Revenue])')});
 it.each(['Revenue','rEvEnUe','Region'])('preserves the visible %s measure while isolating a colliding source column',name=>{const source=data(),plan=design();plan.measures[0].name=name;const candidate=compilePowerBI(plan,source,defaultTenantSettings),tables=Object.entries(candidate.files).filter(([path])=>path.endsWith('.tmdl')&&path.includes('/definition/tables/')),technical=tables.find(([path])=>path.includes('/__APBRA_Measures_'));expect(technical).toBeDefined();expect(technical![1]).toContain(`measure '${name}' = SUM(Orders[Revenue])`);expect(candidate.files['OrdersPerformance.SemanticModel/definition/tables/Orders.tmdl']).not.toContain(`measure '${name}' =`);expect(validateGenericCandidate(candidate,plan,source).checks.find(item=>item.id==='SEMANTIC_NAMESPACE')?.status).toBe('PASS');expect(validateGenericCandidate(candidate,plan,source).status).toBe('PASS');const visuals=Object.values(candidate.files).filter(value=>value.includes('cardVisual'));expect(visuals.join('\n')).toContain(`${technical![0].split('/').at(-1)!.slice(0,-5)}.${name}`)});
 it('rejects a tampered measure home or case/Unicode-equivalent source-column identity',()=>{const source=data(),plan=design();plan.measures[0].name='Revenue';const candidate=compilePowerBI(plan,source,defaultTenantSettings),visualPath=Object.keys(candidate.files).find(path=>path.endsWith('/visual.json')&&candidate.files[path].includes('cardVisual'))!;candidate.files[visualPath]=candidate.files[visualPath].replaceAll('__APBRA_Measures_','Orders_');expect(validateGenericCandidate(candidate,plan,source).checks.find(item=>item.id==='SEMANTIC_NAMESPACE')?.status).toBe('FAIL');source.tables[0].columns.push({...source.tables[0].columns[1],name:'Ｒｅｖｅｎｕｅ'});expect(()=>compilePowerBI(plan,source,defaultTenantSettings)).toThrow('SEMANTIC_NAMESPACE_COLLISION')});
