@@ -20,7 +20,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertTrue(c.validate(yaml.safe_dump(self.doc)))
 
     def test_current_workflow(self):
-        self.assertEqual(self.job['timeout-minutes'], '30')
+        self.assertEqual(self.job['timeout-minutes'], '45')
         self.assertEqual(c.validate(self.text), [])
 
     def test_step_names_are_not_authority(self):
@@ -29,6 +29,16 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_missing_frontend_tests(self):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run', '').strip() != c.WEB_COMMAND]
+        self.rejected()
+
+    def test_hosted_image_smoke_is_mandatory_and_not_skippable(self):
+        self.job['steps'] = [s for s in self.job['steps'] if s.get('run', '').strip() != c.HOSTED_IMAGE_SMOKE]
+        self.rejected()
+        self.setUp()
+        next(s for s in self.job['steps'] if s.get('run') == c.HOSTED_IMAGE_SMOKE)['run'] += ' || true'
+        self.rejected()
+        self.setUp()
+        next(s for s in self.job['steps'] if s.get('run') == c.HOSTED_IMAGE_SMOKE)['if'] = 'false'
         self.rejected()
 
     def test_semantic_bridge_must_be_built_before_backend_tests(self):
@@ -65,7 +75,7 @@ class CiPolicyTests(unittest.TestCase):
         self.rejected()
 
     def test_timeout_is_exact_capacity_boundary(self):
-        for timeout in ('10', '19', '20', '21', '29', '31'):
+        for timeout in ('10', '19', '20', '21', '29', '30', '31', '46'):
             with self.subTest(timeout=timeout):
                 self.job['timeout-minutes'] = timeout
                 self.rejected()

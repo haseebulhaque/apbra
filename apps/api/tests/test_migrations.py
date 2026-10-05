@@ -51,6 +51,27 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
 
 
+def test_online_migration_lock_timeout_fails_without_schema_change(
+    settings: Settings, database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An occupied session lock blocks the entire migration before any revision runs."""
+    config = disposable_alembic_config(settings.database_url)
+    monkeypatch.setenv("APBRA_MIGRATION_LOCK_TIMEOUT_SECONDS", "1")
+    with database.engine.connect() as holder:
+        holder.execute(text("SELECT pg_advisory_lock(4706334531650664243)"))
+        holder.commit()
+        try:
+            with pytest.raises(
+                RuntimeError, match="Timed out waiting for APBRA schema migration lock"
+            ):
+                command.upgrade(config, "head")
+            with database.session() as db:
+                assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+        finally:
+            assert holder.scalar(text("SELECT pg_advisory_unlock(4706334531650664243)")) is True
+            holder.commit()
+
+
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
     settings: Settings, database: Database
 ) -> None:
