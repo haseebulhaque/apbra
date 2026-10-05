@@ -75,14 +75,30 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
             self.assertEqual((matches[0]["content_id"], matches[0]["version"],
                               matches[0]["status"]), (cid, version, "ACCEPTED"))
             self.assertEqual(digest(matches[0]), expected_hash)
+        owner_row = self.sources["sources"][-1]
+        self.assertEqual(owner_row["id"], "apbra-173b-owner-architecture-acceptance")
+        self.assertEqual(owner_row["url"],
+                         "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10526")
+        self.assertIn("10526", owner_row["version"])
+        self.assertIn("Confirmed and approved", owner_row["acceptance"])
+        self.assertIn("required backend runtime code/resources", owner_row["acceptance"])
         for section, expected_hash in c.HOSTED_WEB_RELEASE_GATE_SHA256.items():
             self.assertEqual(digest(self.task[section]), expected_hash)
         words = " ".join(self.task["requirements"] + self.task["acceptance_criteria"]
                          + self.task["verification_required"] + self.task["out_of_scope"])
-        for phrase in ("10522", "45-minute", "manifest-reachable", "same connection",
+        for phrase in ("10522", "10526", "45-minute", "manifest-reachable", "same connection",
                        "private", "rollout", "schema compatibility", "Live Canvas",
                        "APBRA-173C", "Haseeb"):
             self.assertIn(phrase, words)
+        image_rule = self.task["acceptance_criteria"][2]
+        self.assertIn("Required backend runtime code/resources", image_rule)
+        self.assertIn("never served by public static routes", image_rule)
+        self.assertIn("secrets", image_rule)
+        self.assertIn("synthetic build-context markers", image_rule)
+        build_rule = self.task["requirements"][5]
+        self.assertIn("Raw frontend source may enter the build stage", build_rule)
+        self.assertIn("must not remain in the final runtime image", build_rule)
+        self.assertIn("Required backend runtime code/resources", build_rule)
 
     def test_registration_exactly_five_and_product_separate(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -142,6 +158,25 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
                     with patch.object(c, "HOSTED_WEB_RELEASE_TASK_SHA256", digest(changed)):
                         errors = self.check(root, {"apps/api/Dockerfile"})
                     self.assertIn("APBRA-173B safety/review gate differs: " + section, errors)
+            for section, needle, replacement in (
+                ("requirements", "comment 10526", "comment 10522"),
+                ("requirements", "must never be publicly served", "may be publicly served"),
+                ("requirements", "must not remain in the final runtime image",
+                 "may remain in the final runtime image"),
+                ("acceptance_criteria", "never served by public static routes",
+                 "served by public static routes"),
+                ("acceptance_criteria", "Private evidence", "Evidence"),
+                ("dependencies", "comment 10526", "comment 10522"),
+            ):
+                with self.subTest(section=section, needle=needle):
+                    changed = copy.deepcopy(self.task)
+                    index = next(i for i, value in enumerate(changed[section]) if needle in value)
+                    changed[section][index] = changed[section][index].replace(
+                        needle, replacement, 1)
+                    (root / self.task_path).write_text(json.dumps(changed))
+                    with patch.object(c, "HOSTED_WEB_RELEASE_TASK_SHA256", digest(changed)):
+                        errors = self.check(root, {"apps/api/Dockerfile"})
+                    self.assertIn("APBRA-173B safety/review gate differs: " + section, errors)
 
     def test_append_only_source_mutations_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -157,6 +192,12 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
             cases.append((changed, "APBRA-173B source ordering differs"))
             changed = copy.deepcopy(original)
             changed["sources"][66]["acceptance"] += " altered"
+            cases.append((changed, "APBRA-173B source differs from provenance"))
+            changed = copy.deepcopy(original)
+            changed["sources"][-1]["url"] = "https://arkitektz.atlassian.net/browse/APBRA-173"
+            cases.append((changed, "APBRA-173B source differs from provenance"))
+            changed = copy.deepcopy(original)
+            changed["sources"][-1]["acceptance"] = "Controller recommendation 10522 is accepted."
             cases.append((changed, "APBRA-173B source differs from provenance"))
             changed = copy.deepcopy(original)
             changed["sources"].append(copy.deepcopy(changed["sources"][-1]))

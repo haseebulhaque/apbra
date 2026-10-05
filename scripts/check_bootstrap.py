@@ -876,7 +876,7 @@ HOSTED_WEB_RELEASE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_hosted_web_release_scope.py',
     'tests/bootstrap/test_current_state_docs_scope.py',
 }
-HOSTED_WEB_RELEASE_TASK_SHA256 = 'eb0f5446f949d368ade646d954341e51cd932012b8776bb513b3f036d3a09805'
+HOSTED_WEB_RELEASE_TASK_SHA256 = 'fcf8ffdd388616c27fdf42f3687801df86ccd4f373d3c02b429608460aea2d57'
 HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT = 66
 HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256 = '634e0fc2ab98cf546f93cbae5382d80f5d7f724b9589b4c812606cb702d6b17f'
 HOSTED_WEB_RELEASE_SOURCES = (
@@ -887,18 +887,18 @@ HOSTED_WEB_RELEASE_SOURCES = (
     ('apbra-173b-data-identity', '4063348', 6, 'b8a8d4773c5d65d24822e3eba1a9ce29ddb37b301bd0726b2d7ffefcb0127ce3'),
     ('apbra-173b-traceability', '3932382', 18, '52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
     ('apbra-173b-reconciliation', '6422580', 62, '5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
-    ('apbra-173b-owner-architecture-acceptance', 'APBRA-173', 'Haseeb acceptance after Jira controller comment 10522, 2026-10-05', '9c4877b013de572f4ca227175926326a4330337e11a8153aea333b479d20443a'),
+    ('apbra-173b-owner-architecture-acceptance', 'APBRA-173', 'Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100', 'f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
 )
 HOSTED_WEB_RELEASE_GATE_SHA256 = {
-    'requirements': '8aeb32cada219a218acf0e9aa2b5951fee9330da4bf59498f8d008d06f09ec3d',
+    'requirements': '09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30',
     'adrs': 'e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650',
-    'architecture_refs': '32174b5b2322ca933e2417e392c332aae00bfea569a545ee802cca51d6215576',
+    'architecture_refs': '9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f',
     'restricted_paths': 'cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672',
-    'acceptance_criteria': '4b9018ae32bb8c20c897e41155c76eb407421e1072c1ce88d0170c374e20d429',
+    'acceptance_criteria': 'b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e',
     'verification_required': 'ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356',
     'out_of_scope': '052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512',
     'escalate_when': '4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81',
-    'dependencies': '42d638e6a19ba9bbf85eea89ed917725fc895aa228400f33484fae8dda3340cd',
+    'dependencies': '6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1',
 }
 HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'

@@ -649,11 +649,11 @@
     {
       "id": "apbra-173b-owner-architecture-acceptance",
       "content_id": "APBRA-173",
-      "version": "Haseeb acceptance after Jira controller comment 10522, 2026-10-05",
+      "version": "Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100",
       "section": "APBRA-173B owner architecture acceptance",
-      "url": "https://arkitektz.atlassian.net/browse/APBRA-173",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10526",
       "status": "ACCEPTED",
-      "acceptance": "Haseeb explicitly approved the portable immutable same-origin 173B design, 10522 refinements and 45-minute CI ceiling in the 2026-10-05 instruction. This records architecture and governance-registration authority only: finite registration must pass hosted CI, fresh independent exact-head review, Haseeb manual merge and post-merge verification before product implementation. 173C package sequence remains separate."
+      "acceptance": "Jira APBRA-173 comment 10526 records Haseeb's explicit 'Confirmed and approved' acceptance of the portable immutable same-origin 173B design, 10522 refinements, F1 clarification permitting required backend runtime code/resources inside the final image but never on public static routes, and the later 45-minute CI ceiling. Private content, secrets, unnecessary development/raw frontend source, fixtures and synthetic exclusion markers remain excluded as applicable. This records architecture and governance-registration authority only: finite registration must pass new exact-head hosted CI, fresh independent review, Haseeb manual merge and post-merge verification before product implementation. 173C package sequence remains separate."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
