@@ -4,7 +4,7 @@ Capstone is complete/submitted. The bounded MVP baseline is working and product 
 
 ## Current protected local/CI foundation
 
-Merged protected-case work through APBRA-174 added server-derived invited identity, private-case authorization, PostgreSQL-backed request/conversation/evidence and immutable generation history, Owner/Admin governed Tenant Settings, protected credential references, optional model-led clarification, exact-version acceptance and bounded validated Power BI PBIP/PBIR/TMDL candidates with `Delivery-Guide.md`. Local/CI deterministic tests verify these bounded controls; they do not establish real-provider quality, Desktop runtime PASS, hosted tenant isolation, production recovery or successful deployment. The completed Capstone evidence below is a separate earlier result, not a current provider execution.
+Merged protected-case work through APBRA-174 and APBRA-151/172 added server-derived provider-qualified identity, first-company creation, initial owner, multi-company membership, private-case authorization, PostgreSQL-backed request/conversation/evidence and immutable generation history, Owner/Admin governed Tenant Settings, protected credential references, optional model-led clarification, exact-version acceptance and bounded validated Power BI PBIP/PBIR/TMDL candidates with `Delivery-Guide.md`. APBRA-173A additionally establishes portable protected-content storage with secure local and alternate adapter tests. Local/CI deterministic tests verify these bounded controls; they do not establish real-provider quality, Desktop runtime PASS, hosted tenant isolation, production recovery or successful deployment. The completed Capstone evidence below is a separate earlier result, not a current provider execution.
 
 ## Historical completed Capstone capabilities
 
@@ -44,7 +44,7 @@ Test totals are revision-specific and must be refreshed after changes.
 
 ## Production acceptance remains open
 
-The protected local/CI application now has bounded identity, private-case tenant isolation, durable PostgreSQL case/evidence/settings/generation records and encrypted tenant credentials. Production acceptance remains open for hosted identity/tenancy qualification, managed secret/storage operations, durable knowledge lifecycle, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations and commercial operations.
+The protected local/CI application now has bounded provider-neutral identity and company lifecycle, private-case tenant isolation, durable PostgreSQL case/evidence/settings/generation records, portable APBRA-173A content storage and encrypted tenant credentials. Production acceptance remains open for hosted identity/tenancy qualification, managed secret/storage operations, durable knowledge lifecycle, broad Power BI compatibility, publishing, gateway/credential orchestration, reviewer workflow, performance/load, resilience/DR, SLOs/monitoring/on-call, broad evaluation, privacy/compliance operations and commercial operations.
 
 ## APBRA-175 architecture is not a current MVP acceptance gate
 
@@ -75,13 +75,13 @@ The earlier APBRA-147 planning hold and APBRA-149–158 target items are histori
 
 Generated ≠ validated ≠ Desktop verified ≠ approved ≠ released ≠ deployed.
 
-## APBRA-176 identity/onboarding acceptance boundary — target gates, not current PASS
+## APBRA-176 identity/onboarding acceptance boundary — local/CI progress and open live gates
 
-The 2 October 2026 owner decision changes the intended MVP-1 onboarding path, but these criteria remain **unpassed** until APBRA-151/172/173 produce exact implementation evidence.
+Merged APBRA-151/172 provide deterministic local/CI evidence for first-company creation, owner bootstrap, invitation/membership lifecycle and provider-neutral sessions. These are bounded implementation results, not an overall hosted-preview PASS. Live provider and multi-user hosted qualification under APBRA-173 remain unpassed.
 
 A qualified identity/onboarding slice must demonstrate at minimum:
 
-1. a real qualified provider can authenticate a user through the provider-neutral APBRA SSO/session seam, with Microsoft Entra External ID first;
+1. a real qualified provider must later authenticate a user through the provider-neutral APBRA SSO/session seam, with Microsoft Entra External ID first;
 2. the stable external identity binding does not use mutable email/UPN as the durable security key and does not silently merge equal-email identities across issuers/providers;
 3. an existing active membership resumes correctly, an eligible invitation binds only the intended company membership, and an unrelated authenticated user receives no APBRA authority;
 4. a user with no applicable membership/invitation can choose **Create Company / Workspace**, and the company plus initial `COMPANY_OWNER` membership are created transactionally, idempotently and audibly;

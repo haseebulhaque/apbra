@@ -6,7 +6,7 @@ The protected case experience permits zero or optional model-generated clarifica
 
 Owner/Admin can inspect, edit, version and restore validated tenant settings and replace protected credentials without seeing plaintext. Provider/model/region activation requires qualified explicit configuration. Automatic ReportDesign remains subject to deterministic validation and cannot use a business-specific fallback. The canonical compiler resolves technical measure/column namespace collisions without changing semantic objects. Successful candidate ZIPs include a digest-bound Delivery / Instruction Guide; they are not evidence of Desktop execution, release approval or deployment. Earlier Capstone rows below remain historical evidence.
 
-This repository view separates implemented Capstone behaviour, verified evidence and future product requirements. Confluence remains authoritative for requirements and Jira for delivery intent.
+This repository view separates current local/CI implementation, historical Capstone evidence and future product requirements. Confluence remains authoritative for requirements and Jira for delivery intent.
 
 ## Accepted APBRA-175 architecture requirements — future implementation
 
@@ -74,7 +74,7 @@ DAY, MONTH, QUARTER and YEAR are genuinely represented. WEEK, fiscal/custom cale
 
 ## Target boundary
 
-The accepted target includes company identity and membership, tenant isolation, optional projects and collaboration, capability-based licensing/usage visibility, durable governed knowledge, qualified model profiles, separately consented Azure provisioning where applicable, broader Power BI discovery/delivery, future ARD/native reporting and other adapters, review/release workflow, reliability/FinOps and privacy/compliance operations. Local/CI invited identity, durable private cases/settings/evidence and bounded Power BI generation already exist; production profiles and entitlement runtime do not follow from those foundations. None is marked implemented merely because it appears above.
+The accepted target includes company identity and membership, tenant isolation, optional projects and collaboration, capability-based licensing/usage visibility, durable governed knowledge, qualified model profiles, separately consented Azure provisioning where applicable, broader Power BI discovery/delivery, future ARD/native reporting and other adapters, review/release workflow, reliability/FinOps and privacy/compliance operations. Local/CI APBRA-151/172 company lifecycle and provider-neutral sessions, private cases/settings/evidence, APBRA-173A portable protected-content storage and bounded Power BI generation already exist; production profiles and entitlement runtime do not follow from those foundations. None is marked implemented merely because it appears above.
 
 The target does not select a delivery milestone, replacement stack, model/provider, region, price, SLA or new numerical limit. Licences, modes, company membership and model keys do not grant private-resource access, trusted-author status or external management authority. Expert assistance, business acceptance, inspection download, release approval and successful deployment remain separate events.
 
@@ -95,4 +95,4 @@ Confluence 10.03 v4 and 02.01 v7 refine PC26-FR-008 without creating a new requi
 - verified-domain join, enterprise SSO and SCIM/JIT are later opt-in company policies and may require customer-admin involvement;
 - APBRA authentication, company membership, private-resource access, Power BI/Fabric consent, Azure management authority and commercial entitlement remain separate authorities.
 
-APBRA-176 changes documentation only. APBRA-151/172/173 remain pending implementation/qualification work and no live sign-in, public signup, Power BI Desktop, publishing or production claim follows from this refinement.
+This section records the historical APBRA-176 requirements refinement. APBRA-151/172 have since merged bounded local/CI company lifecycle and provider-neutral session implementations; APBRA-173A has merged the portable storage foundation. Live Entra sign-in, hosted durability/recovery, public signup, Power BI Desktop, publishing and production qualification remain open.
