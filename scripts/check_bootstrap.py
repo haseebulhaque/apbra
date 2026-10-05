@@ -854,6 +854,55 @@ CURRENT_STATE_DOCS_GATE_SHA256 = {
 CURRENT_STATE_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-177-current-state-docs'
 CURRENT_STATE_DOCS_REGISTRATION_BRANCH = CURRENT_STATE_DOCS_BRANCH + '-registration'
 
+HOSTED_WEB_RELEASE_PATHS = {
+    'apps/api/Dockerfile',
+    'apps/api/Dockerfile.dockerignore',
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/web_static.py',
+    'apps/api/alembic/env.py',
+    'apps/api/tests/test_hosted_web.py',
+    'apps/api/tests/test_migrations.py',
+    'apps/api/README.md',
+    '.github/workflows/bootstrap.yml',
+    'scripts/check_ci_policy.py',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_ci_policy.py',
+    'scripts/smoke_hosted_image.sh',
+}
+HOSTED_WEB_RELEASE_REGISTRATION_PATHS = {
+    'docs/source-register.json',
+    'scripts/check_bootstrap.py',
+    'tasks/APBRA-173-production-web-release.json',
+    'tests/bootstrap/test_hosted_web_release_scope.py',
+    'tests/bootstrap/test_current_state_docs_scope.py',
+}
+HOSTED_WEB_RELEASE_TASK_SHA256 = 'fcf8ffdd388616c27fdf42f3687801df86ccd4f373d3c02b429608460aea2d57'
+HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT = 66
+HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256 = '634e0fc2ab98cf546f93cbae5382d80f5d7f724b9589b4c812606cb702d6b17f'
+HOSTED_WEB_RELEASE_SOURCES = (
+    ('apbra-173b-preview-direction', '8519682', 23, '8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
+    ('apbra-173b-mvp-scope', '4063307', 14, '3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
+    ('apbra-173b-deployment-portability', '9568258', 2, 'e77c9ce09f9a6b76d36670e6452e289461d86162d019e6d132d280cafcab4d79'),
+    ('apbra-173b-entitlement-boundary', '9535525', 2, '08b8d7b79af6c28f1e944ce61cb61e0ba76044beff7f158a0ea7d0c74614e593'),
+    ('apbra-173b-data-identity', '4063348', 6, 'b8a8d4773c5d65d24822e3eba1a9ce29ddb37b301bd0726b2d7ffefcb0127ce3'),
+    ('apbra-173b-traceability', '3932382', 18, '52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
+    ('apbra-173b-reconciliation', '6422580', 62, '5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
+    ('apbra-173b-owner-architecture-acceptance', 'APBRA-173', 'Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100', 'f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
+)
+HOSTED_WEB_RELEASE_GATE_SHA256 = {
+    'requirements': '09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30',
+    'adrs': 'e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650',
+    'architecture_refs': '9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f',
+    'restricted_paths': 'cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672',
+    'acceptance_criteria': 'b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e',
+    'verification_required': 'ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356',
+    'out_of_scope': '052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512',
+    'escalate_when': '4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81',
+    'dependencies': '6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1',
+}
+HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
+HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -2075,7 +2124,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
                         + len(PRIVATE_CONTENT_STORAGE_SOURCES):
                     ]
-                    expected_later = CURRENT_STATE_DOCS_SOURCES
+                    expected_later = CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES
                     if (
                         len(later_rows) != len(expected_later)
                         or any(
@@ -2181,7 +2230,21 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     and len(source_rows) !=
                     CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT + len(CURRENT_STATE_DOCS_SOURCES)
                 ):
-                    extension_errors.append('APBRA-177 registration added unrelated source rows')
+                    later_rows = source_rows[
+                        CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT
+                        + len(CURRENT_STATE_DOCS_SOURCES):
+                    ]
+                    if (
+                        len(later_rows) != len(HOSTED_WEB_RELEASE_SOURCES)
+                        or any(
+                            (row.get('id'), hashlib.sha256(json.dumps(
+                                row, sort_keys=True, separators=(',', ':'),
+                            ).encode()).hexdigest()) != (source_id, expected_sha)
+                            for row, (source_id, _content_id, _version, expected_sha)
+                            in zip(later_rows, HOSTED_WEB_RELEASE_SOURCES)
+                        )
+                    ):
+                        extension_errors.append('APBRA-177 registration added unrelated source rows')
                 for section, expected in CURRENT_STATE_DOCS_GATE_SHA256.items():
                     actual = json.dumps(
                         current_state_docs_task[section], sort_keys=True, separators=(',', ':'),
@@ -2206,6 +2269,79 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 current_state_docs_task = None
+        hosted_web_release_task = None
+        hosted_web_release_path = root / 'tasks/APBRA-173-production-web-release.json'
+        if hosted_web_release_path.exists():
+            hosted_web_release_task = load_json(hosted_web_release_path)
+            extension_errors = schema_errors(
+                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                hosted_web_release_task,
+            )
+            if not extension_errors:
+                extension_errors += task_errors(hosted_web_release_task, catalog, sources)
+                if hashlib.sha256(json.dumps(
+                    hosted_web_release_task, sort_keys=True, separators=(',', ':'),
+                ).encode()).hexdigest() != HOSTED_WEB_RELEASE_TASK_SHA256:
+                    extension_errors.append('APBRA-173B contract differs from accepted authority')
+                if (
+                    hosted_web_release_task['task_id'],
+                    hosted_web_release_task['assigned_agent'],
+                    hosted_web_release_task['agent_card_version'],
+                ) != ('APBRA-173', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-173B task or agent identity')
+                if hosted_web_release_task['branch'] != HOSTED_WEB_RELEASE_BRANCH:
+                    extension_errors.append('Unexpected APBRA-173B implementation branch')
+                if hosted_web_release_task['base_commit'] != '714a53e3e26ea85b176dd6990ccd7229d1ab770c':
+                    extension_errors.append('Stale APBRA-173B registration base')
+                if (set(hosted_web_release_task['allowed_paths']) != HOSTED_WEB_RELEASE_PATHS
+                        or len(hosted_web_release_task['allowed_paths']) != len(HOSTED_WEB_RELEASE_PATHS)):
+                    extension_errors.append('Unexpected APBRA-173B implementation scope')
+                if (
+                    hosted_web_release_task['task_mode'],
+                    hosted_web_release_task['readiness'],
+                    hosted_web_release_task['owner_acceptance'],
+                ) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-173B requires issued implementation acceptance')
+                if hosted_web_release_task['source_ids'] != [row[0] for row in HOSTED_WEB_RELEASE_SOURCES]:
+                    extension_errors.append('APBRA-173B requires exact accepted sources')
+                source_rows = sources['sources']
+                if hashlib.sha256(json.dumps(
+                    source_rows[:HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT],
+                    sort_keys=True, separators=(',', ':'),
+                ).encode()).hexdigest() != HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256:
+                    extension_errors.append('APBRA-173B historical source provenance changed')
+                registered_rows = source_rows[
+                    HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT:
+                    HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES)
+                ]
+                if [row.get('id') for row in registered_rows] != [row[0] for row in HOSTED_WEB_RELEASE_SOURCES]:
+                    extension_errors.append('APBRA-173B source ordering differs')
+                if (active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH
+                        and len(source_rows) != HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES)):
+                    extension_errors.append('APBRA-173B registration added unrelated source rows')
+                for section, expected in HOSTED_WEB_RELEASE_GATE_SHA256.items():
+                    actual = hashlib.sha256(json.dumps(
+                        hosted_web_release_task[section], sort_keys=True, separators=(',', ':'),
+                    ).encode()).hexdigest()
+                    if actual != expected:
+                        extension_errors.append('APBRA-173B safety/review gate differs: ' + section)
+                for source_id, content_id, version, expected_sha in HOSTED_WEB_RELEASE_SOURCES:
+                    matching = [row for row in source_rows if row.get('id') == source_id]
+                    if len(matching) != 1:
+                        extension_errors.append('APBRA-173B source missing or duplicated: ' + source_id)
+                    else:
+                        row = matching[0]
+                        if hashlib.sha256(json.dumps(
+                            row, sort_keys=True, separators=(',', ':'),
+                        ).encode()).hexdigest() != expected_sha:
+                            extension_errors.append('APBRA-173B source differs from provenance: ' + source_id)
+                        if (row.get('content_id'), row.get('version'), row.get('status')) != (
+                            content_id, version, 'ACCEPTED',
+                        ):
+                            extension_errors.append('APBRA-173B source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                hosted_web_release_task = None
         provider_neutral_sso_task = None
         provider_neutral_sso_path = root / 'tasks/APBRA-172-provider-neutral-sso.json'
         if provider_neutral_sso_path.exists():
@@ -2340,10 +2476,17 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
             (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
+            (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
+        if active_task_id == 'APBRA-173':
+            registered_tasks['APBRA-173'] = (
+                private_content_storage_task if active_branch in {
+                    PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
+                } else hosted_web_release_task
+            )
         if changed_paths is not None and changed_paths:
             active_task = registered_tasks.get(active_task_id or '')
             if active_task_id is None:
@@ -2395,6 +2538,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (active_task_id == 'APBRA-173' and
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
                          changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-173' and
+                         active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
+                         changed_paths == HOSTED_WEB_RELEASE_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-177' and
                          active_branch == CURRENT_STATE_DOCS_REGISTRATION_BRANCH and
                          changed_paths == CURRENT_STATE_DOCS_REGISTRATION_PATHS) and
@@ -2547,6 +2693,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS)):
                 errors.append('APBRA-108 implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-173' and
+                    active_branch in {PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH} and
                     changed_paths.intersection(PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
                     changed_paths.intersection(PRIVATE_CONTENT_STORAGE_PATHS)):
                 errors.append('APBRA-173A registration and implementation changes must remain separate')
@@ -2558,6 +2705,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == PRIVATE_CONTENT_STORAGE_BRANCH and
                     changed_paths.intersection(PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS)):
                 errors.append('APBRA-173A implementation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-173' and
+                    active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
+                    changed_paths != HOSTED_WEB_RELEASE_REGISTRATION_PATHS):
+                errors.append('APBRA-173B registration must change exactly its five governance files')
+            if (active_task_id == 'APBRA-173' and
+                    active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
+                    changed_paths.intersection(HOSTED_WEB_RELEASE_PATHS - {'scripts/check_bootstrap.py'})):
+                errors.append('APBRA-173B registration and implementation changes must remain separate')
+            if (active_task_id == 'APBRA-173' and
+                    active_branch == HOSTED_WEB_RELEASE_BRANCH and
+                    changed_paths.intersection(HOSTED_WEB_RELEASE_REGISTRATION_PATHS - {'scripts/check_bootstrap.py'})):
+                errors.append('APBRA-173B implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-177' and
                     changed_paths.intersection(CURRENT_STATE_DOCS_REGISTRATION_PATHS) and
                     changed_paths.intersection(CURRENT_STATE_DOCS_PATHS)):
@@ -2696,6 +2855,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
                          changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS and
                          name in PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-173' and active_task is not None and
+                         active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
+                         changed_paths == HOSTED_WEB_RELEASE_REGISTRATION_PATHS and
+                         name in HOSTED_WEB_RELEASE_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-177' and active_task is not None and
                          active_branch == CURRENT_STATE_DOCS_REGISTRATION_BRANCH and

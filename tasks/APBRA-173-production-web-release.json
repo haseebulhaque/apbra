@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-173",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-173B-20261005-REG",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Package 173B registers only the finite portable immutable same-origin production web/API image and serialized migration-before-rollout gate. This PR changes governance only; a separate post-merge implementation may change the exact 13 listed paths.",
+  "requirements": [
+    "Haseeb's explicit 'Confirmed and approved' acceptance of the APBRA-173B architecture, controller refinements in Jira 10522, the F1 runtime-code clarification and a 45-minute APBRA Bootstrap job ceiling is recorded in Jira APBRA-173 comment 10526. Owner decision 10471 still makes Azure Container Apps/Job a reference deployment profile, not core product logic. This acceptance does not select region, SKU, spend, networking, preview URL, live Entra, paid provider or recovery targets.",
+    "Create one portable immutable same-origin web/API image. The build must compile the existing React/Vite application into exact versioned static bytes and package those bytes with FastAPI and existing Node bridges. Vite development/preview proxy and legacy Azure AI proxy are never the hosted production runtime. No new frontend framework, dependency or lockfile change is authorised.",
+    "Pin public static routing to GET and HEAD / and /invite returning the built shell, plus manifest-reachable, hashed asset files under /assets/. There is no general SPA fallback, directory listing, source-map exposure by default, arbitrary file serving or public path to evidence, reference material, generated artifacts, secrets or local test fixtures. Private content continues through current protected API/database authority.",
+    "The built index/shell must revalidate rather than use immutable caching. Manifest-reachable hashed assets may use immutable long-lived caching; unknown assets fail 404. The exact built asset closure must be checked so stale or missing manifest references fail rather than being silently served. No stale index may point at missing assets after rollout/rollback.",
+    "All /api routes remain FastAPI routes. Unknown API paths and methods retain API 404/405 semantics and never receive the SPA. /dev/oidc, /docs, /openapi.json and every other non-app route keep their existing explicit behavior or 404; this package grants no authentication or API contract change.",
+    "The repository-root Docker build context requires an effective Dockerfile-specific apps/api/Dockerfile.dockerignore. Exclude .env and secret-bearing local files, private content roots, artifacts, caches, Git metadata, unnecessary development build output and unrelated workspace material from transferred context. Raw frontend source may enter the build stage to compile Vite assets but must not remain in the final runtime image or public static root. Required backend runtime code/resources, including existing Node bridges, may be packaged inside the final image but must never be publicly served. Verify actual context exclusion with synthetic marker files; do not assume apps/api/.dockerignore applies to a root context.",
+    "For hosted release, run one explicit Alembic migration step before app rollout; do not run migration or local bootstrap on every hosted replica start. Serialize the entire online migration using a PostgreSQL advisory lock held by the same connection executing migrations, with bounded lock/startup waits and deterministic release/connection cleanup. Failure or timeout blocks rollout. No cloud runner/IaC is implemented in 173B.",
+    "Rollback is image-based only after explicit schema compatibility verification between the previous image and migrated schema. Never automatically downgrade a production schema, treat successful app restart as migration proof, or roll out a new image after failed migration. Preserve existing local Compose development behavior unless separately governed.",
+    "Mandatory CI must build and start the actual image and test public shell/assets, API health and unknown-API 404, no replica startup migration/bootstrap, private/static separation and effective context exclusions using synthetic markers. Every failing or timed-out smoke step fails CI, and cleanup is bounded and reliable.",
+    "The APBRA Bootstrap job keeps its required runner, read-only permissions and mandatory checks; future implementation may add the image smoke and change only the exact job timeout from 30 to 45 minutes through the registered workflow, CI policy checker, bootstrap checker and CI policy test paths. The ceiling is a validation budget, not measured speed improvement or permission for skipped tests.",
+    "Registration changes exactly five governance files. The APBRA-177 historical source-position test may change only its tail-dependent location/mutation assertions to stable contiguous ID-based assertions; all historical source rows, hashes, task contracts and gates stay unchanged. Future implementation changes only the exact 13 unique literal allowed_paths after exact-head CI, separate independent review, Haseeb manual registration merge and verified main."
+  ],
+  "adrs": [
+    "APBRA-175 and Confluence 04.07: deployment-neutral core with Azure as first separately qualified reference profile. Static serving and release orchestration must not embed region, Azure resource names, secrets or customer policy in domain behavior.",
+    "Confluence 02.05/04.08 and existing APBRA-173A: static assets are public immutable build output; uploaded evidence, reference images and generated artifacts are private DB-authorised content and cannot be copied into the image or exposed through static routes.",
+    "PostgreSQL online migrations require a single same-connection serialization point and bounded failure behavior; schema compatibility determines image rollback eligibility. No application replica performs opportunistic migration.",
+    "APBRA-173C durable requirement-analysis, automatic-design and candidate-generation work remains separately governed, with shared PostgreSQL claim/lease/fencing and distinct retry, cancellation, revocation and publication gates."
+  ],
+  "architecture_refs": [
+    "Current Confluence 03.07 page 8519682 v23; 01.10 page 4063307 v14; 04.07 page 9568258 v2; 04.08 page 9535525 v2; 02.05 page 4063348 v6; 02.06 page 3932382 v18; ledger 20.05 page 6422580 v62, refreshed 2026-10-05.",
+    "Jira APBRA-173 owner Azure reference decision 10471; planning 10508/10511/10519/10521; controller architecture refinements 10522; independent PR #93 CHANGES_REQUIRED review 10525; Haseeb's explicit acceptance of the 173B decision pack, refinements, F1 clarification and 45-minute CI limit recorded in comment 10526.",
+    "Exact registration base 714a53e3e26ea85b176dd6990ccd7229d1ab770c is Haseeb manual merge of APBRA-177 PR #92 with reviewed head 684927f8f8a8698f5f9d3977dc4842cbc63704d2. APBRA-177 Done; APBRA-160/173 In Progress; zero open PRs at preflight.",
+    "Repository: apps/api/Dockerfile currently builds Node bridges and Python API but not Vite dist; main.py constructs api.create_app; Vite routes / and /invite through its dev/preview server; compose.yaml migrates and bootstraps on local API start; alembic/env.py has one migration connection without advisory serialization; workflow bootstrap.yml has a 30-minute single job pinned by both checkers."
+  ],
+  "allowed_paths": [
+    "apps/api/Dockerfile",
+    "apps/api/Dockerfile.dockerignore",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/web_static.py",
+    "apps/api/alembic/env.py",
+    "apps/api/tests/test_hosted_web.py",
+    "apps/api/tests/test_migrations.py",
+    "apps/api/README.md",
+    ".github/workflows/bootstrap.yml",
+    "scripts/check_ci_policy.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_ci_policy.py",
+    "scripts/smoke_hosted_image.sh"
+  ],
+  "restricted_paths": [
+    "tasks/**",
+    "docs/**",
+    "apps/web/**",
+    "apps/api/alembic/versions/**",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "apps/api/.env.example",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "compose.yaml",
+    "requirements-bootstrap.txt",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**"
+  ],
+  "acceptance_criteria": [
+    "The registration PR changes exactly five governance paths and no product, Docker, workflow or runtime file. Future implementation has exactly 13 literal paths, no glob, no fourteenth path, no migration revision and no new dependency.",
+    "Actual built image serves GET/HEAD / and /invite as a revalidating shell and only manifest-reachable hashed /assets files with immutable caching; missing/stale/unknown assets, unknown application routes and path traversal fail 404. API unknown routes return API 404 rather than index HTML; API methods retain their semantics.",
+    "Private evidence, reference material, generated artifacts, secrets, unnecessary development/raw frontend source, test fixtures and synthetic build-context markers are absent from the public static root and from the final image where applicable. Required backend runtime code/resources, including existing Node bridges, may remain inside the final image but are never served by public static routes; no private object can be downloaded through a public path.",
+    "A Dockerfile-specific ignore for the effective root context excludes synthetic secret/private markers before build transfer, while every required source/lockfile is still available to build. Image build is reproducible from the exact checkout without Vite hosted runtime or browser-visible credentials.",
+    "Two concurrent online migration processes serialize on one same-connection PostgreSQL lock for the entire migration. Bounded lock timeout and process failure clean up; a failed or timed-out migration blocks rollout. Hosted app start is migration/bootstrap-free. Previous-image rollback is allowed only after compatibility verification; no automatic schema downgrade.",
+    "Actual image build/start smoke covers shell, asset closure, cache headers, API health and 404, private/static separation, excluded markers, no startup migration/bootstrap, failure propagation and bounded cleanup. Its timeout/crash is not PASS.",
+    "The future workflow retains every mandatory check, uses the same read-only runner permissions, adds mandatory image smoke and pins a 45-minute job ceiling with matching CI-policy and bootstrap-policy checks; no paid runner, skipped suite or ignored exit status.",
+    "Historical APBRA-177 accepted source IDs, order, hashes and source rows stay intact; only source-position assertion logic is repaired so later append-only rows are allowed while historical reordering/mutation remains rejected.",
+    "No Azure deployment, 173C worker, live Entra, hosted durability/recovery, Power BI Desktop, production readiness, Live Canvas/ARD, billing or connected publishing claim follows from registration or deterministic image smoke."
+  ],
+  "verification_required": [
+    "Registration: focused APBRA-173B positive and negative scope/source/gate tests; historical APBRA-177 tests; complete bootstrap suite; standalone check_bootstrap.py and check_ci_policy.py; JSON parse, exact five-path audit, git diff --check and available secret-pattern scan.",
+    "Registration: APBRA Bootstrap hosted CI on exact governance PR head, genuinely separate independent exact-head governance review, Haseeb-only manual merge and post-merge main verification before any product edit.",
+    "Implementation: secure static route/cache/asset-closure/API 404/private-content tests; effective Docker context exclusion with synthetic markers; real immutable image build/start smoke; concurrent PostgreSQL advisory migration lock, bounded timeout, failure/cleanup and schema-compatible rollback tests.",
+    "Implementation: Ruff, strict mypy, PostgreSQL 17 API/migration suite, web unit/build/Playwright regression, complete bootstrap, both policy checkers, exact 13-path and secret scan, hosted CI on exact head and fresh independent product/security review before Haseeb-only merge."
+  ],
+  "out_of_scope": [
+    "Any runtime, Docker, static serving, migration or workflow implementation in this registration PR. CI timeout remains 30 minutes until a separately merged registration authorises the later implementation.",
+    "APBRA-173C durable analysis/design/generation workers, queue/lease schema, background processing and provider retry/cost policy; 173D Azure resources/adapters; 173E live Entra; 173F hosted recovery/operations.",
+    "Azure region, SKU, spend, networking, Container Apps/Job deployment, Blob, Key Vault, ACR, public domain, TLS ingress, live identity, paid provider or customer data. No cloud provisioning or spend.",
+    "Broad SPA catch-all, public private-content URLs, browser storage credentials, Vite production proxy, authentication, membership, Tenant Settings, entitlement, Power BI publishing or schema downgrade changes.",
+    "Live Canvas, ARD, APBRA-165/APBRA-166, billing and connected publishing remain outside MVP implementation. No direct main write, force-push, auto-merge, self-approval or historical delegated merge authority."
+  ],
+  "escalate_when": [
+    "Correct 173B runtime implementation or mandatory test needs a fourteenth path, dependency, migration revision, cloud resource or 173C worker scope.",
+    "Exact bounded routes, manifest asset closure, private/static separation, effective context exclusion, same-connection full-migration lock or schema-compatible rollback cannot be implemented inside the 13 paths.",
+    "Mandatory smoke exceeds the accepted 45-minute ceiling, is skipped/crashed, or requires CI policy/runner/permission change beyond the registered files.",
+    "Controlling source versions/accepted architecture conflict, or paid capacity/cloud/owner-admin decision becomes required for this package.",
+    "Hosted CI, independent exact-head review, Haseeb manual registration merge or verified post-merge main is absent, failed or stale."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "714a53e3e26ea85b176dd6990ccd7229d1ab770c",
+  "branch": "agent/APBRA-DEVOPS/APBRA-173-production-web-release",
+  "source_ids": [
+    "apbra-173b-preview-direction",
+    "apbra-173b-mvp-scope",
+    "apbra-173b-deployment-portability",
+    "apbra-173b-entitlement-boundary",
+    "apbra-173b-data-identity",
+    "apbra-173b-traceability",
+    "apbra-173b-reconciliation",
+    "apbra-173b-owner-architecture-acceptance"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Finite 173B product authority only after this governance PR passes exact-head hosted CI and fresh independent review, Haseeb manually merges it, and post-merge main is verified",
+  "dependencies": [
+    "Haseeb's explicit owner acceptance is recorded in Jira APBRA-173 comment 10526 (2026-10-05 15:25 AEDT), following controller recommendation 10522 and independent review 10525; this governance PR remains registration-only and unmerged until new exact-head CI, fresh separate review and Haseeb manual merge.",
+    "APBRA-173A portable protected content and APBRA-177 documentation are merged local/CI foundations; neither is Azure Blob, hosted storage/recovery or 173B runtime evidence. APBRA-160/173 remain In Progress.",
+    "Confluence 03.07 v23, 01.10 v14, 04.07 v2, 04.08 v2, 02.05 v6, 02.06 v18 and 20.05 v62 plus Jira APBRA-173 architecture owner decisions are the exact source bindings for 173B. Refresh again before product implementation.",
+    "173B packages a portable image and release gate; 173C work, 173D Azure reference deployment, 173E live Entra and 173F hosted qualification each need separate exact-path governance and owner/admin approvals where applicable."
+  ]
+}

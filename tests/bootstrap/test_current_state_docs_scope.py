@@ -61,8 +61,12 @@ class CurrentStateDocsScopeTests(unittest.TestCase):
             digest(self.sources["sources"][:c.CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT]),
             c.CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256,
         )
-        rows = self.sources["sources"][c.CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT:]
-        self.assertEqual(len(rows), len(c.CURRENT_STATE_DOCS_SOURCES))
+        source_ids = [row["id"] for row in self.sources["sources"]]
+        anchor = c.CURRENT_STATE_DOCS_SOURCES[0][0]
+        self.assertEqual(source_ids.count(anchor), 1)
+        start = source_ids.index(anchor)
+        self.assertEqual(start, c.CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT)
+        rows = self.sources["sources"][start:start + len(c.CURRENT_STATE_DOCS_SOURCES)]
         self.assertEqual([row["id"] for row in rows], self.task["source_ids"])
         for row, (source_id, content_id, version, expected) in zip(rows, c.CURRENT_STATE_DOCS_SOURCES):
             self.assertEqual((row["id"], row["content_id"], row["version"], row["status"]),
@@ -177,7 +181,9 @@ class CurrentStateDocsScopeTests(unittest.TestCase):
             self.assertIn("APBRA-177 historical source provenance changed",
                           self.check(root, {"README.md"}))
             changed = copy.deepcopy(self.sources)
-            changed["sources"][-1]["acceptance"] += " changed"
+            current_source = next(row for row in changed["sources"]
+                                  if row["id"] == "apbra-177-owner-doc-clarification")
+            current_source["acceptance"] += " changed"
             (root / self.source_path).write_text(json.dumps(changed))
             self.assertTrue(any("APBRA-177 source differs from provenance" in x
                                 for x in self.check(root, {"README.md"})))

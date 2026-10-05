@@ -582,6 +582,78 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-177?focusedCommentId=10481",
       "status": "ACCEPTED",
       "acceptance": "Haseeb requested a separate governed cleanup of stale repository current-state statements. Jira APBRA-177 and controller audit 10481 identify nine exact document paths and require historical checkpoints, portability, future configurable providers/themes, and live/hosted claim limits to remain explicit. No APBRA-173A runtime or Azure/Canvas implementation authority follows; separate registration CI/review/manual merge precedes documentation edits."
+    },
+    {
+      "id": "apbra-173b-preview-direction",
+      "content_id": "8519682",
+      "version": 23,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "The current full-journey preview direction and merged 173A/177 checkpoint bind 173B only to portable production web/API packaging and a release gate. Haseeb approved the finite 173B architecture in the 2026-10-05 instruction after controller refinement 10522. This is not hosted qualification or 173C worker authority."
+    },
+    {
+      "id": "apbra-173b-mvp-scope",
+      "content_id": "4063307",
+      "version": 14,
+      "section": "01.10 - MVP Scope & Product Boundaries",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "acceptance": "MVP-1 remains the full self-service company/report journey. Package 173B is production web/API packaging and release orchestration only; local/CI implementation does not prove live Entra, hosted recovery, Power BI Desktop or pilot acceptance. Live Canvas/ARD, billing and connected publishing remain outside MVP."
+    },
+    {
+      "id": "apbra-173b-deployment-portability",
+      "content_id": "9568258",
+      "version": 2,
+      "section": "04.07 - Deployment Models, Control Plane & Customer-Hosted Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9568258",
+      "status": "ACCEPTED",
+      "acceptance": "Platform-independent APBRA core and qualified deployment adapters remain separate. The same-origin immutable image and migration gate must be portable; Azure Container Apps is a later reference deployment profile, not core runtime authority or a selected region, SKU or network."
+    },
+    {
+      "id": "apbra-173b-entitlement-boundary",
+      "content_id": "9535525",
+      "version": 2,
+      "section": "04.08 - Subscription, Entitlement & Feature-Gating Architecture",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9535525",
+      "status": "ACCEPTED",
+      "acceptance": "Static hosting and CI configuration confer no membership, private-resource, commercial, provider or external-platform authority. 173B must not change Tenant Settings or entitlement behavior."
+    },
+    {
+      "id": "apbra-173b-data-identity",
+      "content_id": "4063348",
+      "version": 6,
+      "section": "02.05 - Data, Integration, Identity & Audit Requirements",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063348",
+      "status": "ACCEPTED",
+      "acceptance": "The hosted web package must keep private content separate from public static assets; authenticated APBRA membership and exact private-resource access remain server-authoritative. This binding authorizes no storage, identity or database schema redesign."
+    },
+    {
+      "id": "apbra-173b-traceability",
+      "content_id": "3932382",
+      "version": 18,
+      "section": "02.06 - Requirements Traceability Matrix",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932382",
+      "status": "ACCEPTED",
+      "acceptance": "The current traceability checkpoint distinguishes merged local/CI company/identity/storage foundations from remaining 173B-F and live qualification. 173B registration is a finite package and does not close APBRA-160 or APBRA-173."
+    },
+    {
+      "id": "apbra-173b-reconciliation",
+      "content_id": "6422580",
+      "version": 62,
+      "section": "20.05 - Post-Capstone Product Baseline Reconciliation Ledger",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/6422580",
+      "status": "ACCEPTED",
+      "acceptance": "The current merged PR #92 checkpoint and remaining MVP checklist are provenance, not a new main test or 173B implementation. Historical source rows and prior package gates remain unchanged."
+    },
+    {
+      "id": "apbra-173b-owner-architecture-acceptance",
+      "content_id": "APBRA-173",
+      "version": "Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100",
+      "section": "APBRA-173B owner architecture acceptance",
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10526",
+      "status": "ACCEPTED",
+      "acceptance": "Jira APBRA-173 comment 10526 records Haseeb's explicit 'Confirmed and approved' acceptance of the portable immutable same-origin 173B design, 10522 refinements, F1 clarification permitting required backend runtime code/resources inside the final image but never on public static routes, and the later 45-minute CI ceiling. Private content, secrets, unnecessary development/raw frontend source, fixtures and synthetic exclusion markers remain excluded as applicable. This records architecture and governance-registration authority only: finite registration must pass new exact-head hosted CI, fresh independent review, Haseeb manual merge and post-merge verification before product implementation. 173C package sequence remains separate."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
