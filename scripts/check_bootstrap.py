@@ -934,6 +934,51 @@ FOUNDRY_SCHEMA_GATE_SHA256 = {
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility'
 FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-registration'
 
+DEMO_UX_PATHS = {
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/tenant_settings.py',
+    'apps/api/tests/test_tenant_settings.py',
+    'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/api.ts',
+    'apps/web/src/api.test.ts',
+    'apps/web/src/privateCases.tsx',
+    'apps/web/src/privateCases.test.tsx',
+    'apps/web/src/durableConversation.tsx',
+    'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableGeneration.tsx',
+    'apps/web/src/durableGeneration.test.tsx',
+    'apps/web/src/style.css',
+    'apps/web/e2e/private-case.spec.ts',
+    'apps/web/e2e/tenant-settings.spec.ts',
+    'apps/web/e2e/durable-conversation.spec.ts',
+    'apps/web/e2e/protected-generation.spec.ts',
+}
+DEMO_UX_REGISTRATION_PATHS = {
+    'tasks/APBRA-160-demo-ux.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_demo_ux_scope.py',
+}
+DEMO_UX_TASK_SHA256 = 'fe5d42f016d45b7b3d6c28e8d22a1e5eac9a34bb78c8e4ea8255c58a56dc842a'
+DEMO_UX_SOURCES = (
+    ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
+    ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
+    ('apbra-160-screen-interactions', '4063368', 5, '3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f'),
+    ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
+)
+DEMO_UX_GATE_SHA256 = {
+    'requirements': 'b526c20de91793f2445dbf08662456a9a43c7e132d264a19dca0dfff9da6470b',
+    'adrs': '829f0ec019af037959fcd75b4ab36a0aef210c3ca0233bb8fe585f9c0e6d45f7',
+    'architecture_refs': 'e4f4631e93abe8fc0810d4018cedb1e6c1b859550b5ec012f572e599106f12cf',
+    'restricted_paths': '5e08560646f7a2eae391795146980a9e78dce061267819c5cc1cce77db7322d1',
+    'acceptance_criteria': '87512cc7f16138a8927d895c804c08abe7e4f753d52084e17301bd04382129b3',
+    'verification_required': '01f83052395918e4a7a086359bd87fb63f1fe7419b330b4d6077e84795af0ba1',
+    'out_of_scope': '1853d25d1985668fb9f9071ed783c45cdec09060ea280b2eaeee6d8f222bbc9e',
+    'escalate_when': '695898c7b675ee5d437c243855ff6576e06f8929cd872bb5ea5db9af8f87134f',
+    'dependencies': 'ea033f607dde2c609bb012fae8ea158e7f7dda299dab47d209fc58248421afd4',
+}
+DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
+DEMO_UX_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux-registration'
+
 # A separate, source-only APBRA-160 amendment. Historical APBRA-173B rows
 # remain bound to their original packaging authority.
 CURRENT_DEMO_SOURCE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-current-source-alignment'
@@ -2205,6 +2250,65 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 foundry_schema_task = None
+        demo_ux_task = None
+        demo_ux_path = root / 'tasks/APBRA-160-demo-ux.json'
+        if demo_ux_path.exists():
+            demo_ux_task = load_json(demo_ux_path)
+            extension_errors = schema_errors(
+                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                demo_ux_task,
+            )
+            if not extension_errors:
+                extension_errors += task_errors(demo_ux_task, catalog, sources)
+                canonical_task = json.dumps(
+                    demo_ux_task, sort_keys=True, separators=(',', ':'),
+                ).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != DEMO_UX_TASK_SHA256:
+                    extension_errors.append('APBRA-160 demo UX contract differs from accepted authority')
+                if (
+                    demo_ux_task['task_id'], demo_ux_task['assigned_agent'],
+                    demo_ux_task['agent_card_version'], demo_ux_task['branch'],
+                    demo_ux_task['base_commit'],
+                ) != (
+                    'APBRA-160', 'APBRA-DEVOPS', '0.1', DEMO_UX_BRANCH,
+                    '6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7',
+                ):
+                    extension_errors.append('Unexpected APBRA-160 demo UX identity, branch or base')
+                if (
+                    set(demo_ux_task['allowed_paths']) != DEMO_UX_PATHS
+                    or len(demo_ux_task['allowed_paths']) != len(DEMO_UX_PATHS)
+                    or any('*' in path for path in demo_ux_task['allowed_paths'])
+                ):
+                    extension_errors.append('Unexpected APBRA-160 demo UX implementation scope')
+                if (
+                    demo_ux_task['task_mode'], demo_ux_task['readiness'],
+                    demo_ux_task['owner_acceptance'],
+                ) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-160 demo UX requires issued implementation acceptance')
+                if demo_ux_task['source_ids'] != [row[0] for row in DEMO_UX_SOURCES]:
+                    extension_errors.append('APBRA-160 demo UX requires exact accepted sources')
+                for section, expected in DEMO_UX_GATE_SHA256.items():
+                    actual = json.dumps(
+                        demo_ux_task[section], sort_keys=True, separators=(',', ':'),
+                    ).encode()
+                    if hashlib.sha256(actual).hexdigest() != expected:
+                        extension_errors.append('APBRA-160 demo UX safety/review gate differs: ' + section)
+                for source_id, content_id, version, expected_sha in DEMO_UX_SOURCES:
+                    rows = [row for row in sources['sources'] if row.get('id') == source_id]
+                    if len(rows) != 1:
+                        extension_errors.append('APBRA-160 demo UX source missing or duplicated: ' + source_id)
+                    else:
+                        row = rows[0]
+                        actual = hashlib.sha256(json.dumps(
+                            row, sort_keys=True, separators=(',', ':'),
+                        ).encode()).hexdigest()
+                        if actual != expected_sha or (
+                            row.get('content_id'), row.get('version'), row.get('status')
+                        ) != (content_id, version, 'ACCEPTED'):
+                            extension_errors.append('APBRA-160 demo UX source differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                demo_ux_task = None
         private_content_storage_task = None
         private_content_storage_path = root / 'tasks/APBRA-173-private-content-storage.json'
         if private_content_storage_path.exists():
@@ -2634,6 +2738,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
             (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
             (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
+            (demo_ux_task, DEMO_UX_PATHS),
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
             (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
             (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
@@ -2646,7 +2751,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
-                else foundry_schema_task
+                else demo_ux_task if active_branch in {
+                    DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
+                } else foundry_schema_task
             )
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
@@ -2705,6 +2812,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
+                         active_branch == DEMO_UX_REGISTRATION_BRANCH and
+                         changed_paths == DEMO_UX_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-173' and
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
                          changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
@@ -2888,6 +2998,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == FOUNDRY_SCHEMA_BRANCH and
                     changed_paths.intersection(FOUNDRY_SCHEMA_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry implementation cannot change governance files')
+            if (active_task_id == 'APBRA-160' and
+                    changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
+                    changed_paths.intersection(DEMO_UX_PATHS)):
+                errors.append('APBRA-160 demo UX registration and implementation must remain separate')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == DEMO_UX_REGISTRATION_BRANCH and
+                    changed_paths != DEMO_UX_REGISTRATION_PATHS):
+                errors.append('APBRA-160 demo UX registration must change exactly three governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == DEMO_UX_BRANCH and
+                    changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS)):
+                errors.append('APBRA-160 demo UX implementation cannot change governance files')
             if (active_task_id == 'APBRA-173' and
                     active_branch in {PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH} and
                     changed_paths.intersection(PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
@@ -3051,6 +3173,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS and
                          name in FOUNDRY_SCHEMA_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == DEMO_UX_REGISTRATION_BRANCH and
+                         changed_paths == DEMO_UX_REGISTRATION_PATHS and
+                         name in DEMO_UX_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-173' and active_task is not None and
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
