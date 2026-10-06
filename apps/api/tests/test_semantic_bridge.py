@@ -335,3 +335,99 @@ def test_bridge_uses_exact_suggestion_identity_when_labels_repeat() -> None:
     assert second.session["currentInterpretation"]["coverageRequirements"][1]["fields"] == [
         "Second.Group"
     ]
+
+
+@pytest.mark.parametrize(
+    ("message", "reason"),
+    [
+        ("AI returned more questions than the configured per-round limit.",
+         "QUESTION_LIMIT_EXCEEDED"),
+        ("Analysis knowledge provenance is malformed.", "KNOWLEDGE_PROVENANCE_INVALID"),
+        (
+            "Ready for confirmation requires a supported interpretation with no unresolved "
+            "ambiguity in the deliverable scope.",
+            "CONFIRMATION_SCOPE_UNRESOLVED",
+        ),
+        ("Analysis history is malformed.", "ANALYSIS_HISTORY_INVALID"),
+        ("private-candidate=synthetic-secret", "SEMANTIC_RULE_UNCLASSIFIED"),
+        ("CLARIFICATION_STATE_INVALID: Analysis history is malformed. "
+         "private-candidate=synthetic-secret",
+         "SEMANTIC_RULE_UNCLASSIFIED"),
+    ],
+)
+def test_bridge_rejection_retains_only_curated_reason(
+    monkeypatch: pytest.MonkeyPatch, message: str, reason: str
+) -> None:
+    import subprocess
+
+    if reason != "SEMANTIC_RULE_UNCLASSIFIED":
+        message = "CLARIFICATION_STATE_INVALID: " + message
+    response = json.dumps({"ok": False, "error": {
+        "code": "SEMANTIC_VALIDATION_FAILED", "message": message,
+    }}).encode()
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs:
+                        subprocess.CompletedProcess([], 1, response, b""))
+    with pytest.raises(SemanticValidationFailed) as caught:
+        bridge()._call({"operation": "analysis"})
+    assert getattr(caught.value, "reason_code", None) == reason
+    assert "synthetic-secret" not in str(caught.value)
+    assert message not in str(caught.value)
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize(
+    ("returncode", "response", "reason"),
+    [
+        (1, b'{"ok":true,"value":{"session":{}}}', "BRIDGE_PROCESS_FAILED"),
+        (0, b'private-candidate=synthetic-secret', "BRIDGE_RESPONSE_INVALID"),
+        (1, b'private-candidate=synthetic-secret', "BRIDGE_PROCESS_FAILED"),
+        (0, b'{"ok":true,"value":[]}', "BRIDGE_VALUE_INVALID"),
+        (0, b'{"ok":true,"value":{}}', "BRIDGE_VALUE_INVALID"),
+        (0, b'{"ok":false,"error":{"code":"OTHER","message":'
+         b'"Analysis history is malformed."}}', "SEMANTIC_RULE_UNCLASSIFIED"),
+        (0, b'[]', "BRIDGE_RESPONSE_INVALID"),
+        (0, b'"synthetic-secret"', "BRIDGE_RESPONSE_INVALID"),
+        (0, b'\xff', "BRIDGE_RESPONSE_INVALID"),
+    ],
+)
+def test_bridge_protocol_failures_remain_rejected_and_redacted(
+    monkeypatch: pytest.MonkeyPatch, returncode: int, response: bytes, reason: str
+) -> None:
+    import subprocess
+    from datetime import UTC, datetime
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs:
+                        subprocess.CompletedProcess([], returncode, response, b""))
+    with pytest.raises(SemanticValidationFailed) as caught:
+        bridge().analysis(session_id="synthetic", original_request="synthetic",
+                          context_binding="synthetic", analysed_at=datetime.now(UTC),
+                          data_structure={}, analysis={}, limits={})
+    assert getattr(caught.value, "reason_code", None) == reason
+    assert "synthetic-secret" not in str(caught.value)
+    assert caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("kind", ["timeout", "process", "input_size", "output_size"])
+def test_bridge_transport_failures_have_constant_reasons(
+    monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    import subprocess
+
+    from apbra_api.semantic_bridge import MAX_BRIDGE_BYTES
+
+    def respond(*args: object, **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        if kind == "timeout":
+            raise subprocess.TimeoutExpired("synthetic-secret", 1, output=b"synthetic-secret")
+        if kind == "process":
+            raise OSError("synthetic-secret")
+        return subprocess.CompletedProcess([], 0, b"x" * (MAX_BRIDGE_BYTES + 1), b"")
+
+    monkeypatch.setattr(subprocess, "run", respond)
+    with pytest.raises(SemanticValidationFailed) as caught:
+        bridge()._call({"operation": "analysis", "synthetic":
+                        "x" * (MAX_BRIDGE_BYTES + 1) if kind == "input_size" else ""})
+    expected = {"timeout": "BRIDGE_TIMEOUT", "process": "BRIDGE_PROCESS_FAILED",
+                "input_size": "BRIDGE_INPUT_TOO_LARGE", "output_size": "BRIDGE_OUTPUT_TOO_LARGE"}
+    assert getattr(caught.value, "reason_code", None) == expected[kind]
+    assert "synthetic-secret" not in str(caught.value)
+    assert caught.value.__cause__ is None

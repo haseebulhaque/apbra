@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, select
 from apbra_api.api import create_app
 from apbra_api.auth_boundary import SESSION_COOKIE, digest
 from apbra_api.config import Settings
+from apbra_api.domain import SemanticValidationFailed
 from apbra_api.model_provider import (
     DeterministicFakeProvider,
     OpenAICompatibleProvider,
@@ -32,6 +33,7 @@ from apbra_api.persistence import (
     InterpretationRow,
     SessionRow,
 )
+from apbra_api.semantic_bridge import SemanticBridge
 
 
 def create_case(client: TestClient, session: dict[str, object]) -> dict[str, object]:
@@ -291,13 +293,37 @@ def test_failed_provider_attempt_has_durable_safe_observation(
     assert "server-secret" not in audit[0].details_json
 
 
+@pytest.mark.parametrize(
+    ("failure_kind", "reason"),
+    [
+        ("negative_minimum", "SEMANTIC_RULE_UNCLASSIFIED"),
+        ("unresolved_scope", "CONFIRMATION_SCOPE_UNRESOLVED"),
+        ("invented_field", "SEMANTIC_RULE_UNCLASSIFIED"),
+        ("unknown_error", "SEMANTIC_RULE_UNCLASSIFIED"),
+        ("tampered_reason", "SEMANTIC_RULE_UNCLASSIFIED"),
+    ],
+)
 def test_semantic_rejection_records_observed_usage_without_accepting_interpretation(
-    settings: Settings, database: Database
+    settings: Settings, database: Database, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture, failure_kind: str, reason: str,
 ) -> None:
     invalid = provider_analysis(ready=True)
     interpretation = cast(dict[str, object], invalid["interpretation"])
     coverage = cast(list[dict[str, object]], interpretation["coverageRequirements"])
-    coverage[0]["minimumRepresentations"] = -1
+    if failure_kind == "negative_minimum":
+        coverage[0]["minimumRepresentations"] = -1
+    elif failure_kind == "unresolved_scope":
+        interpretation["ambiguities"] = ["synthetic-private-canary"]
+    elif failure_kind == "invented_field":
+        measures = cast(list[dict[str, object]], coverage[0]["measures"])
+        measures[0]["field"] = "Synthetic.Unknown"
+    else:
+        def reject(*args: object, **kwargs: object) -> object:
+            error = SemanticValidationFailed("synthetic-private-canary")
+            if failure_kind == "tampered_reason":
+                error.reason_code = "synthetic-private-canary"  # type: ignore[attr-defined]
+            raise error
+        monkeypatch.setattr(SemanticBridge, "analysis", reject)
     provider = DeterministicFakeProvider(provider_profile(), [invalid])
     with TestClient(
         create_app(settings=settings, database=database, model_provider=provider)
@@ -326,7 +352,18 @@ def test_semantic_rejection_records_observed_usage_without_accepting_interpretat
     assert len(audit) == 1
     details = json.loads(audit[0].details_json)
     assert details["stage"] == "SEMANTIC_VALIDATION"
+    assert details["semantic_reason"] == reason
     assert details["call_count"] == 1
+    assert "synthetic-private-canary" not in audit[0].details_json
+    assert "synthetic-private-canary" not in failed.text
+    assert "synthetic-private-canary" not in caplog.text
+    with database.session() as db:
+        assert db.scalar(select(func.count()).select_from(InterpretationRow).where(
+            InterpretationRow.case_id == UUID(str(case["id"]))
+        )) == 0
+        assert db.scalar(select(func.count()).select_from(EvidenceRow).where(
+            EvidenceRow.case_id == UUID(str(case["id"]))
+        )) == 1
     assert details["usage"] == {
         "prompt_tokens": 10,
         "completion_tokens": 20,

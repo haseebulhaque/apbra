@@ -56,7 +56,7 @@ from .model_provider import (
     ProviderResult,
     requirement_analysis_schema,
 )
-from .semantic_bridge import SemanticBridge
+from .semantic_bridge import SemanticBridge, SemanticBridgeFailure, safe_semantic_reason
 from .tenant_settings import (
     TenantSettingsSnapshot,
     interpretation_material_digest,
@@ -84,6 +84,7 @@ class AnalysisAttemptFailed(IntelligentAnalysisUnavailable):
         stage: str,
         error_code: str,
         observation: ProviderExecutionObservation | None,
+        semantic_reason: object = None,
     ) -> None:
         super().__init__()
         safe_code = (
@@ -113,6 +114,8 @@ class AnalysisAttemptFailed(IntelligentAnalysisUnavailable):
             ),
             "usage": usage,
         }
+        if stage == "SEMANTIC_VALIDATION":
+            self.audit_details["semantic_reason"] = safe_semantic_reason(semantic_reason)
 
 
 def canonical_payload(payload: dict[str, Any]) -> str:
@@ -1257,7 +1260,8 @@ class AcceptanceService:
                     "SEMANTIC_VALIDATION",
                     "SEMANTIC_VALIDATION_FAILED",
                     result.observation if result is not None else None,
-                ) from exc
+                    getattr(exc, "reason_code", None),
+                ) from None
         elif self.allow_test_simulator:
             session = self.bridge.simulate(
                 session_id=f"case-{case.id}-context-{case.semantic_context_version}",
@@ -1269,16 +1273,18 @@ class AcceptanceService:
         else:
             raise IntelligentAnalysisUnavailable()
 
-        def semantic_error() -> SemanticValidationFailed | AnalysisAttemptFailed:
+        def semantic_error(
+            reason: object = None,
+        ) -> SemanticValidationFailed | AnalysisAttemptFailed:
             if result is not None:
                 return AnalysisAttemptFailed(
-                    "SEMANTIC_VALIDATION", "SEMANTIC_VALIDATION_FAILED", result.observation
+                    "SEMANTIC_VALIDATION", "SEMANTIC_VALIDATION_FAILED", result.observation, reason
                 )
-            return SemanticValidationFailed()
+            return SemanticBridgeFailure(reason)
 
         state = session.get("state")
         if state not in {"NEEDS_CLARIFICATION", "READY_FOR_CONFIRMATION"}:
-            raise semantic_error()
+            raise semantic_error("ANALYSIS_STATE_UNSUPPORTED")
         if self.tenant_settings is not None:
             cycles = store.clarification_cycles(case_id)
             current_cycle = cycles[-1]
@@ -1292,20 +1298,20 @@ class AcceptanceService:
                     or sum(item.rounds_used for item in cycles)
                     >= self.tenant_settings.settings.max_clarification_rounds_overall
                 ):
-                    raise semantic_error()
+                    raise semantic_error("CLARIFICATION_BUDGET_EXCEEDED")
                 current_cycle.rounds_used += 1
         confirmation_summary: dict[str, Any]
         if state == "READY_FOR_CONFIRMATION":
             try:
                 readiness = self.bridge.readiness(session, schema)
             except SemanticValidationFailed as exc:
-                raise semantic_error() from exc
+                raise semantic_error(getattr(exc, "reason_code", None)) from None
             confirmation_summary = readiness.confirmation_summary
             readiness_digest = sha256_text(readiness.readiness_binding)
         else:
             raw_summary = session.get("confirmationSummary")
             if not isinstance(raw_summary, dict):
-                raise semantic_error()
+                raise semantic_error("BRIDGE_VALUE_INVALID")
             confirmation_summary = raw_summary
             readiness_digest = sha256_text("")
         row = store.add_interpretation(
