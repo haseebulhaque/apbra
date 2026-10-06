@@ -654,8 +654,80 @@
       "url": "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10526",
       "status": "ACCEPTED",
       "acceptance": "Jira APBRA-173 comment 10526 records Haseeb's explicit 'Confirmed and approved' acceptance of the portable immutable same-origin 173B design, 10522 refinements, F1 clarification permitting required backend runtime code/resources inside the final image but never on public static routes, and the later 45-minute CI ceiling. Private content, secrets, unnecessary development/raw frontend source, fixtures and synthetic exclusion markers remain excluded as applicable. This records architecture and governance-registration authority only: finite registration must pass new exact-head hosted CI, fresh independent review, Haseeb manual merge and post-merge verification before product implementation. 173C package sequence remains separate."
+    },
+    {
+      "id": "apbra-160-current-six-stage-direction",
+      "content_id": "8519682",
+      "version": 26,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for the APBRA-160 local-demo understanding contract and current-state documentation alignment: Current six-stage local-demo direction, failed real Understanding checkpoint, provider-versus-code authority and paused hosted 173B-F sequence. Section 10 preserves the separately approved ACA Consumption/Job reference direction without claiming deployment approval or runtime qualification. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-current-model-led-delivery",
+      "content_id": "9404417",
+      "version": 7,
+      "section": "03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for the APBRA-160 local-demo understanding contract and current-state documentation alignment: Current model-led optional clarification, exact-version acceptance, scoped supported generation, Delivery Guide and Tenant Settings control-plane direction. Requested section-scoped administration saves are future work, not implemented evidence. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-historical-business-shell",
+      "content_id": "8388610",
+      "version": 2,
+      "section": "03.07 - Business-Friendly UX & Application Shell — Governed Package",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8388610",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Historical APBRA-169 shell package remains historical; its earlier stage count is not the current six-stage acceptance target. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-conversational-ux-history",
+      "content_id": "3932422",
+      "version": 8,
+      "section": "03.03 - Conversational UX & Clarification Design",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932422",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Earlier conversational and blocking-question language is read with the current 03.08 optional-clarification contract; historical reviewer/release distinctions remain. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-future-native-platform",
+      "content_id": "7864321",
+      "version": 2,
+      "section": "03.06 - Native Reporting Platform, Live Canvas & UI Themes",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/7864321",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: ARD, Live Canvas and full selectable themes remain separately governed future capabilities outside current MVP implementation; no present support is claimed. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-use-cases-acceptance",
+      "content_id": "3932402",
+      "version": 5,
+      "section": "03.02 - Use Cases, User Stories & Acceptance Criteria",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932402",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Current business-user requirement and acceptance context for local real-provider journey documentation; no deterministic test is relabelled as live or hosted acceptance. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-screen-interactions",
+      "content_id": "4063368",
+      "version": 5,
+      "section": "03.04 - Screen, Form & Interaction Specifications",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063368",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Current screen and interaction context informs truthful six-stage and role-aware navigation documentation; requested refinements are not marked implemented. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-reviewer-administration",
+      "content_id": "4063388",
+      "version": 6,
+      "section": "03.05 - Approval, Reviewer & Administration UX",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063388",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Reviewer, release and administration controls remain distinct from normal generation; requested separated settings sections and scoped saves require later finite implementation authority. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
     }
   ],
-  "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. The new solo-owner source was verified in this change; other source versions retain their earlier read baseline.",
+  "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. Historical source bindings retain their earlier read baselines; the appended APBRA-160 current-source bindings were verified for this amendment.",
   "approval_note": "Solo-owner/public GitHub governance was explicitly accepted. Proposed product source pages are not silently relabelled Accepted; reconcile their acceptance separately before application dispatch."
 }
