@@ -114,6 +114,29 @@ class FoundrySchemaScopeTests(unittest.TestCase):
                     self.assertTrue(errors)
             (root / self.task_path).write_text(json.dumps(self.task))
 
+    def test_current_apbra160_source_binding_cannot_revert_to_hosting_sources(self):
+        self.assertEqual(self.task["source_ids"], [
+            "apbra-160-current-six-stage-direction",
+            "apbra-160-current-model-led-delivery",
+        ])
+        self.assertEqual([row[2] for row in c.FOUNDRY_SCHEMA_SOURCES], [26, 7])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for source_ids in (
+                ["apbra-173b-preview-direction", "apbra-173b-mvp-scope", "apbra-173b-traceability"],
+                ["apbra-160-current-six-stage-direction"],
+                self.task["source_ids"] + ["apbra-173b-preview-direction"],
+            ):
+                with self.subTest(source_ids=source_ids):
+                    changed = copy.deepcopy(self.task)
+                    changed["source_ids"] = source_ids
+                    (root / self.task_path).write_text(json.dumps(changed))
+                    with patch.object(c, "FOUNDRY_SCHEMA_TASK_SHA256", digest(changed)):
+                        errors = self.check(root, c.FOUNDRY_SCHEMA_REGISTRATION_PATHS,
+                                            c.FOUNDRY_SCHEMA_REGISTRATION_BRANCH)
+                    self.assertIn("APBRA-160 Foundry requires exact accepted sources", errors)
+
     def test_safety_gate_mutations_fail_with_recomputed_task_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

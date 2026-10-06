@@ -915,25 +915,46 @@ FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_foundry_schema_scope.py',
 }
-FOUNDRY_SCHEMA_TASK_SHA256 = '1416b4a8ad1e46d8bca03296ba97c6f877649a3790c13f68ed4272b76a4afd70'
+FOUNDRY_SCHEMA_TASK_SHA256 = '3411145b6a43e1cd4178f0d549581a6b49b41f7a5f0277e874bbce612528fc07'
 FOUNDRY_SCHEMA_SOURCES = (
-    ('apbra-173b-preview-direction', '8519682', 23, '8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
-    ('apbra-173b-mvp-scope', '4063307', 14, '3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
-    ('apbra-173b-traceability', '3932382', 18, '52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
+    ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
+    ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
 )
 FOUNDRY_SCHEMA_GATE_SHA256 = {
-    'requirements': '2d77c4a240cfdfe4213a3d63e8410e81581cb499e8c7f27bf4ac549a528e7403',
+    'requirements': '623f32a2219da8177fe61c21e1e518f1efc5787f55f530dd907e98e3d1d06750',
     'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
-    'architecture_refs': 'f079f6c0d5d2711fb418ee251554ae40d38adbde0fd4f52f6d97712f62ca8f90',
+    'architecture_refs': '1cb1e8d337006609673327f8947adba78c2e4245f1653bfa4fe5305f41985028',
     'restricted_paths': '859a559592e1c0f20ddb5c3582565876e61b8f6f016e17a14e3849c5b0e7800c',
     'acceptance_criteria': '6e8f8f8a6ad66f4f8661aa439229b359019f4ddc464f22fe1473cd0334001225',
     'verification_required': 'a78f80a92af200d70214e6d8ec7f6a63a1a108eaea00847270d756e8ee16d229',
     'out_of_scope': 'c45d9cd9e216718002056864f3f5b4151c8a6e70385e00b3d89a538a1a4ce1b6',
     'escalate_when': 'f050ebaabda76a3463ee524e3a34765c250edfb518b7fcb0e046aa147de8f31c',
-    'dependencies': '5fdc0382c536c4e5a4b52ddb5ffe7c446a1477661cb7659baee69d46a27db93f',
+    'dependencies': '7d8f16e2faf4f4b25934f5bcc4933c27ce2464053a711758e2161280fd9e63f3',
 }
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility'
 FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-registration'
+
+# A separate, source-only APBRA-160 amendment. Historical APBRA-173B rows
+# remain bound to their original packaging authority.
+CURRENT_DEMO_SOURCE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-current-source-alignment'
+CURRENT_DEMO_SOURCE_PATHS = {
+    'docs/source-register.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_hosted_web_release_scope.py',
+    'tests/bootstrap/test_current_demo_source_alignment_scope.py',
+}
+CURRENT_DEMO_HISTORICAL_SOURCE_COUNT = 74
+CURRENT_DEMO_HISTORICAL_SOURCES_SHA256 = '1f1ecb0729abfc6b76671b621208a6c60370a838f91a67050faa7e3c0b51fa4b'
+CURRENT_DEMO_SOURCES = (
+    ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
+    ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
+    ('apbra-160-historical-business-shell', '8388610', 2, 'b44375446b2ce03e03c22136aa0cd74938253a88ab0c27cb7bbac89fc6ea4304'),
+    ('apbra-160-conversational-ux-history', '3932422', 8, 'c3eaabbceee9fa5f3f1f4cd18bfb4fe0f6a63a6b447731d920cac35bcbc6174a'),
+    ('apbra-160-future-native-platform', '7864321', 2, '10502b3d6cf59134982ec231ed0081aaac7a6c8a1cd070bdd3f969d366494444'),
+    ('apbra-160-use-cases-acceptance', '3932402', 5, '3faf1efa272470e3771f72f65d7a47e9d5026e12d31a689c19378f3ac9e644d5'),
+    ('apbra-160-screen-interactions', '4063368', 5, '3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f'),
+    ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
+)
 
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
@@ -1170,6 +1191,31 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             return errors, {}
         errors += catalog_errors(catalog)
         errors += task_errors(task, catalog, sources)
+        current_rows = sources['sources']
+        if hashlib.sha256(json.dumps(
+            current_rows[:CURRENT_DEMO_HISTORICAL_SOURCE_COUNT],
+            sort_keys=True, separators=(',', ':'),
+        ).encode()).hexdigest() != CURRENT_DEMO_HISTORICAL_SOURCES_SHA256:
+            errors.append('APBRA-160 current-demo historical source provenance changed')
+        appended_rows = current_rows[CURRENT_DEMO_HISTORICAL_SOURCE_COUNT:]
+        if (len(appended_rows) != len(CURRENT_DEMO_SOURCES) or
+                [row.get('id') for row in appended_rows] !=
+                [row[0] for row in CURRENT_DEMO_SOURCES]):
+            errors.append('APBRA-160 current-demo source block is not exact and append-only')
+        for source_id, content_id, version, expected_sha in CURRENT_DEMO_SOURCES:
+            matches = [row for row in current_rows if row.get('id') == source_id]
+            if len(matches) != 1:
+                errors.append('APBRA-160 current-demo source missing or duplicated: ' + source_id)
+                continue
+            row = matches[0]
+            if (row.get('content_id'), row.get('version'), row.get('status')) != (
+                content_id, version, 'ACCEPTED',
+            ):
+                errors.append('APBRA-160 current-demo source binding differs: ' + source_id)
+            if hashlib.sha256(json.dumps(
+                row, sort_keys=True, separators=(',', ':'),
+            ).encode()).hexdigest() != expected_sha:
+                errors.append('APBRA-160 current-demo source differs from provenance: ' + source_id)
         workflow_path = root / '.github/workflows/bootstrap.yml'
         workflow_bytes = workflow_path.read_bytes()
         historical_capacity_fixture = (
@@ -2218,7 +2264,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
                         + len(PRIVATE_CONTENT_STORAGE_SOURCES):
                     ]
-                    expected_later = CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES
+                    expected_later = (
+                        CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES +
+                        CURRENT_DEMO_SOURCES
+                    )
                     if (
                         len(later_rows) != len(expected_later)
                         or any(
@@ -2329,13 +2378,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         + len(CURRENT_STATE_DOCS_SOURCES):
                     ]
                     if (
-                        len(later_rows) != len(HOSTED_WEB_RELEASE_SOURCES)
+                        len(later_rows) != len(HOSTED_WEB_RELEASE_SOURCES + CURRENT_DEMO_SOURCES)
                         or any(
                             (row.get('id'), hashlib.sha256(json.dumps(
                                 row, sort_keys=True, separators=(',', ':'),
                             ).encode()).hexdigest()) != (source_id, expected_sha)
                             for row, (source_id, _content_id, _version, expected_sha)
-                            in zip(later_rows, HOSTED_WEB_RELEASE_SOURCES)
+                            in zip(later_rows, HOSTED_WEB_RELEASE_SOURCES + CURRENT_DEMO_SOURCES)
                         )
                     ):
                         extension_errors.append('APBRA-177 registration added unrelated source rows')
@@ -2410,9 +2459,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 ]
                 if [row.get('id') for row in registered_rows] != [row[0] for row in HOSTED_WEB_RELEASE_SOURCES]:
                     extension_errors.append('APBRA-173B source ordering differs')
-                if (active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH
-                        and len(source_rows) != HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES)):
-                    extension_errors.append('APBRA-173B registration added unrelated source rows')
+                if active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH:
+                    later_rows = source_rows[
+                        HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES):
+                    ]
+                    if (len(later_rows) != len(CURRENT_DEMO_SOURCES) or any(
+                        (row.get('id'), hashlib.sha256(json.dumps(
+                            row, sort_keys=True, separators=(',', ':'),
+                        ).encode()).hexdigest()) != (source_id, expected_sha)
+                        for row, (source_id, _content_id, _version, expected_sha)
+                        in zip(later_rows, CURRENT_DEMO_SOURCES)
+                    )):
+                        extension_errors.append('APBRA-173B registration added unrelated source rows')
                 for section, expected in HOSTED_WEB_RELEASE_GATE_SHA256.items():
                     actual = hashlib.sha256(json.dumps(
                         hosted_web_release_task[section], sort_keys=True, separators=(',', ':'),
@@ -2577,7 +2635,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                             legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
         if active_task_id == 'APBRA-160':
-            registered_tasks['APBRA-160'] = foundry_schema_task
+            registered_tasks['APBRA-160'] = (
+                task if active_branch == CURRENT_DEMO_SOURCE_BRANCH
+                else foundry_schema_task
+            )
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
                 private_content_storage_task if active_branch in {
@@ -2652,9 +2713,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS) and
                     not (active_task_id == 'APBRA-151' and
                          active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS)):
+                         changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
+                         active_branch == CURRENT_DEMO_SOURCE_BRANCH and
+                         changed_paths == CURRENT_DEMO_SOURCE_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == CURRENT_DEMO_SOURCE_BRANCH and
+                    changed_paths != CURRENT_DEMO_SOURCE_PATHS):
+                errors.append('APBRA-160 current-source amendment must change exactly four governance files')
             if (active_task_id == 'APBRA-148' and
                     changed_paths.intersection(POST_CAPSTONE_PRODUCT_RECONCILIATION_REGISTRATION_PATHS) and
                     changed_paths.intersection(POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS)):
@@ -3002,6 +3070,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
                          changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS and
                          name in COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == CURRENT_DEMO_SOURCE_BRANCH and
+                         changed_paths == CURRENT_DEMO_SOURCE_PATHS and
+                         name in CURRENT_DEMO_SOURCE_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)

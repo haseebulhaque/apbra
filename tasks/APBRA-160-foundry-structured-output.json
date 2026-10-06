@@ -9,6 +9,7 @@
   "risk_class": "R4",
   "objective": "Register a bounded offline-first correction of the existing Foundry strict structured-output transport schemas and safe failed-interpretation diagnostics for the saved retail report; this registration changes no product code.",
   "requirements": [
+    "Current accepted APBRA-160 03.07 v26 and 03.08 v7 govern the six-stage local demo and model-led Understanding contract. This bounded repair must preserve qualified-model interpretation, zero or optional model-authored questions, exact-version user confirmation and server-authoritative validation; historical APBRA-173B packaging sources are not authority for this model-provider repair.",
     "APBRA-160 Jira comment 10540 records one failed real Understanding attempt on saved case d0bd52ea-7d5a-4ab5-b10d-0fd6baeae805 and an offline schema incompatibility. The exact cause and billable usage of that attempt remain unknown; preserve its complete request, evidence, history and protected credential.",
     "Provider-facing requirement_analysis_schema and report_design_schema must conform to the documented Microsoft Foundry strict structured-output subset, including object nesting, property limits, required/additionalProperties form and unsupported numeric/array keywords. Run a deterministic schema-profile check on exact emitted wire schemas before any paid request.",
     "The legacy interpretation.clarifications transport shape is instructed to be empty; narrowing only that unused transport branch must not delete accepted interpretation meaning or bypass the bridge's rejection of nonempty legacy clarifications. Iterative questions remain top-level.",
@@ -24,7 +25,7 @@
     "Registration, implementation, independent exact-head review, hosted CI and Haseeb manual merge are separate gates."
   ],
   "architecture_refs": [
-    "Confluence 03.07 page 8519682 v23, 01.10 page 4063307 v14 and 02.06 page 3932382 v18 refreshed 2026-10-06; accepted source rows are bound below.",
+    "Current accepted APBRA-160 Confluence 03.07 page 8519682 v26 and 03.08 page 9404417 v7 were refreshed on 2026-10-06; their exact append-only source rows are bound below. Earlier 01.10 v14 and 02.06 v18 provide contextual MVP/traceability evidence, not this repair's source authority.",
     "Jira APBRA-160 comment 10540 is the incident record; PLAN comment 10541 identifies Codex as actual actor and the governance-only scope. Haseeb's direct instruction permits continued work inside the A$10 total ceiling, not unbounded paid calls.",
     "Microsoft Learn Structured outputs, https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/structured-outputs, checked 2026-10-06; current code audit found six object levels and unsupported minimum/maxItems wire keywords."
   ],
@@ -72,10 +73,11 @@
   "human_initiator": "Haseeb Ul Haque",
   "base_commit": "f9db07cd7bc16311caf0ce316aa404018348c382",
   "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility",
-  "source_ids": ["apbra-173b-preview-direction", "apbra-173b-mvp-scope", "apbra-173b-traceability"],
+  "source_ids": ["apbra-160-current-six-stage-direction", "apbra-160-current-model-led-delivery"],
   "owner_acceptance": "RECORDED",
   "effective_release": "Bounded implementation authority only after this governance PR passes exact-head hosted CI and independent review, Haseeb manually merges it, and post-merge main is verified",
   "dependencies": [
+    "APBRA-160 current-source amendment PR #96 was independently reviewed, passed hosted CI and was merged at 0267025789809cbdf83dabc04d52e8b74c979e4e before this registration's source bindings were updated. The historical 74 source rows remain unchanged and the two current APBRA-160 rows are exact version/hash bound.",
     "APBRA-160 10540 and PLAN 10541; registration PR is governance-only and remains unmerged until hosted CI, genuinely separate exact-head review and Haseeb manual merge.",
     "No APBRA-160 product edit before verified post-registration main. PR #94 and deployment remain paused; the saved retail case and isolated preview data remain intact.",
     "The A$10 total ceiling includes the prior unknown usage. Any later paid retry requires a conservative evidenced remaining budget and explicit qualified configuration; registration alone does not open that gate."

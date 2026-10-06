@@ -66,8 +66,8 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
         self.assertEqual(self.task["source_ids"], [row[0] for row in c.HOSTED_WEB_RELEASE_SOURCES])
         self.assertEqual(digest(self.sources["sources"][:66]),
                          c.HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256)
-        self.assertEqual(len(self.sources["sources"]), 66 + len(c.HOSTED_WEB_RELEASE_SOURCES))
-        self.assertEqual([row["id"] for row in self.sources["sources"][66:]],
+        registered = self.sources["sources"][66:66 + len(c.HOSTED_WEB_RELEASE_SOURCES)]
+        self.assertEqual([row["id"] for row in registered],
                          self.task["source_ids"])
         for sid, cid, version, expected_hash in c.HOSTED_WEB_RELEASE_SOURCES:
             matches = [row for row in self.sources["sources"] if row["id"] == sid]
@@ -75,7 +75,7 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
             self.assertEqual((matches[0]["content_id"], matches[0]["version"],
                               matches[0]["status"]), (cid, version, "ACCEPTED"))
             self.assertEqual(digest(matches[0]), expected_hash)
-        owner_row = self.sources["sources"][-1]
+        owner_row = registered[-1]
         self.assertEqual(owner_row["id"], "apbra-173b-owner-architecture-acceptance")
         self.assertEqual(owner_row["url"],
                          "https://arkitektz.atlassian.net/browse/APBRA-173?focusedCommentId=10526")
@@ -194,13 +194,14 @@ class HostedWebReleaseScopeTests(unittest.TestCase):
             changed["sources"][66]["acceptance"] += " altered"
             cases.append((changed, "APBRA-173B source differs from provenance"))
             changed = copy.deepcopy(original)
-            changed["sources"][-1]["url"] = "https://arkitektz.atlassian.net/browse/APBRA-173"
+            owner_index = 66 + len(c.HOSTED_WEB_RELEASE_SOURCES) - 1
+            changed["sources"][owner_index]["url"] = "https://arkitektz.atlassian.net/browse/APBRA-173"
             cases.append((changed, "APBRA-173B source differs from provenance"))
             changed = copy.deepcopy(original)
-            changed["sources"][-1]["acceptance"] = "Controller recommendation 10522 is accepted."
+            changed["sources"][owner_index]["acceptance"] = "Controller recommendation 10522 is accepted."
             cases.append((changed, "APBRA-173B source differs from provenance"))
             changed = copy.deepcopy(original)
-            changed["sources"].append(copy.deepcopy(changed["sources"][-1]))
+            changed["sources"].append(copy.deepcopy(changed["sources"][owner_index]))
             cases.append((changed, "APBRA-173B registration added unrelated source rows"))
             for changed, expected in cases:
                 with self.subTest(expected=expected):
