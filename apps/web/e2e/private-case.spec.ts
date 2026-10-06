@@ -8,7 +8,7 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
   await signIn(page,'member');
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await expect(page.locator('main').getByRole('button',{name:'Create report'})).toHaveCount(1);
   await page.getByRole('button',{name:'Create report'}).first().click();
 
@@ -19,7 +19,7 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await expect(page.getByRole('heading',{name:'Compare synthetic distribution performance by depot and month'})).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await expect(page.getByLabel('Current business request')).toHaveValue(request);
 
@@ -83,7 +83,7 @@ test('stale edits are rejected through the UI and reload recovers the current ve
 
 test('an expired application session is reported truthfully by the protected UI handler',async({page,context})=>{
   await signIn(page,'owner');
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await page.getByRole('button',{name:'Create report'}).first().click();
 
   const sessionControl=await context.newPage();
@@ -100,7 +100,8 @@ test('an expired application session is reported truthfully by the protected UI 
 test('an invited identity accepts the exact single-use invitation through OIDC and the UI',async({page,browser})=>{
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Create report'}).first().click();
-  await page.getByText('Manage company access').click();
+  await page.getByRole('button',{name:'Administration'}).click();
+    await page.getByText('Manage company access').click();
   await page.getByLabel('External subject').fill('dev-uninvited');
   await page.getByLabel('Application role').selectOption('EXPERT');
   await page.getByRole('button',{name:'Issue invitation'}).click();
@@ -118,7 +119,7 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await expect(inviteePage.getByRole('heading',{name:'Accept your invitation'})).toBeVisible();
   await inviteePage.getByRole('button',{name:'Accept invitation'}).click();
   await expect(inviteePage.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
-  await expect(inviteePage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(inviteePage.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await inviteeContext.close();
 });
 
@@ -140,13 +141,14 @@ test('an uninvited identity creates one company with owner and approved settings
   await page.getByRole('button',{name:'Create Company / Workspace'}).click();
   await expect(page.getByRole('alert')).toContainText('Company creation could not be completed. Please try again.');
   await page.getByRole('button',{name:'Create Company / Workspace'}).click();
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await expect(page.locator('.account-controls')).toContainText('company owner');
   const settings=await page.evaluate(async()=>{const response=await fetch('/api/tenant-settings',{credentials:'same-origin'});return{status:response.status,body:await response.json()}});
   expect(settings.status).toBe(200);
   expect(settings.body).toMatchObject({version:1,validation_status:'PASS',settings:{automatic_generation_enabled:false,provider_profile:null,generation_policy:{organisation:{name,displayName:name}}}});
   await page.reload();
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
+  await page.getByRole('button',{name:'Administration'}).click();
   await page.getByText('My profile').click();
   await page.locator('.profile-editor').getByLabel('Display name').fill('Casey Creator');
   await page.getByRole('button',{name:'Save profile'}).click();
@@ -163,12 +165,12 @@ test('an uninvited identity creates one company with owner and approved settings
 
 test('an existing company member accepts a second exact invitation and selects each company on fresh sign-in',async({page,browser})=>{
   await signIn(page,'creator');
-  await expect(page.getByRole('heading',{name:/Create Company \/ Workspace|Clarity starts with a question\./})).toBeVisible();
+  await expect(page.getByRole('heading',{name:/Create Company \/ Workspace|Your reports/})).toBeVisible();
   if(await page.getByRole('heading',{name:'Create Company / Workspace'}).isVisible()){
     await page.getByLabel('Company or workspace name').fill('Creator Invitation Preview Workspace');
     await page.getByRole('button',{name:'Create Company / Workspace'}).click();
   }
-  await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   const originalSession=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string;role:string}});
   expect(originalSession.actor.role).toBe('COMPANY_OWNER');
 
@@ -188,9 +190,10 @@ test('an existing company member accepts a second exact invitation and selects e
   try{
     const inviterPage=await inviterContext.newPage();
     await signIn(inviterPage,'foreign');
-    await expect(inviterPage.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    await expect(inviterPage.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const targetSession=await inviterPage.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
     expect(targetSession.actor.company_id).not.toBe(originalSession.actor.company_id);
+    await inviterPage.getByRole('button',{name:'Administration'}).click();
     await inviterPage.getByText('Manage company access').click();
     await inviterPage.getByLabel('External subject').fill('dev-creator');
     await inviterPage.getByLabel('Application role').selectOption('MEMBER');
@@ -211,7 +214,7 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
     await page.reload();
-    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const refreshed=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
     expect(refreshed.actor.company_id).toBe(targetSession.actor.company_id);
 
@@ -228,7 +231,7 @@ test('an existing company member accepts a second exact invitation and selects e
     expect(target).toBeTruthy();
     expect(fresh.available_companies).toHaveLength(2);
     await page.locator('.company-selection button').filter({hasText:original!.name}).click();
-    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedOriginal=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedOriginal.actor.membership_id).toBe(originalSession.actor.membership_id);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
@@ -238,7 +241,7 @@ test('an existing company member accepts a second exact invitation and selects e
     await signIn(page,'creator');
     await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
     await page.locator('.company-selection button').filter({hasText:target!.name}).click();
-    await expect(page.getByRole('heading',{name:'Clarity starts with a question.'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedTarget=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedTarget.actor.membership_id).toBe(accepted.actor.membership_id);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
@@ -248,7 +251,8 @@ test('an existing company member accepts a second exact invitation and selects e
 
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
   await signIn(page,'owner');
-  await page.getByText('Manage company access').click();
+  await page.getByRole('button',{name:'Administration'}).click();
+    await page.getByText('Manage company access').click();
   const owner=page.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
   const member=page.locator('.invitation-admin .membership-list li').filter({hasText:'Morgan Member'});
   await expect(owner.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
@@ -260,7 +264,8 @@ test('company role controls protect the owner while allowing a bounded member-ad
     const adminContext=await browser.newContext(),adminPage=await adminContext.newPage();
     try{
       await signIn(adminPage,'member');
-      await adminPage.getByText('Manage company access').click();
+      await adminPage.getByRole('button',{name:'Administration'}).click();
+    await adminPage.getByText('Manage company access').click();
       const ownerAsAdmin=adminPage.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
       await expect(ownerAsAdmin.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
       const ownerId=await page.evaluate(async()=>{const response=await fetch('/api/memberships',{credentials:'same-origin'}),body=await response.json() as {items:Array<{id:string;role:string}>};return body.items.find(item=>item.role==='COMPANY_OWNER')?.id});

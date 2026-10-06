@@ -1,5 +1,6 @@
 import {expect,test,type Page} from '@playwright/test';
-import {chmodSync,readFileSync} from 'node:fs';
+import {chmodSync,existsSync,readFileSync,statSync} from 'node:fs';
+import {join} from 'node:path';
 
 async function signIn(page:Page,identity:'owner'|'uninvited'|'foreign'='owner'){
   await page.goto('/');
@@ -37,7 +38,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const clarification=page.getByText('Clarification required',{exact:true});
   if(await clarification.isVisible())await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmationResponse=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Accept & Generate'}).click();
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('confirmed-understanding.png'),fullPage:true});
@@ -51,6 +52,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'});
   await expect(invitationRequired.or(expert.locator('.account-controls').getByText('expert',{exact:true}))).toBeVisible();
   if(await invitationRequired.isVisible()){
+    await page.getByRole('button',{name:'Administration'}).click();
     await page.getByText('Manage company access').click();
     await page.getByLabel('External subject').fill('dev-uninvited');
     await page.getByLabel('Application role').selectOption('EXPERT');
@@ -81,12 +83,21 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('reviewed-build-readiness.png'),fullPage:true});
 
   const artifactRoot='/tmp/apbra-164-e2e-artifacts';
+  const actor=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
+  const reports=await page.evaluate(async()=>await (await fetch('/api/cases',{credentials:'same-origin'})).json() as {items:Array<{id:string;current_request:{request_text:string}}>});
+  const caseId=reports.items.find(item=>item.current_request.request_text===request)?.id;
+  expect(caseId).toBeTruthy();
+  const companyRoot=join(artifactRoot,actor.actor.company_id),caseRoot=join(companyRoot,caseId!);
+  const blockedRoot=existsSync(caseRoot)?caseRoot:existsSync(companyRoot)?companyRoot:artifactRoot;
+  const previousMode=statSync(blockedRoot).mode&0o777;
   try{
-    chmodSync(artifactRoot,0o500);
+    // An earlier E2E run may already have created a company subtree. Block the
+    // nearest existing parent so the new attempt cannot be published there.
+    chmodSync(blockedRoot,0o500);
     await page.getByRole('button',{name:'Build report'}).click();
     await page.locator('.report-history summary').click();
     await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Build failed');
-  }finally{chmodSync(artifactRoot,0o700)}
+  }finally{chmodSync(blockedRoot,previousMode)}
   await page.getByRole('button',{name:'Retry failed build'}).click();
   await expect(page.locator('.generation-history li').filter({hasText:'Version 2'})).toContainText('Report ready');
   const download=page.getByRole('button',{name:'Download current report candidate'});
@@ -166,7 +177,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const reconfirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Accept & Generate'}).click();
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
   const newContract=(await (await reconfirmation).json()).confirmed_contract.contract;
   await expect(page.getByLabel('Current report')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
@@ -224,7 +235,7 @@ test('business UI cancels an active attempt and keeps its truthful history',asyn
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
-  await page.getByRole('button',{name:'Accept & Generate'}).click();
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
   const confirmed=(await (await confirmation).json()).confirmed_contract;
   let status:'RUNNING'|'CANCELLED'='RUNNING';
   const attempt=()=>({id:'synthetic-running-attempt',case_id:'synthetic-case',confirmed_contract_id:confirmed.id,reviewed_design_id:'synthetic-reviewed-plan',interpretation_id:confirmed.interpretation_id,request_version_id:'synthetic-version',status,attempt_number:1,retry_of_attempt_id:null,supersedes_attempt_id:null,provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',pipeline:'canonical',runtimeEvidence:{}},validation:null,failure:null,created_at:new Date().toISOString(),started_at:new Date().toISOString(),completed_at:null,cancelled_at:status==='CANCELLED'?new Date().toISOString():null,artifact:null});

@@ -45,11 +45,17 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await expect(page.getByText('Saved, visual meaning not interpreted')).toBeVisible();
   await page.getByText('Source details').click();
   await expect(page.getByText(/Depot \(text\).*Availability \(decimal\)/)).toBeVisible();
+  await page.route('**/api/cases/*/interpretations',async route=>{
+    if(route.request().method()==='POST')await new Promise(resolve=>setTimeout(resolve,300));
+    await route.continue();
+  });
   await page.getByRole('button',{name:'Review my requirements'}).click();
+  await expect(page.getByRole('status').filter({hasText:'Checking your information and preparing the understanding'})).toBeVisible();
   await expect(page.getByText('Optional refinement',{exact:false}).first()).toBeVisible();
+  await expect(page.getByRole('status').filter({hasText:'Checking your information and preparing the understanding'})).toHaveCount(0);
   await page.getByRole('button',{name:/Summarise Availability and compare it by Depot/}).click();
   await expect(page.getByText('Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.')).toBeVisible();
-  await page.getByRole('button',{name:'Accept & Generate'}).click();
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
 
   await page.reload();
@@ -80,7 +86,7 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await expect(page.getByText(/Clinic \(text\).*WaitMinutes \(integer\)/)).toBeVisible();
   await page.getByRole('button',{name:'Review my requirements'}).click();
   await expect(page.getByText('Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.')).toBeVisible();
-  await page.getByRole('button',{name:'Accept & Generate'}).click();
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();

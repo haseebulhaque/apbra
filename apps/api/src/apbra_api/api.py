@@ -84,6 +84,7 @@ from .tenant_settings import (
     restore_settings,
     settings_history,
     update_settings,
+    update_settings_section,
     validate_qualified_profile,
 )
 
@@ -168,6 +169,13 @@ class TenantSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_version: int = Field(ge=1)
     settings: TenantSettings
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class TenantSettingsSectionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=1)
+    changes: dict[str, Any] = Field(min_length=1)
     reason: str | None = Field(default=None, max_length=500)
 
 
@@ -482,6 +490,33 @@ def create_app(
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
         )
+        assert isinstance(db, ApplicationSession)
+        db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
+        db.commit()
+        return settings_response(db, snapshot)
+
+    @app.patch("/api/tenant-settings/sections/{section}")
+    def patch_tenant_settings_section(
+        section: str,
+        payload: TenantSettingsSectionUpdate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        actor = resolve_actor(db, session_token)
+        try:
+            snapshot = update_settings_section(
+                db, actor, section, payload.changes,
+                expected_version=payload.expected_version,
+                reason=payload.reason,
+                credential_store=credential_store,
+                qualified_profiles=qualified_profiles,
+            )
+        except ValueError as error:
+            # Validation exceptions may contain submitted content. The existing
+            # request-validation handler emits only a bounded generic error.
+            raise RequestValidationError([]) from error
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
         db.commit()
