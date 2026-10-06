@@ -47,9 +47,12 @@ class DemoUXScopeTests(unittest.TestCase):
             changed_paths=set(paths),
         )[0]
 
-    def test_exact_twelve_paths_sources_and_hashes(self):
+    def test_exact_seventeen_paths_sources_and_hashes(self):
         expected = {
+            "apps/api/src/apbra_api/api.py", "apps/api/src/apbra_api/tenant_settings.py",
+            "apps/api/tests/test_tenant_settings.py",
             "apps/web/src/EnterpriseApp.tsx", "apps/web/src/privateCases.tsx",
+            "apps/web/src/api.ts", "apps/web/src/api.test.ts",
             "apps/web/src/privateCases.test.tsx", "apps/web/src/durableConversation.tsx",
             "apps/web/src/durableConversation.test.tsx", "apps/web/src/durableGeneration.tsx",
             "apps/web/src/durableGeneration.test.tsx", "apps/web/src/style.css",
@@ -58,7 +61,7 @@ class DemoUXScopeTests(unittest.TestCase):
         }
         self.assertEqual(c.DEMO_UX_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 12)
+        self.assertEqual(len(self.task["allowed_paths"]), 17)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.DEMO_UX_BRANCH)
         self.assertEqual(self.task["base_commit"], "6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7")
@@ -97,12 +100,16 @@ class DemoUXScopeTests(unittest.TestCase):
     def test_scope_mutations_fail_even_with_recomputed_task_digest(self):
         mutations = [
             [p for p in self.task["allowed_paths"] if p != "apps/web/e2e/tenant-settings.spec.ts"],
-            self.task["allowed_paths"] + ["apps/api/src/apbra_api/api.py"],
-            self.task["allowed_paths"] + ["apps/web/src/api.ts"],
+            [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/tenant_settings.py"],
+            [p for p in self.task["allowed_paths"] if p != "apps/api/tests/test_tenant_settings.py"],
+            self.task["allowed_paths"] + ["apps/api/src/apbra_api/application.py"],
+            self.task["allowed_paths"] + ["apps/api/tests/test_authentication.py"],
+            self.task["allowed_paths"] + ["apps/web/src/EnterpriseUI.tsx"],
             self.task["allowed_paths"] + ["apps/web/package.json"],
             self.task["allowed_paths"] + [".github/workflows/bootstrap.yml"],
             self.task["allowed_paths"] + ["apps/web/src/another.tsx"],
             self.task["allowed_paths"] + ["apps/web/src/**"],
+            self.task["allowed_paths"] + ["apps/api/**"],
             self.task["allowed_paths"] + ["apps/web/e2e/tenant-settings.spec.ts"],
         ]
         with tempfile.TemporaryDirectory() as directory:
@@ -122,8 +129,10 @@ class DemoUXScopeTests(unittest.TestCase):
             self.copy_repository(root)
             for section, needle in (
                 ("requirements", "A$10 total cap"),
+                ("requirements", "does not resubmit unrelated AI"),
                 ("adrs", "expected_version"),
                 ("acceptance_criteria", "another unsaved section"),
+                ("acceptance_criteria", "rejects unknown or cross-section fields"),
                 ("verification_required", "genuinely separate independent exact-head"),
                 ("dependencies", "No paid retry"),
             ):

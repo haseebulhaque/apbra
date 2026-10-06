@@ -935,7 +935,12 @@ FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibili
 FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-registration'
 
 DEMO_UX_PATHS = {
+    'apps/api/src/apbra_api/api.py',
+    'apps/api/src/apbra_api/tenant_settings.py',
+    'apps/api/tests/test_tenant_settings.py',
     'apps/web/src/EnterpriseApp.tsx',
+    'apps/web/src/api.ts',
+    'apps/web/src/api.test.ts',
     'apps/web/src/privateCases.tsx',
     'apps/web/src/privateCases.test.tsx',
     'apps/web/src/durableConversation.tsx',
@@ -953,7 +958,7 @@ DEMO_UX_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_demo_ux_scope.py',
 }
-DEMO_UX_TASK_SHA256 = 'aa935ef86f7100ce78c28ba6eda80a7f5302cafb2f7d8fe69d9ac48175ccc4fe'
+DEMO_UX_TASK_SHA256 = 'fe5d42f016d45b7b3d6c28e8d22a1e5eac9a34bb78c8e4ea8255c58a56dc842a'
 DEMO_UX_SOURCES = (
     ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
     ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
@@ -961,14 +966,14 @@ DEMO_UX_SOURCES = (
     ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
 )
 DEMO_UX_GATE_SHA256 = {
-    'requirements': 'da7aef1b945c1fc3e235f4223588716b968be24dbbc3b542f691dc6f72fb6dec',
-    'adrs': '23979823237e049881621a33e2a74f2f97dd0c86a12ef2af008514815ebb40b4',
+    'requirements': 'b526c20de91793f2445dbf08662456a9a43c7e132d264a19dca0dfff9da6470b',
+    'adrs': '829f0ec019af037959fcd75b4ab36a0aef210c3ca0233bb8fe585f9c0e6d45f7',
     'architecture_refs': 'e4f4631e93abe8fc0810d4018cedb1e6c1b859550b5ec012f572e599106f12cf',
-    'restricted_paths': 'cb88ce32fcdde289aefe6310667f39d03669433c3bb24ff3e92666939695d219',
-    'acceptance_criteria': '8a66af1fad49e11fffa4b56a16dce14d94cf488f048b4f3f98985d5e32ab7e51',
-    'verification_required': '058f8b26d5e992a55cda17da1444dfc25680a3e3de42f58498a347f47698f866',
-    'out_of_scope': '8c9588142ae90c3fcff34b0bb1be565728f0a17c5a87184b8294cbe1b12d8578',
-    'escalate_when': 'cb691fbd6c8b6884eed2300bb12bbd8d5a829356674e7546b2fec0543cc27f86',
+    'restricted_paths': '5e08560646f7a2eae391795146980a9e78dce061267819c5cc1cce77db7322d1',
+    'acceptance_criteria': '87512cc7f16138a8927d895c804c08abe7e4f753d52084e17301bd04382129b3',
+    'verification_required': '01f83052395918e4a7a086359bd87fb63f1fe7419b330b4d6077e84795af0ba1',
+    'out_of_scope': '1853d25d1985668fb9f9071ed783c45cdec09060ea280b2eaeee6d8f222bbc9e',
+    'escalate_when': '695898c7b675ee5d437c243855ff6576e06f8929cd872bb5ea5db9af8f87134f',
     'dependencies': 'ea033f607dde2c609bb012fae8ea158e7f7dda299dab47d209fc58248421afd4',
 }
 DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
