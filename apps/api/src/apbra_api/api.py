@@ -1205,14 +1205,15 @@ def create_app(
             )
         except AnalysisAttemptFailed as exc:
             # The provider call is outside PostgreSQL. Roll back all attempted
-            # interpretation changes before committing only curated audit data.
+            # interpretation changes, then account for the attempt using the
+            # server-validated actor/case authority held before that call.
+            # A session or private grant may have changed while the provider
+            # ran; current access is checked only after this audit commits.
             db.rollback()
-            current_actor = resolve_actor(db, session_token)
-            case_service.get(db, current_actor, case_id)
             db.add(
                 AuditEventRow(
-                    company_id=current_actor.company_id,
-                    actor_membership_id=current_actor.membership_id,
+                    company_id=actor.company_id,
+                    actor_membership_id=actor.membership_id,
                     event_type="INTERPRETATION_ATTEMPT_FAILED",
                     resource_type="REPORTING_CASE",
                     resource_id=case_id,
@@ -1222,6 +1223,8 @@ def create_app(
                 )
             )
             db.commit()
+            current_actor = resolve_actor(db, session_token)
+            case_service.get(db, current_actor, case_id)
             raise
         db.commit()
         return {"interpretation": result}
