@@ -1117,7 +1117,7 @@ def workflow_errors(text: str) -> list[str]:
     if set(jobs) != {'bootstrap'}:
         errors.append('Unexpected job: review bootstrap CI scope')
     for job in jobs.values():
-        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '30':
+        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '45':
             errors.append('Unexpected runner or unbounded job')
         if 'permissions' in job:
             errors.append('Job permission override prohibited')
@@ -1200,7 +1200,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             # The original bytes are digest-bound above and again in APBRA-163's
             # scope check below. Validate every other control through the current
             # checker after normalizing only this historical timeout in memory.
-            workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 30', 1)
+            workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
         errors += workflow_errors(workflow_text)
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
         # Explicitly bounded Capstone extensions, not arbitrary task discovery.

@@ -12,7 +12,7 @@ jobs:
   bootstrap:
     name: APBRA Bootstrap Checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       APBRA_PROFILE: test
@@ -88,6 +88,8 @@ jobs:
           npm --prefix apps/web run build
           npm --prefix apps/web exec playwright install --with-deps chromium
           npm --prefix apps/web run test:e2e
+      - name: Build and exercise the exact hosted web image
+        run: bash scripts/smoke_hosted_image.sh
       - name: Retain bounded checker evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

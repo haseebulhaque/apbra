@@ -108,6 +108,45 @@ remain development/test-only and retain private-root, no-symlink and integrity
 checks. Hosted backup, object lifecycle and recovery qualification are separate
 APBRA-173 work.
 
+## APBRA-173B portable web image and release gate
+
+The production reference image builds the locked React/Vite frontend and the
+existing Node bridges, then packages only the built web bytes with FastAPI and
+its required backend runtime resources. It does not run Vite or its local Azure
+AI proxy. The Dockerfile-specific ignore file is effective for the repository
+root build context and excludes local environments, private content and
+unnecessary workspace material before transfer. Synthetic compile fixtures
+enter only the build stage; they are absent from the final image.
+
+Set `APBRA_WEB_STATIC_ROOT` to the immutable built directory (the image sets it
+to `/app/web-dist`). GET/HEAD `/` and `/invite` return the revalidating shell;
+only the Vite entry manifest's reachable hashed `/assets/` files are public and
+immutable-cacheable. Missing or unsafe manifest entries prevent app startup.
+Unknown application paths and assets return 404. `/api` and existing explicit
+routes retain FastAPI behavior; unknown API paths never receive an SPA shell.
+Evidence, references and generated artifacts remain separate protected content
+resolved through APBRA's database authority, never static image paths.
+
+A hosted release first builds and pins one image, then runs `alembic upgrade
+head` as a separate migration step against the target PostgreSQL database.
+The online migration holds a PostgreSQL session advisory lock on the same
+connection for the whole migration; connection and lock waits are bounded.
+Only after migration succeeds and the target schema is known compatible may
+the app image roll out and pass health checks. App replicas run only Uvicorn:
+they do not migrate or bootstrap. On failed migration, stop the rollout and
+investigate the database state; a restarted app is not proof of success.
+Rollback to a previous image requires an explicit compatibility check against
+the migrated schema and its data. Never automatically downgrade a hosted
+schema. Local Compose retains its development-only migrate/bootstrap command.
+
+`bash scripts/smoke_hosted_image.sh` builds and starts the exact image against
+disposable local PostgreSQL, tests two concurrent migration invocations,
+verifies public/private routes and cache behavior, checks effective context
+exclusions with harmless markers, and confirms app startup adds no fixture
+data. It creates no cloud resource and is not hosted durability, live Entra,
+production security or recovery qualification. APBRA-173C work execution and
+173D-F deployment/provider/operations remain separate governed packages.
+
 ## Backend verification
 
 Use the committed lock and a real PostgreSQL 17 database. SQLite and in-memory persistence are not substitutes for these tests.

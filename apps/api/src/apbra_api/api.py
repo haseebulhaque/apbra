@@ -1,7 +1,9 @@
 import logging
+import os
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -83,6 +85,7 @@ from .tenant_settings import (
     update_settings,
     validate_qualified_profile,
 )
+from .web_static import install_web_static
 
 logger = logging.getLogger("apbra_api")
 
@@ -228,6 +231,7 @@ def create_app(
     evidence_objects: EvidenceObjectStore | None = None,
     reference_objects: EvidenceObjectStore | None = None,
     artifact_objects: ArtifactObjectStore | None = None,
+    web_static_root: Path | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
@@ -1560,6 +1564,9 @@ def create_app(
         db.commit()
         return {"membership": {"id": str(row.id), "role": row.role, "active": row.active}}
 
+    static_root = web_static_root or Path(os.environ.get("APBRA_WEB_STATIC_ROOT", ""))
+    if web_static_root is not None or os.environ.get("APBRA_WEB_STATIC_ROOT"):
+        install_web_static(app, static_root)
     app.state.settings = settings
     app.state.database = database
     app.state.oidc = oidc
