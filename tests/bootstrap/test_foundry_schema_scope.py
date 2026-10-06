@@ -55,13 +55,15 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             "apps/api/src/apbra_api/api.py",
             "apps/api/tests/test_model_provider.py",
             "apps/api/tests/test_conversations.py",
+            "apps/api/src/apbra_api/semantic_bridge.py",
+            "apps/api/tests/test_semantic_bridge.py",
         }
         self.assertEqual(c.FOUNDRY_SCHEMA_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 5)
+        self.assertEqual(len(self.task["allowed_paths"]), 7)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.FOUNDRY_SCHEMA_BRANCH)
-        self.assertEqual(self.task["base_commit"], "f9db07cd7bc16311caf0ce316aa404018348c382")
+        self.assertEqual(self.task["base_commit"], "5ffc9d79e4d92d99e25a68735d60b73594ad0775")
         self.assertEqual(digest(self.task), c.FOUNDRY_SCHEMA_TASK_SHA256)
         self.assertEqual(len(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS), 3)
         self.assertTrue(expected.isdisjoint(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS))
@@ -99,6 +101,10 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/persistence.py"],
             self.task["allowed_paths"] + ["apps/api/alembic/versions/new.py"],
             self.task["allowed_paths"] + ["apps/api/src/**"],
+            self.task["allowed_paths"] + ["apps/web/scripts/semantic-bridge.ts"],
+            self.task["allowed_paths"] + ["apps/api/src/apbra_api/domain.py"],
+            self.task["allowed_paths"] + [".github/workflows/apbra.yml"],
+            [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/semantic_bridge.py"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/model_provider.py"],
         ]
         with tempfile.TemporaryDirectory() as directory:
@@ -142,11 +148,14 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             root = Path(directory)
             self.copy_repository(root)
             for section, needle in (
-                ("requirements", "A$10"),
+                ("requirements", "below-A$5"),
                 ("adrs", "The qualified LLM owns interpretation"),
                 ("acceptance_criteria", "Deterministic APBRA validators"),
                 ("verification_required", "genuinely separate independent exact-head review"),
                 ("dependencies", "Haseeb manual merge"),
+                ("requirements", "exact allowlisted fixed validation messages"),
+                ("requirements", "Paid calls remain prohibited"),
+                ("out_of_scope", "weakened validation"),
             ):
                 with self.subTest(section=section):
                     changed = copy.deepcopy(self.task)

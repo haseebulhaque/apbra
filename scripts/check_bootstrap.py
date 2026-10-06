@@ -909,30 +909,32 @@ FOUNDRY_SCHEMA_PATHS = {
     'apps/api/src/apbra_api/api.py',
     'apps/api/tests/test_model_provider.py',
     'apps/api/tests/test_conversations.py',
+    'apps/api/src/apbra_api/semantic_bridge.py',
+    'apps/api/tests/test_semantic_bridge.py',
 }
 FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
     'tasks/APBRA-160-foundry-structured-output.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_foundry_schema_scope.py',
 }
-FOUNDRY_SCHEMA_TASK_SHA256 = '3411145b6a43e1cd4178f0d549581a6b49b41f7a5f0277e874bbce612528fc07'
+FOUNDRY_SCHEMA_TASK_SHA256 = 'd0dbd4cc22d9f3d6e27e913328bcbef7325a6bda3db25aec2d535d5b8b537213'
 FOUNDRY_SCHEMA_SOURCES = (
     ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
     ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
 )
 FOUNDRY_SCHEMA_GATE_SHA256 = {
-    'requirements': '623f32a2219da8177fe61c21e1e518f1efc5787f55f530dd907e98e3d1d06750',
+    'requirements': 'db56cb5911a2f9be56ad08dc9a1d282720260d97557d74a31a53e0a18442de98',
     'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
-    'architecture_refs': '1cb1e8d337006609673327f8947adba78c2e4245f1653bfa4fe5305f41985028',
+    'architecture_refs': '3a5b053aaa4de6ac2245d42d6c726aa92bd3543f7d26c0bd17be4f2e221805ea',
     'restricted_paths': '859a559592e1c0f20ddb5c3582565876e61b8f6f016e17a14e3849c5b0e7800c',
-    'acceptance_criteria': '6e8f8f8a6ad66f4f8661aa439229b359019f4ddc464f22fe1473cd0334001225',
-    'verification_required': 'a78f80a92af200d70214e6d8ec7f6a63a1a108eaea00847270d756e8ee16d229',
-    'out_of_scope': 'c45d9cd9e216718002056864f3f5b4151c8a6e70385e00b3d89a538a1a4ce1b6',
-    'escalate_when': 'f050ebaabda76a3463ee524e3a34765c250edfb518b7fcb0e046aa147de8f31c',
-    'dependencies': '7d8f16e2faf4f4b25934f5bcc4933c27ce2464053a711758e2161280fd9e63f3',
+    'acceptance_criteria': 'bbfa933c60cd05c1f481b1d072abd24714f56039f1d584a180cb5b5b7b3eba7b',
+    'verification_required': 'b418f44e2a9731265c84ae490514851003f7eb5c65b805140f7ee76a8a5f9f18',
+    'out_of_scope': '0cf6a3766df4b9c3587edba8358775d5ec5b512df54a1f2e70a45a082e4863d9',
+    'escalate_when': 'c313f6706fc49a98464904457a7403042634a75c533fc9d147a78f4c0f7fe69d',
+    'dependencies': '792315d6d32874c335af527d636d93db56e46186c5e33ccfa15370f6a5f8781c',
 }
-FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility'
-FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-registration'
+FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-semantic-diagnostics'
+FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-semantic-diagnostics-registration'
 
 DEMO_UX_PATHS = {
     'apps/api/src/apbra_api/api.py',
@@ -2211,7 +2213,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected APBRA-160 Foundry task or agent identity')
                 if foundry_schema_task['branch'] != FOUNDRY_SCHEMA_BRANCH:
                     extension_errors.append('Unexpected APBRA-160 Foundry implementation branch')
-                if foundry_schema_task['base_commit'] != 'f9db07cd7bc16311caf0ce316aa404018348c382':
+                if foundry_schema_task['base_commit'] != '5ffc9d79e4d92d99e25a68735d60b73594ad0775':
                     extension_errors.append('Stale APBRA-160 Foundry registration base')
                 if (
                     set(foundry_schema_task['allowed_paths']) != FOUNDRY_SCHEMA_PATHS
