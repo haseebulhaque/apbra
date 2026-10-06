@@ -823,7 +823,7 @@ class OpenAICompatibleProvider:
 
 
 def _integer_or_none(value: object) -> int | None:
-    return value if isinstance(value, int) and value >= 0 else None
+    return value if type(value) is int and value >= 0 else None
 
 
 class DeterministicFakeProvider:

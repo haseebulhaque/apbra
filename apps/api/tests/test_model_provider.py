@@ -225,6 +225,31 @@ def test_terminal_candidate_rejection_carries_only_safe_observed_provenance() ->
     assert len(observed) == 2
 
 
+def test_boolean_usage_is_not_recorded_as_observed_token_counts() -> None:
+    def respond(_incoming: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"pages":[{"id":"safe"}]}'}}],
+                "usage": {
+                    "prompt_tokens": True,
+                    "completion_tokens": False,
+                    "total_tokens": 9,
+                },
+            },
+        )
+
+    provider = OpenAICompatibleProvider(
+        profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    result = provider.structured(request())
+    assert result.usage == {
+        "prompt_tokens": None,
+        "completion_tokens": None,
+        "total_tokens": 9,
+    }
+
+
 def test_transient_failure_retries_only_within_the_exact_call_budget() -> None:
     calls = 0
 
