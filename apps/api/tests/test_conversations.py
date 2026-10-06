@@ -7,6 +7,7 @@ from threading import Barrier
 from typing import cast
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
@@ -14,13 +15,18 @@ from sqlalchemy import func, select
 
 from apbra_api.api import create_app
 from apbra_api.config import Settings
-from apbra_api.model_provider import DeterministicFakeProvider, ProviderProfile
+from apbra_api.model_provider import (
+    DeterministicFakeProvider,
+    OpenAICompatibleProvider,
+    ProviderProfile,
+)
 from apbra_api.persistence import (
     ApplicationSession,
     AuditEventRow,
     ConfirmedContractRow,
     Database,
     EvidenceRow,
+    InterpretationRow,
 )
 
 
@@ -195,6 +201,161 @@ def test_normal_runtime_without_a_provider_never_uses_the_test_simulator(
         )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "INTELLIGENT_ANALYSIS_UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_code"),
+    [
+        ("provider_4xx", "MODEL_PROVIDER_REJECTED"),
+        ("timeout", "MODEL_PROVIDER_TIMEOUT"),
+        ("malformed_2xx", "MODEL_OUTPUT_INVALID"),
+    ],
+)
+def test_failed_provider_attempt_has_durable_safe_observation(
+    settings: Settings, database: Database, failure_kind: str, expected_code: str
+) -> None:
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        if failure_kind == "timeout":
+            raise httpx.ReadTimeout("synthetic timeout", request=incoming)
+        if failure_kind == "malformed_2xx":
+            return httpx.Response(200, json={"choices": [{"message": {"content": "not-json"}}]})
+        return httpx.Response(403, text="credential=server-secret")
+
+    provider = OpenAICompatibleProvider(
+        provider_profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409, failed.text
+        assert failed.json()["error"]["code"] == "INTELLIGENT_ANALYSIS_UNAVAILABLE"
+
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+        interpretation_count = db.scalar(
+            select(func.count()).select_from(InterpretationRow).where(
+                InterpretationRow.case_id == UUID(str(case["id"]))
+            )
+        )
+        evidence_count = db.scalar(
+            select(func.count()).select_from(EvidenceRow).where(
+                EvidenceRow.case_id == UUID(str(case["id"]))
+            )
+        )
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details == {
+        "stage": "PROVIDER_CALL",
+        "error_code": expected_code,
+        "call_count": 1,
+        "usage": {
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+        },
+    }
+    assert interpretation_count == 0
+    assert evidence_count == 1
+    assert "server-secret" not in audit[0].details_json
+
+
+def test_semantic_rejection_records_observed_usage_without_accepting_interpretation(
+    settings: Settings, database: Database
+) -> None:
+    invalid = provider_analysis(ready=True)
+    interpretation = cast(dict[str, object], invalid["interpretation"])
+    coverage = cast(list[dict[str, object]], interpretation["coverageRequirements"])
+    coverage[0]["minimumRepresentations"] = -1
+    provider = DeterministicFakeProvider(provider_profile(), [invalid])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409, failed.text
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details["stage"] == "SEMANTIC_VALIDATION"
+    assert details["call_count"] == 1
+    assert details["usage"] == {
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30,
+    }
+
+
+def test_no_provider_call_is_audited_with_unknown_usage(
+    settings: Settings, database: Database
+) -> None:
+    provider = DeterministicFakeProvider(provider_profile(), [])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details["call_count"] == 0
+    assert details["usage"] == {
+        "prompt_tokens": None,
+        "completion_tokens": None,
+        "total_tokens": None,
+    }
 
 
 def test_provider_owns_question_and_follow_up_analysis_with_full_durable_context(
