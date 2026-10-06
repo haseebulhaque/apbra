@@ -154,6 +154,50 @@ test('stale section saves fail closed and preserve the draft while loading curre
   await secondPage.close();
 });
 
+test('a committed section save stays successful when history refresh fails',async({page})=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration'}).click();
+  const admin=page.getByLabel('Tenant administration');
+  const before=await (await page.request.get('/api/tenant-settings')).json();
+  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
+  await page.route('**/api/tenant-settings/history',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":{"code":"TEMPORARY","message":"Synthetic history failure"}}'}));
+  await admin.getByRole('button',{name:/Review .* changes/}).click();
+  await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Confirm and save new version'}).click();
+  await expect(admin.getByText(`Tenant settings version ${before.version+1} is now effective.`,{exact:false})).toBeVisible();
+  await expect(admin.getByText('Settings history could not be refreshed',{exact:false})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'Review tenant settings changes'})).toHaveCount(0);
+  await expect(admin.getByLabel('Invitation lifetime (days)')).toHaveValue(String(before.settings.invitation_ttl_days+1));
+  const after=await (await page.request.get('/api/tenant-settings')).json();
+  expect(after.version).toBe(before.version+1);
+  expect(after.settings.invitation_ttl_days).toBe(before.settings.invitation_ttl_days+1);
+});
+
+test('lost section-save response reconciles current policy without replaying the change',async({page})=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration'}).click();
+  const admin=page.getByLabel('Tenant administration');
+  const before=await (await page.request.get('/api/tenant-settings')).json();
+  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
+  let attempts=0;
+  await page.route('**/api/tenant-settings/sections/budgets_limits',async route=>{
+    attempts+=1;
+    const committed=await route.fetch();
+    expect(committed.status()).toBe(200);
+    await route.fulfill({status:503,contentType:'application/json',body:'{"error":{"code":"TEMPORARY","message":"Synthetic response lost after commit"}}'});
+  });
+  await admin.getByRole('button',{name:/Review .* changes/}).click();
+  await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Confirm and save new version'}).click();
+  await expect(admin.getByText('The save response could not be confirmed.',{exact:false})).toBeVisible();
+  await expect(admin.getByText('The requested values are now effective',{exact:false})).toBeVisible();
+  await expect(page.getByRole('dialog',{name:'Review tenant settings changes'})).toHaveCount(0);
+  expect(attempts).toBe(1);
+  const after=await (await page.request.get('/api/tenant-settings')).json();
+  expect(after.version).toBe(before.version+1);
+  expect(after.settings.invitation_ttl_days).toBe(before.settings.invitation_ttl_days+1);
+});
+
 test('owner configures and rotates a synthetic protected credential without revealing it',async({page})=>{
   await signIn(page,'owner');
   const initialVersion=(await (await page.request.get('/api/tenant-settings')).json()).version;
@@ -175,11 +219,20 @@ test('owner configures and rotates a synthetic protected credential without reve
   await expect(admin.getByText('Configured · ***')).toBeVisible();
   await expect(admin.getByRole('button',{name:'Replace / rotate credential'})).toBeVisible();
   await expect(page.locator('body')).not.toContainText('synthetic-e2e-secret-first');
+  const beforeRotation=await (await page.request.get('/api/tenant-settings')).json();
+  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByLabel('Invitation lifetime (days)').fill(String(beforeRotation.settings.invitation_ttl_days+1));
+  await admin.getByRole('button',{name:/AI & models/}).click();
   await admin.getByRole('button',{name:'Replace / rotate credential'}).click();
   await dialog.getByLabel('New credential').fill('synthetic-e2e-secret-second');
   await dialog.getByRole('button',{name:'Replace credential'}).click();
   await expect(admin.getByText(/Protected credential replaced in settings version/)).toBeVisible();
   await expect(page.locator('body')).not.toContainText('synthetic-e2e-secret-second');
+  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await expect(admin.getByLabel('Invitation lifetime (days)')).toHaveValue(String(beforeRotation.settings.invitation_ttl_days+1));
+  await expect(admin.getByText('Unsaved changes',{exact:true})).toBeVisible();
+  expect((await (await page.request.get('/api/tenant-settings')).json()).settings.invitation_ttl_days).toBe(beforeRotation.settings.invitation_ttl_days);
+  await admin.getByRole('button',{name:/AI & models/}).click();
   const current=await (await page.request.get('/api/tenant-settings')).text();
   const history=await (await page.request.get('/api/tenant-settings/history')).text();
   for(const response of [current,history]){
