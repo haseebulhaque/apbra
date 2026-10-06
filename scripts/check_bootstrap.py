@@ -903,6 +903,37 @@ HOSTED_WEB_RELEASE_GATE_SHA256 = {
 HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
 
+FOUNDRY_SCHEMA_PATHS = {
+    'apps/api/src/apbra_api/model_provider.py',
+    'apps/api/src/apbra_api/application.py',
+    'apps/api/tests/test_model_provider.py',
+    'apps/api/tests/test_conversations.py',
+}
+FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
+    'tasks/APBRA-160-foundry-structured-output.json',
+    'scripts/check_bootstrap.py',
+    'tests/bootstrap/test_foundry_schema_scope.py',
+}
+FOUNDRY_SCHEMA_TASK_SHA256 = '342e882bae085394574ddd9892a119c5941434a74d3f4c4be3a1ecb8e64faa94'
+FOUNDRY_SCHEMA_SOURCES = (
+    ('apbra-173b-preview-direction', '8519682', 23, '8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
+    ('apbra-173b-mvp-scope', '4063307', 14, '3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
+    ('apbra-173b-traceability', '3932382', 18, '52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
+)
+FOUNDRY_SCHEMA_GATE_SHA256 = {
+    'requirements': 'd09e6a3b81ebf80397fb54c9c5b8ca5738c8f498d975db427c57ee8ec9e677d3',
+    'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
+    'architecture_refs': 'f079f6c0d5d2711fb418ee251554ae40d38adbde0fd4f52f6d97712f62ca8f90',
+    'restricted_paths': 'b83f402df9c1470656a1f7cbde869c503d89e4ebbd3d75b03447ba68fe6406fb',
+    'acceptance_criteria': '71c8d98da32b4111cc1a4eeb97debb796bcad0d753e160f03949290c281cc4e4',
+    'verification_required': 'a78f80a92af200d70214e6d8ec7f6a63a1a108eaea00847270d756e8ee16d229',
+    'out_of_scope': 'c0bc7b872ddca7d3838a58ed4eb703b0ebaf58a754630b103f89eca460e36969',
+    'escalate_when': '3e8f164409a92ff26e38d15c9bac3897f5a21185cbe9bd897227bd0147d5c111',
+    'dependencies': '5fdc0382c536c4e5a4b52ddb5ffe7c446a1477661cb7659baee69d46a27db93f',
+}
+FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility'
+FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-registration'
+
 CAPSTONE_EVALUATION_PATHS = {
     'apps/web/.env.example', 'apps/web/README.md',
     'apps/web/knowledge/accessibility-standards.md',
@@ -2058,6 +2089,68 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 candidate_source_safety_task = None
+        foundry_schema_task = None
+        foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
+        if foundry_schema_path.exists():
+            foundry_schema_task = load_json(foundry_schema_path)
+            extension_errors = schema_errors(
+                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                foundry_schema_task,
+            )
+            if not extension_errors:
+                extension_errors += task_errors(foundry_schema_task, catalog, sources)
+                canonical_task = json.dumps(
+                    foundry_schema_task, sort_keys=True, separators=(',', ':'),
+                ).encode()
+                if hashlib.sha256(canonical_task).hexdigest() != FOUNDRY_SCHEMA_TASK_SHA256:
+                    extension_errors.append('APBRA-160 Foundry contract differs from accepted authority')
+                if (
+                    foundry_schema_task['task_id'],
+                    foundry_schema_task['assigned_agent'],
+                    foundry_schema_task['agent_card_version'],
+                ) != ('APBRA-160', 'APBRA-DEVOPS', '0.1'):
+                    extension_errors.append('Unexpected APBRA-160 Foundry task or agent identity')
+                if foundry_schema_task['branch'] != FOUNDRY_SCHEMA_BRANCH:
+                    extension_errors.append('Unexpected APBRA-160 Foundry implementation branch')
+                if foundry_schema_task['base_commit'] != 'f9db07cd7bc16311caf0ce316aa404018348c382':
+                    extension_errors.append('Stale APBRA-160 Foundry registration base')
+                if (
+                    set(foundry_schema_task['allowed_paths']) != FOUNDRY_SCHEMA_PATHS
+                    or len(foundry_schema_task['allowed_paths']) != len(FOUNDRY_SCHEMA_PATHS)
+                ):
+                    extension_errors.append('Unexpected APBRA-160 Foundry implementation scope')
+                if (
+                    foundry_schema_task['task_mode'],
+                    foundry_schema_task['readiness'],
+                    foundry_schema_task['owner_acceptance'],
+                ) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                    extension_errors.append('APBRA-160 Foundry requires issued implementation acceptance')
+                if foundry_schema_task['source_ids'] != [row[0] for row in FOUNDRY_SCHEMA_SOURCES]:
+                    extension_errors.append('APBRA-160 Foundry requires exact accepted sources')
+                for section, expected in FOUNDRY_SCHEMA_GATE_SHA256.items():
+                    actual = json.dumps(
+                        foundry_schema_task[section], sort_keys=True, separators=(',', ':'),
+                    ).encode()
+                    if hashlib.sha256(actual).hexdigest() != expected:
+                        extension_errors.append('APBRA-160 Foundry safety/review gate differs: ' + section)
+                for source_id, content_id, version, expected_sha in FOUNDRY_SCHEMA_SOURCES:
+                    rows = [row for row in sources['sources'] if row.get('id') == source_id]
+                    if len(rows) != 1:
+                        extension_errors.append('APBRA-160 Foundry source missing or duplicated: ' + source_id)
+                    else:
+                        row = rows[0]
+                        actual = hashlib.sha256(json.dumps(
+                            row, sort_keys=True, separators=(',', ':'),
+                        ).encode()).hexdigest()
+                        if actual != expected_sha:
+                            extension_errors.append('APBRA-160 Foundry source differs from provenance: ' + source_id)
+                        if (row.get('content_id'), row.get('version'), row.get('status')) != (
+                            content_id, version, 'ACCEPTED',
+                        ):
+                            extension_errors.append('APBRA-160 Foundry source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                foundry_schema_task = None
         private_content_storage_task = None
         private_content_storage_path = root / 'tasks/APBRA-173-private-content-storage.json'
         if private_content_storage_path.exists():
@@ -2474,6 +2567,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
             (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
             (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
+            (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
             (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
             (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
@@ -2481,6 +2575,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
+        if active_task_id == 'APBRA-160':
+            registered_tasks['APBRA-160'] = foundry_schema_task
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
                 private_content_storage_task if active_branch in {
@@ -2535,6 +2631,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (active_task_id == 'APBRA-108' and
                          active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
                          changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
+                         active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
+                         changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-173' and
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
                          changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
@@ -2692,6 +2791,18 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == CANDIDATE_SOURCE_SAFETY_BRANCH and
                     changed_paths.intersection(CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS)):
                 errors.append('APBRA-108 implementation branch cannot change governance registration files')
+            if (active_task_id == 'APBRA-160' and
+                    changed_paths.intersection(FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
+                    changed_paths.intersection(FOUNDRY_SCHEMA_PATHS)):
+                errors.append('APBRA-160 Foundry registration and implementation must remain separate')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
+                    changed_paths != FOUNDRY_SCHEMA_REGISTRATION_PATHS):
+                errors.append('APBRA-160 Foundry registration must change exactly three governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == FOUNDRY_SCHEMA_BRANCH and
+                    changed_paths.intersection(FOUNDRY_SCHEMA_REGISTRATION_PATHS)):
+                errors.append('APBRA-160 Foundry implementation cannot change governance files')
             if (active_task_id == 'APBRA-173' and
                     active_branch in {PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH} and
                     changed_paths.intersection(PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
@@ -2850,6 +2961,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
                          changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
                          name in CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
+                         changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS and
+                         name in FOUNDRY_SCHEMA_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-173' and active_task is not None and
                          active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
