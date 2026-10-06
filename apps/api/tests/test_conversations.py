@@ -3,24 +3,34 @@ from __future__ import annotations
 import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from threading import Barrier
 from typing import cast
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from apbra_api.api import create_app
+from apbra_api.auth_boundary import SESSION_COOKIE, digest
 from apbra_api.config import Settings
-from apbra_api.model_provider import DeterministicFakeProvider, ProviderProfile
+from apbra_api.model_provider import (
+    DeterministicFakeProvider,
+    OpenAICompatibleProvider,
+    ProviderProfile,
+)
 from apbra_api.persistence import (
     ApplicationSession,
     AuditEventRow,
+    CaseAccessRow,
     ConfirmedContractRow,
     Database,
     EvidenceRow,
+    InterpretationRow,
+    SessionRow,
 )
 
 
@@ -195,6 +205,267 @@ def test_normal_runtime_without_a_provider_never_uses_the_test_simulator(
         )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "INTELLIGENT_ANALYSIS_UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_code"),
+    [
+        ("provider_4xx", "MODEL_PROVIDER_REJECTED"),
+        ("timeout", "MODEL_PROVIDER_TIMEOUT"),
+        ("malformed_2xx", "MODEL_OUTPUT_INVALID"),
+    ],
+)
+def test_failed_provider_attempt_has_durable_safe_observation(
+    settings: Settings, database: Database, failure_kind: str, expected_code: str
+) -> None:
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        if failure_kind == "timeout":
+            raise httpx.ReadTimeout("synthetic timeout", request=incoming)
+        if failure_kind == "malformed_2xx":
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "not-json"}}],
+                    "usage": {
+                        "prompt_tokens": 7,
+                        "completion_tokens": 3,
+                        "total_tokens": 10,
+                    },
+                },
+            )
+        return httpx.Response(403, text="credential=server-secret")
+
+    provider = OpenAICompatibleProvider(
+        provider_profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409, failed.text
+        assert failed.json()["error"]["code"] == "INTELLIGENT_ANALYSIS_UNAVAILABLE"
+
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+        interpretation_count = db.scalar(
+            select(func.count()).select_from(InterpretationRow).where(
+                InterpretationRow.case_id == UUID(str(case["id"]))
+            )
+        )
+        evidence_count = db.scalar(
+            select(func.count()).select_from(EvidenceRow).where(
+                EvidenceRow.case_id == UUID(str(case["id"]))
+            )
+        )
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details == {
+        "stage": "PROVIDER_CALL",
+        "error_code": expected_code,
+        "call_count": 1,
+        "usage": {
+            "prompt_tokens": 7 if failure_kind == "malformed_2xx" else None,
+            "completion_tokens": 3 if failure_kind == "malformed_2xx" else None,
+            "total_tokens": 10 if failure_kind == "malformed_2xx" else None,
+        },
+    }
+    assert interpretation_count == 0
+    assert evidence_count == 1
+    assert "server-secret" not in audit[0].details_json
+
+
+def test_semantic_rejection_records_observed_usage_without_accepting_interpretation(
+    settings: Settings, database: Database
+) -> None:
+    invalid = provider_analysis(ready=True)
+    interpretation = cast(dict[str, object], invalid["interpretation"])
+    coverage = cast(list[dict[str, object]], interpretation["coverageRequirements"])
+    coverage[0]["minimumRepresentations"] = -1
+    provider = DeterministicFakeProvider(provider_profile(), [invalid])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409, failed.text
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details["stage"] == "SEMANTIC_VALIDATION"
+    assert details["call_count"] == 1
+    assert details["usage"] == {
+        "prompt_tokens": 10,
+        "completion_tokens": 20,
+        "total_tokens": 30,
+    }
+
+
+def test_no_provider_call_is_audited_with_unknown_usage(
+    settings: Settings, database: Database
+) -> None:
+    provider = DeterministicFakeProvider(provider_profile(), [])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        case = create_case(runtime, session)
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == 409
+    with database.session() as db:
+        audit = db.scalars(
+            select(AuditEventRow).where(
+                AuditEventRow.resource_id == UUID(str(case["id"])),
+                AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+            )
+        ).all()
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details["call_count"] == 0
+    assert details["usage"] == {
+        "prompt_tokens": None,
+        "completion_tokens": None,
+        "total_tokens": None,
+    }
+
+
+@pytest.mark.parametrize("access_change", ["session_expired", "case_grant_revoked"])
+def test_provider_failure_accounting_survives_midcall_access_change(
+    settings: Settings, database: Database, access_change: str
+) -> None:
+    owner = TestClient(create_app(settings=settings, database=database))
+    owner_session = sign_in(owner, "owner")
+    case = create_case(owner, owner_session)
+    member_id: UUID | None = None
+    if access_change == "case_grant_revoked":
+        member_id = UUID(next(
+            str(item["id"])
+            for item in owner.get("/api/memberships").json()["items"]
+            if item["subject"] == "dev-member"
+        ))
+        granted = owner.post(
+            f"/api/cases/{case['id']}/access",
+            json={"membership_id": str(member_id), "access_level": "EDITOR"},
+            headers=csrf(owner_session),
+        )
+        assert granted.status_code == 200
+
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        with database.session() as separate:
+            if access_change == "session_expired":
+                token = runtime.cookies.get(SESSION_COOKIE)
+                assert token is not None
+                row = separate.scalar(
+                    select(SessionRow).where(SessionRow.token_digest == digest(token))
+                )
+                assert row is not None
+                row.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+            else:
+                assert member_id is not None
+                separate.execute(
+                    delete(CaseAccessRow).where(
+                        CaseAccessRow.case_id == UUID(str(case["id"])),
+                        CaseAccessRow.membership_id == member_id,
+                    )
+                )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "not-json"}}],
+                "usage": {
+                    "prompt_tokens": 7,
+                    "completion_tokens": 3,
+                    "total_tokens": 10,
+                },
+            },
+        )
+
+    provider = OpenAICompatibleProvider(
+        provider_profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "owner" if member_id is None else "member")
+        uploaded = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "synthetic.csv", "expected_context_version": 1},
+            content=b"Campus,Visits\nNorth,12\nSouth,9\n",
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        failed = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": uploaded["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert failed.status_code == (401 if member_id is None else 404), failed.text
+
+    with database.session() as db:
+        audit = db.scalars(select(AuditEventRow).where(
+            AuditEventRow.resource_id == UUID(str(case["id"])),
+            AuditEventRow.event_type == "INTERPRETATION_ATTEMPT_FAILED",
+        )).all()
+        interpretations = db.scalar(select(func.count()).select_from(InterpretationRow).where(
+            InterpretationRow.case_id == UUID(str(case["id"]))
+        ))
+        evidence = db.scalar(select(func.count()).select_from(EvidenceRow).where(
+            EvidenceRow.case_id == UUID(str(case["id"]))
+        ))
+    assert len(audit) == 1
+    details = json.loads(audit[0].details_json)
+    assert details["error_code"] == "MODEL_OUTPUT_INVALID"
+    assert details["call_count"] == 1
+    assert details["usage"] == {
+        "prompt_tokens": 7,
+        "completion_tokens": 3,
+        "total_tokens": 10,
+    }
+    assert interpretations == 0
+    assert evidence == 1
+    assert "server-secret" not in audit[0].details_json
 
 
 def test_provider_owns_question_and_follow_up_analysis_with_full_durable_context(

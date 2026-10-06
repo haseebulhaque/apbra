@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from collections.abc import Iterator
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from .application import (
     AcceptanceService,
+    AnalysisAttemptFailed,
     CaseService,
     CompanyService,
     ConversationService,
@@ -62,6 +64,7 @@ from .model_provider import (
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     ApplicationSession,
+    AuditEventRow,
     AuthorizationCodeRow,
     AuthTransactionRow,
     CompanyRow,
@@ -1193,12 +1196,36 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
-        result = local_acceptance_service(db, tenant_snapshot(db, actor)).create_interpretation(
-            db,
-            actor,
-            case_id,
-            expected_context_version=payload.expected_context_version,
-        )
+        try:
+            result = local_acceptance_service(db, tenant_snapshot(db, actor)).create_interpretation(
+                db,
+                actor,
+                case_id,
+                expected_context_version=payload.expected_context_version,
+            )
+        except AnalysisAttemptFailed as exc:
+            # The provider call is outside PostgreSQL. Roll back all attempted
+            # interpretation changes, then account for the attempt using the
+            # server-validated actor/case authority held before that call.
+            # A session or private grant may have changed while the provider
+            # ran; current access is checked only after this audit commits.
+            db.rollback()
+            db.add(
+                AuditEventRow(
+                    company_id=actor.company_id,
+                    actor_membership_id=actor.membership_id,
+                    event_type="INTERPRETATION_ATTEMPT_FAILED",
+                    resource_type="REPORTING_CASE",
+                    resource_id=case_id,
+                    details_json=json.dumps(
+                        exc.audit_details, sort_keys=True, separators=(",", ":")
+                    ),
+                )
+            )
+            db.commit()
+            current_actor = resolve_actor(db, session_token)
+            case_service.get(db, current_actor, case_id)
+            raise
         db.commit()
         return {"interpretation": result}
 

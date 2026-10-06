@@ -58,7 +58,22 @@ def request(*, vision: bool = False) -> ProviderRequest:
         task="REPORT_DESIGN",
         system_prompt="Return one typed candidate.",
         context={"safe": "context"},
-        output_schema={"type": "object"},
+        output_schema={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["pages"],
+            "properties": {
+                "pages": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["id"],
+                        "properties": {"id": {"type": "string"}},
+                    },
+                }
+            },
+        },
         requires_vision=vision,
     )
 
@@ -210,6 +225,31 @@ def test_terminal_candidate_rejection_carries_only_safe_observed_provenance() ->
     assert len(observed) == 2
 
 
+def test_boolean_usage_is_not_recorded_as_observed_token_counts() -> None:
+    def respond(_incoming: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"pages":[{"id":"safe"}]}'}}],
+                "usage": {
+                    "prompt_tokens": True,
+                    "completion_tokens": False,
+                    "total_tokens": 9,
+                },
+            },
+        )
+
+    provider = OpenAICompatibleProvider(
+        profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    result = provider.structured(request())
+    assert result.usage == {
+        "prompt_tokens": None,
+        "completion_tokens": None,
+        "total_tokens": 9,
+    }
+
+
 def test_transient_failure_retries_only_within_the_exact_call_budget() -> None:
     calls = 0
 
@@ -308,11 +348,104 @@ def test_real_provider_schemas_are_closed_and_fully_required(schema: dict[str, o
     inspect(schema)
 
 
+@pytest.mark.parametrize("schema", [requirement_schema(), design_schema()])
+def test_exact_provider_wire_schemas_fit_foundry_strict_profile(schema: dict[str, Any]) -> None:
+    object_properties = 0
+    object_depth = 0
+    unsupported = {
+        "minimum", "maximum", "multipleOf", "minItems", "maxItems", "uniqueItems",
+        "minLength", "maxLength", "pattern", "format", "minProperties", "maxProperties",
+    }
+
+    def inspect(node: dict[str, Any], depth: int) -> None:
+        nonlocal object_properties, object_depth
+        assert not unsupported.intersection(node)
+        if node.get("type") == "object":
+            properties = node["properties"]
+            assert node["additionalProperties"] is False
+            assert set(node["required"]) == set(properties)
+            object_properties += len(properties)
+            object_depth = max(object_depth, depth)
+            for child in properties.values():
+                inspect(child, depth + 1)
+        elif node.get("type") == "array":
+            inspect(node["items"], depth)
+
+    inspect(schema, 1)
+    assert object_properties <= 100
+    assert object_depth <= 5
+
+
+@pytest.mark.parametrize(
+    "failure_kind",
+    [
+        "unsupported_minimum", "unsupported_max_items", "six_object_levels",
+        "too_many_properties", "missing_required", "open_object", "malformed_required",
+    ],
+)
+def test_invalid_wire_schema_is_rejected_before_any_provider_request(
+    failure_kind: str,
+) -> None:
+    observed: list[httpx.Request] = []
+
+    def respond(incoming: httpx.Request) -> httpx.Response:
+        observed.append(incoming)
+        return httpx.Response(400, json={"error": "schema rejected"})
+
+    provider = OpenAICompatibleProvider(
+        profile(), "server-secret", transport=httpx.MockTransport(respond)
+    )
+    bad = requirement_schema()
+    if failure_kind == "unsupported_minimum":
+        bad["properties"]["interpretation"]["properties"]["coverageRequirements"]["items"][
+            "properties"
+        ]["minimumRepresentations"]["minimum"] = 0
+    elif failure_kind == "unsupported_max_items":
+        bad = design_schema()
+        bad["properties"]["pages"]["items"]["properties"]["visuals"]["maxItems"] = 6
+    elif failure_kind == "six_object_levels":
+        nested: dict[str, Any] = {"type": "string"}
+        for _ in range(5):
+            nested = {
+                "type": "object", "properties": {"child": nested},
+                "required": ["child"], "additionalProperties": False,
+            }
+        bad = {
+            "type": "object", "properties": {"child": nested},
+            "required": ["child"], "additionalProperties": False,
+        }
+    elif failure_kind == "too_many_properties":
+        properties = {f"field{index}": {"type": "string"} for index in range(101)}
+        bad = {
+            "type": "object", "properties": properties,
+            "required": list(properties), "additionalProperties": False,
+        }
+    elif failure_kind == "missing_required":
+        bad["required"].remove("state")
+    elif failure_kind == "open_object":
+        bad["additionalProperties"] = True
+    else:
+        bad["required"] = [[]]
+    with pytest.raises(ProviderCallError, match="MODEL_SCHEMA_UNSUPPORTED") as captured:
+        provider.structured(
+            ProviderRequest(
+                task="REQUIREMENT_ANALYSIS",
+                system_prompt="Return a typed proposal.",
+                context={"synthetic": True},
+                output_schema=bad,
+            )
+        )
+    assert captured.value.observation is not None
+    assert captured.value.observation.call_count == 0
+    assert observed == []
+
+
 def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
     schema = design_schema()
     properties = schema["properties"]
     visuals = properties["pages"]["items"]["properties"]["visuals"]
-    assert visuals["maxItems"] == COMPILER_MAX_VISUALS_PER_PAGE
+    assert "maxItems" not in visuals
+    assert f"at most {COMPILER_MAX_VISUALS_PER_PAGE} visuals" in visuals["description"]
     assert "four non-card slots and two additional card-only slots" in visuals["description"]
     filters = properties["filters"]
     assert "must not also be represented by a slicer" in filters["description"]
@@ -330,7 +463,8 @@ def test_provider_schemas_derive_capacity_and_grains_from_validated_capability()
     design_grains = visual["items"]["properties"]["timeGrain"]["enum"]
     assert requirement_grains == ["NONE", "DAY", "MONTH"]
     assert design_grains == ["NONE", "DAY", "MONTH"]
-    assert visual["maxItems"] == 4
+    assert "maxItems" not in visual
+    assert "at most 4 visuals" in visual["description"]
     assert "WEEK" not in requirement_grains
     assert "WEEK" not in design_grains
     with pytest.raises(ValueError, match="exceed the active compiler"):

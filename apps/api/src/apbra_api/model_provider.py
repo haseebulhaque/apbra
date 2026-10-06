@@ -48,6 +48,66 @@ def _string_array(description: str | None = None) -> dict[str, Any]:
     return value
 
 
+def _validate_strict_wire_schema(schema: dict[str, Any]) -> None:
+    """Fail before transport when a schema exceeds the qualified strict subset.
+
+    This checks the exact provider-facing schema. APBRA's semantic validators
+    still own numeric bounds, coverage and report-design correctness.
+    """
+
+    allowed = {
+        "type", "description", "enum", "properties", "required", "additionalProperties", "items",
+    }
+    property_count = 0
+
+    def inspect(node: object, object_depth: int) -> None:
+        nonlocal property_count
+        if not isinstance(node, dict) or set(node) - allowed:
+            raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+        kind = node.get("type")
+        if not isinstance(kind, str):
+            raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+        if kind == "object":
+            if object_depth > 5:
+                raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+            properties = node.get("properties")
+            required = node.get("required")
+            if (
+                not isinstance(properties, dict)
+                or not all(isinstance(name, str) and isinstance(child, dict)
+                           for name, child in properties.items())
+                or not isinstance(required, list)
+                or not all(isinstance(name, str) for name in required)
+                or len(required) != len(properties)
+                or set(required) != set(properties)
+                or node.get("additionalProperties") is not False
+                or "items" in node
+            ):
+                raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+            property_count += len(properties)
+            if property_count > 100:
+                raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+            for child in properties.values():
+                inspect(child, object_depth + 1)
+        elif kind == "array":
+            if "items" not in node or any(
+                key in node for key in ("properties", "required", "additionalProperties")
+            ):
+                raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+            inspect(node["items"], object_depth)
+        elif kind in {"string", "integer", "number", "boolean"}:
+            if any(
+                key in node for key in ("properties", "required", "additionalProperties", "items")
+            ):
+                raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+        else:
+            raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
+    inspect(schema, 1)
+
+
 def _measure_schema() -> dict[str, Any]:
     fields = {
         "id": {"type": "string"},
@@ -114,7 +174,6 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
         },
         "minimumRepresentations": {
             "type": "integer",
-            "minimum": 0,
             "description": "Required obligations use at least 1; optional ones use 0.",
         },
         "measures": {
@@ -146,41 +205,12 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
         "required": list(coverage_fields),
         "properties": coverage_fields,
     }
-    option_fields = {
-        "id": {"type": "string"},
-        "label": {"type": "string"},
-        "coverageOverrides": {"type": "array", "items": coverage},
-        "pageScope": _string_array(),
-        "audience": {"type": "string"},
-    }
-    clarification_fields = {
-        "id": {"type": "string"},
-        "category": {
-            "type": "string",
-            "enum": [
-                "METRIC_DEFINITION",
-                "TIME_COMPARISON",
-                "SECURITY",
-                "AUDIENCE",
-                "PAGE_SCOPE",
-                "FILTER_SCOPE",
-                "OTHER",
-            ],
-        },
-        "question": {"type": "string"},
-        "reason": {"type": "string"},
-        "required": {"type": "boolean"},
-        "coverageRequirementIds": _string_array(),
-        "selection": {"type": "string", "enum": ["SINGLE"]},
-        "options": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": list(option_fields),
-                "properties": option_fields,
-            },
-        },
+    clarification_category = {
+        "type": "string",
+        "enum": [
+            "METRIC_DEFINITION", "TIME_COMPARISON", "SECURITY", "AUDIENCE",
+            "PAGE_SCOPE", "FILTER_SCOPE", "OTHER",
+        ],
     }
     interpretation_fields = {
         "request_kind": {
@@ -217,11 +247,15 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
         "ambiguities": _string_array(),
         "clarifications": {
             "type": "array",
+            "description": (
+                "Legacy field: return an empty array. Material clarification questions "
+                "belong only in the top-level questions array."
+            ),
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": list(clarification_fields),
-                "properties": clarification_fields,
+                "required": [],
+                "properties": {},
             },
         },
         "coverageRequirements": {"type": "array", "items": coverage},
@@ -240,7 +274,7 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
     }
     question_fields = {
         "id": {"type": "string"},
-        "category": clarification_fields["category"],
+        "category": clarification_category,
         "question": {"type": "string"},
         "reason": {"type": "string"},
         "required": {
@@ -375,7 +409,6 @@ def report_design_schema(
         "purpose": {"type": "string"},
         "visuals": {
             "type": "array",
-            "maxItems": max_visuals_per_page,
             "description": (
                 f"Compiler-ordered visual list. The validated runtime permits at most "
                 f"{max_visuals_per_page} visuals on this page. The active compiler has four "
@@ -629,6 +662,7 @@ class OpenAICompatibleProvider:
         user_content = json.dumps(request.context, sort_keys=True, separators=(",", ":"))
         if len(request.system_prompt) + len(user_content) > self.profile.max_input_characters:
             raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED")
+        _validate_strict_wire_schema(request.output_schema)
         return {
             "model": self.profile.model_or_deployment,
             "messages": [
@@ -705,11 +739,9 @@ class OpenAICompatibleProvider:
                 if response.status_code < 200 or response.status_code >= 300:
                     raise ProviderCallError("MODEL_PROVIDER_REJECTED", observation=observation())
                 payload = response.json()
-                content = payload["choices"][0]["message"]["content"]
-                value = json.loads(content) if isinstance(content, str) else content
-                if not isinstance(value, dict):
-                    raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
-                candidate_digest = _candidate_digest(value)
+                # A provider may report billable usage even when the candidate
+                # body is malformed. Capture only validated counters first so
+                # the failure observation does not silently lose known usage.
                 usage = payload.get("usage") if isinstance(payload, dict) else None
                 if not isinstance(usage, dict):
                     usage = {}
@@ -718,6 +750,11 @@ class OpenAICompatibleProvider:
                     if amount is not None:
                         usage_totals[name] += amount
                         usage_seen.add(name)
+                content = payload["choices"][0]["message"]["content"]
+                value = json.loads(content) if isinstance(content, str) else content
+                if not isinstance(value, dict):
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
+                candidate_digest = _candidate_digest(value)
                 if request.validator is not None:
                     try:
                         request.validator(value)
@@ -786,7 +823,7 @@ class OpenAICompatibleProvider:
 
 
 def _integer_or_none(value: object) -> int | None:
-    return value if isinstance(value, int) and value >= 0 else None
+    return value if type(value) is int and value >= 0 else None
 
 
 class DeterministicFakeProvider:
