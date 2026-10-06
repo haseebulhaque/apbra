@@ -912,6 +912,13 @@ CURRENT_DEMO_SOURCE_PATHS = {
     'tests/bootstrap/test_hosted_web_release_scope.py',
     'tests/bootstrap/test_current_demo_source_alignment_scope.py',
 }
+APBRA160_CI_CAPACITY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-bootstrap-ci-capacity'
+APBRA160_CI_CAPACITY_PATHS = {
+    '.github/workflows/bootstrap.yml',
+    'scripts/check_bootstrap.py',
+    'scripts/check_ci_policy.py',
+    'tests/bootstrap/test_ci_policy.py',
+}
 CURRENT_DEMO_HISTORICAL_SOURCE_COUNT = 74
 CURRENT_DEMO_HISTORICAL_SOURCES_SHA256 = '1f1ecb0729abfc6b76671b621208a6c60370a838f91a67050faa7e3c0b51fa4b'
 CURRENT_DEMO_SOURCES = (
@@ -1117,7 +1124,7 @@ def workflow_errors(text: str) -> list[str]:
     if set(jobs) != {'bootstrap'}:
         errors.append('Unexpected job: review bootstrap CI scope')
     for job in jobs.values():
-        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '30':
+        if job.get('runs-on') != 'ubuntu-24.04' or job.get('timeout-minutes') != '45':
             errors.append('Unexpected runner or unbounded job')
         if 'permissions' in job:
             errors.append('Job permission override prohibited')
@@ -1200,7 +1207,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             # The original bytes are digest-bound above and again in APBRA-163's
             # scope check below. Validate every other control through the current
             # checker after normalizing only this historical timeout in memory.
-            workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 30', 1)
+            workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
         errors += workflow_errors(workflow_text)
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
         # Explicitly bounded Capstone extensions, not arbitrary task discovery.
@@ -2540,7 +2547,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
-        if active_task_id == 'APBRA-160' and active_branch == CURRENT_DEMO_SOURCE_BRANCH:
+        if active_task_id == 'APBRA-160' and active_branch in {
+                CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH}:
             registered_tasks['APBRA-160'] = task
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
@@ -2616,13 +2624,20 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS) and
                     not (active_task_id == 'APBRA-160' and
                          active_branch == CURRENT_DEMO_SOURCE_BRANCH and
-                         changed_paths == CURRENT_DEMO_SOURCE_PATHS)):
+                         changed_paths == CURRENT_DEMO_SOURCE_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
+                         active_branch == APBRA160_CI_CAPACITY_BRANCH and
+                         changed_paths == APBRA160_CI_CAPACITY_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-160' and
                     active_branch == CURRENT_DEMO_SOURCE_BRANCH and
                     changed_paths != CURRENT_DEMO_SOURCE_PATHS):
                 errors.append('APBRA-160 current-source amendment must change exactly four governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == APBRA160_CI_CAPACITY_BRANCH and
+                    changed_paths != APBRA160_CI_CAPACITY_PATHS):
+                errors.append('APBRA-160 CI-capacity amendment must change exactly four policy files')
             if (active_task_id == 'APBRA-148' and
                     changed_paths.intersection(POST_CAPSTONE_PRODUCT_RECONCILIATION_REGISTRATION_PATHS) and
                     changed_paths.intersection(POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS)):
@@ -2958,6 +2973,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == CURRENT_DEMO_SOURCE_BRANCH and
                          changed_paths == CURRENT_DEMO_SOURCE_PATHS and
                          name in CURRENT_DEMO_SOURCE_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == APBRA160_CI_CAPACITY_BRANCH and
+                         changed_paths == APBRA160_CI_CAPACITY_PATHS and
+                         name in APBRA160_CI_CAPACITY_PATHS and
                          path_allowed(name, task, card))
                 ):
                     errors.append('File outside active task scope: ' + name)
