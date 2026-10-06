@@ -31,6 +31,93 @@ from apbra_api.tenant_settings import (
 )
 
 
+def test_section_update_preserves_unrelated_settings_and_versions(client: TestClient) -> None:
+    owner = sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    response = client.patch(
+        "/api/tenant-settings/sections/budgets_limits",
+        headers=csrf(owner),
+        json={
+            "expected_version": before["version"],
+            "changes": {"invitation_ttl_days": before["settings"]["invitation_ttl_days"] - 1},
+        },
+    )
+    assert response.status_code == 200
+    after = response.json()
+    assert after["version"] == before["version"] + 1
+    assert after["settings"]["invitation_ttl_days"] == before["settings"]["invitation_ttl_days"] - 1
+    for key in (
+        "provider_profile", "automatic_generation_enabled", "generation_policy", "conventions",
+    ):
+        assert after["settings"][key] == before["settings"][key]
+    history = client.get("/api/tenant-settings/history").json()["items"]
+    assert history[0]["changed_keys"] == ["invitation_ttl_days"]
+
+
+def test_section_update_rejects_cross_section_credential_and_stale_writes(
+    client: TestClient,
+) -> None:
+    owner = sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    version = before["version"]
+    route = "/api/tenant-settings/sections/budgets_limits"
+    for section, changes in (
+        ("budgets_limits", {"automatic_generation_enabled": True}),
+        ("budgets_limits", {"credential": "synthetic-must-not-be-accepted"}),
+        ("unknown_section", {"invitation_ttl_days": 6}),
+    ):
+        rejected = client.patch(
+            f"/api/tenant-settings/sections/{section}",
+            headers=csrf(owner),
+            json={"expected_version": version, "changes": changes},
+        )
+        assert rejected.status_code == 422
+        assert "synthetic-must-not-be-accepted" not in rejected.text
+        assert client.get("/api/tenant-settings").json()["version"] == version
+    assert client.patch(
+        route,
+        json={"expected_version": version, "changes": {"invitation_ttl_days": 6}},
+    ).status_code == 401
+    invalid_cross_setting = client.patch(
+        route,
+        headers=csrf(owner),
+        json={"expected_version": version, "changes": {
+            "max_clarification_rounds_per_cycle": 11,
+        }},
+    )
+    assert invalid_cross_setting.status_code == 422
+    assert client.get("/api/tenant-settings").json()["version"] == version
+    saved = client.patch(
+        route,
+        headers=csrf(owner),
+        json={"expected_version": version, "changes": {"invitation_ttl_days": 6}},
+    )
+    assert saved.status_code == 200
+    stale = client.patch(
+        route,
+        headers=csrf(owner),
+        json={"expected_version": version, "changes": {"invitation_ttl_days": 5}},
+    )
+    assert stale.status_code == 409
+    assert client.get("/api/tenant-settings").json()["settings"]["invitation_ttl_days"] == 6
+
+
+def test_section_update_requires_company_admin_authority(client: TestClient) -> None:
+    sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    member = sign_in(client, "member")
+    denied = client.patch(
+        "/api/tenant-settings/sections/branding_organisation",
+        headers=csrf(member),
+        json={"expected_version": before["version"], "changes": {
+            "generation_policy.branding": before["settings"]["generation_policy"]["branding"],
+        }},
+    )
+    assert denied.status_code == 403
+    sign_in(client, "owner")
+    assert client.get("/api/tenant-settings").json()["version"] == before["version"]
+
+
 def test_private_preview_onboarding_template_v1_matches_owner_decision() -> None:
     settings = private_preview_onboarding_settings_v1("Aurora Research")
     assert settings.clarification_enabled is True

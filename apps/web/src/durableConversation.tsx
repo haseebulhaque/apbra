@@ -32,6 +32,8 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
   const [answer,setAnswer]=useState('');
   const [contextVersion,setContextVersion]=useState(record.semantic_context_version);
   const [busy,setBusy]=useState(false);
+  const [busyStep,setBusyStep]=useState<string|null>(null);
+  const [actionError,setActionError]=useState('');
   const [reportReady,setReportReady]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const refreshGeneration=useRef(0);
@@ -55,6 +57,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
   useEffect(()=>{
     caseIdRef.current=record.id;
     contextVersionRef.current=record.semantic_context_version;
+    setActionError('');
     setContextVersion(record.semantic_context_version);
     setReportReady(false);
     setPendingFiles([]);
@@ -80,6 +83,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     if(!messageCommand.current||messageCommand.current.text!==text)messageCommand.current={text,key:crypto.randomUUID()};
     refreshGeneration.current+=1;
     setBusy(true);
+    setBusyStep('Saving your additional requirements');
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const event=await conversationApi.append(caseId,'USER_MESSAGE',{text},current,messageCommand.current.key,csrfToken);
@@ -89,7 +93,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
       changed(next);
       setMessage('');
       messageCommand.current=null;
-    }catch(error){onError(error)}finally{setBusy(false)}
+    }catch(error){onError(error)}finally{setBusy(false);setBusyStep(null)}
   }
 
   function selectFiles(files:File[]){
@@ -104,6 +108,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     if(!pendingFiles.length)return;
     refreshGeneration.current+=1;
     setBusy(true);
+    setBusyStep('Saving and checking selected files');
     let version=contextVersionRef.current;
     for(const pending of pendingFiles){
       setPendingFiles(current=>current.map(item=>item.id===pending.id?{...item,status:'UPLOADING',error:undefined}:item));
@@ -116,16 +121,18 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
         contextVersionRef.current=version;setPendingFiles(current=>current.filter(item=>item.id!==pending.id));
       }catch(error){const message=error instanceof Error?error.message:'Upload failed.';setPendingFiles(current=>current.map(item=>item.id===pending.id?{...item,status:'FAILED',error:message}:item));onError(error)}
     }
-    changed(version);setBusy(false);
+    changed(version);setBusy(false);setBusyStep(null);
   }
 
   async function prepare(){
     setBusy(true);
+    setBusyStep('Checking your information and preparing the understanding');
+    setActionError('');
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const interpretation=await acceptanceApi.prepare(caseId,current,csrfToken);
       if(operationIsCurrent(caseId,current))setAcceptance({...await acceptanceApi.state(caseId),interpretation,confirmed_contract:null});
-    }catch(error){onError(error)}finally{setBusy(false)}
+    }catch(error){setActionError('The understanding could not be completed. Your saved request and files remain available. Review the error, then retry only when the required capability and budget are available. No requirements were confirmed.');onError(error)}finally{setBusy(false);setBusyStep(null)}
   }
 
   async function submitAnswer(question:DurableQuestion,input:{rawAnswer:string;suggestionId?:string;decision:'ACCEPT'|'DECLINE'|'FREE_TEXT'}){
@@ -136,6 +143,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
     if(!answerCommand.current||answerCommand.current.signature!==signature)answerCommand.current={signature,key:crypto.randomUUID()};
     refreshGeneration.current+=1;
     setBusy(true);
+    setBusyStep('Saving your answer and refreshing the understanding');
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const event=await conversationApi.append(caseId,'RAW_ANSWER',payload,current,answerCommand.current.key,csrfToken);
@@ -149,26 +157,28 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
       setAcceptance({...await acceptanceApi.state(caseId),interpretation:nextInterpretation,confirmed_contract:null});
       const transcript=await conversationApi.list(caseId);
       if(operationIsCurrent(caseId,next))setEvents(transcript.items);
-    }catch(error){onError(error)}finally{setBusy(false)}
+    }catch(error){onError(error)}finally{setBusy(false);setBusyStep(null)}
   }
 
   async function confirm(){
     const interpretation=acceptance.interpretation;
     if(!interpretation?.current)return;
     setBusy(true);
+    setBusyStep('Confirming the current understanding');
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const contract=await acceptanceApi.confirm(caseId,interpretation.id,current,csrfToken);
       if(operationIsCurrent(caseId,current))setAcceptance({
         ...acceptance,interpretation:{...interpretation,state:'CONFIRMED'},confirmed_contract:contract,
       });
-    }catch(error){onError(error)}finally{setBusy(false)}
+    }catch(error){onError(error)}finally{setBusy(false);setBusyStep(null)}
   }
 
   async function refine(){
     const enhancement=message.trim();
     if(!refinementCommand.current||refinementCommand.current.text!==enhancement)refinementCommand.current={text:enhancement,key:crypto.randomUUID()};
     setBusy(true);
+    setBusyStep('Enhancing and rechecking the understanding');
     try{
       const caseId=record.id,current=contextVersionRef.current;
       const result=await acceptanceApi.refine(caseId,current,enhancement,refinementCommand.current.key,csrfToken);
@@ -182,7 +192,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
         setEvents(transcript.items);
         setAcceptance({interpretation:next,confirmed_contract:null,clarification:(await acceptanceApi.state(caseId)).clarification});
       }
-    }catch(error){onError(error)}finally{setBusy(false)}
+    }catch(error){onError(error)}finally{setBusy(false);setBusyStep(null)}
   }
 
   const interpretation=acceptance.interpretation;
@@ -199,6 +209,8 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
 
   return <section className="durable-conversation" aria-label="Your report journey">
     <div className="journey-heading"><div><span className="eyebrow">Your report journey</span><h2>From question to candidate</h2><p>Each step stays with this private report. Review the meaning before any build begins.</p></div><span className="status-badge status-info">Private and saved</span></div>
+    {busyStep&&<div className="state-callout info journey-progress" role="status" aria-live="polite"><span className="processing-spinner" aria-hidden="true"/><div><strong>{busyStep}…</strong><p>Keep this page open. A report is available only after the later build and validation steps succeed.</p></div></div>}
+    {actionError&&<div className="state-callout danger" role="alert"><strong>Understanding not completed</strong><p>{actionError}</p></div>}
     <ol className="journey-steps" aria-label="Report journey">{stages.map((label,index)=><li key={label} className={index===stage?'active':index<stage?'complete':'unavailable'} aria-current={index===stage?'step':undefined} aria-disabled={index>stage||undefined}><span className="step-number" aria-hidden="true">{index<stage?'✓':index+1}</span><span className="step-copy"><small>{index<stage?'Complete':index===stage?stale&&index>=2?'Needs review':'Current':'Unavailable'}</small><strong>{label}</strong></span></li>)}</ol>
     <div className="journey-section-title"><div><span className="eyebrow">Working together</span><h3>Shape your report</h3><p>Explain what you need, add supporting information, then confirm that the understanding matches your goal.</p></div></div>
     <section className="conversation-step" aria-label="Report requirements">
@@ -220,7 +232,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',onConte
       {summary&&!stale&&['requestedScope','deliverableScope','unsupportedScope','omittedScope','limitations','suggestedAlternatives','assumptions'].some(key=>scopeItems(key).length>0)&&<div className="understanding-grid" aria-label="Disclosed report scope">{([['requestedScope','Requested scope'],['deliverableScope','What this candidate can deliver'],['unsupportedScope','Unsupported scope'],['omittedScope','Omitted scope'],['limitations','Limitations'],['suggestedAlternatives','Suggested alternatives'],['assumptions','Assumptions']] as const).filter(([key])=>scopeItems(key).length>0).map(([key,label])=><div key={key}><h5>{label}</h5><ul>{scopeItems(key).map((item,index)=><li key={`${key}-${index}`}>{item}</li>)}</ul></div>)}</div>}
       {question&&!stale&&<div className="clarification-panel"><p><strong>Optional refinement{pendingQuestions.length>1?'s':''}</strong> · You can accept the current understanding without answering.</p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div>{question.suggestions.map(option=><button key={option.id} disabled={busy||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}</div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={capabilities?.max_answer_characters} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>}
       {clarification&&<p role="status" className="supporting-copy">Clarification cycle {clarification.cycle_number||1}: {clarification.rounds_used_in_cycle} of {clarification.max_rounds_per_cycle??'—'} turns · {clarification.rounds_used_overall} of {clarification.max_rounds_overall??'—'} overall.{clarification.overall_limit_reached?' Further AI clarification is unavailable; you can still accept the current understanding or ask an expert.':clarification.per_cycle_limit_reached?' Start a new cycle to enhance the requirements.':''}</p>}
-      <div className="command-bar"><button disabled={busy||!evidence.length} onClick={()=>void prepare()}>{stale?'Review updated requirements':'Review my requirements'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button disabled={busy} onClick={()=>void confirm()}>Accept &amp; Generate</button>}{summary&&!stale&&!acceptance.confirmed_contract&&<button className="subtle" disabled={busy||!canRefine} onClick={()=>void refine()}>Clarify / Enhance Requirements</button>}</div>
+      <div className="command-bar"><button disabled={busy||!evidence.length} onClick={()=>void prepare()}>{stale?'Review updated requirements':'Review my requirements'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button disabled={busy} onClick={()=>void confirm()}>Confirm requirements</button>}{summary&&!stale&&!acceptance.confirmed_contract&&<button className="subtle" disabled={busy||!canRefine} onClick={()=>void refine()}>Clarify / Enhance Requirements</button>}</div>
       {acceptance.confirmed_contract?.current&&<div className="confirmed-state" role="status"><strong>Your report requirements are confirmed</strong><p>Confirmed {new Date(acceptance.confirmed_contract.accepted_at).toLocaleString()}. If the request or supporting information changes, you will need to confirm the revised meaning.</p></div>}
     </section>
     <DurableGeneration caseId={record.id} contract={acceptance.confirmed_contract} csrfToken={csrfToken} actorRole={actorRole} onReportReady={ready=>{setReportReady(ready);onReportReady?.(ready)}} onError={onError}/>

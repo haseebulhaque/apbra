@@ -499,6 +499,61 @@ def update_settings(
     )
 
 
+# These names are application policy sections, not storage-provider configuration.
+# A section request carries only values in its exact section; committed settings
+# are assembled from the locked current version and validated as one typed model.
+SECTION_FIELDS: dict[str, frozenset[str]] = {
+    "ai_models": frozenset({
+        "automatic_generation_enabled", "clarification_enabled",
+        "expert_escalation_enabled", "provider_profile",
+    }),
+    "responses_standards": frozenset({
+        "conventions", "delivery_guide_policy", "generation_policy.generation",
+        "generation_policy.governance",
+    }),
+    "budgets_limits": frozenset({
+        "invitation_ttl_days", "upload_policy", "clarification_policy",
+        "max_clarification_rounds_per_cycle", "max_clarification_rounds_overall",
+    }),
+    "branding_organisation": frozenset({
+        "generation_policy.branding", "generation_policy.organisation",
+    }),
+}
+
+
+def update_settings_section(
+    db: Session,
+    actor: Actor,
+    section: str,
+    changes: dict[str, Any],
+    *,
+    expected_version: int,
+    reason: str | None = None,
+    credential_store: TenantCredentialStore | None = None,
+    qualified_profiles: tuple[ProviderProfile, ...] = (),
+) -> TenantSettingsSnapshot:
+    """Apply one allowlisted section against a locked effective version."""
+    _require_admin(actor)
+    allowed = SECTION_FIELDS.get(section)
+    if allowed is None or not changes or any(path not in allowed for path in changes):
+        raise ValueError("invalid Tenant Settings section change")
+    current = current_settings(db, actor.company_id, lock=True)
+    if current.version != expected_version:
+        raise Conflict()
+    data = current.settings.model_dump(mode="json", by_alias=True)
+    for path, value in changes.items():
+        target = data
+        parts = path.split(".")
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = value
+    updated = TenantSettings.model_validate(data)
+    return update_settings(
+        db, actor, updated, expected_version=expected_version, reason=reason,
+        credential_store=credential_store, qualified_profiles=qualified_profiles,
+    )
+
+
 def restore_settings(
     db: Session,
     actor: Actor,

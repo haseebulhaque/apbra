@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi} from './api';
+import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -10,6 +10,20 @@ const inspectPlaywrightConfig=(databaseUrl:string,environment:Record<string,stri
   cwd:fileURLToPath(new URL('..',import.meta.url)),
   encoding:'utf8',
   env:{...process.env,PGHOST:undefined,PGHOSTADDR:undefined,PGPORT:undefined,PGDATABASE:undefined,PGSERVICE:undefined,PGSERVICEFILE:undefined,PGSYSCONFDIR:undefined,APBRA_E2E_DATABASE_URL:databaseUrl,APBRA_E2E_SESSION_SECRET:'synthetic-config-validation-material',APBRA_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra',APBRA_TEST_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test',...environment},
+});
+
+describe('Tenant Settings section transport',()=>{
+  it('sends only the selected section change and expected version',async()=>{
+    const fetch=vi.fn(async()=>response({version:2}));
+    vi.stubGlobal('fetch',fetch);
+    await tenantSettingsApi.updateSection('branding_organisation',{'generation_policy.branding':{themeName:'Synthetic preview'}},1,'csrf');
+    const [path,init]=(fetch.mock.calls as unknown as Array<[RequestInfo|URL,RequestInit]>)[0];
+    expect(path).toBe('/api/tenant-settings/sections/branding_organisation');
+    expect(init.method).toBe('PATCH');
+    expect(init.headers).toEqual(expect.objectContaining({'X-CSRF-Token':'csrf'}));
+    expect(JSON.parse(String(init.body))).toEqual({expected_version:1,changes:{'generation_policy.branding':{themeName:'Synthetic preview'}}});
+    expect(String(init.body)).not.toMatch(/credential|automatic_generation_enabled|upload_policy/);
+  });
 });
 
 describe('APBRA isolated browser-test configuration',()=>{
