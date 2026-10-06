@@ -906,6 +906,7 @@ HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registrat
 FOUNDRY_SCHEMA_PATHS = {
     'apps/api/src/apbra_api/model_provider.py',
     'apps/api/src/apbra_api/application.py',
+    'apps/api/src/apbra_api/api.py',
     'apps/api/tests/test_model_provider.py',
     'apps/api/tests/test_conversations.py',
 }
@@ -914,21 +915,21 @@ FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_foundry_schema_scope.py',
 }
-FOUNDRY_SCHEMA_TASK_SHA256 = '342e882bae085394574ddd9892a119c5941434a74d3f4c4be3a1ecb8e64faa94'
+FOUNDRY_SCHEMA_TASK_SHA256 = '1416b4a8ad1e46d8bca03296ba97c6f877649a3790c13f68ed4272b76a4afd70'
 FOUNDRY_SCHEMA_SOURCES = (
     ('apbra-173b-preview-direction', '8519682', 23, '8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
     ('apbra-173b-mvp-scope', '4063307', 14, '3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
     ('apbra-173b-traceability', '3932382', 18, '52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
 )
 FOUNDRY_SCHEMA_GATE_SHA256 = {
-    'requirements': 'd09e6a3b81ebf80397fb54c9c5b8ca5738c8f498d975db427c57ee8ec9e677d3',
+    'requirements': '2d77c4a240cfdfe4213a3d63e8410e81581cb499e8c7f27bf4ac549a528e7403',
     'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
     'architecture_refs': 'f079f6c0d5d2711fb418ee251554ae40d38adbde0fd4f52f6d97712f62ca8f90',
-    'restricted_paths': 'b83f402df9c1470656a1f7cbde869c503d89e4ebbd3d75b03447ba68fe6406fb',
-    'acceptance_criteria': '71c8d98da32b4111cc1a4eeb97debb796bcad0d753e160f03949290c281cc4e4',
+    'restricted_paths': '859a559592e1c0f20ddb5c3582565876e61b8f6f016e17a14e3849c5b0e7800c',
+    'acceptance_criteria': '6e8f8f8a6ad66f4f8661aa439229b359019f4ddc464f22fe1473cd0334001225',
     'verification_required': 'a78f80a92af200d70214e6d8ec7f6a63a1a108eaea00847270d756e8ee16d229',
-    'out_of_scope': 'c0bc7b872ddca7d3838a58ed4eb703b0ebaf58a754630b103f89eca460e36969',
-    'escalate_when': '3e8f164409a92ff26e38d15c9bac3897f5a21185cbe9bd897227bd0147d5c111',
+    'out_of_scope': 'c45d9cd9e216718002056864f3f5b4151c8a6e70385e00b3d89a538a1a4ce1b6',
+    'escalate_when': 'f050ebaabda76a3463ee524e3a34765c250edfb518b7fcb0e046aa147de8f31c',
     'dependencies': '5fdc0382c536c4e5a4b52ddb5ffe7c446a1477661cb7659baee69d46a27db93f',
 }
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-schema-compatibility'

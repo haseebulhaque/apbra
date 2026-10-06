@@ -52,12 +52,13 @@ class FoundrySchemaScopeTests(unittest.TestCase):
         expected = {
             "apps/api/src/apbra_api/model_provider.py",
             "apps/api/src/apbra_api/application.py",
+            "apps/api/src/apbra_api/api.py",
             "apps/api/tests/test_model_provider.py",
             "apps/api/tests/test_conversations.py",
         }
         self.assertEqual(c.FOUNDRY_SCHEMA_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 4)
+        self.assertEqual(len(self.task["allowed_paths"]), 5)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.FOUNDRY_SCHEMA_BRANCH)
         self.assertEqual(self.task["base_commit"], "f9db07cd7bc16311caf0ce316aa404018348c382")
@@ -95,7 +96,7 @@ class FoundrySchemaScopeTests(unittest.TestCase):
     def test_scope_mutations_fail_with_recomputed_task_digest(self):
         mutations = [
             [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/model_provider.py"],
-            self.task["allowed_paths"] + ["apps/api/src/apbra_api/api.py"],
+            self.task["allowed_paths"] + ["apps/api/src/apbra_api/persistence.py"],
             self.task["allowed_paths"] + ["apps/api/alembic/versions/new.py"],
             self.task["allowed_paths"] + ["apps/api/src/**"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/model_provider.py"],
