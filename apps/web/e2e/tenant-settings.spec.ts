@@ -198,6 +198,41 @@ test('lost section-save response reconciles current policy without replaying the
   expect(after.settings.invitation_ttl_days).toBe(before.settings.invitation_ttl_days+1);
 });
 
+test('unknown save outcome blocks all settings writes until an authoritative read succeeds',async({page})=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration'}).click();
+  const admin=page.getByLabel('Tenant administration');
+  const before=await (await page.request.get('/api/tenant-settings')).json();
+  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
+  let writes=0;
+  await page.route('**/api/tenant-settings/sections/budgets_limits',async route=>{
+    writes+=1;
+    const committed=await route.fetch();
+    expect(committed.status()).toBe(200);
+    await route.fulfill({status:503,contentType:'application/json',body:'{"error":{"code":"TEMPORARY","message":"Synthetic response lost after commit"}}'});
+  });
+  await page.route('**/api/tenant-settings',route=>route.request().method()==='GET'?route.fulfill({status:503,contentType:'application/json',body:'{"error":{"code":"TEMPORARY","message":"Synthetic current read unavailable"}}'}):route.continue());
+  await admin.getByRole('button',{name:/Review .* changes/}).click();
+  await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Confirm and save new version'}).click();
+  await expect(admin.getByRole('alert')).toContainText('Settings writes are paused');
+  await expect(page.getByRole('dialog',{name:'Review tenant settings changes'})).toHaveCount(0);
+  await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeDisabled();
+  await expect(admin.getByLabel('Invitation lifetime (days)')).toHaveValue(String(before.settings.invitation_ttl_days+1));
+  expect(writes).toBe(1);
+  await admin.getByRole('button',{name:'Check current settings before another save'}).click();
+  await expect(admin.getByRole('alert')).toContainText('Settings writes remain paused');
+  expect(writes).toBe(1);
+  await page.unroute('**/api/tenant-settings');
+  await admin.getByRole('button',{name:'Check current settings before another save'}).click();
+  await expect(admin.getByText(`Current effective settings version ${before.version+1} loaded.`,{exact:false})).toBeVisible();
+  await expect(admin.getByRole('button',{name:'Check current settings before another save'})).toHaveCount(0);
+  expect(writes).toBe(1);
+  const after=await (await page.request.get('/api/tenant-settings')).json();
+  expect(after.version).toBe(before.version+1);
+  expect(after.settings.invitation_ttl_days).toBe(before.settings.invitation_ttl_days+1);
+});
+
 test('owner configures and rotates a synthetic protected credential without revealing it',async({page})=>{
   await signIn(page,'owner');
   const initialVersion=(await (await page.request.get('/api/tenant-settings')).json()).version;
