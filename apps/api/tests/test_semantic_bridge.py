@@ -388,6 +388,15 @@ def test_bridge_rejection_retains_only_curated_reason(
         (0, b'[]', "BRIDGE_RESPONSE_INVALID"),
         (0, b'"synthetic-secret"', "BRIDGE_RESPONSE_INVALID"),
         (0, b'\xff', "BRIDGE_RESPONSE_INVALID"),
+        (0, b"[" * 5_000 + b"0" + b"]" * 5_000, "BRIDGE_RESPONSE_INVALID"),
+        (0, b'{"ok":true,"value":{"number":' + b"1" * 5_000 + b'}}',
+         "BRIDGE_RESPONSE_INVALID"),
+        (0, b'{"ok":false,"ok":true,"value":{"session":{}}}',
+         "BRIDGE_RESPONSE_INVALID"),
+        (0, b'{"ok":false,"error":{"code":"SEMANTIC_VALIDATION_FAILED",'
+         b'"message":"synthetic-secret","message":'
+         b'"CLARIFICATION_STATE_INVALID: Analysis history is malformed."}}',
+         "BRIDGE_RESPONSE_INVALID"),
     ],
 )
 def test_bridge_protocol_failures_remain_rejected_and_redacted(

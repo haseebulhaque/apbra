@@ -50,6 +50,15 @@ def safe_semantic_reason(value: object) -> str:
     return value if type(value) is str and value in _SAFE_REASONS else "SEMANTIC_RULE_UNCLASSIFIED"
 
 
+def _bridge_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("Duplicate bridge JSON keys.")
+        value[key] = item
+    return value
+
+
 class SemanticBridgeFailure(SemanticValidationFailed):
     """Same public failure; only a curated constant is available to internal audit."""
 
@@ -120,8 +129,8 @@ class SemanticBridge:
         if len(result.stdout) > MAX_BRIDGE_BYTES:
             raise SemanticBridgeFailure("BRIDGE_OUTPUT_TOO_LARGE")
         try:
-            response = json.loads(result.stdout)
-        except (json.JSONDecodeError, UnicodeDecodeError):
+            response = json.loads(result.stdout, object_pairs_hook=_bridge_object)
+        except (ValueError, RecursionError):
             reason = "BRIDGE_PROCESS_FAILED" if result.returncode else "BRIDGE_RESPONSE_INVALID"
             raise SemanticBridgeFailure(reason) from None
         if not isinstance(response, dict):
