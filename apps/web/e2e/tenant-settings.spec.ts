@@ -44,6 +44,9 @@ test('owner edits and restores a versioned clarification policy without exposing
 test('ordinary member cannot see owner settings and narrow admin form does not overflow',async({page})=>{
   await signIn(page,'member');
   await expect(page.getByLabel('Tenant administration')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Administration'})).toHaveCount(0);
+  await page.getByRole('button',{name:'My profile'}).click();
+  await expect(page.getByRole('heading',{name:'My profile'})).toBeVisible();
   await page.getByRole('button',{name:'Sign out'}).click();
   await signIn(page,'owner');
   await page.setViewportSize({width:375,height:812});
@@ -117,7 +120,7 @@ test('saving one section leaves another unsaved draft out of the committed versi
   await expect(admin.getByRole('checkbox',{name:/Expert assistance/})).toHaveJSProperty('checked',before.settings.expert_escalation_enabled);
 });
 
-test('stale section saves fail closed and explicitly reload current policy',async({page,context})=>{
+test('stale section saves fail closed and preserve the draft while loading current policy',async({page,context})=>{
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Administration'}).click();
   const original=await (await page.request.get('/api/tenant-settings')).json();
@@ -140,9 +143,14 @@ test('stale section saves fail closed and explicitly reload current policy',asyn
   await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Confirm and save new version'}).click();
   await expect(first.getByRole('alert')).toContainText('rejected this stale version');
   expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(original.version+1);
-  await first.getByRole('button',{name:'Discard drafts and load latest settings'}).click();
-  await expect(first.getByLabel('Invitation lifetime (days)')).toHaveValue(String(original.settings.invitation_ttl_days));
+  await first.getByRole('button',{name:'Load latest settings and keep my draft'}).click();
+  await expect(first.getByText('Your unsaved draft was kept.',{exact:false})).toBeVisible();
+  await expect(first.getByLabel('Invitation lifetime (days)')).toHaveValue(String(original.settings.invitation_ttl_days+1));
   await expect(first.getByLabel('Files per selection')).toHaveValue(String(original.settings.upload_policy.max_files_per_selection+1));
+  await first.getByRole('button',{name:/Review .* changes/}).click();
+  await expect(page.getByRole('dialog',{name:'Review tenant settings changes'})).toContainText('invitation_ttl_days');
+  await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Cancel'}).click();
+  expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(original.version+1);
   await secondPage.close();
 });
 

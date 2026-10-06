@@ -148,8 +148,8 @@ test('an uninvited identity creates one company with owner and approved settings
   expect(settings.body).toMatchObject({version:1,validation_status:'PASS',settings:{automatic_generation_enabled:false,provider_profile:null,generation_policy:{organisation:{name,displayName:name}}}});
   await page.reload();
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
-  await page.getByRole('button',{name:'Administration'}).click();
-  await page.getByText('My profile').click();
+  await page.getByRole('button',{name:'My profile'}).click();
+  await page.locator('.profile-editor summary').click();
   await page.locator('.profile-editor').getByLabel('Display name').fill('Casey Creator');
   await page.getByRole('button',{name:'Save profile'}).click();
   await expect(page.locator('.account-controls')).toContainText('Casey Creator');
