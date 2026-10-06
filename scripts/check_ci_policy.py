@@ -101,7 +101,7 @@ def validate(text: str) -> list[str]:
         job = doc['jobs']['bootstrap']
         if not isinstance(job, dict) or set(job) != {'name', 'runs-on', 'timeout-minutes', 'env', 'services', 'steps'}:
             return errors + ['Unexpected job options; skipping or error suppression is forbidden']
-        if job['name'] != 'APBRA Bootstrap Checks' or job['runs-on'] != 'ubuntu-24.04' or job['timeout-minutes'] != '30':
+        if job['name'] != 'APBRA Bootstrap Checks' or job['runs-on'] != 'ubuntu-24.04' or job['timeout-minutes'] != '45':
             errors.append('Unexpected required check, runner or timeout')
         expected_env = {
             'PR_HEAD_SHA': '${{ github.event.pull_request.head.sha }}',

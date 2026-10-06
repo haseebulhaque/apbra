@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('ci_policy', ROOT / 'scripts/check_ci_policy.py')
 c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
+BOOTSTRAP_SPEC = importlib.util.spec_from_file_location('bootstrap_for_ci_capacity', ROOT / 'scripts/check_bootstrap.py')
+b = importlib.util.module_from_spec(BOOTSTRAP_SPEC)
+BOOTSTRAP_SPEC.loader.exec_module(b)
 
 
 class CiPolicyTests(unittest.TestCase):
@@ -20,7 +23,7 @@ class CiPolicyTests(unittest.TestCase):
         self.assertTrue(c.validate(yaml.safe_dump(self.doc)))
 
     def test_current_workflow(self):
-        self.assertEqual(self.job['timeout-minutes'], '30')
+        self.assertEqual(self.job['timeout-minutes'], '45')
         self.assertEqual(c.validate(self.text), [])
 
     def test_step_names_are_not_authority(self):
@@ -65,10 +68,35 @@ class CiPolicyTests(unittest.TestCase):
         self.rejected()
 
     def test_timeout_is_exact_capacity_boundary(self):
-        for timeout in ('10', '19', '20', '21', '29', '31'):
+        for timeout in ('10', '19', '20', '21', '29', '30', '31', '44', '46'):
             with self.subTest(timeout=timeout):
                 self.job['timeout-minutes'] = timeout
                 self.rejected()
+
+    def test_apbra160_capacity_branch_has_exact_four_file_authority(self):
+        expected = {
+            '.github/workflows/bootstrap.yml',
+            'scripts/check_bootstrap.py',
+            'scripts/check_ci_policy.py',
+            'tests/bootstrap/test_ci_policy.py',
+        }
+        self.assertEqual(b.APBRA160_CI_CAPACITY_PATHS, expected)
+        self.assertEqual(len(expected), 4)
+        self.assertTrue(all('*' not in path for path in expected))
+        branch = b.APBRA160_CI_CAPACITY_BRANCH
+        self.assertEqual(branch, 'agent/APBRA-DEVOPS/APBRA-160-bootstrap-ci-capacity')
+        self.assertEqual(b.check(ROOT, active_task_id='APBRA-160',
+                                 active_branch=branch, changed_paths=expected)[0], [])
+        for omitted in expected:
+            with self.subTest(omitted=omitted):
+                errors = b.check(ROOT, active_task_id='APBRA-160', active_branch=branch,
+                                 changed_paths=expected - {omitted})[0]
+                self.assertIn('APBRA-160 CI-capacity amendment must change exactly four policy files', errors)
+        for extra in ('apps/api/src/apbra_api/api.py', 'docs/source-register.json'):
+            with self.subTest(extra=extra):
+                errors = b.check(ROOT, active_task_id='APBRA-160', active_branch=branch,
+                                 changed_paths=expected | {extra})[0]
+                self.assertIn('APBRA-160 CI-capacity amendment must change exactly four policy files', errors)
 
     def test_missing_scanner(self):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run') != c.COMMANDS[0]]
