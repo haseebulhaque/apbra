@@ -739,11 +739,9 @@ class OpenAICompatibleProvider:
                 if response.status_code < 200 or response.status_code >= 300:
                     raise ProviderCallError("MODEL_PROVIDER_REJECTED", observation=observation())
                 payload = response.json()
-                content = payload["choices"][0]["message"]["content"]
-                value = json.loads(content) if isinstance(content, str) else content
-                if not isinstance(value, dict):
-                    raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
-                candidate_digest = _candidate_digest(value)
+                # A provider may report billable usage even when the candidate
+                # body is malformed. Capture only validated counters first so
+                # the failure observation does not silently lose known usage.
                 usage = payload.get("usage") if isinstance(payload, dict) else None
                 if not isinstance(usage, dict):
                     usage = {}
@@ -752,6 +750,11 @@ class OpenAICompatibleProvider:
                     if amount is not None:
                         usage_totals[name] += amount
                         usage_seen.add(name)
+                content = payload["choices"][0]["message"]["content"]
+                value = json.loads(content) if isinstance(content, str) else content
+                if not isinstance(value, dict):
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
+                candidate_digest = _candidate_digest(value)
                 if request.validator is not None:
                     try:
                         request.validator(value)

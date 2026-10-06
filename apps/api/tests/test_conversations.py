@@ -218,7 +218,17 @@ def test_failed_provider_attempt_has_durable_safe_observation(
         if failure_kind == "timeout":
             raise httpx.ReadTimeout("synthetic timeout", request=incoming)
         if failure_kind == "malformed_2xx":
-            return httpx.Response(200, json={"choices": [{"message": {"content": "not-json"}}]})
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [{"message": {"content": "not-json"}}],
+                    "usage": {
+                        "prompt_tokens": 7,
+                        "completion_tokens": 3,
+                        "total_tokens": 10,
+                    },
+                },
+            )
         return httpx.Response(403, text="credential=server-secret")
 
     provider = OpenAICompatibleProvider(
@@ -267,9 +277,9 @@ def test_failed_provider_attempt_has_durable_safe_observation(
         "error_code": expected_code,
         "call_count": 1,
         "usage": {
-            "prompt_tokens": None,
-            "completion_tokens": None,
-            "total_tokens": None,
+            "prompt_tokens": 7 if failure_kind == "malformed_2xx" else None,
+            "completion_tokens": 3 if failure_kind == "malformed_2xx" else None,
+            "total_tokens": 10 if failure_kind == "malformed_2xx" else None,
         },
     }
     assert interpretation_count == 0
