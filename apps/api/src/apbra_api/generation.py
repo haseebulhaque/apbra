@@ -8,6 +8,7 @@ import io
 import json
 import logging
 import os
+import re
 import selectors
 import subprocess
 import threading
@@ -283,8 +284,74 @@ SAFE_BRIDGE_DIAGNOSTIC_DETAILS = {
 }
 
 
+SAFE_COMPILER_DIAGNOSTIC_CODES = {
+    "SEMANTIC_NAMESPACE_COLLISION",
+    "MEASURE_INTEGRITY",
+    "UNRESOLVED_MEASURE",
+    "INVALID_VISUAL_BINDING_CARDINALITY",
+    "VISUAL_CAPACITY_EXCEEDED",
+    "UNSUPPORTED_TIME_GRAIN",
+    "INVALID_TIME_GRAIN_FIELD",
+    "TIME_GRAIN_COLUMN_COLLISION",
+    "UNSUPPORTED_SOURCE_NAME",
+    "REPORT_PROJECT_NAME_REQUIRED",
+    "REPORT_FACT_TABLE_REQUIRED",
+}
+SAFE_STRUCTURED_BRIDGE_CODES = {
+    "REPORT_DESIGN_MEASURE_INTEGRITY", "REPORT_DESIGN_INVALID",
+    "REPORT_DESIGN_CITATION_INVALID", "REPORT_DESIGN_COVERAGE_INVALID",
+    "GENERATION_PIPELINE_FAILED",
+} | SAFE_COMPILER_DIAGNOSTIC_CODES
+SAFE_STRUCTURED_FINDING_CODES = {
+    "DUPLICATE_MEASURE_ID", "DUPLICATE_MEASURE_NAME", "UNSUPPORTED_MEASURE_TYPE",
+    "MISSING_MEASURE_FIELD", "INCOHERENT_MEASURE_SHAPE", "INCOMPLETE_FILTERED_COUNT",
+    "UNKNOWN_MEASURE_FIELD", "UNKNOWN_FILTER_FIELD", "UNKNOWN_CONTEXT_FIELD",
+    "MISSING_RATIO_OPERAND", "UNRESOLVED_MEASURE_OPERAND", "SELF_REFERENTIAL_MEASURE",
+    "CYCLIC_MEASURE_DEPENDENCY", "INCOMPLETE_PERCENTAGE_OF_TOTAL",
+    "UNRESOLVED_VISUAL_MEASURE", "INVALID_VISUAL_BINDING_CARDINALITY",
+    "REPORT_DESIGN_INVALID", "REPORT_DESIGN_CITATION_INVALID", "REPORT_DESIGN_COVERAGE_INVALID",
+} | SAFE_COMPILER_DIAGNOSTIC_CODES
+SAFE_DIAGNOSTIC_PATH = re.compile(
+    r"/reportDesign(?:/standardsApplied|/measures(?:/[0-9]{1,6}"
+    r"(?:/(?:aggregation|field|filterField|contextField))?)?"
+    r"|/pages/[0-9]{1,6}/visuals/[0-9]{1,6}(?:/measureIds)?)?"
+)
+
+
 def _safe_bridge_diagnostic_detail(exc: GenerationBridgeFailure) -> str | None:
-    return exc.diagnostic_message if exc.diagnostic_code in SAFE_BRIDGE_DIAGNOSTIC_DETAILS else None
+    if exc.diagnostic_code in SAFE_BRIDGE_DIAGNOSTIC_DETAILS:
+        return exc.diagnostic_message
+    if exc.diagnostic_code not in SAFE_STRUCTURED_BRIDGE_CODES:
+        return None
+    try:
+        detail = json.loads(exc.diagnostic_message)
+    except (ValueError, TypeError):
+        return None
+    if (
+        not isinstance(detail, dict)
+        or set(detail) != {"stage", "findings", "truncated"}
+        or not isinstance(detail["stage"], str)
+        or detail["stage"] not in {
+            "INPUT", "REPORT_DESIGN", "NORMALIZATION", "GUARDRAILS",
+            "COMPILER", "CANDIDATE_FILES", "DELIVERY_GUIDE",
+        }
+        or type(detail["truncated"]) is not bool
+        or not isinstance(detail["findings"], list)
+        or len(detail["findings"]) > 3
+    ):
+        return None
+    for finding in detail["findings"]:
+        if (
+            not isinstance(finding, dict)
+            or set(finding) != {"code", "path"}
+            or not isinstance(finding["code"], str)
+            or finding["code"] not in SAFE_STRUCTURED_FINDING_CODES
+            or not isinstance(finding["path"], str)
+            or SAFE_DIAGNOSTIC_PATH.fullmatch(finding["path"]) is None
+        ):
+            return None
+    serialized = json.dumps(detail, sort_keys=True, separators=(",", ":"))
+    return serialized if len(serialized) <= 480 else None
 
 
 def _provider_validation_failure(exc: Exception) -> Exception | None:
