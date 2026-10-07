@@ -175,8 +175,8 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             assert json.loads(failed["validation"]["structural_detail"])["findings"] == [
                 {"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"}
             ]
-            assert "Metrics.Missing" not in history.text
-            assert "Draft Visits" not in history.text
+            assert "Metrics.Missing" not in json.dumps(history)
+            assert "Draft Visits" not in json.dumps(history)
             return
         assert proposed.status_code == 201, proposed.text
         result = proposed.json()
