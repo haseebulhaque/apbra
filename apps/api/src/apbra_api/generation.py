@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import csv
 import hashlib
 import hmac
@@ -550,7 +551,46 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
     }
 
 
+def _provider_confirmed_requirements(contract: dict[str, Any]) -> dict[str, Any]:
+    """Copy model context without an exactly redundant server confirmation receipt."""
+    result = copy.deepcopy(contract)
+    provenance = result.get("provenance")
+    session = provenance.get("clarificationSession") if isinstance(provenance, dict) else None
+    if not isinstance(session, dict) or not isinstance(session.get("readinessBinding"), str):
+        return result
+    fields = (
+        "sessionId", "contextBinding", "originalRequest", "mode", "limits", "rounds",
+        "corrections", "designConflicts", "currentInterpretation", "unresolvedAmbiguities",
+        "confirmationSummary",
+    )
+    analyses = session.get("analyses")
+    if (
+        any(field not in session for field in fields)
+        or not isinstance(analyses, list)
+        or not analyses
+    ):
+        return result
+    expected = {field: session[field] for field in fields}
+    expected["lastAnalysis"] = analyses[-1]
+    try:
+        binding = json.loads(session["readinessBinding"])
+        matches = json.dumps(binding, sort_keys=True, allow_nan=False) == json.dumps(
+            expected, sort_keys=True, allow_nan=False
+        )
+    except (ValueError, TypeError):
+        return result
+    if matches:
+        del session["readinessBinding"]
+    return result
+
+
 def design_attempt_json(row: Any) -> dict[str, Any]:
+    usage = json.loads(row.usage_json)
+    preflight_input_limit = (
+        row.safe_failure_code == "MODEL_INPUT_BUDGET_EXCEEDED"
+        and type(usage.get("call_count")) is int
+        and usage["call_count"] == 0
+    )
     return {
         "id": str(row.id),
         "confirmed_contract_id": str(row.confirmed_contract_id),
@@ -560,9 +600,17 @@ def design_attempt_json(row: Any) -> dict[str, Any]:
         "prompt_version": row.prompt_version,
         "configuration_id": row.configuration_id,
         "capability_profile": json.loads(row.capability_profile_json),
-        "usage": json.loads(row.usage_json),
+        "usage": usage,
         "failure": (
-            {"code": row.safe_failure_code, "message": "The design proposal was not eligible."}
+            {
+                "code": row.safe_failure_code,
+                "message": (
+                    "The AI request exceeded the configured input limit before a model call. "
+                    "Your confirmed requirements remain saved."
+                    if preflight_input_limit
+                    else "The design proposal was not eligible."
+                ),
+            }
             if row.safe_failure_code
             else None
         ),
@@ -1030,7 +1078,9 @@ class GenerationService:
                         "candidate."
                     ),
                     context={
-                        "confirmedRequirements": payload["contract"],
+                        "confirmedRequirements": _provider_confirmed_requirements(
+                            payload["contract"]
+                        ),
                         "dataStructure": payload["dataStructure"],
                         "referenceMaterial": references,
                         "governedKnowledge": governed_knowledge,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import shutil
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -26,14 +27,24 @@ from apbra_api.domain import GenerationFailed
 from apbra_api.generation import (
     GenerationBridge,
     GenerationBridgeFailure,
+    GenerationService,
     _automatic_design_retry_instruction,
+    _provider_confirmed_requirements,
 )
 from apbra_api.model_provider import (
     DeterministicFakeProvider,
     OpenAICompatibleProvider,
+    ProviderCallError,
     ProviderProfile,
+    ProviderRequest,
+    report_design_schema,
 )
-from apbra_api.persistence import ApplicationSession, AutomaticDesignAttemptRow, Database
+from apbra_api.persistence import (
+    ApplicationSession,
+    AutomaticDesignAttemptRow,
+    ConfirmedContractRow,
+    Database,
+)
 
 
 @pytest.mark.parametrize(
@@ -186,8 +197,119 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert persisted["current_request"]["request_text"] == request
         saved_evidence = runtime.get(f"/api/cases/{case['id']}/evidence").json()["items"]
         assert saved_evidence[0]["content_digest"] == hashlib.sha256(csv).hexdigest()
-        assert provider.requests[1].context["confirmedRequirements"] == contract["contract"]
+        assert provider.requests[1].context["confirmedRequirements"] == (
+            _provider_confirmed_requirements(contract["contract"])
+        )
+        stored = runtime.get(f"/api/cases/{case['id']}/acceptance").json()
+        assert stored["confirmed_contract"]["contract"] == before["contract"]
         assert len(provider.requests) == 2
+
+
+def synthetic_large_confirmation() -> dict[str, object]:
+    request = "Unique request detail retained. " * 1_600
+    session = {
+        "sessionId": "synthetic-session",
+        "originalRequest": request,
+        "contextBinding": json.dumps({"request": request, "history": ["Unique prior answer"]}),
+        "mode": "GUIDED",
+        "limits": {"maxRounds": 3},
+        "rounds": [],
+        "corrections": [],
+        "designConflicts": [],
+        "currentInterpretation": {"objective": "Unique objective"},
+        "unresolvedAmbiguities": ["Unique assumption"],
+        "confirmationSummary": {"objective": "Unique visible confirmation"},
+        "analyses": [{"interpretation": {"objective": "Unique objective"}}],
+    }
+    binding = {key: value for key, value in session.items() if key != "analyses"}
+    binding["lastAnalysis"] = session["analyses"][-1]
+    session["readinessBinding"] = json.dumps(binding, sort_keys=True)
+    return {"provenance": {"clarificationSession": session}, "objective": "Unique report goal"}
+
+
+def packaging_request(contract: dict[str, object]) -> ProviderRequest:
+    return ProviderRequest(
+        task="REPORT_DESIGN",
+        system_prompt="Preserve the complete confirmed context.",
+        context={
+            "confirmedRequirements": contract,
+            "dataStructure": {
+                "tables": [
+                    {
+                        "name": "UniqueEvidence",
+                        "rows": [
+                            [str(index), "Unique evidence value retained", "Other source value"]
+                            for index in range(620)
+                        ],
+                    }
+                ]
+            },
+            "governedKnowledge": [{"citation": "synthetic", "text": "Unique convention"}],
+        },
+        output_schema=report_design_schema(
+            max_visuals_per_page=6, supported_trend_grains=["DAY", "MONTH", "QUARTER", "YEAR"]
+        ),
+    )
+
+
+def test_provider_packaging_removes_only_duplicate_receipt_without_mutation() -> None:
+    original = synthetic_large_confirmation()
+    before = copy.deepcopy(original)
+    provider = OpenAICompatibleProvider(automatic_test_provider([{}]).profile, "offline-secret")
+    raw = packaging_request(original)
+    with pytest.raises(ProviderCallError, match="MODEL_INPUT_BUDGET_EXCEEDED"):
+        provider._request_body(raw)
+    compact = _provider_confirmed_requirements(original)
+    expected = copy.deepcopy(before)
+    del expected["provenance"]["clarificationSession"]["readinessBinding"]
+    assert compact == expected
+    assert original == before
+    request = packaging_request(compact)
+    body = provider._request_body(request)
+    assert len(json.dumps(body, separators=(",", ":"))) < 200_000
+    assert provider.profile.max_input_characters == 200_000
+    assert request.context["dataStructure"] == raw.context["dataStructure"]
+    compact["provenance"]["clarificationSession"]["analyses"][0]["interpretation"]["objective"] = (
+        "changed copy"
+    )
+    assert original == before
+
+
+@pytest.mark.parametrize(
+    "difference", ["unique_field", "changed_field", "malformed", "missing_history"]
+)
+def test_provider_packaging_preserves_unverified_receipt(difference: str) -> None:
+    contract = synthetic_large_confirmation()
+    session = contract["provenance"]["clarificationSession"]
+    if difference == "malformed":
+        session["readinessBinding"] = "not JSON"
+    elif difference == "missing_history":
+        session["analyses"] = []
+    else:
+        binding = json.loads(session["readinessBinding"])
+        binding["unique_business_fact" if difference == "unique_field" else "originalRequest"] = (
+            "Unique content"
+        )
+        session["readinessBinding"] = json.dumps(binding)
+    assert _provider_confirmed_requirements(contract) == contract
+
+
+def test_unique_oversized_context_still_fails_before_transport() -> None:
+    contract = synthetic_large_confirmation()
+    contract["uniqueBusinessContext"] = "Unshared business detail " * 12_000
+    observed: list[httpx.Request] = []
+    provider = OpenAICompatibleProvider(
+        automatic_test_provider([{}]).profile,
+        "offline-secret",
+        transport=httpx.MockTransport(
+            lambda request: observed.append(request) or httpx.Response(500)
+        ),
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_INPUT_BUDGET_EXCEEDED") as captured:
+        provider.structured(packaging_request(_provider_confirmed_requirements(contract)))
+    assert captured.value.observation.call_count == 0
+    assert observed == []
+    assert contract["uniqueBusinessContext"].startswith("Unshared business detail")
 
 
 def confirmed_case(
@@ -206,6 +328,94 @@ def confirmed_case(
     ).json()["evidence"]
     contract = confirm_current_case(client, session, case["id"], evidence)
     return case, contract
+
+
+def test_design_input_limit_is_reported_as_preflight_without_model_call(
+    client: TestClient, settings: Settings, database: Database
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client,
+        session,
+        "Keep this complete synthetic requirement.",
+        "Metrics.csv",
+        b"Group,Visits\nA,7\nB,5\n",
+    )
+    observed: list[httpx.Request] = []
+    profile = automatic_test_provider([{}]).profile.model_copy(
+        update={"max_input_characters": 1_000}
+    )
+    provider = OpenAICompatibleProvider(
+        profile,
+        "offline-secret",
+        transport=httpx.MockTransport(
+            lambda request: observed.append(request) or httpx.Response(500)
+        ),
+    )
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        runtime.cookies.update(client.cookies)
+        result = runtime.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
+            headers=csrf(session),
+        )
+        assert result.status_code == 409
+        history = runtime.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        ).json()["items"]
+        assert history[0]["failure"]["code"] == "MODEL_INPUT_BUDGET_EXCEEDED"
+        assert "before a model call" in history[0]["failure"]["message"]
+        assert history[0]["usage"]["call_count"] == 0
+        assert observed == []
+        saved = runtime.get(f"/api/cases/{case['id']}/acceptance").json()
+        assert saved["confirmed_contract"]["contract"] == contract["contract"]
+
+
+def test_server_rejects_tampered_confirmation_before_provider_packaging(
+    client: TestClient, settings: Settings, database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Keep the exact visible synthetic confirmation.", "Metrics.csv",
+        b"Group,Visits\nA,7\nB,5\n",
+    )
+    with pytest.raises(DBAPIError, match="immutable"), database.session() as db:
+        stored = db.get(ConfirmedContractRow, UUID(contract["id"]))
+        payload = json.loads(stored.contract_json)
+        payload["provenance"]["clarificationSession"]["readinessBinding"] = "tampered"
+        stored.contract_json = json.dumps(payload)
+        db.flush()
+    original_payload = GenerationService._current_payload
+
+    def corrupted_payload(self, *args, **kwargs):
+        value, *rest = original_payload(self, *args, **kwargs)
+        value = copy.deepcopy(value)
+        value["contract"]["provenance"]["clarificationSession"]["readinessBinding"] = "tampered"
+        return value, *rest
+
+    monkeypatch.setattr(GenerationService, "_current_payload", corrupted_payload)
+    provider = automatic_test_provider([{}])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        runtime.cookies.update(client.cookies)
+        result = runtime.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
+            headers=csrf(session),
+        )
+        assert result.status_code == 409
+        assert provider.requests == []
+        history = runtime.get(
+            f"/api/cases/{case['id']}/automatic-designs",
+            params={"confirmed_contract_id": contract["id"]},
+        ).json()["items"]
+        assert history[0]["status"] == "FAILED"
+        assert history[0]["validation"]["category"] == "CONFIRMED_REQUIREMENT_CONTRACT_INVALID"
+        assert history[0]["validation"]["status"] == "FAILED"
 
 
 def confirm_current_case(
