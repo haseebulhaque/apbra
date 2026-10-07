@@ -48,11 +48,12 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
   await page.getByLabel('Your reporting goal').fill('Compare completed synthetic orders by depot.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
   const upload=page.getByRole('button',{name:'Add data sources or reference material'});
   await upload.focus();
   await expect(upload).toBeFocused();
   await expect(page.locator('label.upload-button')).toBeVisible();
-  await expect(page.locator('.journey-steps li.unavailable')).toHaveCount(5);
+  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2ViewingInformation');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
@@ -313,4 +314,67 @@ test('case owner grants and revokes named private access through the real UI',as
   await memberPage.reload();
   await expect(memberPage.getByRole('button',{name:new RegExp(request)})).toHaveCount(0);
   await memberContext.close();
+});
+
+test('report step navigation preserves drafts and queued files without making API calls',async({page})=>{
+  await signIn(page,'member');
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity by month.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const calls:string[]=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/'))calls.push(request.method()+' '+new URL(request.url()).pathname)});
+  const draft='Compare synthetic workshop activity by month. Include site comparisons.';
+  await page.getByLabel('Current business request').fill(draft);
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.locator('input[type=file]').setInputFiles({name:'synthetic-workshop.csv',mimeType:'text/csv',buffer:Buffer.from('Month,Activity\n2026-01,12\n')});
+  await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
+  for(const step of ['Understanding','Confirm','Build','Report']){
+    await page.getByRole('button',{name:'Next: '+step,exact:true}).click();
+    await expect(page.locator('.wizard-step-heading h2')).toHaveText(step);
+    await expect(page.locator('.wizard-step-heading h2')).toBeFocused();
+  }
+  await expect(page.getByRole('button',{name:'Last step',exact:true})).toBeDisabled();
+  for(let step=0;step<5;step++)await page.getByRole('button',{name:'Back',exact:true}).click();
+  await expect(page.getByLabel('Current business request')).toHaveValue(draft);
+  await expect(page.getByText('Your goal has unsaved changes.',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
+  await page.getByLabel('Appearance',{exact:true}).selectOption('dark');
+  await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
+  expect(calls).toEqual([]);
+  await page.reload();
+  await expect(page.getByLabel('Appearance',{exact:true})).toHaveValue('dark');
+  await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
+  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+});
+
+test('personal appearance has readable core text, system fallback and narrow reflow',async({page},testInfo)=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration',exact:true}).click();
+  for(const mode of ['light','dark'] as const){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    const ratios=await page.locator('.private-workspace').evaluate(element=>{
+      const style=getComputedStyle(element);
+      const rgb=(name:string)=>{const probe=document.createElement('span');probe.style.color=style.getPropertyValue(name);element.append(probe);const values=getComputedStyle(probe).color.match(/\d+(?:\.\d+)?/g)!.slice(0,3).map(Number);probe.remove();return values};
+      const luminance=(values:number[])=>values.map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
+      const background=luminance(rgb('--surface'));
+      return ['--ink','--text-secondary','--muted'].map(name=>{const text=luminance(rgb(name));return (Math.max(text,background)+.05)/(Math.min(text,background)+.05)});
+    });
+    for(const ratio of ratios)expect(ratio).toBeGreaterThanOrEqual(4.5);
+    await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCSS('color',mode==='dark'?'rgb(245, 245, 245)':'rgb(36, 36, 36)');
+    await page.screenshot({path:testInfo.outputPath('settings-'+mode+'.png'),fullPage:true,animations:'disabled'});
+  }
+  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+  await page.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'});
+  await expect(page.locator('.private-workspace')).toHaveCSS('color-scheme','dark');
+  await page.emulateMedia({colorScheme:'light'});
+  await expect(page.locator('.private-workspace')).toHaveCSS('color-scheme','light');
+  await page.setViewportSize({width:320,height:800});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await page.screenshot({path:testInfo.outputPath('settings-320px.png'),fullPage:true,animations:'disabled'});
+  await page.setViewportSize({width:1280,height:800});
+  await page.locator('.private-workspace').evaluate(element=>{(element as HTMLElement).style.fontSize='200%'});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 });

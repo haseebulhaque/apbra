@@ -15,7 +15,7 @@ test('owner edits and restores a versioned clarification policy without exposing
   await expect(admin.getByText('Not configured')).toBeVisible();
   await expect(admin.getByText(/Current effective version 1 · Validation PASS · Applies to this company’s new and revalidated operations/)).toBeVisible();
   await expect(admin.getByRole('button',{name:/Reveal|Show key|Copy existing key/i})).toHaveCount(0);
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   const turns=admin.getByLabel('Turns per cycle',{exact:false});
   const original=Number(await turns.inputValue());
   await turns.fill(String(original+1));
@@ -38,7 +38,7 @@ test('owner edits and restores a versioned clarification policy without exposing
   await expect(turns).toHaveValue(String(original));
   await page.reload();
   await page.getByRole('button',{name:'Administration'}).click();
-  await expect(admin.locator('.status-badge',{hasText:'Version 3'})).toBeVisible();
+  await expect(admin.locator('.status-badge',{hasText:/^Version 3$/})).toBeVisible();
 });
 
 test('ordinary member cannot see owner settings and narrow admin form does not overflow',async({page})=>{
@@ -68,10 +68,10 @@ test('high-impact changes remain in separate section drafts and each review excl
   await admin.getByLabel('Retry limit',{exact:false}).fill('0');
   await admin.getByRole('checkbox',{name:/Expert assistance/}).uncheck();
   await admin.getByRole('checkbox',{name:/Automatic intelligent generation/}).check();
-  await admin.getByRole('button',{name:/Responses & standards/}).click();
+  await admin.getByRole('button',{name:/Responses & report standards/}).click();
   await admin.getByLabel('Visuals per page',{exact:false}).fill('5');
-  await admin.getByRole('textbox',{name:/^report naming Applies/}).fill('Synthetic test naming convention');
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('textbox',{name:'Report naming',exact:true}).fill('Synthetic test naming convention');
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await admin.getByLabel('Turns overall',{exact:false}).fill('9');
   await admin.getByRole('button',{name:/Review .* changes/}).click();
   const review=page.getByRole('dialog',{name:'Review tenant settings changes'});
@@ -98,7 +98,7 @@ test('saving one section leaves another unsaved draft out of the committed versi
   const before=await (await page.request.get('/api/tenant-settings')).json();
   const expert=admin.getByRole('checkbox',{name:/Expert assistance/});
   if(before.settings.expert_escalation_enabled)await expert.uncheck();else await expert.check();
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   const lifetime=admin.getByLabel('Invitation lifetime (days)');
   await lifetime.fill(String(before.settings.invitation_ttl_days+1));
   await admin.getByRole('button',{name:/Review .* changes/}).click();
@@ -125,14 +125,14 @@ test('stale section saves fail closed and preserve the draft while loading curre
   await page.getByRole('button',{name:'Administration'}).click();
   const original=await (await page.request.get('/api/tenant-settings')).json();
   const first=page.getByLabel('Tenant administration');
-  await first.getByRole('button',{name:/Budgets & limits/}).click();
+  await first.getByRole('button',{name:/Budget & limits/}).click();
   await first.getByLabel('Invitation lifetime (days)').fill(String(original.settings.invitation_ttl_days+1));
 
   const secondPage=await context.newPage();
   await secondPage.goto('/');
   await secondPage.getByRole('button',{name:'Administration'}).click();
   const second=secondPage.getByLabel('Tenant administration');
-  await second.getByRole('button',{name:/Budgets & limits/}).click();
+  await second.getByRole('button',{name:/Budget & limits/}).click();
   const files=second.getByLabel('Files per selection');
   await files.fill(String(original.settings.upload_policy.max_files_per_selection+1));
   await second.getByRole('button',{name:/Review .* changes/}).click();
@@ -159,7 +159,7 @@ test('a committed section save stays successful when history refresh fails',asyn
   await page.getByRole('button',{name:'Administration'}).click();
   const admin=page.getByLabel('Tenant administration');
   const before=await (await page.request.get('/api/tenant-settings')).json();
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
   await page.route('**/api/tenant-settings/history',route=>route.fulfill({status:503,contentType:'application/json',body:'{"error":{"code":"TEMPORARY","message":"Synthetic history failure"}}'}));
   await admin.getByRole('button',{name:/Review .* changes/}).click();
@@ -178,7 +178,7 @@ test('lost section-save response reconciles current policy without replaying the
   await page.getByRole('button',{name:'Administration'}).click();
   const admin=page.getByLabel('Tenant administration');
   const before=await (await page.request.get('/api/tenant-settings')).json();
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
   let attempts=0;
   await page.route('**/api/tenant-settings/sections/budgets_limits',async route=>{
@@ -203,7 +203,7 @@ test('unknown save outcome blocks all settings writes until an authoritative rea
   await page.getByRole('button',{name:'Administration'}).click();
   const admin=page.getByLabel('Tenant administration');
   const before=await (await page.request.get('/api/tenant-settings')).json();
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await admin.getByLabel('Invitation lifetime (days)').fill(String(before.settings.invitation_ttl_days+1));
   let writes=0;
   await page.route('**/api/tenant-settings/sections/budgets_limits',async route=>{
@@ -255,7 +255,7 @@ test('owner configures and rotates a synthetic protected credential without reve
   await expect(admin.getByRole('button',{name:'Replace / rotate credential'})).toBeVisible();
   await expect(page.locator('body')).not.toContainText('synthetic-e2e-secret-first');
   const beforeRotation=await (await page.request.get('/api/tenant-settings')).json();
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await admin.getByLabel('Invitation lifetime (days)').fill(String(beforeRotation.settings.invitation_ttl_days+1));
   await admin.getByRole('button',{name:/AI & models/}).click();
   await admin.getByRole('button',{name:'Replace / rotate credential'}).click();
@@ -263,7 +263,7 @@ test('owner configures and rotates a synthetic protected credential without reve
   await dialog.getByRole('button',{name:'Replace credential'}).click();
   await expect(admin.getByText(/Protected credential replaced in settings version/)).toBeVisible();
   await expect(page.locator('body')).not.toContainText('synthetic-e2e-secret-second');
-  await admin.getByRole('button',{name:/Budgets & limits/}).click();
+  await admin.getByRole('button',{name:/Budget & limits/}).click();
   await expect(admin.getByLabel('Invitation lifetime (days)')).toHaveValue(String(beforeRotation.settings.invitation_ttl_days+1));
   await expect(admin.getByText('Unsaved changes',{exact:true})).toBeVisible();
   expect((await (await page.request.get('/api/tenant-settings')).json()).settings.invitation_ttl_days).toBe(beforeRotation.settings.invitation_ttl_days);
@@ -312,4 +312,34 @@ test('foreign owner sees only their own settings and member has no settings rout
   expect((await page.request.get('/api/tenant-settings')).status()).toBe(403);
   expect((await page.request.get('/api/tenant-settings/history')).status()).toBe(403);
   expect((await page.request.get('/api/tenant-settings/qualified-profiles')).status()).toBe(403);
+});
+
+
+test('settings sections expose keyboard navigation, field help and independent unsaved indicators',async({page})=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration'}).click();
+  const admin=page.getByLabel('Tenant administration');
+  const navigation=admin.getByRole('navigation',{name:'Tenant Settings sections'});
+  const aiSection=navigation.getByRole('button',{name:'AI & models',exact:true});
+  await expect(aiSection).toHaveAttribute('aria-current','page');
+  await expect(admin.getByRole('heading',{name:'AI & models',exact:true})).toBeVisible();
+  await expect(admin.getByRole('combobox',{name:'Qualified model profile'})).toBeVisible();
+  await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeDisabled();
+  const expert=admin.getByRole('checkbox',{name:'Expert assistance',exact:true});
+  await expert.setChecked(!await expert.isChecked());
+  await expect(navigation.getByRole('button',{name:'AI & models · Unsaved',exact:true})).toBeVisible();
+  const limits=navigation.getByRole('button',{name:'Budget & limits',exact:true});
+  await limits.focus();
+  await page.keyboard.press('Enter');
+  await expect(limits).toHaveAttribute('aria-current','page');
+  await expect(admin.getByRole('heading',{name:'Budget & limits',exact:true})).toBeVisible();
+  await expect(admin.getByRole('checkbox',{name:'Expert assistance',exact:true})).toBeHidden();
+  const turns=admin.getByRole('spinbutton',{name:'Turns per cycle',exact:true});
+  await expect(turns).toHaveAccessibleDescription(/Affects future clarification turns, not saved history/);
+  await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeDisabled();
+  await navigation.getByRole('button',{name:'AI & models · Unsaved',exact:true}).click();
+  await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeEnabled();
+  await admin.getByRole('button',{name:'Cancel section changes'}).click();
+  await expect(navigation.getByRole('button',{name:'AI & models',exact:true})).toBeVisible();
+  await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeDisabled();
 });

@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {CaseEditor,CaseList,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {CaseEditor,CaseList,ReportCreationWizard,personalColorMode,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
@@ -16,3 +16,26 @@ it('renders only supplied authorized case summaries with a clear selected state'
 it('makes an empty workspace actionable without claiming a report exists',()=>{const html=renderToStaticMarkup(<CaseList items={[]} onOpen={()=>{}}/>);expect(html).toContain('No reports in progress');expect(html).toContain('Start with a business question');expect(html).not.toContain('aria-current="page"')});
 it('renders immutable request history separately from the editable current request',()=>{const html=renderToStaticMarkup(<CaseEditor record={record} versions={[{id:'request-1',sequence:1,request_text:'Original business request',created_at:'2026-09-23T00:00:00Z'},record.current_request]} requestText={record.current_request.request_text} onRequestText={()=>{}} onSave={()=>{}} onRefresh={()=>{}} busy={false}/>);expect(html).toContain('Original business request');expect(html).toContain('Updated business request');expect(html).toContain('Earlier request versions · 2');expect(html).toContain('require a fresh confirmation');expect(html).not.toContain('expected_version')});
 it('does not disclose whether a protected foreign or private report exists',()=>{expect(protectedErrorMessage(new ApiError(404,'CASE_NOT_FOUND','hidden'))).toBe('That report is unavailable or you no longer have access.');expect(protectedErrorMessage(new ApiError(401,'AUTH_REQUIRED','expired'))).toContain('session has expired');expect(protectedErrorMessage(new ApiError(409,'STALE_VERSION','stale'))).toContain('changed in another session')});
+
+it('opens the wizard at Goal and distinguishes viewing a step from completing an action',()=>{
+  const html=renderToStaticMarkup(<ReportCreationWizard goal={<p>Saved business goal</p>}>{step=><p>Saved journey view: {step}</p>}</ReportCreationWizard>);
+  expect(html).toContain('aria-label="Report steps"');
+  expect(html.match(/aria-current="step"/g)).toHaveLength(1);
+  expect(html).toContain('Step 1 of 6');
+  expect(html).toContain('Next: Information');
+  expect(html).toMatch(/button[^>]*disabled=""[^>]*>Back/);
+  expect(html).toContain('<div hidden=""><p>Saved journey view: information</p></div>');
+  expect(html).toContain('Use each step’s action to save, review, confirm or build.');
+  expect(html).not.toContain('Complete');
+});
+it('keeps an unsaved reporting goal visible as a warning without claiming it was saved',()=>{
+  const html=renderToStaticMarkup(<ReportCreationWizard hasUnsavedGoal goal={<p>Draft business question</p>}>{()=>null}</ReportCreationWizard>);
+  expect(html).toContain('Your goal has unsaved changes.');
+  expect(html).toContain('save the new version before reviewing the updated requirements');
+});
+it('bounds personal appearance to light, dark or system',()=>{
+  expect(personalColorMode('light')).toBe('light');
+  expect(personalColorMode('dark')).toBe('dark');
+  expect(personalColorMode('system')).toBe('system');
+  for(const value of ['arbitrary',null,{},'DARK'])expect(personalColorMode(value)).toBe('system');
+});

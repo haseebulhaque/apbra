@@ -8,6 +8,12 @@ async function signIn(page:Page,identity:'owner'|'uninvited'|'foreign'='owner'){
   await page.getByRole('link',{name:identity,exact:true}).click();
 }
 
+
+async function openStep(page:Page,step:'Goal'|'Information'|'Understanding'|'Confirm'|'Build'|'Report'){
+  await page.getByRole('navigation',{name:'Report steps'}).getByRole('button',{name:new RegExp(`\\b${step}$`)}).click();
+  await expect(page.locator('.wizard-step-heading').getByRole('heading',{name:step,exact:true})).toBeVisible();
+}
+
 function reviewedSyntheticDesign(contract:any){
   // Test-only reviewed fixture. The application never derives a layout from obligations.
   const measures=[...new Map(contract.obligations.flatMap((item:any)=>item.measures.map((measure:any)=>[measure.id,measure]))).values()] as any[];
@@ -26,6 +32,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const request='Compare completed inspections by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await openStep(page,'Information');
   const initialUpload=page.locator('input[type="file"]');
   await expect(initialUpload).toBeEnabled();
   await initialUpload.setInputFiles({
@@ -34,15 +41,18 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
     buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
   await page.getByRole('button',{name:'Add selected files'}).click();
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review my requirements'}).click();
   const clarification=page.getByText('Clarification required',{exact:true});
   if(await clarification.isVisible())await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmationResponse=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
+  await openStep(page,'Confirm');
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('confirmed-understanding.png'),fullPage:true});
   const design=JSON.stringify(reviewedSyntheticDesign(confirmed));
+  await openStep(page,'Build');
   await expect(page.getByText('Create the report design',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
 
@@ -71,6 +81,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await page.getByRole('button',{name:'Grant report access'}).click();
   await expert.reload();
   await expert.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(expert,'Build');
   await expert.getByText('Details for experts').last().click();
   await expert.getByLabel('Expert report design JSON').fill(design);
   await expert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
@@ -78,6 +89,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expertContext.close();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Build');
   await expect(page.getByLabel('Eligible report design')).toBeVisible();
   await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('reviewed-build-readiness.png'),fullPage:true});
@@ -94,12 +106,17 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
     // An earlier E2E run may already have created a company subtree. Block the
     // nearest existing parent so the new attempt cannot be published there.
     chmodSync(blockedRoot,0o500);
+  await openStep(page,'Build');
     await page.getByRole('button',{name:'Build report'}).click();
+  await openStep(page,'Report');
     await page.locator('.report-history summary').click();
     await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Build failed');
   }finally{chmodSync(blockedRoot,previousMode)}
+  await openStep(page,'Build');
   await page.getByRole('button',{name:'Retry failed build'}).click();
+  await openStep(page,'Report');
   await expect(page.locator('.generation-history li').filter({hasText:'Version 2'})).toContainText('Report ready');
+  await openStep(page,'Report');
   const download=page.getByRole('button',{name:'Download current report candidate'});
   await expect(download).toBeVisible();
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('current-report.png'),fullPage:true});
@@ -134,11 +151,14 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
 
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Report');
   await page.locator('.report-history summary').click();
   await expect(page.locator('.generation-history li').filter({hasText:'Version 2'})).toContainText('Report ready');
   await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Build failed');
   await expect(page.getByText('2 builds',{exact:true})).toBeVisible();
+  await openStep(page,'Build');
   await page.getByRole('button',{name:'Build another version'}).click();
+  await openStep(page,'Report');
   await expect(page.locator('.generation-history li').filter({hasText:'Version 3'})).toContainText('Report ready');
   await expect(page.getByText('3 builds',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Download current report candidate'})).toHaveCount(1);
@@ -154,29 +174,36 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await viewer.getByText('Local development identities').click();
   await viewer.getByRole('link',{name:'member',exact:true}).click();
   await viewer.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(viewer,'Build');
   await expect(viewer.getByLabel('Eligible report design')).toBeVisible();
   await expect(viewer.getByText('building or cancelling requires editor access')).toBeVisible();
   await expect(viewer.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   await expect(viewer.getByRole('button',{name:'Retry failed build'})).toHaveCount(0);
   await viewerContext.close();
 
+  await openStep(page,'Goal');
   await page.getByLabel('Current business request').fill(`${request} Show the total completed by facility.`);
   await page.getByRole('button',{name:'Save new version'}).click();
+  await openStep(page,'Understanding');
   await expect(page.getByText('Reconfirmation required.')).toBeVisible();
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   await expect(page.getByLabel('Current report')).toHaveCount(0);
+  await openStep(page,'Report');
   await expect(page.getByText('No current report yet')).toBeVisible();
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(2);
+  await openStep(page,'Information');
   const updatedUpload=page.locator('input[type="file"]');
   await expect(updatedUpload).toBeEnabled();
   await updatedUpload.setInputFiles({
     name:'current-inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
   await page.getByRole('button',{name:'Add selected files'}).click();
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review updated requirements'}).click();
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const reconfirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
+  await openStep(page,'Confirm');
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   const newContract=(await (await reconfirmation).json()).confirmed_contract.contract;
   await expect(page.getByLabel('Current report')).toHaveCount(0);
@@ -185,6 +212,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const currentExpert=await currentExpertContext.newPage();
   await signIn(currentExpert,'uninvited');
   await currentExpert.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(currentExpert,'Build');
   await currentExpert.getByText('Details for experts').last().click();
   await currentExpert.getByLabel('Expert report design JSON').fill(JSON.stringify(reviewedSyntheticDesign(newContract)));
   await currentExpert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
@@ -192,6 +220,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await currentExpertContext.close();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Build');
   await expect(page.getByRole('button',{name:'Build report',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   await page.getByText('Manage private report access').click();
@@ -203,6 +232,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const viewerExpert=await viewerExpertContext.newPage();
   await signIn(viewerExpert,'uninvited');
   await viewerExpert.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(viewerExpert,'Build');
   await viewerExpert.getByText('Details for experts').last().click();
   await expect(viewerExpert.getByText('Design submission requires expert edit access')).toBeVisible();
   await expect(viewerExpert.getByLabel('Expert report design JSON')).toHaveCount(0);
@@ -225,16 +255,19 @@ test('business UI cancels an active attempt and keeps its truthful history',asyn
   const request='Compare completed synthetic inspections by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await openStep(page,'Information');
   const cancellationUpload=page.locator('input[type="file"]');
   await expect(cancellationUpload).toBeEnabled();
   await cancellationUpload.setInputFiles({
     name:'inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
   await page.getByRole('button',{name:'Add selected files'}).click();
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review my requirements'}).click();
   if(await page.getByText('Clarification required',{exact:true}).isVisible())
     await page.getByText(/Summarise Completed and compare it by Facility/).click();
   const confirmation=page.waitForResponse(response=>response.url().endsWith('/confirm')&&response.request().method()==='POST');
+  await openStep(page,'Confirm');
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   const confirmed=(await (await confirmation).json()).confirmed_contract;
   let status:'RUNNING'|'CANCELLED'='RUNNING';
@@ -246,9 +279,82 @@ test('business UI cancels an active attempt and keeps its truthful history',asyn
   });
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Build');
   await expect(page.getByRole('button',{name:'Cancel build'})).toBeVisible();
   await page.getByRole('button',{name:'Cancel build'}).click();
+  await openStep(page,'Report');
   await page.locator('.report-history summary').click();
   await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Cancelled');
   await expect(page.getByRole('button',{name:'Cancel build'})).toHaveCount(0);
+});
+
+test('design feedback remains pending across Back, prevents repeat submission and recovers after failure',async({page})=>{
+  await signIn(page);
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Compare completed synthetic feedback checks by facility.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await openStep(page,'Information');
+  await page.locator('input[type="file"]').setInputFiles({
+    name:'feedback-checks.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
+  });
+  await page.getByRole('button',{name:'Add selected files'}).click();
+  await openStep(page,'Understanding');
+  await page.getByRole('button',{name:'Review my requirements'}).click();
+  await expect(page.getByText('Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.')).toBeVisible();
+  await openStep(page,'Confirm');
+  await page.getByRole('button',{name:'Confirm requirements'}).click();
+  await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+  await openStep(page,'Build');
+
+  let release!:()=>void,observed!:()=>void,requests=0;
+  const held=new Promise<void>(resolve=>{release=resolve});
+  const intercepted=new Promise<void>(resolve=>{observed=resolve});
+  // POSTs are always fulfilled/aborted here: this test cannot reach a provider.
+  await page.route('**/api/cases/*/automatic-designs',async route=>{
+    if(route.request().method()!=='POST'){await route.continue();return}
+    requests+=1;
+    if(requests>1){await route.abort('failed');return}
+    observed();
+    await held;
+    await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'AUTOMATIC_DESIGN_UNAVAILABLE',message:'Synthetic design request failed.'}})});
+  });
+  try{
+    await page.getByRole('button',{name:'Create report design',exact:true}).click();
+    await intercepted;
+    const feedback=page.getByRole('status').filter({hasText:'Preparing report design…'});
+    const pending=page.getByRole('button',{name:/Creating and checking design/});
+    await expect(feedback).toBeVisible();
+    await expect(feedback.locator('.processing-spinner')).toBeVisible();
+    await expect(pending).toBeDisabled();
+    await expect(pending).toHaveAttribute('aria-busy','true');
+    await pending.evaluate(button=>(button as HTMLButtonElement).click());
+    expect(requests).toBe(1);
+    await page.getByRole('button',{name:'Back',exact:true}).click();
+    await expect(page.locator('.wizard-step-heading').getByRole('heading',{name:'Confirm',exact:true})).toBeFocused();
+    await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+    await page.getByRole('button',{name:'Next: Build',exact:true}).click();
+    await expect(feedback).toBeVisible();
+    await expect(pending).toBeDisabled();
+    expect(requests).toBe(1);
+    release();
+    await expect(page.getByRole('alert').filter({hasText:'Synthetic design request failed.'})).toBeVisible();
+    await expect(feedback).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Create report design',exact:true})).toBeEnabled();
+    await expect(page.getByRole('button',{name:'Build report',exact:true})).toHaveCount(0);
+    // A deliberately interrupted explicit retry clears pending feedback too.
+    await page.getByRole('button',{name:'Create report design',exact:true}).click();
+    await expect.poll(()=>requests).toBe(2);
+    await expect(feedback).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Create report design',exact:true})).toBeEnabled();
+    await expect(page.getByRole('alert')).toBeVisible();
+    await openStep(page,'Report');
+    await expect(page.getByText('No current report yet')).toBeVisible();
+    await expect(page.getByRole('button',{name:'Download current report candidate'})).toHaveCount(0);
+    await page.reload();
+    await page.getByRole('button',{name:/Compare completed synthetic feedback checks by facility/}).first().click();
+    await expect(page.locator('.wizard-step-heading').getByRole('heading',{name:'Goal',exact:true})).toBeVisible();
+    await openStep(page,'Confirm');
+    await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+    expect(requests).toBe(2);
+  }finally{release()}
 });
