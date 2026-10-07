@@ -37,7 +37,7 @@ function qualifiedPolicy(value:unknown):TenantSettings{if(!value||typeof value!=
 // Cross-page slicer interactions are not supported and are disclosed in the draft.
 function paginateForCompiler(original:ReportDesign,tenant:TenantSettings):{reportDesign:ReportDesign;mapping:Array<{sourcePageIndex:number;resultPageIndexes:number[]}>}|null{
  const reportDesign=structuredClone(original),pages:ReportDesign['pages']=[],mapping:Array<{sourcePageIndex:number;resultPageIndexes:number[]}>=[],usedIds=new Set(original.pages.map(page=>page.id));
- for(const[sourcePageIndex,source]of original.pages.entries()){
+ for(const[sourcePageIndex,source]of reportDesign.pages.entries()){
   const chunks:Array<ReportDesign['pages'][number]['visuals']>=[[]];
   for(const visual of source.visuals){let chunk=chunks[chunks.length-1];if(chunk.length>=tenant.governance.maxVisualsPerPage||!compilerVisualFits(compilerVisualLayout(visual,chunk.length))){chunk=[];chunks.push(chunk)}if(!compilerVisualFits(compilerVisualLayout(visual,chunk.length)))return null;chunk.push(visual)}
   const resultPageIndexes:number[]=[];
