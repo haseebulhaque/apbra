@@ -852,7 +852,9 @@ def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
         assert "editable first-draft" in prompt
         assert "are not software delivery gates" in prompt
         assert "Measures and pages may differ" in prompt
-        assert "four general slots plus two card" in prompt
+        assert "rendererCapabilities" in prompt
+        assert "You author every measure" in prompt
+        assert "four general slots plus two card" not in prompt
         assert not any(
             fixture_term in prompt.lower()
             for fixture_term in ("retail", "store", "product", "sales")
