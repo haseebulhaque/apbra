@@ -398,6 +398,14 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
         const label=button.querySelector('strong')!;check(label,button,label.textContent??'step');
         if((label as HTMLElement).scrollWidth>(label as HTMLElement).clientWidth+1)errors.push('Clipped step text');
       });
+      const rgb=(color:string)=>color.match(/\d+(?:\.\d+)?/g)!.map(Number);
+      const luminance=(values:number[])=>values.slice(0,3).map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
+      for(const selector of ['.quiet-empty','.evidence-upload strong','.evidence-upload small','.evidence-upload .upload-button','.composer-footer>span']){
+        const element=wizard.querySelector(selector)!;let background=element;
+        while(background.parentElement&&rgb(getComputedStyle(background).backgroundColor)[3]===0)background=background.parentElement;
+        const text=luminance(rgb(getComputedStyle(element).color)),surface=luminance(rgb(getComputedStyle(background).backgroundColor));
+        if((Math.max(text,surface)+.05)/(Math.min(text,surface)+.05)<4.5)errors.push('Text contrast: '+selector);
+      }
       const button=wizard.querySelector('.message-composer .composer-footer button')!;
       check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
       return [...new Set(errors)];
