@@ -54,7 +54,8 @@ from apbra_api.persistence import (
     [
         ("", "An imperfect first draft"), ("", ""), ("", "   "),
         ("UNKNOWN_FIELD", ""), ("TIME_GRAIN_FIELD", ""), ("", "Shared-name draft"),
-        ("", "Paginated draft"), ("", "Collision pagination"), ("LAYOUT_LIMIT", ""),
+        ("", "AI-chosen pages"), ("", "AI-chosen alternative"),
+        ("LAYOUT_LIMIT", ""), ("LAYOUT_ORDER", ""), ("LAYOUT_CAPACITY", ""),
     ],
 )
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
@@ -120,8 +121,8 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "warnings": ["Business coverage requires user inspection"],
         "generationRequirements": [],
     }
-    paginated = overview in {"Paginated draft", "Collision pagination"}
-    if paginated or failure_kind == "LAYOUT_LIMIT":
+    model_layout = overview in {"AI-chosen pages", "AI-chosen alternative"}
+    if model_layout or failure_kind in {"LAYOUT_LIMIT", "LAYOUT_ORDER", "LAYOUT_CAPACITY"}:
         source = design["pages"][0]
         source["visuals"] = [
             {**copy.deepcopy(source["visuals"][0]), "id": f"chart-{index}",
@@ -130,10 +131,20 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         ] + [{"id": "campus-slicer", "type": "slicer", "title": "Campus", "altText": "Campus",
               "categoryField": "", "timeGrain": "NONE", "measureIds": [],
               "fields": ["Metrics.Campus"]}]
-        if overview == "Collision pagination":
-            design["pages"].append({**copy.deepcopy(source), "id": "draft-page__continuation_2",
-                                    "name": "Other page",
-                                    "visuals": [copy.deepcopy(source["visuals"][0])]})
+        if model_layout:
+            all_visuals = source["visuals"]
+            source["visuals"] = all_visuals[:4]
+            design["pages"].append({**copy.deepcopy(source), "id": "ai-second-page",
+                                    "name": "AI additional analysis", "visuals": all_visuals[4:]})
+            if overview == "AI-chosen alternative":
+                design["pages"].reverse()
+                design["pages"][0]["visuals"].reverse()
+        if failure_kind == "LAYOUT_ORDER":
+            source["visuals"] = [copy.deepcopy(design["pages"][0]["visuals"][0]) for _ in range(6)]
+            for index, visual in enumerate(source["visuals"]):
+                visual["id"] = f"ordered-{index}"
+                if index < 2:
+                    visual.update(type="card", categoryField="")
         if failure_kind == "LAYOUT_LIMIT":
             design["pages"] = [{**copy.deepcopy(source), "id": f"page-{index}"}
                                for index in range(4)]
@@ -214,30 +225,21 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert proposed.status_code == 201, proposed.text
         result = proposed.json()
         assert result["attempt"]["status"] == "ELIGIBLE"
-        if paginated:
-            with database.session() as db:
-                stored = json.loads(db.scalar(text(
-                    "SELECT design_json FROM reviewed_report_designs WHERE id=:id"
-                ), {"id": result["reviewed_design"]["id"]}))
-            assert stored["pages"][0]["id"] == original_design["pages"][0]["id"]
-            assert stored["pages"][0]["name"] == original_design["pages"][0]["name"]
-            assert all(page["purpose"] == "Initial draft" for page in stored["pages"])
-            assert [v for p in stored["pages"] for v in p["visuals"]] == [
-                v for p in original_design["pages"] for v in p["visuals"]
-            ]
-            assert len({p["id"] for p in stored["pages"]}) == len(stored["pages"])
-            assert all(len(p["visuals"]) <= 4 for p in stored["pages"])
-            for key in original_design:
-                if key not in {"pages", "warnings"}:
-                    assert stored[key] == original_design[key]
-            assert stored["warnings"][:len(original_design["warnings"])] == (
-                original_design["warnings"]
-            )
-            assert "Slicers filter their own page" in stored["warnings"][-1]
-            assert "cross-page slicer synchronization is not implemented" in stored["warnings"][-1]
-            if overview == "Collision pagination":
-                assert stored["pages"][1]["id"] == "draft-page__continuation_2_2"
-
+        capabilities = provider.requests[-1].context["rendererCapabilities"]
+        assert capabilities["source"] == "ACTIVE_COMPILER"
+        assert capabilities["pageBounds"] == {"width": 1280, "height": 720}
+        assert [slot["index"] for slot in capabilities["slots"]] == list(range(6))
+        assert all({p["type"] for p in slot["placements"]} == {"card"}
+                   for slot in capabilities["slots"][4:])
+        assert capabilities["knowledgeScope"] == (
+            "BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG"
+        )
+        assert "APBRA will not reorder" in provider.requests[-1].system_prompt
+        with database.session() as db:
+            stored = json.loads(db.scalar(text(
+                "SELECT design_json FROM reviewed_report_designs WHERE id=:id"
+            ), {"id": result["reviewed_design"]["id"]}))
+        assert stored == original_design
         built = runtime.post(
             f"/api/cases/{case['id']}/generation",
             json={
@@ -257,15 +259,13 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             assert any(name.endswith(".pbip") for name in archive.namelist())
-            if paginated:
-                guide = archive.read("Delivery-Guide.md").decode()
-                assert "Physical layout pagination" in guide
-                assert "Slicers filter their own page" in guide
-                for name in archive.namelist():
-                    if name.endswith("/visual.json"):
-                        position = json.loads(archive.read(name))["position"]
-                        assert position["y"] + position["height"] <= 720
-                        assert position["x"] + position["width"] <= 1280
+            assert json.loads(archive.read("ReportDesign.json")) == original_design
+            assert "Physical layout pagination" not in archive.read("Delivery-Guide.md").decode()
+            for name in archive.namelist():
+                if name.endswith("/visual.json"):
+                    position = json.loads(archive.read(name))["position"]
+                    assert position["y"] + position["height"] <= 720
+                    assert position["x"] + position["width"] <= 1280
 
             assert b"editable first draft" in archive.read("Delivery-Guide.md")
         with TestClient(runtime.app) as outsider:
@@ -2078,7 +2078,7 @@ def test_structured_bridge_details_preserve_only_safe_invariant_paths() -> None:
     assert json.loads(_safe_bridge_diagnostic_detail(compiler))["stage"] == "COMPILER"
 
 
-def test_layout_retry_is_order_only_and_other_rejections_remain_generic() -> None:
+def test_layout_retry_is_ai_authored_and_other_rejections_remain_generic() -> None:
     layout = _automatic_design_retry_instruction(
         GenerationBridgeFailure(
             "REPORT_DESIGN_NORMALIZATION_FAILED",
@@ -2086,10 +2086,11 @@ def test_layout_retry_is_order_only_and_other_rejections_remain_generic() -> Non
         ),
         max_visuals_per_page=6,
     )
-    assert "changing only the order" in layout
-    assert "do not add, remove, move between pages" in layout
-    assert "validated 6-visual page limit" in layout
-    assert "physical slots reported as in bounds" in layout
+    assert "You own its correction" in layout
+    assert "choose page membership" in layout
+    assert "rendererCapabilities" in layout
+    assert "will not independently allocate pages" in layout
+    assert "do not silently delete content" in layout
     semantic = _automatic_design_retry_instruction(
         GenerationBridgeFailure(
             "REPORT_DESIGN_SEMANTICS_FAILED",

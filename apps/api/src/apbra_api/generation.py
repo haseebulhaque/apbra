@@ -262,6 +262,19 @@ class GenerationBridge:
         value = self._call({**payload, "operation": "knowledge"}, validate_candidate=False)
         return cast(list[dict[str, str]], value["knowledge"])
 
+    def design_context(self, payload: dict[str, Any]) -> dict[str, Any]:
+        value = self._call({**payload, "operation": "knowledge"}, validate_candidate=False)
+        capabilities = value.get("rendererCapabilities")
+        if (
+            not isinstance(capabilities, dict)
+            or capabilities.get("source") != "ACTIVE_COMPILER"
+            or not isinstance(capabilities.get("slots"), list)
+            or not capabilities["slots"]
+            or len(json.dumps(capabilities)) > 20_000
+        ):
+            raise GenerationFailed()
+        return value
+
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._call({**payload, "operation": "generate"}, validate_candidate=True)
 
@@ -411,14 +424,16 @@ def _automatic_design_retry_instruction(exc: Exception, *, max_visuals_per_page:
         and "LAYOUT_CAPACITY_EXCEEDED" in exc.diagnostic_message
     ):
         return (
-            "The prior ReportDesign passed structured parsing but failed compiler geometry "
-            "only. Return the exact same complete ReportDesign, changing only the order of "
-            "objects within each affected page's visuals array. Preserve every object, value, "
-            "ID, page membership, measure, field, title, citation, warning, and all other array "
-            "orders exactly; do not add, remove, move between pages, or otherwise change any "
-            f"visual. Stay within the validated {max_visuals_per_page}-visual page limit and "
-            "use only physical slots reported as in bounds by deterministic geometry. "
-            f"Deterministic geometry finding: {exc.diagnostic_message}"
+            "The prior AI-authored ReportDesign failed physical renderer capacity. "
+            "You own its correction: choose page membership, visual allocation and order "
+            "using the supplied rendererCapabilities and tenant limits. Preserve all full "
+            "requirements, source evidence, declared measures and useful visual content; "
+            "do not silently delete content or invent unsupported interactions. Return one "
+            "complete corrected design, disclose revisions and interaction limitations. "
+            "APBRA will not independently allocate pages or repair the layout. "
+            f"Respect the current tenant page limit of {max_visuals_per_page} visuals "
+            "as well as each type/index placement in the actual renderer capability data. "
+            f"Safe deterministic geometry evidence: {_safe_bridge_diagnostic_detail(exc)}"
         )
     if (
         isinstance(exc, GenerationBridgeFailure)
@@ -1030,7 +1045,9 @@ class GenerationService:
         provider_observation: ProviderExecutionObservation | None = None
         terminal_validation: dict[str, Any] | None = None
         try:
-            governed_knowledge = bridge.governed_knowledge(payload)
+            design_context = bridge.design_context(payload)
+            governed_knowledge = design_context["knowledge"]
+            renderer_capabilities = design_context["rendererCapabilities"]
             generation_capabilities = cast(dict[str, Any], generation_policy["generation"])
             governance = cast(dict[str, Any], generation_policy["governance"])
             supported_trend_grains = cast(
@@ -1135,9 +1152,16 @@ class GenerationService:
                         "one category; tables use fields or measures; slicers use one "
                         "field and no measures. Use explicit supported timeGrain only "
                         "on category charts with date fields, otherwise NONE. "
-                        f"Stay within {max_visuals_per_page} visuals per page and the "
-                        "physical compiler slots: four general slots plus two card "
-                        "slots. Do not assert access, confirmation, validation, approval "
+                        "You author every measure, visual choice, page, page membership "
+                        "and visual array order. Use rendererCapabilities as factual execution "
+                        "constraints, not a suggested report design. Array indexes select its "
+                        "fixed slots; choose only placements supported for that visual type "
+                        "and respect the supplied tenant limits. APBRA will not reorder, "
+                        "split pages, invent measures or redesign incompatible output. "
+                        "Choose a complete executable draft and disclose its limitations. "
+                        "Tenant preferences and branding supplement the full request. "
+                        "Bundled knowledge does not mean provider-managed tenant RAG. "
+                        "Do not assert access, confirmation, validation, approval "
                         "or deployment success. Reference material NOT_INTERPRETED conveys no "
                         "visual semantics. Apply only supplied exact governed citation "
                         "IDs when applied; do not invent citations or tenant retrieval. Return "
@@ -1151,6 +1175,7 @@ class GenerationService:
                         "dataStructure": payload["dataStructure"],
                         "referenceMaterial": references,
                         "governedKnowledge": governed_knowledge,
+                        "rendererCapabilities": renderer_capabilities,
                         "generationPolicy": generation_policy,
                         "coverageChecklist": coverage_checklist,
                     },
