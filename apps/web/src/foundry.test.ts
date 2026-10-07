@@ -33,6 +33,10 @@ it('projects technical measure and visual failures to fixed codes and index path
  const visualDesign=integrityDesign();visualDesign.pages[0].visuals[0].measureIds=['unknown-private-id'];
  const issues=inspectMeasureIntegrity(visualDesign,requestSchema);expect(reportDesignFailureDiagnostic(new ReportDesignIntegrityError(visualDesign,issues))?.findings).toContainEqual({code:'UNRESOLVED_VISUAL_MEASURE',path:'/reportDesign/pages/0/visuals/0/measureIds'});
 });
+it('preserves closed compiler invariant codes without private exception suffixes',()=>{
+ for(const code of ['SEMANTIC_NAMESPACE_COLLISION','INVALID_TIME_GRAIN_FIELD','UNSUPPORTED_SOURCE_NAME'])expect(reportDesignFailureDiagnostic(new Error(`${code}: private source names and credential`))).toEqual({code,findings:[{code,path:'/reportDesign'}],truncated:false});
+ expect(reportDesignFailureDiagnostic(new Error('PRIVATE_COMPILER_CODE: private candidate'))).toBeNull();
+});
 it('uses truthful parent paths when the specific bad property or duplicate occurrence is ambiguous',()=>{
  const ratio=integrityDesign();ratio.measures[2].denominatorMeasureId='private-unknown-denominator';
  const ratioDiagnostic=reportDesignFailureDiagnostic(new ReportDesignIntegrityError(ratio,inspectMeasureIntegrity(ratio,requestSchema)));

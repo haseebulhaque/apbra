@@ -50,11 +50,14 @@ from apbra_api.persistence import (
 
 
 @pytest.mark.parametrize(
-    ("invalid_field", "overview"),
-    [(False, "An imperfect first draft"), (False, ""), (False, "   "), (True, "")],
+    ("failure_kind", "overview"),
+    [
+        ("", "An imperfect first draft"), ("", ""), ("", "   "),
+        ("UNKNOWN_FIELD", ""), ("NAMESPACE_COLLISION", ""),
+    ],
 )
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
-    settings: Settings, database: Database, invalid_field: bool, overview: str
+    settings: Settings, database: Database, failure_kind: str, overview: str
 ) -> None:
     from test_conversations import provider_analysis
 
@@ -78,10 +81,10 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "measures": [
             {
                 "id": "draft-visits",
-                "name": "Draft Visits",
+                "name": "Visits" if failure_kind == "NAMESPACE_COLLISION" else "Draft Visits",
                 "businessDefinition": "Draft aggregation chosen by the model",
                 "aggregation": "SUM",
-                "field": "Metrics.Missing" if invalid_field else "Metrics.Visits",
+                "field": "Metrics.Missing" if failure_kind == "UNKNOWN_FIELD" else "Metrics.Visits",
                 "numeratorMeasureId": "",
                 "denominatorMeasureId": "",
                 "format": "integer",
@@ -163,7 +166,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
             headers=csrf(session),
         )
-        if invalid_field:
+        if failure_kind:
             assert proposed.status_code == 409, proposed.text
             history = runtime.get(
                 f"/api/cases/{case['id']}/automatic-designs",
@@ -171,10 +174,15 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             ).json()
             failed = history["items"][0]
             assert failed["status"] == "FAILED"
-            assert failed["validation"]["category"] == "REPORT_DESIGN_MEASURE_INTEGRITY"
-            assert json.loads(failed["validation"]["structural_detail"])["findings"] == [
-                {"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"}
-            ]
+            if failure_kind == "UNKNOWN_FIELD":
+                assert failed["validation"]["category"] == "REPORT_DESIGN_MEASURE_INTEGRITY"
+                expected = {
+                    "code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"
+                }
+            else:
+                assert failed["validation"]["category"] == "SEMANTIC_NAMESPACE_COLLISION"
+                expected = {"code": "SEMANTIC_NAMESPACE_COLLISION", "path": "/reportDesign"}
+            assert json.loads(failed["validation"]["structural_detail"])["findings"] == [expected]
             assert "Metrics.Missing" not in json.dumps(history)
             assert "Draft Visits" not in json.dumps(history)
             return
