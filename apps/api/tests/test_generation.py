@@ -1976,7 +1976,8 @@ def test_structured_bridge_details_reject_private_or_malformed_payloads(unsafe: 
 
 
 @pytest.mark.parametrize(
-    "path", ["/reportDesign/measures", "/reportDesign/measures/2", "/reportDesign/pages/0/visuals/1"]
+    "path",
+    ["/reportDesign/measures", "/reportDesign/measures/2", "/reportDesign/pages/0/visuals/1"],
 )
 def test_structured_bridge_details_allow_conservative_parent_paths(path: str) -> None:
     detail = {
