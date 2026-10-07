@@ -50,22 +50,41 @@ class FoundrySchemaScopeTests(unittest.TestCase):
 
     def test_exact_scope_sources_and_gates(self):
         expected = {
-            "apps/api/src/apbra_api/model_provider.py",
-            "apps/api/src/apbra_api/application.py",
-            "apps/api/src/apbra_api/api.py",
-            "apps/api/tests/test_model_provider.py",
-            "apps/api/tests/test_conversations.py",
-            "apps/api/src/apbra_api/semantic_bridge.py",
-            "apps/api/tests/test_semantic_bridge.py",
+            'apps/api/src/apbra_api/application.py',
+            'apps/api/src/apbra_api/model_provider.py',
+            'apps/api/src/apbra_api/generation.py',
+            'apps/api/tests/test_conversations.py',
+            'apps/api/tests/test_model_provider.py',
+            'apps/api/tests/test_generation.py',
+            'apps/api/tests/test_semantic_bridge.py',
+            'apps/web/scripts/semantic-bridge.ts',
+            'apps/web/scripts/generation-bridge.ts',
+            'apps/web/src/clarification.ts',
+            'apps/web/src/clarification.test.ts',
+            'apps/web/src/confirmedRequirements.ts',
+            'apps/web/src/confirmedRequirements.test.ts',
+            'apps/web/src/foundry.ts',
+            'apps/web/src/foundry.test.ts',
+            'apps/web/src/guardrail.ts',
+            'apps/web/src/guardrail.test.ts',
+            'apps/web/src/genericPowerBI.test.ts',
+            'apps/web/src/durableConversation.tsx',
+            'apps/web/src/durableConversation.test.tsx',
+            'apps/web/src/durableGeneration.tsx',
+            'apps/web/src/durableGeneration.test.tsx',
+            'apps/web/src/deploymentGuide.ts',
+            'apps/web/src/deploymentGuide.test.ts',
+            'apps/web/e2e/durable-conversation.spec.ts',
+            'apps/web/e2e/protected-generation.spec.ts',
         }
         self.assertEqual(c.FOUNDRY_SCHEMA_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 7)
+        self.assertEqual(len(self.task["allowed_paths"]), 26)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.FOUNDRY_SCHEMA_BRANCH)
-        self.assertEqual(self.task["base_commit"], "5ffc9d79e4d92d99e25a68735d60b73594ad0775")
+        self.assertEqual(self.task["base_commit"], "efb11f5004961ceff9318d6d6f12f88ecd7b2c4a")
         self.assertEqual(digest(self.task), c.FOUNDRY_SCHEMA_TASK_SHA256)
-        self.assertEqual(len(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS), 3)
+        self.assertEqual(len(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS), 5)
         self.assertTrue(expected.isdisjoint(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS))
         self.assertEqual(self.task["source_ids"], [row[0] for row in c.FOUNDRY_SCHEMA_SOURCES])
         for source_id, page, version, expected_hash in c.FOUNDRY_SCHEMA_SOURCES:
@@ -87,8 +106,8 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             for omitted in c.FOUNDRY_SCHEMA_REGISTRATION_PATHS:
                 errors = self.check(root, c.FOUNDRY_SCHEMA_REGISTRATION_PATHS - {omitted},
                                     c.FOUNDRY_SCHEMA_REGISTRATION_BRANCH)
-                self.assertIn("APBRA-160 Foundry registration must change exactly three governance files", errors)
-            for extra in ("apps/api/src/apbra_api/model_provider.py", "docs/source-register.json"):
+                self.assertIn("APBRA-160 Foundry registration must change exactly five governance files", errors)
+            for extra in ("apps/api/src/apbra_api/model_provider.py", "docs/decisions/implementation-baseline.md"):
                 errors = self.check(root, c.FOUNDRY_SCHEMA_REGISTRATION_PATHS | {extra},
                                     c.FOUNDRY_SCHEMA_REGISTRATION_BRANCH)
                 self.assertTrue(errors)
@@ -96,15 +115,21 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             self.assertIn("APBRA-160 Foundry implementation cannot change governance files", errors)
 
     def test_scope_mutations_fail_with_recomputed_task_digest(self):
-        mutations = [
+        mutations = [[p for p in self.task["allowed_paths"] if p != omitted]
+                     for omitted in self.task["allowed_paths"]]
+        mutations += [self.task["allowed_paths"] + [duplicate]
+                      for duplicate in self.task["allowed_paths"]]
+        mutations += [
             [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/model_provider.py"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/persistence.py"],
             self.task["allowed_paths"] + ["apps/api/alembic/versions/new.py"],
             self.task["allowed_paths"] + ["apps/api/src/**"],
-            self.task["allowed_paths"] + ["apps/web/scripts/semantic-bridge.ts"],
+            self.task["allowed_paths"] + ["apps/web/src/genericPowerBI.ts"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/domain.py"],
+            self.task["allowed_paths"] + ["apps/web/src/rag.ts"],
+            self.task["allowed_paths"] + ["apps/web/package.json"],
             self.task["allowed_paths"] + [".github/workflows/apbra.yml"],
-            [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/semantic_bridge.py"],
+            [p for p in self.task["allowed_paths"] if p != "apps/web/scripts/semantic-bridge.ts"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/model_provider.py"],
         ]
         with tempfile.TemporaryDirectory() as directory:
@@ -122,10 +147,10 @@ class FoundrySchemaScopeTests(unittest.TestCase):
 
     def test_current_apbra160_source_binding_cannot_revert_to_hosting_sources(self):
         self.assertEqual(self.task["source_ids"], [
-            "apbra-160-current-six-stage-direction",
-            "apbra-160-current-model-led-delivery",
+            "apbra-160-editable-first-draft-direction",
+            "apbra-160-editable-first-draft-delivery",
         ])
-        self.assertEqual([row[2] for row in c.FOUNDRY_SCHEMA_SOURCES], [26, 7])
+        self.assertEqual([row[2] for row in c.FOUNDRY_SCHEMA_SOURCES], [28, 9])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
@@ -148,14 +173,16 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             root = Path(directory)
             self.copy_repository(root)
             for section, needle in (
-                ("requirements", "below-A$5"),
+                ("requirements", "Paid calls remain prohibited"),
+                ("requirements", "across Understanding/readiness, confirmation materialization and generation"),
+                ("requirements", "exact visible interpretation"),
+                ("requirements", "private-resource isolation"),
                 ("adrs", "The qualified LLM owns interpretation"),
-                ("acceptance_criteria", "Deterministic APBRA validators"),
+                ("acceptance_criteria", "protected editable artifact download"),
+                ("acceptance_criteria", "Malformed protocol/shape"),
                 ("verification_required", "genuinely separate independent exact-head review"),
                 ("dependencies", "Haseeb manual merge"),
-                ("requirements", "exact allowlisted fixed validation messages"),
-                ("requirements", "Paid calls remain prohibited"),
-                ("out_of_scope", "weakened validation"),
+                ("out_of_scope", "Paid provider calls"),
             ):
                 with self.subTest(section=section):
                     changed = copy.deepcopy(self.task)
