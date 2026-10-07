@@ -235,7 +235,7 @@
     {
       "id": "mvp1-business-friendly-ux-application-shell",
       "content_id": "APBRA-169",
-      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell — Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
+      "version": "Haseeb APBRA-169 registration authorization on 2026-09-29; live Jira APBRA-169 task 10269; Confluence 03.07 Business-Friendly UX & Application Shell \u2014 Governed Package v1 (8388610); verified main a34a20ef8448b932bc9537c2b1c377c8de1727d6; Jira PLAN comment 10280",
       "section": "APBRA-PRODUCT-2026-09-22 / APBRA-160 MVP-1 / APBRA-169 business-friendly UX and application shell",
       "url": "https://arkitektz.atlassian.net/browse/APBRA-169",
       "status": "ACCEPTED",
@@ -677,7 +677,7 @@
       "id": "apbra-160-historical-business-shell",
       "content_id": "8388610",
       "version": 2,
-      "section": "03.07 - Business-Friendly UX & Application Shell — Governed Package",
+      "section": "03.07 - Business-Friendly UX & Application Shell \u2014 Governed Package",
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8388610",
       "status": "ACCEPTED",
       "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Historical APBRA-169 shell package remains historical; its earlier stage count is not the current six-stage acceptance target. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
@@ -726,6 +726,24 @@
       "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063388",
       "status": "ACCEPTED",
       "acceptance": "Haseeb requested current APBRA-160 local-demo/documentation alignment on 6 October 2026. This exact source version is accepted for documentation/provenance reconciliation only: Reviewer, release and administration controls remain distinct from normal generation; requested separated settings sections and scoped saves require later finite implementation authority. This row grants no Foundry runtime edit, paid retry, cloud deployment, Live Canvas, or general product authority; separate finite registration, hosted CI, independent exact-head review and Haseeb manual merge remain required."
+    },
+    {
+      "id": "apbra-160-editable-first-draft-direction",
+      "content_id": "8519682",
+      "version": 28,
+      "section": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly handed APBRA-160 back on 7 October 2026 for one bounded editable-first-draft iteration after the documentation hold. Jira decision 10575 and handback PLAN 10576 bind this exact source version. The LLM owns business reasoning and design; business correctness, completeness, obligation coverage and semantic equivalence must not veto technically processable drafts across Understanding, confirmation materialization or generation. Retain exact visible interpretation acceptance, authorization, tenant isolation, configured budgets, typed shape, valid references, supported compiler operations, constructibility, file integrity and protected download. This is target acceptance, not implemented or live-tested evidence. Provider-managed tenant RAG remains separate and unimplemented. Preserve all historical sources and saved evidence. Finite registration, independent exact-head review, hosted CI and Haseeb manual merge remain required before product work. No paid call, merge, deployment, preview or permission change is authorized by this source row."
+    },
+    {
+      "id": "apbra-160-editable-first-draft-delivery",
+      "content_id": "9404417",
+      "version": 9,
+      "section": "03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract",
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicitly handed APBRA-160 back on 7 October 2026 for one bounded editable-first-draft iteration after the documentation hold. Jira decision 10575 and handback PLAN 10576 bind this exact source version. The LLM owns business reasoning and design; business correctness, completeness, obligation coverage and semantic equivalence must not veto technically processable drafts across Understanding, confirmation materialization or generation. Retain exact visible interpretation acceptance, authorization, tenant isolation, configured budgets, typed shape, valid references, supported compiler operations, constructibility, file integrity and protected download. This is target acceptance, not implemented or live-tested evidence. Provider-managed tenant RAG remains separate and unimplemented. Preserve all historical sources and saved evidence. Finite registration, independent exact-head review, hosted CI and Haseeb manual merge remain required before product work. No paid call, merge, deployment, preview or permission change is authorized by this source row."
     }
   ],
   "freshness": "Recorded source versions; refresh live Jira/Confluence before implementation. Historical source bindings retain their earlier read baselines; the appended APBRA-160 current-source bindings were verified for this amendment.",

@@ -23,6 +23,8 @@ CURRENT_ROWS = (
     ("apbra-160-use-cases-acceptance", "3932402", 5, "3faf1efa272470e3771f72f65d7a47e9d5026e12d31a689c19378f3ac9e644d5"),
     ("apbra-160-screen-interactions", "4063368", 5, "3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f"),
     ("apbra-160-reviewer-administration", "4063388", 6, "05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1"),
+    ('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'),
+    ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9'),
 )
 
 
@@ -64,6 +66,17 @@ class CurrentDemoSourceAlignmentScopeTests(unittest.TestCase):
         self.assertIn("six-stage", self.rows[HISTORICAL_COUNT]["acceptance"])
         self.assertIn("no Foundry runtime edit", self.rows[HISTORICAL_COUNT]["acceptance"])
         self.assertIn("future capabilities", self.rows[HISTORICAL_COUNT + 4]["acceptance"])
+
+    def test_all_82_previous_source_rows_remain_unchanged(self):
+        self.assertEqual(digest(self.rows[:82]), '45f818ba29a8b6f474e5115b83f244394417c23a6d329a33af44f57409e54578')
+        self.assertEqual(len(self.rows), 84)
+        self.assertEqual([row[2] for row in CURRENT_ROWS[-2:]], [28, 9])
+        for index in range(82, 84):
+            for field, value in (("version", 999), ("status", "PROPOSED"),
+                                 ("acceptance", "weakened")):
+                changed = copy.deepcopy(self.rows)
+                changed[index][field] = value
+                self.assertTrue(provenance_errors(changed))
 
     def test_mutations_fail_closed(self):
         variants = []

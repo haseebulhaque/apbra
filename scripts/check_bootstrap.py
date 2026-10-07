@@ -904,37 +904,58 @@ HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
 
 FOUNDRY_SCHEMA_PATHS = {
-    'apps/api/src/apbra_api/model_provider.py',
     'apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/api.py',
-    'apps/api/tests/test_model_provider.py',
+    'apps/api/src/apbra_api/model_provider.py',
+    'apps/api/src/apbra_api/generation.py',
     'apps/api/tests/test_conversations.py',
-    'apps/api/src/apbra_api/semantic_bridge.py',
+    'apps/api/tests/test_model_provider.py',
+    'apps/api/tests/test_generation.py',
     'apps/api/tests/test_semantic_bridge.py',
+    'apps/web/scripts/semantic-bridge.ts',
+    'apps/web/scripts/generation-bridge.ts',
+    'apps/web/src/clarification.ts',
+    'apps/web/src/clarification.test.ts',
+    'apps/web/src/confirmedRequirements.ts',
+    'apps/web/src/confirmedRequirements.test.ts',
+    'apps/web/src/foundry.ts',
+    'apps/web/src/foundry.test.ts',
+    'apps/web/src/guardrail.ts',
+    'apps/web/src/guardrail.test.ts',
+    'apps/web/src/genericPowerBI.test.ts',
+    'apps/web/src/durableConversation.tsx',
+    'apps/web/src/durableConversation.test.tsx',
+    'apps/web/src/durableGeneration.tsx',
+    'apps/web/src/durableGeneration.test.tsx',
+    'apps/web/src/deploymentGuide.ts',
+    'apps/web/src/deploymentGuide.test.ts',
+    'apps/web/e2e/durable-conversation.spec.ts',
+    'apps/web/e2e/protected-generation.spec.ts',
 }
 FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
+    'docs/source-register.json',
     'tasks/APBRA-160-foundry-structured-output.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_foundry_schema_scope.py',
+    'tests/bootstrap/test_current_demo_source_alignment_scope.py',
 }
-FOUNDRY_SCHEMA_TASK_SHA256 = 'd0dbd4cc22d9f3d6e27e913328bcbef7325a6bda3db25aec2d535d5b8b537213'
+FOUNDRY_SCHEMA_TASK_SHA256 = '88a9577c08461a274f04c7a64c920e032f0c07e5b3baffdfa5ea63aa3318857d'
 FOUNDRY_SCHEMA_SOURCES = (
-    ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
-    ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
+    ('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'),
+    ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9'),
 )
 FOUNDRY_SCHEMA_GATE_SHA256 = {
-    'requirements': 'db56cb5911a2f9be56ad08dc9a1d282720260d97557d74a31a53e0a18442de98',
-    'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
-    'architecture_refs': '3a5b053aaa4de6ac2245d42d6c726aa92bd3543f7d26c0bd17be4f2e221805ea',
-    'restricted_paths': '859a559592e1c0f20ddb5c3582565876e61b8f6f016e17a14e3849c5b0e7800c',
-    'acceptance_criteria': 'bbfa933c60cd05c1f481b1d072abd24714f56039f1d584a180cb5b5b7b3eba7b',
-    'verification_required': 'b418f44e2a9731265c84ae490514851003f7eb5c65b805140f7ee76a8a5f9f18',
-    'out_of_scope': '0cf6a3766df4b9c3587edba8358775d5ec5b512df54a1f2e70a45a082e4863d9',
-    'escalate_when': 'c313f6706fc49a98464904457a7403042634a75c533fc9d147a78f4c0f7fe69d',
-    'dependencies': '792315d6d32874c335af527d636d93db56e46186c5e33ccfa15370f6a5f8781c',
+    'requirements': '843a56bc013e1c0db367b0d6c9f118e6ebbe5d51c03a1931fad930059d963b2f',
+    'adrs': '2c7a575cc35488c6e1cd10aeeef41575646c26bc9804e8b446d779c09360fd25',
+    'architecture_refs': '756a3adacb850a15bf297617b552e39af2fc630599f900a580d70d437cff8c13',
+    'restricted_paths': '5da9a2143668174dc898d0ed884c32c49b587a0524bf2c37bc7ae53e0ccf2fbe',
+    'acceptance_criteria': '24df1f8b274ff60bfe8d4a202ceffa1de766e1a00dfe357e811192e4c99c2e97',
+    'verification_required': '3e0d547686d5b640d8f207673e3017e8426874607eab3a1ce96af58c8d78582f',
+    'out_of_scope': 'd84f2cd70d79358d10e16173234e3f8e5cd9623c4ab2a6dd9432e6a1b27efa29',
+    'escalate_when': '434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1',
+    'dependencies': '1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded',
 }
-FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-semantic-diagnostics'
-FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-semantic-diagnostics-registration'
+FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft'
+FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft-registration'
 
 DEMO_UX_PATHS = {
     'apps/api/src/apbra_api/api.py',
@@ -1008,6 +1029,8 @@ CURRENT_DEMO_SOURCES = (
     ('apbra-160-use-cases-acceptance', '3932402', 5, '3faf1efa272470e3771f72f65d7a47e9d5026e12d31a689c19378f3ac9e644d5'),
     ('apbra-160-screen-interactions', '4063368', 5, '3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f'),
     ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
+    ('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'),
+    ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9'),
 )
 
 CAPSTONE_EVALUATION_PATHS = {
@@ -2213,7 +2236,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected APBRA-160 Foundry task or agent identity')
                 if foundry_schema_task['branch'] != FOUNDRY_SCHEMA_BRANCH:
                     extension_errors.append('Unexpected APBRA-160 Foundry implementation branch')
-                if foundry_schema_task['base_commit'] != '5ffc9d79e4d92d99e25a68735d60b73594ad0775':
+                if foundry_schema_task['base_commit'] != 'efb11f5004961ceff9318d6d6f12f88ecd7b2c4a':
                     extension_errors.append('Stale APBRA-160 Foundry registration base')
                 if (
                     set(foundry_schema_task['allowed_paths']) != FOUNDRY_SCHEMA_PATHS
@@ -2995,7 +3018,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                     changed_paths != FOUNDRY_SCHEMA_REGISTRATION_PATHS):
-                errors.append('APBRA-160 Foundry registration must change exactly three governance files')
+                errors.append('APBRA-160 Foundry registration must change exactly five governance files')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_BRANCH and
                     changed_paths.intersection(FOUNDRY_SCHEMA_REGISTRATION_PATHS)):
