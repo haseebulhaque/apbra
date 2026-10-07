@@ -30,6 +30,8 @@ from apbra_api.generation import (
     GenerationService,
     _automatic_design_retry_instruction,
     _provider_confirmed_requirements,
+    _safe_bridge_diagnostic_detail,
+    _safe_failed_validation,
 )
 from apbra_api.model_provider import (
     DeterministicFakeProvider,
@@ -113,6 +115,9 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "generationRequirements": [],
     }
     provider = automatic_test_provider([analysis, design])
+    provider.profile = provider.profile.model_copy(
+        update={"max_calls_per_operation": 1, "retry_limit": 0}
+    )
     with TestClient(
         create_app(settings=settings, database=database, model_provider=provider)
     ) as runtime:
@@ -164,7 +169,14 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                 f"/api/cases/{case['id']}/automatic-designs",
                 params={"confirmed_contract_id": contract["id"]},
             ).json()
-            assert history["items"][0]["status"] == "FAILED"
+            failed = history["items"][0]
+            assert failed["status"] == "FAILED"
+            assert failed["validation"]["category"] == "REPORT_DESIGN_MEASURE_INTEGRITY"
+            assert json.loads(failed["validation"]["structural_detail"])["findings"] == [
+                {"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"}
+            ]
+            assert "Metrics.Missing" not in history.text
+            assert "Draft Visits" not in history.text
             return
         assert proposed.status_code == 201, proposed.text
         result = proposed.json()
@@ -849,11 +861,14 @@ def test_invalid_automatic_design_is_failed_safely_without_losing_requirements(
             "prompt_tokens": 20,
             "total_tokens": 60,
         }
-        assert failed["validation"] == {
-            "category": "GENERATION_PIPELINE_FAILED",
-            "detail_status": "WITHHELD",
-            "stage": "REPORT_DESIGN_DETERMINISTIC_VALIDATION",
-            "status": "FAILED",
+        assert failed["validation"]["category"] == "REPORT_DESIGN_INVALID"
+        assert failed["validation"]["detail_status"] == "RECORDED"
+        assert failed["validation"]["stage"] == "REPORT_DESIGN_DETERMINISTIC_VALIDATION"
+        assert failed["validation"]["status"] == "FAILED"
+        assert json.loads(failed["validation"]["structural_detail"]) == {
+            "stage": "REPORT_DESIGN",
+            "findings": [{"code": "REPORT_DESIGN_INVALID", "path": "/reportDesign"}],
+            "truncated": False,
         }
         assert failed["failure"]["code"] == "MODEL_CANDIDATE_REJECTED"
         assert "first rejected" not in history.text
@@ -1913,6 +1928,73 @@ def test_generation_bridge_rejects_unsafe_executables_timeout_and_malformed_outp
         )
     assert captured.value.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
     assert captured.value.diagnostic_message.endswith("REQUIRED_BREAKDOWN_UNCOVERED")
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        {"stage": "private credential", "findings": [], "truncated": False},
+        {"stage": [], "findings": [], "truncated": False},
+        {"stage": "COMPILER", "findings": [], "truncated": False, "raw": "private"},
+        {"stage": "REPORT_DESIGN", "findings": [], "truncated": "false"},
+        {"stage": "REPORT_DESIGN", "findings": "private", "truncated": False},
+        {
+            "stage": "REPORT_DESIGN",
+            "findings": [{"code": "PRIVATE", "path": "/reportDesign"}],
+            "truncated": False,
+        },
+        {
+            "stage": "REPORT_DESIGN",
+            "findings": [{"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/private-field"}],
+            "truncated": False,
+        },
+        {
+            "stage": "REPORT_DESIGN",
+            "findings": [
+                {"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/1000000/field"}
+            ],
+            "truncated": False,
+        },
+        {
+            "stage": "REPORT_DESIGN",
+            "findings": [
+                {"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign", "reason": "private"}
+            ],
+            "truncated": False,
+        },
+        {
+            "stage": "REPORT_DESIGN",
+            "findings": [{"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign"}] * 4,
+            "truncated": False,
+        },
+    ],
+)
+def test_structured_bridge_details_reject_private_or_malformed_payloads(unsafe: dict) -> None:
+    failure = GenerationBridgeFailure("REPORT_DESIGN_MEASURE_INTEGRITY", json.dumps(unsafe))
+    assert _safe_bridge_diagnostic_detail(failure) is None
+    assert _safe_failed_validation(failure)["detail_status"] == "WITHHELD"
+
+
+def test_structured_bridge_details_preserve_only_safe_invariant_paths() -> None:
+    detail = {
+        "stage": "REPORT_DESIGN",
+        "findings": [{"code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"}],
+        "truncated": False,
+    }
+    failure = GenerationBridgeFailure("REPORT_DESIGN_MEASURE_INTEGRITY", json.dumps(detail))
+    assert json.loads(_safe_bridge_diagnostic_detail(failure)) == detail
+    for message in ("private provider payload", '{"stage":'):
+        assert (
+            _safe_bridge_diagnostic_detail(
+                GenerationBridgeFailure("REPORT_DESIGN_INVALID", message)
+            )
+            is None
+        )
+    compiler = GenerationBridgeFailure(
+        "GENERATION_PIPELINE_FAILED",
+        json.dumps({"stage": "COMPILER", "findings": [], "truncated": False}),
+    )
+    assert json.loads(_safe_bridge_diagnostic_detail(compiler))["stage"] == "COMPILER"
 
 
 def test_layout_retry_is_order_only_and_other_rejections_remain_generic() -> None:
