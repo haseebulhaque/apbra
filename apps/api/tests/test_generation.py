@@ -53,7 +53,7 @@ from apbra_api.persistence import (
     ("failure_kind", "overview"),
     [
         ("", "An imperfect first draft"), ("", ""), ("", "   "),
-        ("UNKNOWN_FIELD", ""), ("NAMESPACE_COLLISION", ""),
+        ("UNKNOWN_FIELD", ""), ("TIME_GRAIN_FIELD", ""), ("", "Shared-name draft"),
     ],
 )
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
@@ -81,7 +81,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "measures": [
             {
                 "id": "draft-visits",
-                "name": "Visits" if failure_kind == "NAMESPACE_COLLISION" else "Draft Visits",
+                "name": "Visits" if overview == "Shared-name draft" else "Draft Visits",
                 "businessDefinition": "Draft aggregation chosen by the model",
                 "aggregation": "SUM",
                 "field": "Metrics.Missing" if failure_kind == "UNKNOWN_FIELD" else "Metrics.Visits",
@@ -98,10 +98,12 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                 "visuals": [
                     {
                         "id": "draft-card",
-                        "type": "card",
+                        "type": "line" if failure_kind == "TIME_GRAIN_FIELD" else "card",
                         "title": "Draft Visits",
-                        "categoryField": "",
-                        "timeGrain": "NONE",
+                        "categoryField": (
+                            "Metrics.Visits" if failure_kind == "TIME_GRAIN_FIELD" else ""
+                        ),
+                        "timeGrain": "MONTH" if failure_kind == "TIME_GRAIN_FIELD" else "NONE",
                         "measureIds": ["draft-visits"],
                         "fields": [],
                         "altText": "",
@@ -180,8 +182,8 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                     "code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"
                 }
             else:
-                assert failed["validation"]["category"] == "SEMANTIC_NAMESPACE_COLLISION"
-                expected = {"code": "SEMANTIC_NAMESPACE_COLLISION", "path": "/reportDesign"}
+                assert failed["validation"]["category"] == "INVALID_TIME_GRAIN_FIELD"
+                expected = {"code": "INVALID_TIME_GRAIN_FIELD", "path": "/reportDesign"}
             assert json.loads(failed["validation"]["structural_detail"])["findings"] == [expected]
             assert "Metrics.Missing" not in json.dumps(history)
             assert "Draft Visits" not in json.dumps(history)
