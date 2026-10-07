@@ -205,3 +205,12 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 .private-workspace button:disabled{color:var(--muted);background:var(--surface-tint);border-color:var(--border);opacity:1}
 @media(max-width:700px){.report-wizard .journey-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.wizard-navigation{flex-wrap:wrap}.tenant-section-intro{flex-wrap:wrap}.workspace-topbar .account-controls{flex-wrap:wrap}.workspace-topbar{padding:16px}.appearance-control{margin-left:0}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.private-workspace *{animation:none!important;transition:none!important;scroll-behavior:auto!important}.private-workspace button:hover{transform:none!important}}
+/* Keep labels inside their controls as the wizard's available width changes. */
+.report-wizard .journey-steps{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.report-wizard .journey-steps button{height:100%;min-width:0}
+.report-wizard .journey-steps .step-copy strong{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.35}
+.report-wizard .journey-steps .step-copy small{white-space:normal;overflow-wrap:anywhere}
+.private-workspace .composer-footer button{white-space:normal;overflow-wrap:anywhere;min-width:0;max-width:100%;height:auto;line-height:1.4;text-align:center}
+.private-workspace .composer-footer button>span{flex:none}
+.wizard-step-heading{flex-wrap:wrap}
+.wizard-step-heading>p{flex:1 1 100%;margin:0}

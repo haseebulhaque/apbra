@@ -378,3 +378,40 @@ test('personal appearance has readable core text, system fallback and narrow ref
   await page.locator('.private-workspace').evaluate(element=>{(element as HTMLElement).style.fontSize='200%'});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 });
+
+test('wizard and composer labels fit their controls at narrow widths and with long text',async({page})=>{
+  await signIn(page,'member');
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity across locations.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const assertLabelsFit=async()=>{
+    const violations=await page.locator('.report-wizard').evaluate(wizard=>{
+      const errors:string[]=[];
+      const check=(element:Element,container:Element,label:string)=>{
+        const bounds=container.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
+        for(const rect of Array.from(range.getClientRects()))if(rect.width>0&&(rect.left<bounds.left-1||rect.right>bounds.right+1||rect.top<bounds.top-1||rect.bottom>bounds.bottom+1))errors.push(label);
+      };
+      wizard.querySelectorAll('.journey-steps button').forEach(button=>{
+        const label=button.querySelector('strong')!;check(label,button,label.textContent??'step');
+        if((label as HTMLElement).scrollWidth>(label as HTMLElement).clientWidth+1)errors.push('Clipped step text');
+      });
+      const button=wizard.querySelector('.message-composer .composer-footer button')!;
+      check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
+      return [...new Set(errors)];
+    });
+    expect(violations).toEqual([]);
+  };
+  for(const mode of ['light','dark']){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    for(const width of [1280,1024,768,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+  }
+  await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
+  await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
+  for(const mode of ['light','dark']){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+  }
+});
