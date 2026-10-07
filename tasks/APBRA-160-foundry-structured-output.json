@@ -2,12 +2,12 @@
   "schema_version": 1,
   "task_id": "APBRA-160",
   "work_item_system": "jira",
-  "execution_id": "APBRA-160-20261006-SEMANTIC-DIAGNOSTICS-REG",
+  "execution_id": "APBRA-160-semantic-rule-coverage-20261007",
   "human_owner": "Haseeb Ul Haque",
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Register a finite offline semantic-failure diagnostics extension to the merged Foundry correction; preserve validators and evidence, make no runtime change in registration.",
+  "objective": "Register a finite offline diagnostic extension to preserve stable canonical validator rule identifiers, aggregate reasons and failure stages without changing deterministic acceptance or retaining private error text.",
   "requirements": [
     "Current accepted APBRA-160 03.07 v26 and 03.08 v7 govern the six-stage local demo and model-led Understanding contract. This bounded repair must preserve qualified-model interpretation, zero or optional model-authored questions, exact-version user confirmation and server-authoritative validation; historical APBRA-173B packaging sources are not authority for this model-provider repair.",
     "APBRA-160 Jira comment 10540 records one failed real Understanding attempt on saved case d0bd52ea-7d5a-4ab5-b10d-0fd6baeae805 and an offline schema incompatibility. The exact cause and billable usage of that attempt remain unknown; preserve its complete request, evidence, history and protected credential.",
@@ -18,9 +18,10 @@
     "The below-A$5 owner limit is a total ceiling including the earlier attempt of unknown cost. No additional paid call is authorised merely by this registration or a green offline test; establish and record a conservative remaining-spend bound before any later real retry. Keep automatic generation disabled until that gate is met.",
     "APBRA-173B draft PR #94, deployment and the existing manual preview data are separate and paused. Do not alter them under this package.",
     "Jira APBRA-160 comment 10566 records a returned real Understanding response rejected at semantic validation after two previous timeouts. The candidate was discarded; no exact failed business rule or mapping defect is established. Preserve saved CSV, full requirements and history. No paid calls during initial repair.",
-    "SemanticBridge currently discards the TypeScript error envelope on nonzero exit. Later implementation may classify only exact allowlisted fixed validation messages and bridge transport conditions into constant safe reason codes; unknown, dynamic or malformed messages must yield an unclassified constant. Never retain or log raw bridge/provider responses, candidate, prompt, data, identifiers or secrets. Carry the bounded code through the existing separately committed failure audit, while public error remains safe and failed candidates remain rejected.",
-    "Owner explicitly requested takeover and finite path registration. Only semantic_bridge.py and test_semantic_bridge.py are added to the prior five-path implementation scope. No TypeScript, domain, persistence, migration, dependency, service or provider-setting changes are authorized. Fix a mapping/contract defect only if independently reproduced offline with synthetic evidence and inside registered paths; unsupported fixes require a further amendment.",
-    "The owner now requires total spend below A$5 including reported October posted A$0.44; prior A$10 guidance is superseded. Three A$1 attempt reserves produce A$3.44 as a planning reserve, not reconciled billed cost; A$0.25 per call is only an estimate. Paid calls remain prohibited for this offline repair. Merge permission expired at 13:00 UTC: no merge, deployment or queued auto-merge without renewed owner approval."
+    "The earlier exact allowlisted fixed validation messages classified only selected clarification errors. Offline synthetic evidence shows confirmed-contract error prefixes and aggregated/dynamic canonical reasons are unclassified, and the readiness wrapper replaces structured transcript failures with generic text. Later product work must attach bounded stable rule identifiers at the canonical throw sites and preserve them through wrappers, the bridge envelope, Python exception and failed-attempt audit. Arbitrary exception text, stack, prompt, candidate, field names and identifiers must never become diagnostics.",
+    "Owner instructed offline diagnosis and finite path registration before expanding authority. Add exactly the semantic-bridge TypeScript entry point, clarification validator and its existing test, confirmed-requirement validator and its existing test to the seven registered Python paths. Only diagnostic identifiers, their propagation and offline tests may change: every condition, thrown rejection, confirmed-contract meaning and business validation remains enforced. No new module, domain, persistence, migration, dependency, credential or provider-setting path is authorized.",
+    "The approved single live diagnostic call is consumed. Paid calls remain prohibited for this offline repair; do not retry, infer the discarded candidate failing rule or substitute a renamed generic catch-all. The healthy preserved preview, original effective tenant settings, AI-off state, request, CSV, protected credentials and history remain untouched. This registration and any later product PR have no merge, auto-merge, deployment or preview-update authority.",
+    "Non-Error throws, unstructured runtime errors and malformed/unknown or forged envelopes cannot establish a specific business-rule failure. Preserve a truthful bounded error form or stage only when established offline; never claim a precise rule from generic text. Known canonical errors must carry one or more finite allowlisted stable IDs, deduplicated and bounded to at most 16 identifiers; unknown/excessive identifiers and mixed private diagnostic payloads fail closed."
   ],
   "adrs": [
     "The qualified LLM owns interpretation, optional material clarification, supported report design and business-facing scope proposals; the user confirms meaning. Deterministic code validates the typed contract and governs authorization, budgets and release, without fixed retail answers or a simulated fallback.",
@@ -32,7 +33,8 @@
     "Current accepted APBRA-160 Confluence 03.07 page 8519682 v26 and 03.08 page 9404417 v7 were refreshed on 2026-10-06; their exact append-only source rows are bound below. Earlier 01.10 v14 and 02.06 v18 provide contextual MVP/traceability evidence, not this repair's source authority.",
     "Jira APBRA-160 comment 10540 is the incident record; PLAN comment 10541 identifies Codex as actual actor and the governance-only scope. Haseeb's direct instruction permits continued work inside the below-A$5 total ceiling, not unbounded paid calls.",
     "Microsoft Learn Structured outputs, https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/structured-outputs, checked 2026-10-06; current code audit found six object levels and unsupported minimum/maxItems wire keywords.",
-    "APBRA-160 handoff 10566 and takeover PLAN10567; direct owner instruction authorizes offline takeover and registering expansion, not bypassing exact-head CI/review/manual-merge gates."
+    "APBRA-160 handoff 10566 and takeover PLAN10567; direct owner instruction authorizes offline takeover and registering expansion, not bypassing exact-head CI/review/manual-merge gates.",
+    "APBRA-160 result 10572 and PLAN 10573 record the consumed single-call failure and four offline synthetic missed paths. This amendment is diagnostic-only; accepted source rows for 03.07 v26 and 03.08 v7 remain unchanged."
   ],
   "allowed_paths": [
     "apps/api/src/apbra_api/model_provider.py",
@@ -41,7 +43,12 @@
     "apps/api/tests/test_model_provider.py",
     "apps/api/tests/test_conversations.py",
     "apps/api/src/apbra_api/semantic_bridge.py",
-    "apps/api/tests/test_semantic_bridge.py"
+    "apps/api/tests/test_semantic_bridge.py",
+    "apps/web/scripts/semantic-bridge.ts",
+    "apps/web/src/clarification.ts",
+    "apps/web/src/clarification.test.ts",
+    "apps/web/src/confirmedRequirements.ts",
+    "apps/web/src/confirmedRequirements.test.ts"
   ],
   "restricted_paths": [
     ".github/**",
@@ -55,15 +62,21 @@
     "apps/api/alembic/**",
     "apps/api/pyproject.toml",
     "apps/api/requirements*.txt",
-    "apps/web/**",
     "compose.yaml",
     "infrastructure/**",
     "terraform/**",
     "workers/**",
-    "packages/**"
+    "packages/**",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "apps/web/src/foundry.ts",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/compiler.ts",
+    "apps/web/src/guardrails.ts",
+    "apps/web/src/generation.ts"
   ],
   "acceptance_criteria": [
-    "The registration changes exactly three governance paths. Later implementation changes only the seven literal allowed paths after separate exact-head review, green hosted CI, Haseeb manual registration merge and verified post-merge main.",
+    "The registration changes exactly three governance paths. Later implementation changes only the twelve literal allowed paths after separate exact-head review, green hosted CI, Haseeb manual registration merge and verified post-merge main.",
     "Exact provider-facing requirement and design schemas pass offline strict-profile checks for object nesting <=5, <=100 object properties and absence of unsupported minimum/maxItems. A local HTTP mock rejects nonconforming schemas and proves no paid network request is needed for qualification.",
     "Deterministic APBRA validators still reject negative or inconsistent minimumRepresentations, excess page visuals, nonempty legacy clarifications, incomplete coverage, invented fields and unsupported report scope. The full saved retail request is not simplified to pass.",
     "Provider 4xx, timeout, malformed 2xx, semantic rejection and successful use are distinguished in safe local tests; failed interpretation observation persists independently of a rolled-back interpretation transaction, with call count and token usage when actually supplied and null where unknown.",
@@ -71,23 +84,28 @@
     "The saved case, 52,027-byte CSV, protected credential, Tenant Settings history and paused APBRA-173B PR #94 remain unchanged by registration.",
     "Offline synthetic tests distinguish allowlisted semantic rejection, unknown/dynamic-message rejection, malformed output, bridge timeout, oversize and process failure without exposing messages, report data or secrets. No rejected result becomes valid and original deterministic contract/coverage checks remain enforced.",
     "Safe semantic reason survives the existing failed-interpretation rollback and independent audit commit. Token usage remains supplied usage or null, never invented; public responses and captured logs contain no raw error envelope or candidate.",
-    "Seven literal product paths only. Scope mutation tests fail on removal, duplicates, wildcard, TypeScript, domain, persistence, migrations, workflow or unrelated path additions, even with the task digest recomputed."
+    "Twelve literal product paths only. Scope mutation tests fail on removal, duplicates, wildcard, unrelated TypeScript, domain, persistence, migrations, workflow or unrelated path additions, even with the task digest recomputed.",
+    "Synthetic regressions cover confirmed-contract cardinality, exact schema field rejection, multi-reason aggregation, readiness-wrapper preservation and malformed input/runtime/non-Error forms. Known rule identifiers survive to safe durable audits while the original candidate remains rejected, public responses contain no private details and no model calls occur.",
+    "All canonical throw sites and wrapper error forms reachable by semantic analysis/readiness/confirmation are enumerated against the finite identifier catalogue. Every intentionally unclassified form records why its evidence cannot identify a rule; generic errors must not be relabelled as a specific validator rule.",
+    "Registration changes exactly its three governance files; product code and tests stay untouched until exact-head hosted CI and independent PASS, renewed Haseeb manual merge approval, and verified post-merge main."
   ],
   "verification_required": [
     "Registration: focused scope/mutation tests, full bootstrap suite, standalone bootstrap and CI policy checkers, exact three-path audit, JSON validation, git diff --check and available secret check.",
     "Registration: hosted APBRA Bootstrap on exact PR head, genuinely separate independent exact-head review, Haseeb manual merge and verified post-merge main before product implementation.",
     "Implementation: red-before/green-after offline strict-schema and provider mock tests, safe durable failure-observation tests, full PostgreSQL API suite, Ruff, strict mypy, web regression as applicable, bootstrap/governance and hosted CI on exact head.",
     "A later paid retry requires a reliable prior-spend/remaining-ceiling check and separate recorded usage/cost bound; deterministic tests never count as live model qualification.",
-    "Diagnostic implementation: red-before/green-after synthetic bridge and durable-failure-audit tests, full disposable-PostgreSQL API suite, Ruff/strict mypy, governance/CI, fresh exact-head independent review. No model request is verification evidence for this offline package."
+    "Diagnostic implementation: red-before/green-after synthetic bridge and durable-failure-audit tests, full disposable-PostgreSQL API suite, Ruff/strict mypy, governance/CI, fresh exact-head independent review. No model request is verification evidence for this offline package.",
+    "Diagnostic extension: red-before/green-after synthetic TypeScript validator/bridge tests, Python protocol/redaction/bounds tests and durable failure-audit tests; full web regression/build, disposable-PostgreSQL API suite, Ruff/strict mypy, bootstrap/CI checkers, exact twelve-path audit and genuinely separate independent exact-head review. No paid request or live preview change is evidence for this package."
   ],
   "out_of_scope": [
-    "Product/runtime change in this registration; eighth implementation path, migration, dependency, lockfile, workflow, Azure provisioning, deployment or paid provider call without a separate governed amendment/decision.",
+    "Product/runtime change in this registration; thirteenth implementation path, migration, dependency, lockfile, workflow, Azure provisioning, deployment or paid provider call without a separate governed amendment/decision.",
     "Reworking the report contract, weakening semantic validation, substituting simulation, simplifying the saved retail request, changing Tenant Settings, credentials or protected evidence.",
     "Power BI Desktop PASS, live Entra, hosted durability, production model qualification, billing, Canvas/ARD and connected publishing.",
-    "Restoring or reconstructing the discarded private AI response, arbitrary raw-message logging, weakened validation, fake AI success, simplified retail requirements, live-preview edits, paid provider calls, provider settings, hosting/PR94 or post-expiry merge/deployment."
+    "Restoring or reconstructing the discarded private AI response, arbitrary raw-message logging, weakened validation, fake AI success, simplified retail requirements, live-preview edits, paid provider calls, provider settings, hosting/PR94 or post-expiry merge/deployment.",
+    "Changes to canonical business validation conditions, acceptance, semantic meaning, report coverage, user confirmation, runtime settings, credentials, deployment or paid calls. This extension adds diagnostic identity and propagation only; it does not authorize the owner-discussed prompt/business-reasoning architecture change."
   ],
   "escalate_when": [
-    "A safe durable diagnostic or strict-schema correction needs an eighth path, schema migration, new dependency or change to unregistered domain/persistence surfaces.",
+    "A safe durable diagnostic or strict-schema correction needs a thirteenth path, schema migration, new dependency or change to unregistered domain/persistence surfaces.",
     "The provider requires an incompatible schema that cannot preserve APBRA deterministic meaning, or the prior billable spend cannot be bounded before a contemplated paid retry.",
     "Any mandatory test, hosted CI, independent exact-head review, Haseeb manual merge or post-merge verification is absent, stale, failed or skipped.",
     "No safe exact constant classification exists for a failure; use unclassified reason and seek evidenced offline reproduction. Do not infer or patch business meaning from the generic failure."
@@ -96,19 +114,20 @@
   "readiness": "READY_FOR_IMPLEMENTATION",
   "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
   "human_initiator": "Haseeb Ul Haque",
-  "base_commit": "5ffc9d79e4d92d99e25a68735d60b73594ad0775",
-  "branch": "agent/APBRA-DEVOPS/APBRA-160-semantic-diagnostics",
+  "base_commit": "efb11f5004961ceff9318d6d6f12f88ecd7b2c4a",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-semantic-rule-coverage",
   "source_ids": [
     "apbra-160-current-six-stage-direction",
     "apbra-160-current-model-led-delivery"
   ],
   "owner_acceptance": "RECORDED",
-  "effective_release": "Bounded implementation authority only after this governance PR passes exact-head hosted CI and independent review, Haseeb manually merges it, and post-merge main is verified",
+  "effective_release": "Diagnostic-only product authority after this governance PR passes exact-head hosted CI and genuinely separate independent review, receives renewed Haseeb manual merge approval, and verified post-merge main; no live preview, provider or paid-call authorization.",
   "dependencies": [
     "APBRA-160 current-source amendment PR #96 was independently reviewed, passed hosted CI and was merged at 0267025789809cbdf83dabc04d52e8b74c979e4e before this registration's source bindings were updated. The historical 74 source rows remain unchanged and the two current APBRA-160 rows are exact version/hash bound.",
     "APBRA-160 10540 and PLAN 10541; registration PR is governance-only and remains unmerged until hosted CI, genuinely separate exact-head review and Haseeb manual merge.",
     "No APBRA-160 product edit before verified post-registration main. PR #94 and deployment remain paused; the saved retail case and isolated preview data remain intact.",
     "The below-A$5 total ceiling includes the prior unknown usage. Any later paid retry requires a conservative evidenced remaining budget and explicit qualified configuration; registration alone does not open that gate.",
-    "This new three-file diagnostic registration must pass hosted exact-head CI and fresh independent review, then receive renewed Haseeb manual merge approval and verified post-merge main before expanded-path product work. The earlier Foundry registration/product evidence remains historical; it does not qualify this extension."
+    "This new three-file diagnostic registration must pass hosted exact-head CI and fresh independent review, then receive renewed Haseeb manual merge approval and verified post-merge main before expanded-path product work. The earlier Foundry registration/product evidence remains historical; it does not qualify this extension.",
+    "This five-TypeScript-path diagnostic extension is governance-only until a new exact-head hosted CI PASS and fresh independent PASS are followed by renewed Haseeb manual merge approval and verified post-merge main. PR102 merged at efb11f5004961ceff9318d6d6f12f88ecd7b2c4a is the current base; its former merge/test approval does not authorize merging this amendment."
   ]
 }

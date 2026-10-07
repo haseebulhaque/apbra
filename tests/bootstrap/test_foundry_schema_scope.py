@@ -57,13 +57,18 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             "apps/api/tests/test_conversations.py",
             "apps/api/src/apbra_api/semantic_bridge.py",
             "apps/api/tests/test_semantic_bridge.py",
+            "apps/web/scripts/semantic-bridge.ts",
+            "apps/web/src/clarification.ts",
+            "apps/web/src/clarification.test.ts",
+            "apps/web/src/confirmedRequirements.ts",
+            "apps/web/src/confirmedRequirements.test.ts",
         }
         self.assertEqual(c.FOUNDRY_SCHEMA_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 7)
+        self.assertEqual(len(self.task["allowed_paths"]), 12)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.FOUNDRY_SCHEMA_BRANCH)
-        self.assertEqual(self.task["base_commit"], "5ffc9d79e4d92d99e25a68735d60b73594ad0775")
+        self.assertEqual(self.task["base_commit"], "efb11f5004961ceff9318d6d6f12f88ecd7b2c4a")
         self.assertEqual(digest(self.task), c.FOUNDRY_SCHEMA_TASK_SHA256)
         self.assertEqual(len(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS), 3)
         self.assertTrue(expected.isdisjoint(c.FOUNDRY_SCHEMA_REGISTRATION_PATHS))
@@ -107,6 +112,15 @@ class FoundrySchemaScopeTests(unittest.TestCase):
             [p for p in self.task["allowed_paths"] if p != "apps/api/src/apbra_api/semantic_bridge.py"],
             self.task["allowed_paths"] + ["apps/api/src/apbra_api/model_provider.py"],
         ]
+        for path in sorted(c.FOUNDRY_SCHEMA_PATHS):
+            mutations.append([entry for entry in self.task["allowed_paths"] if entry != path])
+            mutations.append(self.task["allowed_paths"] + [path])
+        mutations.extend([
+            self.task["allowed_paths"] + ["apps/web/src/foundry.ts"],
+            self.task["allowed_paths"] + ["apps/web/src/guardrails.ts"],
+            self.task["allowed_paths"] + ["apps/web/scripts/generation-bridge.ts"],
+            self.task["allowed_paths"] + ["apps/web/src/new-diagnostic-module.ts"],
+        ])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.copy_repository(root)
@@ -153,7 +167,7 @@ class FoundrySchemaScopeTests(unittest.TestCase):
                 ("acceptance_criteria", "Deterministic APBRA validators"),
                 ("verification_required", "genuinely separate independent exact-head review"),
                 ("dependencies", "Haseeb manual merge"),
-                ("requirements", "exact allowlisted fixed validation messages"),
+                ("requirements", "bounded stable rule identifiers"),
                 ("requirements", "Paid calls remain prohibited"),
                 ("out_of_scope", "weakened validation"),
             ):
