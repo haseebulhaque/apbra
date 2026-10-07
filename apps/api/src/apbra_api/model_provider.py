@@ -52,7 +52,7 @@ def _validate_strict_wire_schema(schema: dict[str, Any]) -> None:
     """Fail before transport when a schema exceeds the qualified strict subset.
 
     This checks the exact provider-facing schema. APBRA's semantic validators
-    still own numeric bounds, coverage and report-design correctness.
+    still own numeric bounds, typed references and executable output integrity.
     """
 
     allowed = {

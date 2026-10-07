@@ -49,7 +49,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const expertContext=await browser.newContext();
   const expert=await expertContext.newPage();
   await signIn(expert,'uninvited');
-  const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'});
+  const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'}).or(expert.getByRole('heading',{name:'Create Company / Workspace'}));
   await expect(invitationRequired.or(expert.locator('.account-controls').getByText('expert',{exact:true}))).toBeVisible();
   if(await invitationRequired.isVisible()){
     await page.getByRole('button',{name:'Administration'}).click();
@@ -117,12 +117,12 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).toContainText('This report file is unavailable or you no longer have access.');
   await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).not.toContainText('internal detail');
   await expect(page.getByLabel('Current report')).toContainText('This completed build has no available file.');
-  await expect(page.getByLabel('Current report')).not.toContainText('Validated candidate recorded');
+  await expect(page.getByLabel('Current report')).not.toContainText('Editable first draft recorded');
   await page.unroute('**/generation/*/artifact');
   const retriedDownload=page.waitForEvent('download');
   await page.getByRole('button',{name:'Try current report download again'}).click();
   expect((await retriedDownload).suggestedFilename()).toMatch(/\.zip$/);
-  await expect(page.getByLabel('Current report')).toContainText('Validated candidate recorded');
+  await expect(page.getByLabel('Current report')).toContainText('Editable first draft recorded');
 
   const apiPid=Number(readFileSync('/tmp/apbra-164-e2e-api.pid','utf8').trim());
   process.kill(apiPid,'SIGTERM');

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import shutil
 import zipfile
@@ -33,6 +34,157 @@ from apbra_api.model_provider import (
     ProviderProfile,
 )
 from apbra_api.persistence import ApplicationSession, AutomaticDesignAttemptRow, Database
+
+
+@pytest.mark.parametrize("invalid_field", [False, True])
+def test_editable_draft_whole_chain_preserves_context_and_protected_download(
+    settings: Settings, database: Database, invalid_field: bool
+) -> None:
+    from test_conversations import provider_analysis
+
+    analysis = provider_analysis(ready=True)
+    interpretation = analysis["interpretation"]
+    assert isinstance(interpretation, dict)
+    interpretation.update(
+        coverageRequirements=[],
+        businessQuestionCoverage=[],
+        ambiguities=["Draft business coverage remains incomplete"],
+        kpis=["Visits", "Business KPI still to refine"],
+    )
+    analysis["unresolvedAmbiguities"] = ["Draft business coverage remains incomplete"]
+    design = {
+        "artifact_kind": "ReportDesign",
+        "schema_version": 1,
+        "projectName": "EditableDraft",
+        "overview": "An imperfect first draft",
+        "audience": "Business managers",
+        "dataModel": {"factTables": ["Metrics"], "dimensionTables": [], "relationships": []},
+        "measures": [
+            {
+                "id": "draft-visits",
+                "name": "Draft Visits",
+                "businessDefinition": "Draft aggregation chosen by the model",
+                "aggregation": "SUM",
+                "field": "Metrics.Missing" if invalid_field else "Metrics.Visits",
+                "numeratorMeasureId": "",
+                "denominatorMeasureId": "",
+                "format": "integer",
+            }
+        ],
+        "pages": [
+            {
+                "id": "draft-page",
+                "name": "Model Draft",
+                "purpose": "Initial draft",
+                "visuals": [
+                    {
+                        "id": "draft-card",
+                        "type": "card",
+                        "title": "Draft Visits",
+                        "categoryField": "",
+                        "timeGrain": "NONE",
+                        "measureIds": ["draft-visits"],
+                        "fields": [],
+                        "altText": "",
+                    }
+                ],
+            }
+        ],
+        "filters": [],
+        "branding": {"themeName": "Tenant", "primary": "#005A9C", "accent": "#2D7D9A"},
+        "accessibility": [],
+        "standardsApplied": [],
+        "assumptions": [],
+        "warnings": ["Business coverage requires user inspection"],
+        "generationRequirements": [],
+    }
+    provider = automatic_test_provider([analysis, design])
+    with TestClient(
+        create_app(settings=settings, database=database, model_provider=provider)
+    ) as runtime:
+        session = sign_in(runtime, "member")
+        request = (
+            "Compare visits by campus and explain the additional business KPI; "
+            "retain all this context."
+        )
+        case = runtime.post(
+            "/api/cases",
+            json={"request_text": request},
+            headers={**csrf(session), "Idempotency-Key": str(uuid4())},
+        ).json()["case"]
+        csv = b"Campus,Visits\nNorth,12\nSouth,9\n"
+        evidence = runtime.post(
+            f"/api/cases/{case['id']}/evidence",
+            params={"filename": "Metrics.csv", "expected_context_version": 1},
+            content=csv,
+            headers={**csrf(session), "Content-Type": "application/octet-stream"},
+        ).json()["evidence"]
+        understood = runtime.post(
+            f"/api/cases/{case['id']}/interpretations",
+            json={"expected_context_version": evidence["semantic_context_version"]},
+            headers=csrf(session),
+        )
+        assert understood.status_code == 200, understood.text
+        visible = understood.json()["interpretation"]
+        assert visible["state"] == "READY_FOR_CONFIRMATION"
+        confirmed = runtime.post(
+            f"/api/cases/{case['id']}/confirm",
+            json={
+                "interpretation_id": visible["id"],
+                "expected_context_version": visible["context_version"],
+            },
+            headers=csrf(session),
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        contract = confirmed.json()["confirmed_contract"]
+        assert contract["contract"]["provenance"]["requirement"] == request
+        before = copy.deepcopy(contract)
+        proposed = runtime.post(
+            f"/api/cases/{case['id']}/automatic-designs",
+            json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
+            headers=csrf(session),
+        )
+        if invalid_field:
+            assert proposed.status_code == 409, proposed.text
+            history = runtime.get(
+                f"/api/cases/{case['id']}/automatic-designs",
+                params={"confirmed_contract_id": contract["id"]},
+            ).json()
+            assert history["items"][0]["status"] == "FAILED"
+            return
+        assert proposed.status_code == 201, proposed.text
+        result = proposed.json()
+        assert result["attempt"]["status"] == "ELIGIBLE"
+        built = runtime.post(
+            f"/api/cases/{case['id']}/generation",
+            json={
+                "confirmed_contract_id": contract["id"],
+                "reviewed_design_id": result["reviewed_design"]["id"],
+                "command_key": str(uuid4()),
+            },
+            headers=csrf(session),
+        )
+        assert built.status_code == 201, built.text
+        attempt = built.json()["attempt"]
+        assert attempt["status"] == "SUCCEEDED"
+        assert attempt["validation"]["stages"]["businessQuality"] == "NOT_CERTIFIED"
+        path = f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact"
+        download = runtime.get(path)
+        assert download.status_code == 200
+        assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
+        with zipfile.ZipFile(BytesIO(download.content)) as archive:
+            assert any(name.endswith(".pbip") for name in archive.namelist())
+            assert b"editable first draft" in archive.read("Delivery-Guide.md")
+        with TestClient(runtime.app) as outsider:
+            sign_in(outsider, "foreign")
+            assert outsider.get(path).status_code in {403, 404}
+        assert contract == before
+        persisted = runtime.get(f"/api/cases/{case['id']}").json()["case"]
+        assert persisted["current_request"]["request_text"] == request
+        saved_evidence = runtime.get(f"/api/cases/{case['id']}/evidence").json()["items"]
+        assert saved_evidence[0]["content_digest"] == hashlib.sha256(csv).hexdigest()
+        assert provider.requests[1].context["confirmedRequirements"] == contract["contract"]
+        assert len(provider.requests) == 2
 
 
 def confirmed_case(
@@ -405,10 +557,10 @@ def test_automatic_design_is_untrusted_until_canonical_validation_and_can_build(
             for item in checklist["obligations"]
         )
         prompt = provider.requests[0].system_prompt
-        assert "exact complete canonical measure objects" in prompt
-        assert "every confirmed required page exactly once" in prompt
-        assert "Never create a slicer for a field already listed" in prompt
-        assert "four general visual slots followed by two card-only slots" in prompt
+        assert "editable first-draft" in prompt
+        assert "are not software delivery gates" in prompt
+        assert "Measures and pages may differ" in prompt
+        assert "four general slots plus two card" in prompt
         assert not any(
             fixture_term in prompt.lower()
             for fixture_term in ("retail", "store", "product", "sales")
