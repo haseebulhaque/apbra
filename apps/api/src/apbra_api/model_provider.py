@@ -384,7 +384,7 @@ def report_design_schema(
         "timeGrain": {
             "type": "string",
             "description": (
-                "Use the exact confirmed supported grain for a trend visual and NONE for "
+                "Use a compiler-supported grain for a trend visual and NONE for "
                 "every non-trend visual."
             ),
             "enum": ["NONE", *grains],
@@ -392,8 +392,7 @@ def report_design_schema(
         "measureIds": _string_array("Exact IDs declared in ReportDesign.measures."),
         "fields": _string_array(
             "Exact Table.Column bindings. A slicer uses exactly one fields entry and an "
-            "empty categoryField and measureIds. Do not create a slicer for a field already "
-            "listed in ReportDesign.filters."
+            "empty categoryField and measureIds."
         ),
         "altText": {"type": "string"},
     }
@@ -402,8 +401,7 @@ def report_design_schema(
         "name": {
             "type": "string",
             "description": (
-                "Exact name of one confirmed required page; emit every confirmed page once "
-                "without renaming it."
+                "Name of a draft page chosen by the model using the full confirmed context."
             ),
         },
         "purpose": {"type": "string"},
@@ -450,8 +448,8 @@ def report_design_schema(
         "measures": {
             "type": "array",
             "description": (
-                "Each canonical confirmed measure exactly once, copied without changing any "
-                "identity, definition, format, source field, or operand."
+                "Draft measures chosen by the model using the full confirmed context. "
+                "Use unique IDs, supported operations, exact source fields, and valid operands."
             ),
             "items": _measure_schema(),
         },
@@ -465,9 +463,7 @@ def report_design_schema(
             },
         },
         "filters": _string_array(
-            "Exact confirmed Table.Column report filters. A declared report filter satisfies "
-            "its FILTER obligation without requiring a duplicate slicer. A field listed here "
-            "must not also be represented by a slicer."
+            "Exact Table.Column report filters chosen by the model for this editable draft."
         ),
         "branding": {
             "type": "object",

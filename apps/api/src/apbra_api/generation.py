@@ -1078,7 +1078,6 @@ class GenerationService:
                 or not isinstance(report_title, str)
                 or not report_title.strip()
                 or not isinstance(description, str)
-                or not description.strip()
             ):
                 raise GenerationFailed()
             visual_count = sum(

@@ -36,9 +36,12 @@ from apbra_api.model_provider import (
 from apbra_api.persistence import ApplicationSession, AutomaticDesignAttemptRow, Database
 
 
-@pytest.mark.parametrize("invalid_field", [False, True])
+@pytest.mark.parametrize(
+    ("invalid_field", "overview"),
+    [(False, "An imperfect first draft"), (False, ""), (False, "   "), (True, "")],
+)
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
-    settings: Settings, database: Database, invalid_field: bool
+    settings: Settings, database: Database, invalid_field: bool, overview: str
 ) -> None:
     from test_conversations import provider_analysis
 
@@ -56,7 +59,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "artifact_kind": "ReportDesign",
         "schema_version": 1,
         "projectName": "EditableDraft",
-        "overview": "An imperfect first draft",
+        "overview": overview,
         "audience": "Business managers",
         "dataModel": {"factTables": ["Metrics"], "dimensionTables": [], "relationships": []},
         "measures": [
