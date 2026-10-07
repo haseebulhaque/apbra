@@ -1,8 +1,8 @@
 import {validateConfirmedRequirementContract,type ConfirmedRequirementContract} from '../src/confirmedRequirements';
 import {createHash} from 'node:crypto';
 import {createBoundDeliveryGuideText} from '../src/deploymentGuide';
-import {validateReportDesign,reportDesignFailureDiagnostic,type AIResult,type RequirementInterpretation} from '../src/foundry';
-import {compilePowerBI,validateCompilerCapabilities,validateGenericCandidate} from '../src/genericPowerBI';
+import {validateReportDesign,reportDesignFailureDiagnostic,type AIResult,type RequirementInterpretation,type ReportDesign} from '../src/foundry';
+import {compilePowerBI,compilerVisualLayout,compilerVisualFits,validateCompilerCapabilities,validateGenericCandidate} from '../src/genericPowerBI';
 import {evaluateGuardrails} from '../src/guardrail';
 import {retrieveKnowledge,type Embedder} from '../src/rag';
 import {normalizeReportDesign,orderVisualsForCompilerGrid} from '../src/reportDesignNormalization';
@@ -32,6 +32,27 @@ function fail(error:unknown){
 }
 function qualifiedPolicy(value:unknown):TenantSettings{if(!value||typeof value!=='object')throw new Error('GENERATION_CONFIGURATION_REQUIRED');const policy=value as Record<string,unknown>,generation=policy.generation as Record<string,unknown>|undefined,organisation=policy.organisation as Record<string,unknown>|undefined,branding=policy.branding as Record<string,unknown>|undefined,governance=policy.governance as Record<string,unknown>|undefined;if(!generation||!organisation||!branding||!governance||!Array.isArray(generation.supportedTrendGrains)||typeof organisation.locale!=='string'||typeof branding.themeName!=='string'||typeof branding.primary!=='string'||typeof branding.accent!=='string')throw new Error('GENERATION_CONFIGURATION_INVALID');const tenant=structuredClone(value) as TenantSettings;validateCompilerCapabilities(tenant);return tenant}
 
+
+// Physical continuation pages keep every visual in its original relative order.
+// Cross-page slicer interactions are not supported and are disclosed in the draft.
+function paginateForCompiler(original:ReportDesign,tenant:TenantSettings):{reportDesign:ReportDesign;mapping:Array<{sourcePageIndex:number;resultPageIndexes:number[]}>}|null{
+ const reportDesign=structuredClone(original),pages:ReportDesign['pages']=[],mapping:Array<{sourcePageIndex:number;resultPageIndexes:number[]}>=[],usedIds=new Set(original.pages.map(page=>page.id));
+ for(const[sourcePageIndex,source]of reportDesign.pages.entries()){
+  const chunks:Array<ReportDesign['pages'][number]['visuals']>=[[]];
+  for(const visual of source.visuals){let chunk=chunks[chunks.length-1];if(chunk.length>=tenant.governance.maxVisualsPerPage||!compilerVisualFits(compilerVisualLayout(visual,chunk.length))){chunk=[];chunks.push(chunk)}if(!compilerVisualFits(compilerVisualLayout(visual,chunk.length)))return null;chunk.push(visual)}
+  const resultPageIndexes:number[]=[];
+  for(const[partIndex,visuals]of chunks.entries()){
+   let id=source.id;if(partIndex){const root=`${source.id}__continuation_${partIndex+1}`;id=root;let suffix=2;while(usedIds.has(id))id=`${root}_${suffix++}`;usedIds.add(id)}
+   resultPageIndexes.push(pages.length);pages.push({...source,id,name:partIndex?`${source.name} (continuation ${partIndex+1})`:source.name,visuals});if(pages.length>tenant.governance.maxPages)return null;
+  }
+  if(chunks.length>1)mapping.push({sourcePageIndex,resultPageIndexes});
+ }
+ if(!mapping.length)return null;
+ reportDesign.pages=pages;
+ reportDesign.warnings=[...original.warnings,...mapping.map(item=>`Physical layout pagination: source page ${item.sourcePageIndex+1} is delivered as pages ${item.resultPageIndexes.map(index=>index+1).join(', ')}. Every visual and measure is retained. Slicers filter their own page; cross-page slicer synchronization is not implemented. Inspect and edit interactions before use; semantic equivalence is not certified.`)];
+ return{reportDesign,mapping};
+}
+
 async function main(){
  const chunks:Buffer[]=[];for await(const chunk of process.stdin)chunks.push(Buffer.from(chunk));const bytes=Buffer.concat(chunks);if(bytes.length>20_000_000)throw new Error('GENERATION_INPUT_LIMIT');
  const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure),tenant=qualifiedPolicy(input.generationPolicy);
@@ -44,7 +65,11 @@ async function main(){
  diagnosticStage='REPORT_DESIGN';
  const original=validateReportDesign(input.reportDesign,knowledge.map(item=>item.citation),dataStructure,tenant.generation.supportedTrendGrains);
  diagnosticStage='NORMALIZATION';
- const maxVisualsPerPage=tenant.governance.maxVisualsPerPage;let normalization=normalizeReportDesign(original,dataStructure,maxVisualsPerPage),layoutOrder={applied:false,pageIndexes:[] as number[]};if(normalization.status==='FAILED'&&normalization.normalizationFindings.length>0&&normalization.normalizationFindings.every(item=>item.code==='LAYOUT_CAPACITY_EXCEEDED')){const ordered=orderVisualsForCompilerGrid(original,maxVisualsPerPage),orderedNormalization=normalizeReportDesign(ordered.reportDesign,dataStructure,maxVisualsPerPage);if(ordered.pageIndexes.length&&orderedNormalization.status!=='FAILED'){normalization=orderedNormalization;layoutOrder={applied:true,pageIndexes:ordered.pageIndexes}}}if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${JSON.stringify(normalization.normalizationFindings.map(item=>{const pageIndex=original.pages.findIndex(page=>page.id===item.pageId),visualIndex=pageIndex<0?-1:original.pages[pageIndex].visuals.findIndex(visual=>visual.id===item.visualId);return{code:item.code,pageIndex,visualIndex,requestedResultingVisuals:item.requestedResultingVisuals,pageBounds:item.pageBounds,overflow:item.attemptedLayoutSlots?.map(({type,index,right,bottom})=>({type,index,right,bottom}))}}))}`);
+ const maxVisualsPerPage=tenant.governance.maxVisualsPerPage;let normalization=normalizeReportDesign(original,dataStructure,maxVisualsPerPage),layoutOrder={applied:false,pageIndexes:[] as number[]};if(normalization.status==='FAILED'&&normalization.normalizationFindings.length>0&&normalization.normalizationFindings.every(item=>item.code==='LAYOUT_CAPACITY_EXCEEDED')){const ordered=orderVisualsForCompilerGrid(original,maxVisualsPerPage),orderedNormalization=normalizeReportDesign(ordered.reportDesign,dataStructure,maxVisualsPerPage);if(ordered.pageIndexes.length&&orderedNormalization.status!=='FAILED'){normalization=orderedNormalization;layoutOrder={applied:true,pageIndexes:ordered.pageIndexes}}}const pagination={applied:false,mapping:[] as Array<{sourcePageIndex:number;resultPageIndexes:number[]}>};
+ if(normalization.status==='FAILED'&&normalization.normalizationFindings.length>0&&normalization.normalizationFindings.every(item=>item.code==='LAYOUT_CAPACITY_EXCEEDED')){
+  const paginated=paginateForCompiler(normalization.normalizedReportDesign,tenant);if(paginated){const rechecked=validateReportDesign(paginated.reportDesign,knowledge.map(item=>item.citation),dataStructure,tenant.generation.supportedTrendGrains),normalized=normalizeReportDesign(rechecked,dataStructure,maxVisualsPerPage);if(normalized.status!=='FAILED'){normalization=normalized;pagination.applied=true;pagination.mapping=paginated.mapping}}
+ }
+ if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${JSON.stringify(normalization.normalizationFindings.map(item=>{const pageIndex=original.pages.findIndex(page=>page.id===item.pageId),visualIndex=pageIndex<0?-1:original.pages[pageIndex].visuals.findIndex(visual=>visual.id===item.visualId);return{code:item.code,pageIndex,visualIndex,requestedResultingVisuals:item.requestedResultingVisuals,pageBounds:item.pageBounds,overflow:item.attemptedLayoutSlots?.map(({type,index,right,bottom})=>({type,index,right,bottom}))}}))}`);
  const design=normalization.normalizedReportDesign;
  // Compile and validate actual draft references; business coverage is advisory.
 
@@ -53,7 +78,7 @@ async function main(){
  diagnosticStage='COMPILER';
  const candidate=compilePowerBI(design,dataStructure,tenant);diagnosticStage='CANDIDATE_FILES';const candidateValidation=validateGenericCandidate(candidate,design,dataStructure);if(candidateValidation.status!=='PASS')throw new Error('CANDIDATE_VALIDATION_FAILED');
  if(input.operation==='validate-design'){
-  respond({projectName:candidate.projectName,files:candidate.files,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:layoutOrder.applied?'NORMALIZED':normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,layoutOrder,reportDesign:design}});return
+  respond({projectName:candidate.projectName,files:candidate.files,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:layoutOrder.applied||pagination.applied?'NORMALIZED':normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,layoutOrder,pagination,reportDesign:design}});return
  }
  const binding=input.binding as Record<string,unknown>,execution=input.execution as Record<string,unknown>;
  if(!binding||!execution||typeof binding.settingsVersionId!=='string'||typeof execution.attemptId!=='string')throw new Error('GENERATION_EXECUTION_BINDING_REQUIRED');
@@ -62,7 +87,7 @@ async function main(){
  const guide=createBoundDeliveryGuideText({design,interpretation:contract.provenance.interpretation as unknown as Record<string,unknown>,binding,execution,settings:{conventions:input.tenantConventions},includeHandoverInstructions:input.deliveryGuidePolicy.include_handover_instructions,reportDesignDigest:digest(design),candidateFilesDigest:digest(candidate.files)});
  candidate.files['Delivery-Guide.md']=guide;
  const guideDigest=createHash('sha256').update(guide).digest('hex');
- respond({projectName:candidate.projectName,files:candidate.files,guideDigest,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:layoutOrder.applied?'NORMALIZED':normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS',deliveryGuide:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,layoutOrder,reportDesign:design,guideDigest}})
+ respond({projectName:candidate.projectName,files:candidate.files,guideDigest,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:layoutOrder.applied||pagination.applied?'NORMALIZED':normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS',deliveryGuide:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,layoutOrder,pagination,reportDesign:design,guideDigest}})
 }
 
 main().catch(error=>{fail(error);process.exitCode=1});

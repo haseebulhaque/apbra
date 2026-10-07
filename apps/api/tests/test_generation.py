@@ -54,6 +54,7 @@ from apbra_api.persistence import (
     [
         ("", "An imperfect first draft"), ("", ""), ("", "   "),
         ("UNKNOWN_FIELD", ""), ("TIME_GRAIN_FIELD", ""), ("", "Shared-name draft"),
+        ("", "Paginated draft"), ("", "Collision pagination"), ("LAYOUT_LIMIT", ""),
     ],
 )
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
@@ -119,6 +120,24 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "warnings": ["Business coverage requires user inspection"],
         "generationRequirements": [],
     }
+    paginated = overview in {"Paginated draft", "Collision pagination"}
+    if paginated or failure_kind == "LAYOUT_LIMIT":
+        source = design["pages"][0]
+        source["visuals"] = [
+            {**copy.deepcopy(source["visuals"][0]), "id": f"chart-{index}",
+             "type": "bar", "categoryField": "Metrics.Campus", "timeGrain": "NONE"}
+            for index in range(5)
+        ] + [{"id": "campus-slicer", "type": "slicer", "title": "Campus", "altText": "Campus",
+              "categoryField": "", "timeGrain": "NONE", "measureIds": [],
+              "fields": ["Metrics.Campus"]}]
+        if overview == "Collision pagination":
+            design["pages"].append({**copy.deepcopy(source), "id": "draft-page__continuation_2",
+                                    "name": "Other page",
+                                    "visuals": [copy.deepcopy(source["visuals"][0])]})
+        if failure_kind == "LAYOUT_LIMIT":
+            design["pages"] = [{**copy.deepcopy(source), "id": f"page-{index}"}
+                               for index in range(4)]
+    original_design = copy.deepcopy(design)
     provider = automatic_test_provider([analysis, design])
     provider.profile = provider.profile.model_copy(
         update={"max_calls_per_operation": 1, "retry_limit": 0}
@@ -181,9 +200,13 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                 expected = {
                     "code": "UNKNOWN_MEASURE_FIELD", "path": "/reportDesign/measures/0/field"
                 }
-            else:
+            elif failure_kind == "TIME_GRAIN_FIELD":
                 assert failed["validation"]["category"] == "INVALID_TIME_GRAIN_FIELD"
                 expected = {"code": "INVALID_TIME_GRAIN_FIELD", "path": "/reportDesign"}
+            else:
+                assert failed["validation"]["category"] == "REPORT_DESIGN_NORMALIZATION_FAILED"
+                assert "LAYOUT_CAPACITY_EXCEEDED" in failed["validation"]["structural_detail"]
+                return
             assert json.loads(failed["validation"]["structural_detail"])["findings"] == [expected]
             assert "Metrics.Missing" not in json.dumps(history)
             assert "Draft Visits" not in json.dumps(history)
@@ -191,6 +214,30 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert proposed.status_code == 201, proposed.text
         result = proposed.json()
         assert result["attempt"]["status"] == "ELIGIBLE"
+        if paginated:
+            with database.session() as db:
+                stored = json.loads(db.scalar(text(
+                    "SELECT design_json FROM reviewed_report_designs WHERE id=:id"
+                ), {"id": result["reviewed_design"]["id"]}))
+            assert stored["pages"][0]["id"] == original_design["pages"][0]["id"]
+            assert stored["pages"][0]["name"] == original_design["pages"][0]["name"]
+            assert all(page["purpose"] == "Initial draft" for page in stored["pages"])
+            assert [v for p in stored["pages"] for v in p["visuals"]] == [
+                v for p in original_design["pages"] for v in p["visuals"]
+            ]
+            assert len({p["id"] for p in stored["pages"]}) == len(stored["pages"])
+            assert all(len(p["visuals"]) <= 4 for p in stored["pages"])
+            for key in original_design:
+                if key not in {"pages", "warnings"}:
+                    assert stored[key] == original_design[key]
+            assert stored["warnings"][:len(original_design["warnings"])] == (
+                original_design["warnings"]
+            )
+            assert "Slicers filter their own page" in stored["warnings"][-1]
+            assert "cross-page slicer synchronization is not implemented" in stored["warnings"][-1]
+            if overview == "Collision pagination":
+                assert stored["pages"][1]["id"] == "draft-page__continuation_2_2"
+
         built = runtime.post(
             f"/api/cases/{case['id']}/generation",
             json={
@@ -210,6 +257,16 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
         with zipfile.ZipFile(BytesIO(download.content)) as archive:
             assert any(name.endswith(".pbip") for name in archive.namelist())
+            if paginated:
+                guide = archive.read("Delivery-Guide.md").decode()
+                assert "Physical layout pagination" in guide
+                assert "Slicers filter their own page" in guide
+                for name in archive.namelist():
+                    if name.endswith("/visual.json"):
+                        position = json.loads(archive.read(name))["position"]
+                        assert position["y"] + position["height"] <= 720
+                        assert position["x"] + position["width"] <= 1280
+
             assert b"editable first draft" in archive.read("Delivery-Guide.md")
         with TestClient(runtime.app) as outsider:
             sign_in(outsider, "foreign")
