@@ -1975,6 +1975,19 @@ def test_structured_bridge_details_reject_private_or_malformed_payloads(unsafe: 
     assert _safe_failed_validation(failure)["detail_status"] == "WITHHELD"
 
 
+@pytest.mark.parametrize(
+    "path", ["/reportDesign/measures", "/reportDesign/measures/2", "/reportDesign/pages/0/visuals/1"]
+)
+def test_structured_bridge_details_allow_conservative_parent_paths(path: str) -> None:
+    detail = {
+        "stage": "REPORT_DESIGN",
+        "findings": [{"code": "UNRESOLVED_MEASURE_OPERAND", "path": path}],
+        "truncated": True,
+    }
+    failure = GenerationBridgeFailure("REPORT_DESIGN_MEASURE_INTEGRITY", json.dumps(detail))
+    assert json.loads(_safe_bridge_diagnostic_detail(failure)) == detail
+
+
 def test_structured_bridge_details_preserve_only_safe_invariant_paths() -> None:
     detail = {
         "stage": "REPORT_DESIGN",

@@ -151,20 +151,22 @@ export function inspectMeasureIntegrity(design:ReportDesign,schema?:unknown):Mea
 export class ReportDesignIntegrityError extends Error{metrics?:AIMetrics;constructor(readonly design:ReportDesign,readonly issues:MeasureIntegrityIssue[]){super(`REPORT_DESIGN_MEASURE_INTEGRITY: ${issues.map(issue=>issue.reason).join(' ')}`);this.name='ReportDesignIntegrityError'}}
 export type ReportDesignValidationFinding={code:'REPORT_DESIGN_INVALID'|'REPORT_DESIGN_CITATION_INVALID'|'REPORT_DESIGN_COVERAGE_INVALID';message:string;invalidCitationIds?:string[];allowedCitationIds?:string[];obligations?:Array<{id:string;kind:string;expectedMeasureIds:string[];expectedMeasureNames:string[];expectedFields:string[];expectedTimeGrain:string;expectedPageNames:string[];supportedTrendGrains:readonly string[]}>;businessQuestions?:Array<{question:string;coverageRequirementIds:string[]}>};
 export class ReportDesignValidationError extends Error{constructor(readonly findings:ReportDesignValidationFinding[]){super(findings.map(item=>`${item.code}: ${item.message}`).join(' '));this.name='ReportDesignValidationError'}}
-export function reportDesignFailureDiagnostic(error:unknown):{code:string;findings:Array<{code:string;path:string}>}|null{
- const fields:Record<MeasureIntegrityIssue['code'],string>={DUPLICATE_MEASURE_ID:'id',DUPLICATE_MEASURE_NAME:'name',UNSUPPORTED_MEASURE_TYPE:'aggregation',MISSING_MEASURE_FIELD:'field',INCOHERENT_MEASURE_SHAPE:'aggregation',INCOMPLETE_FILTERED_COUNT:'filterField',UNKNOWN_MEASURE_FIELD:'field',UNKNOWN_FILTER_FIELD:'filterField',UNKNOWN_CONTEXT_FIELD:'contextField',MISSING_RATIO_OPERAND:'numeratorMeasureId',UNRESOLVED_MEASURE_OPERAND:'numeratorMeasureId',SELF_REFERENTIAL_MEASURE:'numeratorMeasureId',CYCLIC_MEASURE_DEPENDENCY:'numeratorMeasureId',INCOMPLETE_PERCENTAGE_OF_TOTAL:'contextField',UNRESOLVED_VISUAL_MEASURE:'measureIds',INVALID_VISUAL_BINDING_CARDINALITY:'measureIds'};
+export function reportDesignFailureDiagnostic(error:unknown):{code:string;findings:Array<{code:string;path:string}>;truncated:boolean}|null{
+ const fields:Record<MeasureIntegrityIssue['code'],string>={DUPLICATE_MEASURE_ID:'',DUPLICATE_MEASURE_NAME:'',UNSUPPORTED_MEASURE_TYPE:'aggregation',MISSING_MEASURE_FIELD:'field',INCOHERENT_MEASURE_SHAPE:'',INCOMPLETE_FILTERED_COUNT:'',UNKNOWN_MEASURE_FIELD:'field',UNKNOWN_FILTER_FIELD:'filterField',UNKNOWN_CONTEXT_FIELD:'contextField',MISSING_RATIO_OPERAND:'',UNRESOLVED_MEASURE_OPERAND:'',SELF_REFERENTIAL_MEASURE:'',CYCLIC_MEASURE_DEPENDENCY:'',INCOMPLETE_PERCENTAGE_OF_TOTAL:'',UNRESOLVED_VISUAL_MEASURE:'measureIds',INVALID_VISUAL_BINDING_CARDINALITY:''};
  if(error instanceof ReportDesignIntegrityError){
-  const findings=error.issues.filter(issue=>Object.hasOwn(fields,issue.code)).slice(0,3).map(issue=>{
+  const eligible=error.issues.filter(issue=>Object.hasOwn(fields,issue.code));
+  const findings=eligible.slice(0,3).map(issue=>{
    const pageIndex=error.design.pages.findIndex(page=>page.id===issue.pageId),visualIndex=pageIndex<0?-1:error.design.pages[pageIndex].visuals.findIndex(visual=>visual.id===issue.visualId),measureIndex=error.design.measures.findIndex(measure=>measure.id===issue.measureId);
-   const path=pageIndex>=0&&visualIndex>=0?`/reportDesign/pages/${pageIndex}/visuals/${visualIndex}/${fields[issue.code]}`:measureIndex>=0?`/reportDesign/measures/${measureIndex}/${fields[issue.code]}`:'/reportDesign';
+   const suffix=fields[issue.code]?`/${fields[issue.code]}`:'';
+   const path=issue.code==='DUPLICATE_MEASURE_ID'||issue.code==='DUPLICATE_MEASURE_NAME'?'/reportDesign/measures':pageIndex>=0&&visualIndex>=0?`/reportDesign/pages/${pageIndex}/visuals/${visualIndex}${suffix}`:measureIndex>=0?`/reportDesign/measures/${measureIndex}${suffix}`:'/reportDesign';
    return{code:issue.code,path};
   });
-  return{code:'REPORT_DESIGN_MEASURE_INTEGRITY',findings};
+  return{code:'REPORT_DESIGN_MEASURE_INTEGRITY',findings,truncated:findings.length<error.issues.length};
  }
  if(error instanceof ReportDesignValidationError){
   const allowed=new Set(['REPORT_DESIGN_INVALID','REPORT_DESIGN_CITATION_INVALID','REPORT_DESIGN_COVERAGE_INVALID']);
   const findings=error.findings.filter(item=>allowed.has(item.code)).slice(0,3).map(item=>({code:item.code,path:item.code==='REPORT_DESIGN_CITATION_INVALID'?'/reportDesign/standardsApplied':'/reportDesign'}));
-  return{code:findings[0]?.code??'REPORT_DESIGN_INVALID',findings};
+  return{code:findings[0]?.code??'REPORT_DESIGN_INVALID',findings,truncated:findings.length<error.findings.length};
  }
  return null;
 }

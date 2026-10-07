@@ -299,9 +299,9 @@ SAFE_STRUCTURED_FINDING_CODES = {
     "REPORT_DESIGN_INVALID", "REPORT_DESIGN_CITATION_INVALID", "REPORT_DESIGN_COVERAGE_INVALID",
 }
 SAFE_DIAGNOSTIC_PATH = re.compile(
-    r"/reportDesign(?:/standardsApplied|/measures/[0-9]{1,6}/"
-    r"(?:id|name|aggregation|field|filterField|contextField|numeratorMeasureId)"
-    r"|/pages/[0-9]{1,6}/visuals/[0-9]{1,6}/measureIds)?"
+    r"/reportDesign(?:/standardsApplied|/measures(?:/[0-9]{1,6}"
+    r"(?:/(?:aggregation|field|filterField|contextField))?)?"
+    r"|/pages/[0-9]{1,6}/visuals/[0-9]{1,6}(?:/measureIds)?)?"
 )
 
 

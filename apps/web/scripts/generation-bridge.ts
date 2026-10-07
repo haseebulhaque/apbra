@@ -24,7 +24,7 @@ function fail(error:unknown){
  const raw=error instanceof Error?error.message:'',prefix=raw.split(':',1)[0];
  if(typed||!diagnosticCodes.has(prefix)){
   const code=typed?.code??(diagnosticStage==='REPORT_DESIGN'?'REPORT_DESIGN_INVALID':'GENERATION_PIPELINE_FAILED');
-  const findings=typed?.findings??[],detail={stage:diagnosticStage,findings,truncated:false};
+  const findings=typed?.findings??[],detail={stage:diagnosticStage,findings,truncated:typed?.truncated??false};
   while(JSON.stringify(detail).length>480&&findings.length){findings.pop();detail.truncated=true}
   process.stdout.write(`${JSON.stringify({ok:false,error:{code,message:JSON.stringify(detail)}})}\n`);return;
  }
