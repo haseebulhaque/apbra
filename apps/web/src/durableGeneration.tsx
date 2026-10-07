@@ -5,6 +5,11 @@ type Mode='BUILD'|'RETRY'|'REGENERATE';
 const statusLabel=(status:GenerationAttempt['status'])=>({PENDING:'Waiting to build',RUNNING:'Building',SUCCEEDED:'Report ready',FAILED:'Build failed',CANCELLED:'Cancelled'}[status]);
 export const automaticDesignPreflightMessage=(attempt?:AutomaticDesignAttempt)=>attempt?.status==='FAILED'&&attempt.failure?.code==='MODEL_INPUT_BUDGET_EXCEEDED'&&attempt.usage.call_count===0?'The AI request exceeded the configured input limit before a model call. Your confirmed requirements remain saved.':null;
 
+export const automaticDesignProposalError=(error:unknown,attempt?:AutomaticDesignAttempt)=>{
+  const message=error instanceof ApiError&&error.status===409&&error.code==='AUTOMATIC_DESIGN_UNAVAILABLE'?automaticDesignPreflightMessage(attempt):null;
+  return message?new Error(message):error;
+};
+
 export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',onReportReady,onError}:{caseId:string;contract:DurableContract|null;csrfToken:string;actorRole?:string;onReportReady?:(ready:boolean)=>void;onError:(error:unknown)=>void}){
   const [attempts,setAttempts]=useState<GenerationAttempt[]>([]);
   const [designs,setDesigns]=useState<ReviewedDesign[]>([]);
@@ -94,8 +99,7 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
     }catch(error){
       const history=await refresh().catch(()=>null);
       if(activeKey.current!==key)return;
-      const message=automaticDesignPreflightMessage(history?.find(item=>!existingAttemptIds.has(item.id)));
-      onError(message?new Error(message):error);
+      onError(automaticDesignProposalError(error,history?.find(item=>!existingAttemptIds.has(item.id))));
     }finally{setReviewBusy(false)}
   }
 
