@@ -76,7 +76,7 @@
     "apps/web/src/generation.ts"
   ],
   "acceptance_criteria": [
-    "The registration changes exactly three governance paths. Later implementation changes only the seven literal allowed paths after separate exact-head review, green hosted CI, Haseeb manual registration merge and verified post-merge main.",
+    "The registration changes exactly three governance paths. Later implementation changes only the twelve literal allowed paths after separate exact-head review, green hosted CI, Haseeb manual registration merge and verified post-merge main.",
     "Exact provider-facing requirement and design schemas pass offline strict-profile checks for object nesting <=5, <=100 object properties and absence of unsupported minimum/maxItems. A local HTTP mock rejects nonconforming schemas and proves no paid network request is needed for qualification.",
     "Deterministic APBRA validators still reject negative or inconsistent minimumRepresentations, excess page visuals, nonempty legacy clarifications, incomplete coverage, invented fields and unsupported report scope. The full saved retail request is not simplified to pass.",
     "Provider 4xx, timeout, malformed 2xx, semantic rejection and successful use are distinguished in safe local tests; failed interpretation observation persists independently of a rolled-back interpretation transaction, with call count and token usage when actually supplied and null where unknown.",

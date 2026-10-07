@@ -922,7 +922,7 @@ FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_foundry_schema_scope.py',
 }
-FOUNDRY_SCHEMA_TASK_SHA256 = '89e8d8550a9ab8dc3bf627ca49bdd5fe3df8f599fa16ae5d4e5aa1a363f227f7'
+FOUNDRY_SCHEMA_TASK_SHA256 = 'a598329cd446e4af02cedd18d42026b448c54f4ca3bfa54d11673eb2b3644c5b'
 FOUNDRY_SCHEMA_SOURCES = (
     ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
     ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
@@ -932,7 +932,7 @@ FOUNDRY_SCHEMA_GATE_SHA256 = {
     'adrs': '25c8f04ebd00afdd8f9e9cc62fcc16b9a88a469fe2b24f4bbcefa1224a723f2d',
     'architecture_refs': '32af64ba956ac52257f574e5f5b451ae77b3ad5cdef267da047903f27adc7c52',
     'restricted_paths': 'b7ecb67159909add8da1a7ba26697d9fb563f57895f4bd8e88bcfaccf00602b9',
-    'acceptance_criteria': '42aaf177ff2d6c4b6a4f65315ebb54caa1acc23703d268ea5abf94fb0dbe928b',
+    'acceptance_criteria': '0f4b2f0e9b6f5d8480348a5230758160648fd61e04111e73f329950587deb792',
     'verification_required': 'f4df12f73d264ceecf1dd9514ff0649444bc0604774c8db30209505614f68590',
     'out_of_scope': '1a2d7bae92577b87aed23a8384daf0b6145284f51ece3c8bbebb066b12c847f8',
     'escalate_when': '6618b9f1dd6476b58d1cac14ca0e9d7c3c4009ffb1016ff2f92a4afe0421c4e2',
