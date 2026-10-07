@@ -954,6 +954,14 @@ FOUNDRY_SCHEMA_GATE_SHA256 = {
     'escalate_when': '434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1',
     'dependencies': '1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded',
 }
+LOCAL_REKEY_PATHS = {'apps/api/tests/test_rekey_tenant_secrets.py', 'apps/api/src/apbra_api/rekey_tenant_secrets.py', 'apps/api/src/apbra_api/tenant_secrets.py'}
+LOCAL_REKEY_REGISTRATION_PATHS = {'tasks/APBRA-160-local-rekey.json', 'scripts/check_bootstrap.py', 'tests/bootstrap/test_local_rekey_scope.py'}
+LOCAL_REKEY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey'
+LOCAL_REKEY_REGISTRATION_BRANCH = LOCAL_REKEY_BRANCH + '-registration'
+LOCAL_REKEY_TASK_SHA256 = '1df51fb5e4d537a1605446f2a572731d36a0f8dc3b430166c3522003ca187a32'
+LOCAL_REKEY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
+LOCAL_REKEY_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
+
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft'
 FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft-registration'
 
@@ -2213,6 +2221,27 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 candidate_source_safety_task = None
+        local_rekey_task = None
+        local_rekey_path = root / 'tasks/APBRA-160-local-rekey.json'
+        if local_rekey_path.exists():
+            local_rekey_task = load_json(local_rekey_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), local_rekey_task)
+            if not extension_errors:
+                extension_errors += task_errors(local_rekey_task, catalog, sources)
+                if hashlib.sha256(json.dumps(local_rekey_task, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != LOCAL_REKEY_TASK_SHA256:
+                    extension_errors.append('APBRA-160 local rekey contract differs from accepted authority')
+                if (set(local_rekey_task['allowed_paths']) != LOCAL_REKEY_PATHS or len(local_rekey_task['allowed_paths']) != 3 or any('*' in p for p in local_rekey_task['allowed_paths'])):
+                    extension_errors.append('APBRA-160 local rekey must retain exactly three literal product paths')
+                if (local_rekey_task['task_id'], local_rekey_task['assigned_agent'], local_rekey_task['branch'], local_rekey_task['base_commit']) != ('APBRA-160', 'APBRA-DEVOPS', LOCAL_REKEY_BRANCH, '92cd56be9b3b275703225640f2fe90c7875f653e'):
+                    extension_errors.append('APBRA-160 local rekey identity differs')
+                if hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != LOCAL_REKEY_ALL_SOURCES_SHA256:
+                    extension_errors.append('APBRA-160 local rekey historical source register changed')
+                matches = [row for row in sources['sources'] if row.get('id') == 'mvp1-model-led-clarification-flexible-generation-delivery-guide']
+                if len(matches) != 1 or hashlib.sha256(json.dumps(matches[0], sort_keys=True, separators=(',', ':')).encode()).hexdigest() != LOCAL_REKEY_SOURCE_SHA256:
+                    extension_errors.append('APBRA-160 local rekey historical source binding differs')
+            errors += extension_errors
+            if extension_errors:
+                local_rekey_task = None
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2762,6 +2791,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
             (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
             (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
+            (local_rekey_task, LOCAL_REKEY_PATHS),
             (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
             (demo_ux_task, DEMO_UX_PATHS),
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
@@ -2776,6 +2806,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else local_rekey_task if active_branch in {LOCAL_REKEY_BRANCH, LOCAL_REKEY_REGISTRATION_BRANCH}
                 else demo_ux_task if active_branch in {
                     DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
                 } else foundry_schema_task
@@ -2835,6 +2866,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
                          changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
+                         active_branch == LOCAL_REKEY_REGISTRATION_BRANCH and
+                         changed_paths == LOCAL_REKEY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
@@ -2866,6 +2900,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == APBRA160_CI_CAPACITY_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
+            if active_task_id == 'APBRA-160' and active_branch == LOCAL_REKEY_REGISTRATION_BRANCH and changed_paths != LOCAL_REKEY_REGISTRATION_PATHS:
+                errors.append('APBRA-160 local rekey registration must change exactly three governance files')
+            if active_task_id == 'APBRA-160' and active_branch == LOCAL_REKEY_BRANCH and changed_paths.intersection(LOCAL_REKEY_REGISTRATION_PATHS):
+                errors.append('APBRA-160 local rekey implementation cannot change registration files')
             if (active_task_id == 'APBRA-160' and
                     active_branch == CURRENT_DEMO_SOURCE_BRANCH and
                     changed_paths != CURRENT_DEMO_SOURCE_PATHS):
@@ -3193,6 +3231,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
                          changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
                          name in CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == LOCAL_REKEY_REGISTRATION_BRANCH and
+                         changed_paths == LOCAL_REKEY_REGISTRATION_PATHS and
+                         name in LOCAL_REKEY_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-160' and active_task is not None and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
