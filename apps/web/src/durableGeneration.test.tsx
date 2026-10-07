@@ -1,9 +1,19 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {DurableGeneration} from './durableGeneration';
-import type {DurableContract} from './api';
+import {DurableGeneration,automaticDesignPreflightMessage} from './durableGeneration';
+import type {AutomaticDesignAttempt,DurableContract} from './api';
 
 const contract:DurableContract={id:'contract-1',interpretation_id:'interpretation-1',schema_version:2,accepted_at:'2026-09-25T00:00:00Z',contract:{},current:true};
+
+it('explains a saved zero-call input-limit failure without claiming a rejected model design',()=>{
+  const attempt:AutomaticDesignAttempt={id:'attempt-1',confirmed_contract_id:'contract-1',status:'FAILED',failure:{code:'MODEL_INPUT_BUDGET_EXCEEDED',message:'Preflight failed'},usage:{call_count:0},provider_profile_id:null,model_or_deployment:null,prompt_version:null,configuration_id:null,capability_profile:{},validation:null,created_at:'2026-10-07T00:00:00Z',completed_at:null};
+  expect(automaticDesignPreflightMessage(attempt)).toContain('input limit before a model call');
+  expect(automaticDesignPreflightMessage(attempt)).toContain('confirmed requirements remain saved');
+  expect(automaticDesignPreflightMessage({...attempt,usage:{call_count:1}})).toBeNull();
+  expect(automaticDesignPreflightMessage({...attempt,usage:{}})).toBeNull();
+  expect(automaticDesignPreflightMessage({...attempt,status:'RUNNING'})).toBeNull();
+  expect(automaticDesignPreflightMessage({...attempt,failure:{code:'MODEL_PROVIDER_FAILED',message:'Failed'}})).toBeNull();
+});
 
 it('offers a clear private report build without overstating local validation',()=>{
   const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={contract} csrfToken="csrf" onError={()=>{}}/>);
