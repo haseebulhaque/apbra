@@ -448,7 +448,9 @@ def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
     assert f"at most {COMPILER_MAX_VISUALS_PER_PAGE} visuals" in visuals["description"]
     assert "four non-card slots and two additional card-only slots" in visuals["description"]
     filters = properties["filters"]
-    assert "must not also be represented by a slicer" in filters["description"]
+    assert "Exact Table.Column" in filters["description"]
+    assert "chosen by the model" in filters["description"]
+    assert "editable draft" in filters["description"]
 
 
 def test_provider_schemas_derive_capacity_and_grains_from_validated_capability() -> None:

@@ -297,7 +297,7 @@ def test_failed_provider_attempt_has_durable_safe_observation(
     ("failure_kind", "reason"),
     [
         ("negative_minimum", "SEMANTIC_RULE_UNCLASSIFIED"),
-        ("unresolved_scope", "CONFIRMATION_SCOPE_UNRESOLVED"),
+        ("invalid_obligation_reference", "SEMANTIC_RULE_UNCLASSIFIED"),
         ("invented_field", "SEMANTIC_RULE_UNCLASSIFIED"),
         ("unknown_error", "SEMANTIC_RULE_UNCLASSIFIED"),
         ("tampered_reason", "SEMANTIC_RULE_UNCLASSIFIED"),
@@ -312,8 +312,11 @@ def test_semantic_rejection_records_observed_usage_without_accepting_interpretat
     coverage = cast(list[dict[str, object]], interpretation["coverageRequirements"])
     if failure_kind == "negative_minimum":
         coverage[0]["minimumRepresentations"] = -1
-    elif failure_kind == "unresolved_scope":
-        interpretation["ambiguities"] = ["synthetic-private-canary"]
+    elif failure_kind == "invalid_obligation_reference":
+        interpretation["businessQuestionCoverage"] = [
+            {"question": "How do visits compare by campus?",
+             "coverageRequirementIds": ["synthetic-private-canary"]}
+        ]
     elif failure_kind == "invented_field":
         measures = cast(list[dict[str, object]], coverage[0]["measures"])
         measures[0]["field"] = "Synthetic.Unknown"
