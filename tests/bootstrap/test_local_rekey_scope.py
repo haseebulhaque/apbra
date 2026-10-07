@@ -20,28 +20,28 @@ def digest(value):
 
 class LocalRekeyScopeTests(unittest.TestCase):
     def check(self, paths, branch=None):
-        return c.check(ROOT, active_task_id='APBRA-160', active_branch=branch or c.LOCAL_REKEY_BRANCH, changed_paths=set(paths))[0]
+        return c.check(ROOT, active_task_id='APBRA-160', active_branch=branch or c.LOCAL_RECOVERY_BRANCH, changed_paths=set(paths))[0]
 
     def test_exact_scope_and_historical_preservation(self):
         task = c.load_json(ROOT / TASK)
         self.assertEqual(set(task['allowed_paths']), PRODUCT)
         self.assertEqual(len(task['allowed_paths']), 3)
-        self.assertEqual(c.LOCAL_REKEY_PATHS, PRODUCT)
-        self.assertEqual(c.LOCAL_REKEY_REGISTRATION_PATHS, REGISTRATION)
-        self.assertEqual(digest(task), c.LOCAL_REKEY_TASK_SHA256)
-        self.assertEqual(digest(c.load_json(ROOT / 'docs/source-register.json')), c.LOCAL_REKEY_ALL_SOURCES_SHA256)
+        self.assertEqual(c.LOCAL_RECOVERY_PATHS, PRODUCT)
+        self.assertEqual(c.LOCAL_RECOVERY_REGISTRATION_PATHS, REGISTRATION)
+        self.assertEqual(digest(task), c.LOCAL_RECOVERY_TASK_SHA256)
+        self.assertEqual(digest(c.load_json(ROOT / 'docs/source-register.json')), c.LOCAL_RECOVERY_ALL_SOURCES_SHA256)
         self.assertEqual(digest(c.load_json(ROOT / 'tasks/APBRA-160-foundry-structured-output.json')), c.FOUNDRY_SCHEMA_TASK_SHA256)
         self.assertEqual(len(c.FOUNDRY_SCHEMA_PATHS), 26)
         self.assertEqual(task['base_commit'], '92cd56be9b3b275703225640f2fe90c7875f653e')
         self.assertEqual(len(c.load_json(ROOT / 'docs/source-register.json')['sources']), 84)
 
     def test_separate_registration_and_implementation(self):
-        self.assertEqual(self.check(REGISTRATION, c.LOCAL_REKEY_REGISTRATION_BRANCH), [])
+        self.assertEqual(self.check(REGISTRATION, c.LOCAL_RECOVERY_REGISTRATION_BRANCH), [])
         self.assertEqual(self.check(PRODUCT), [])
         for omitted in REGISTRATION:
-            self.assertTrue(self.check(REGISTRATION - {omitted}, c.LOCAL_REKEY_REGISTRATION_BRANCH))
+            self.assertTrue(self.check(REGISTRATION - {omitted}, c.LOCAL_RECOVERY_REGISTRATION_BRANCH))
         for extra in PRODUCT | {'docs/source-register.json', '.github/workflows/bootstrap.yml'}:
-            self.assertTrue(self.check(REGISTRATION | {extra}, c.LOCAL_REKEY_REGISTRATION_BRANCH))
+            self.assertTrue(self.check(REGISTRATION | {extra}, c.LOCAL_RECOVERY_REGISTRATION_BRANCH))
         for extra in REGISTRATION | {'apps/api/src/apbra_api/api.py', 'compose.yaml', 'apps/api/alembic/versions/rekey.py'}:
             self.assertTrue(self.check(PRODUCT | {extra}))
         self.assertTrue(self.check(PRODUCT, c.FOUNDRY_SCHEMA_BRANCH))
@@ -66,15 +66,17 @@ class LocalRekeyScopeTests(unittest.TestCase):
             with self.subTest(paths=value['allowed_paths']):
                 def altered(path):
                     return value if path == ROOT / TASK else loader(path)
-                with patch.object(c, 'load_json', side_effect=altered), patch.object(c, 'LOCAL_REKEY_TASK_SHA256', digest(value)):
+                with patch.object(c, 'load_json', side_effect=altered), patch.object(c, 'LOCAL_RECOVERY_TASK_SHA256', digest(value)):
                     self.assertTrue(self.check(PRODUCT))
 
-    def test_weakened_live_execution_gate_fails(self):
+    def test_weakened_protected_gates_fail_with_recomputed_task_digest(self):
         loader = c.load_json
-        task = copy.deepcopy(loader(ROOT / TASK))
-        task['requirements'][-2] = 'Agents may decrypt real credentials'
-        with patch.object(c, 'load_json', side_effect=lambda path: task if path == ROOT / TASK else loader(path)):
-            self.assertTrue(self.check(PRODUCT))
+        for field in c.LOCAL_RECOVERY_GATE_SHA256:
+            task = copy.deepcopy(loader(ROOT / TASK))
+            task[field] = ['Agents may decrypt real credentials; no review or CI'] if isinstance(task[field], list) else 'Live agent execution allowed'
+            with self.subTest(field=field):
+                with patch.object(c, 'load_json', side_effect=lambda path: task if path == ROOT / TASK else loader(path)), patch.object(c, 'LOCAL_RECOVERY_TASK_SHA256', digest(task)):
+                    self.assertTrue(self.check(PRODUCT))
 
 if __name__ == '__main__':
     unittest.main()
