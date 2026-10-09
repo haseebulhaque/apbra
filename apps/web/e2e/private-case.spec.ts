@@ -438,6 +438,7 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   await expect(page.getByText('Report request created and saved.')).toBeVisible();
   await page.getByRole('button',{name:'Next: Information',exact:true}).click();
   await page.emulateMedia({reducedMotion:'reduce'});
+  await page.keyboard.press('Tab');await page.getByLabel('Add more requirements').focus();await expect(page.getByLabel('Add more requirements')).toHaveCSS('outline-style','solid');
   const assertLabelsFit=async()=>{
     const violations=await page.locator('.report-wizard').evaluate(wizard=>{
       const errors:string[]=[];
@@ -449,19 +450,12 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
         const label=button.querySelector('strong')!;check(label,button,label.textContent??'step');
         if((label as HTMLElement).scrollWidth>(label as HTMLElement).clientWidth+1)errors.push('Clipped step text');
       });
-      const rgb=(color:string)=>color.match(/\d+(?:\.\d+)?/g)!.map(Number);
-      const luminance=(values:number[])=>values.slice(0,3).map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
-      for(const selector of ['.quiet-empty','.evidence-upload strong','.evidence-upload small','.evidence-upload .upload-button','.composer-footer>span']){
-        const element=wizard.querySelector(selector)!;let background=element;
-        while(background.parentElement&&rgb(getComputedStyle(background).backgroundColor)[3]===0)background=background.parentElement;
-        const text=luminance(rgb(getComputedStyle(element).color)),surface=luminance(rgb(getComputedStyle(background).backgroundColor));
-        if((Math.max(text,surface)+.05)/(Math.min(text,surface)+.05)<4.5)errors.push('Text contrast: '+selector);
-      }
       const button=wizard.querySelector('.message-composer .composer-footer button')!;
       check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
       return [...new Set(errors)];
     });
     expect(violations).toEqual([]);
+    expect(await renderedTextContrast(page)).toEqual([]);
   };
   for(const mode of ['light','dark']){
     await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
@@ -472,5 +466,48 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   for(const mode of ['light','dark']){
     await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
     for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+  }
+});
+
+
+async function renderedTextContrast(page:Page){
+  return page.locator('.private-workspace').evaluate(root=>{
+    const rgba=(value:string)=>(value.match(/[\d.]+/g)||[]).map(Number);
+    const composite=(front:number[],back:number[])=>{const alpha=front[3]??1;return front.slice(0,3).map((value,index)=>value*alpha+back[index]*(1-alpha))};
+    const background=(element:Element)=>{const ancestors:Element[]=[];for(let item:Element|null=element;item;item=item.parentElement)ancestors.unshift(item);return ancestors.reduce((back,item)=>composite(rgba(getComputedStyle(item).backgroundColor),back),[255,255,255])};
+    const luminance=(color:number[])=>color.map(value=>{const n=value/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);
+    const errors:string[]=[];const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    while(walker.nextNode()){
+      const node=walker.currentNode,element=node.parentElement;
+      if(!element||!node.textContent?.trim()||element.closest('[hidden],[aria-hidden="true"],:disabled,script,style,option'))continue;
+      const style=getComputedStyle(element),range=document.createRange();range.selectNodeContents(node);
+      if(style.visibility==='hidden'||!range.getBoundingClientRect().width)continue;
+      const surface=background(element),text=composite(rgba(style.color),surface),a=luminance(text),b=luminance(surface),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+      const large=parseFloat(style.fontSize)>=24||parseFloat(style.fontSize)>=18.6667&&parseInt(style.fontWeight)>=700;
+      if(ratio<(large?3:4.5))errors.push(`${element.tagName}.${element.className}: ${ratio.toFixed(2)}:1`);
+    }
+    return [...new Set(errors)];
+  });
+}
+
+test('rendered Clear Glass text stays readable across screens, themes, hover and focus',async({page},testInfo)=>{
+  await signIn(page,'owner');await page.emulateMedia({reducedMotion:'reduce'});
+  const check=async()=>{expect(await renderedTextContrast(page)).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)};
+  for(const scheme of ['light','dark'] as const){
+    await page.emulateMedia({colorScheme:scheme,reducedMotion:'reduce'});
+    for(const appearance of [scheme,'system']){
+      await page.getByLabel('Appearance',{exact:true}).selectOption(appearance);
+      for(const width of [1280,768,320]){
+        await page.setViewportSize({width,height:900});
+        const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
+        await navigate('Home');await check();for(const row of await page.locator('.case-row-copy small').all()){const marker=row.locator('span');await expect(marker).toHaveCSS('display','inline')}if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`home-${scheme}-${width}.png`),fullPage:true});
+        await navigate('Create report');await check();if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`create-${scheme}-${width}.png`),fullPage:true});
+        const logout=page.getByRole('button',{name:'Sign out',exact:true});await logout.hover();await check();await page.keyboard.press('Tab');await logout.focus();await expect(logout).toHaveCSS('outline-style','solid');await check();
+        await page.mouse.move(0,0);
+        const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();
+        await page.getByRole('button',{name:'Administration',exact:true}).click();
+        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();await check();if(section==='AI & models'&&appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`settings-${scheme}-${width}.png`),fullPage:true})}
+      }
+    }
   }
 });

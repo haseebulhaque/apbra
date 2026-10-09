@@ -360,3 +360,26 @@ test('settings sections expose keyboard navigation, field help and independent u
   await expect(navigation.getByRole('button',{name:'AI & models',exact:true})).toBeVisible();
   await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeDisabled();
 });
+
+
+test('settings dialogs isolate keyboard focus, dismiss safely and restore the opener',async({page})=>{
+  await signIn(page,'owner');await page.getByRole('button',{name:'Administration',exact:true}).click();
+  const admin=page.getByLabel('Tenant administration');let before=(await (await page.request.get('/api/tenant-settings')).json()).version;
+  const exercise=async(opener:ReturnType<Page['getByRole']>,name:string)=>{
+    await opener.focus();await page.keyboard.press('Enter');
+    const dialog=page.getByRole('dialog',{name,exact:true});await expect(dialog).toBeVisible();await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeFocused();
+    for(let i=0;i<8;i++){await page.keyboard.press('Tab');expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true)}
+    for(let i=0;i<8;i++){await page.keyboard.press('Shift+Tab');expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true)}
+    await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(opener).toBeFocused();
+    expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(before);
+  };
+  // Profile selection enables the replacement disclosure; no credential is sent.
+  await admin.getByRole('combobox').selectOption('synthetic-e2e-profile');
+  await exercise(admin.getByRole('button',{name:/^(Configure credential|Replace \/ rotate credential)$/}),'Replace provider credential');
+  await admin.getByRole('button',{name:/Budget & limits/}).click();const turns=admin.getByLabel('Turns per cycle',{exact:false});await turns.fill(String(Number(await turns.inputValue())+1));
+  await exercise(admin.getByRole('button',{name:/Review .* changes/}),'Review tenant settings changes');
+  // Create a synthetic second version so a historical restore action exists.
+  await admin.getByRole('button',{name:/Review .* changes/}).click();await page.getByRole('dialog',{name:'Review tenant settings changes'}).getByRole('button',{name:'Confirm and save new version',exact:true}).click();await expect(admin.getByText(new RegExp(`settings version ${before+1} is now effective`,'i'))).toBeVisible();before=(await (await page.request.get('/api/tenant-settings')).json()).version;
+  await admin.getByText('Settings history',{exact:true}).click();
+  await exercise(admin.getByRole('button',{name:'Review restore',exact:true}).first(),'Restore tenant settings');
+});
