@@ -181,7 +181,9 @@ test('an existing company member accepts a second exact invitation and selects e
   expect(originalSession.actor.role).toBe('COMPANY_OWNER');
   const originalSavedSettings=await (await page.request.get('/api/tenant-settings')).json();
   const originalSavedHistory=await (await page.request.get('/api/tenant-settings/history')).json();
-  const originalPalette={primary:'#195B99',accent:'#927000'},targetPalette={primary:'#654321',accent:'#ABCDEF'};
+  const originalPalette={primary:originalSavedSettings.settings.generation_policy.branding.primary,accent:originalSavedSettings.settings.generation_policy.branding.accent},targetPalette={primary:'#654321',accent:'#ABCDEF'};
+  expect(originalPalette.primary.toLowerCase()).not.toBe(targetPalette.primary.toLowerCase());
+  expect(originalPalette.accent.toLowerCase()).not.toBe(targetPalette.accent.toLowerCase());
   let releaseOldBranding=()=>{};
 
   const privateRequest='Review synthetic creator-only activity by week.';
