@@ -9,6 +9,8 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|
 }
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
+  const protectedSettingsReads:string[]=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/api/tenant-settings')protectedSettingsReads.push(request.method())});
   await signIn(page,'member');
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await expect(page.locator('main').getByRole('button',{name:'Create report'})).toHaveCount(1);
@@ -31,6 +33,7 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await expect(page.getByText('Earlier request versions · 2')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Private report access'})).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(protectedSettingsReads).toEqual([]);
 });
 
 test('business workspace remains keyboard navigable and contained on a small screen',async({page},testInfo)=>{
@@ -514,4 +517,62 @@ test('rendered Clear Glass text stays readable across screens, themes, hover and
       }
     }
   }
+});
+
+async function renderedControlAudit(page:Page){
+  return page.locator('.private-workspace').evaluate(root=>{
+    const rgba=(value:string)=>(value.match(/[\d.]+/g)||[]).map(Number);
+    const over=(front:number[],back:number[])=>front.slice(0,3).map((value,index)=>value*(front[3]??1)+back[index]*(1-(front[3]??1)));
+    const background=(element:Element|null)=>{const parents:Element[]=[];for(let item=element;item;item=item.parentElement)parents.unshift(item);return parents.reduce((back,item)=>over(rgba(getComputedStyle(item).backgroundColor),back),[255,255,255])};
+    const luminance=(colour:number[])=>colour.map(value=>{const n=value/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);
+    const contrast=(first:number[],second:number[])=>{const a=luminance(first),b=luminance(second);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)};
+    const visible=(element:Element)=>{const closed=element.closest('details:not([open])');return element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden'&&!element.closest('[hidden],[aria-hidden="true"]')&&(!closed||Boolean(closed.querySelector(':scope > summary')?.contains(element)))};
+    const errors:string[]=[];
+    for(const element of root.querySelectorAll('input:not([type="checkbox"]):not([type="file"]),textarea,select,button.subtle:not(:disabled),.new-report-card button:not(:disabled)')){
+      if(!visible(element)||element.matches(':disabled'))continue;
+      const style=getComputedStyle(element),outside=background(element.parentElement),fill=background(element);
+      const boundary=parseFloat(style.borderTopWidth)>0?contrast(over(rgba(style.borderTopColor),outside),outside):0;
+      if(Math.max(boundary,contrast(fill,outside))<3)errors.push(`Control boundary ${element.tagName}.${element.className}`);
+      if(element.matches('input[placeholder],textarea[placeholder]')){const placeholder=getComputedStyle(element,'::placeholder');if(contrast(over(rgba(placeholder.color),fill),fill)<4.5)errors.push('Placeholder contrast');}
+    }
+    const focused=document.activeElement;if(focused&&root.contains(focused)){const style=getComputedStyle(focused);if(style.outlineStyle==='solid'&&contrast(over(rgba(style.outlineColor),background(focused.parentElement)),background(focused.parentElement))<3)errors.push('Focus contrast');}
+    const controls=Array.from(root.querySelectorAll('button,a,input:not([type="file"]),textarea,select,summary')).filter(element=>visible(element)&&!element.classList.contains('skip-link'));
+    for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++){
+      const first=controls[i],second=controls[j];if(first.contains(second)||second.contains(first))continue;
+      const a=first.getBoundingClientRect(),b=second.getBoundingClientRect();if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)errors.push(`Overlapping controls ${first.tagName}/${second.tagName}`);
+    }
+    return [...new Set(errors)];
+  });
+}
+
+test('tenant presentation variants preserve readable controls, borders and non-overlapping layouts',async({page},testInfo)=>{
+  test.setTimeout(90_000);await signIn(page,'owner');await page.emulateMedia({reducedMotion:'reduce'});
+  const before=(await (await page.request.get('/api/tenant-settings')).json());
+  await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(before.settings.generation_policy.branding.primary.toLowerCase());
+  // Fixture only the browser's existing authorized GET response. Persisted
+  // settings and report-generation policy are never written by this test.
+  const palettes=[{primary:'#17635E',accent:'#2D7D9A'},{primary:'#FFFFFF',accent:'#000000'},{primary:'#000000',accent:'#FFFFFF'},{primary:'#FFFF00',accent:'#FF00FF'},{primary:'#0000FF',accent:'#00FF00'},{primary:'#777777',accent:'#777777'}];
+  let palette=palettes[0];
+  await page.route('**/api/tenant-settings',async route=>{const response=await route.fetch();const value=await response.json();value.settings.generation_policy.branding={...value.settings.generation_policy.branding,...palette};await route.fulfill({response,json:value})});
+  const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();if(name==='Administration')await page.getByRole('button',{name,exact:true}).click();else await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
+  for(const [index,branding] of palettes.entries()){
+    palette=branding;await page.reload();await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
+    for(const mode of ['light','dark']){
+      await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+      for(const width of [1280,768,320]){
+        await page.setViewportSize({width,height:900});await navigate('Create report');await page.getByLabel('Your reporting goal').fill('Synthetic presentation audit only');
+        const create=page.locator('.new-report-card').getByRole('button',{name:/Create report/});await create.hover();await page.keyboard.press('Tab');await create.focus();
+        expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
+        expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        if(index===0||index===3)await page.screenshot({path:testInfo.outputPath(`tenant-${index}-${mode}-${width}.png`),fullPage:true});
+        await page.mouse.move(0,0);await navigate('Administration');
+        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){
+          await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();
+          expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        }
+      }
+    }
+  }
+  const after=(await (await page.request.get('/api/tenant-settings')).json());expect(after.version).toBe(before.version);expect(after.settings.generation_policy.branding).toEqual(before.settings.generation_policy.branding);
 });

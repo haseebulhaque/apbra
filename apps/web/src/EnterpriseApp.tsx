@@ -10,7 +10,7 @@ import {parseDataFile,summarizeDataStructure,type DataStructure} from './schemaI
 import {inspectLayoutRepairSemantics,isLayoutRepairEligible,normalizeReportDesign,type LayoutRepairSemanticFinding,type LayoutRepairSemanticInspection,type ReportDesignNormalization} from './reportDesignNormalization';
 import {defaultTenantSettings,supportedTrendGrains,type TenantSettings} from './tenant';
 import {FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper,type StageState} from './EnterpriseUI';
-import {PrivateCaseWorkspace} from './privateCases';
+import {PrivateCaseWorkspace,type PresentationBranding} from './privateCases';
 import {ApiError,authApi,tenantSettingsApi,type CaseRecord,type TenantProviderProfile,type TenantSettingsDocument,type TenantSettingsHistory,type TenantSettingsSection,type TenantSettingsVersion} from './api';
 
 type View='create'|'runs'|'tenant'|'ai'|'knowledge'|'branding'|'guardrails';
@@ -86,7 +86,7 @@ export function EnterprisePrototypeApp({caseRecord}:{caseRecord?:CaseRecord}={})
   return <div className="app-shell"><aside className="side-nav"><div className="brand"><span className="brand-mark">A</span><div><strong>APBRA</strong><small>Power BI automation</small></div></div>{nav.map(section=><nav key={section.group} aria-label={section.group}><p>{section.group}</p>{section.items.map(([id,label,icon])=><NavItem key={id} active={view===id} label={label} icon={icon} onClick={()=>setView(id)}/>)}</nav>)}<p className="session-note">Runs are retained for this browser session.</p></aside><div className="app-main"><header className="top-bar"><div><strong>{tenant.organisation.displayName}</strong><span>{view==='create'?'Report generation':view==='runs'?'Run history':'Administration'}</span></div><StatusBadge tone={serviceTone}>{serviceLabel}</StatusBadge></header>{view==='create'&&<CreateReport tenant={tenant} documents={knowledgeDocuments} initialRequirement={caseRecord?.current_request.request_text} caseVersion={caseRecord?.version} onIndexed={()=>setLastIndexed(new Date().toLocaleString())} onRun={run=>setRuns(current=>[run,...current])}/>} {view==='runs'&&<MyRuns runs={runs}/>} {view==='tenant'&&<TenantSettingsPage value={tenant} onChange={setTenant}/>} {view==='ai'&&<AIModelsPage service={service} tenant={tenant}/>} {view==='knowledge'&&<KnowledgePage documents={knowledgeDocuments} lastIndexed={lastIndexed} onChange={setKnowledgeDocuments} onReindex={()=>{clearRagIndex();setLastIndexed('Index cleared; it will rebuild on the next report run.')}}/>} {view==='branding'&&<BrandingPage value={tenant} onChange={setTenant}/>} {view==='guardrails'&&<GuardrailsPage value={tenant} onChange={setTenant}/>}</div></div>
 }
 
-export function EnterpriseApp(){return <PrivateCaseWorkspace adminPanel={membershipId=><TenantSettingsAdmin key={membershipId}/>}/>}
+export function EnterpriseApp(){return <PrivateCaseWorkspace adminPanel={(membershipId,onBrandingChanged)=><TenantSettingsAdmin key={membershipId} onBrandingChanged={onBrandingChanged}/>}/>}
 
 const tenantSectionFields:Record<TenantSettingsSection,readonly string[]>={
   ai_models:['automatic_generation_enabled','clarification_enabled','expert_escalation_enabled','provider_profile'],
@@ -148,9 +148,10 @@ function TenantSettingsDialog({label,busy,onClose,children}:{label:string;busy:b
   }}>{children}</dialog>;
 }
 
-function TenantSettingsAdmin(){
+function TenantSettingsAdmin({onBrandingChanged}:{onBrandingChanged:(colours:PresentationBranding,version:number)=>void}){
   const [session,setSession]=useState<Awaited<ReturnType<typeof authApi.session>>|null>(null);
   const [current,setCurrent]=useState<TenantSettingsVersion|null>(null);
+  useEffect(()=>{if(current)onBrandingChanged(current.settings.generation_policy.branding,current.version)},[current,onBrandingChanged]);
   const [draft,setDraft]=useState<TenantSettingsDocument|null>(null);
   const [history,setHistory]=useState<TenantSettingsHistory[]>([]);
   const [qualifiedProfiles,setQualifiedProfiles]=useState<TenantProviderProfile[]>([]);

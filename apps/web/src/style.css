@@ -398,3 +398,37 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 .tenant-dialog::backdrop{background:rgba(10,20,36,.65)}
 @media(max-width:768px){.private-workspace .workspace-rail{overflow:visible}.private-workspace .report-wizard .journey-steps .step-copy strong{font-size:13px}}
 @media(prefers-reduced-transparency:reduce){.private-workspace .workspace-rail,.private-workspace .workspace-topbar{background:var(--chrome-solid);backdrop-filter:none;-webkit-backdrop-filter:none}}
+
+/* Tenant primary/accent own workspace accents; neutral material, shadows and
+   success/warning/error colours remain semantic theme roles. Stored report
+   branding is unchanged by these contrast-qualified presentation variants. */
+.private-workspace[data-theme="clear-glass"]{
+  --brand:var(--tenant-brand-light,#245de5);--on-brand:var(--tenant-on-brand-light,#fff);
+  --brand-hover:var(--tenant-hover-light,#1d4ac0);--brand-soft:var(--tenant-soft-light,#eaf1ff);
+  --link:var(--tenant-link-light,#1d4ac0);--focus:var(--tenant-focus-light,#245de5);
+  --chrome-tint:var(--tenant-tint-light,rgba(126,205,213,.12));--border-strong:#70829d;
+  --info-surface:var(--brand-soft);--info-ink:var(--ink);
+}
+.private-workspace[data-theme="clear-glass"][data-color-mode="dark"]{
+  --brand:var(--tenant-brand-dark,#245de5);--on-brand:var(--tenant-on-brand-dark,#fff);
+  --brand-hover:var(--tenant-hover-dark,#1d4ac0);--brand-soft:var(--tenant-soft-dark,#20385e);
+  --link:var(--tenant-link-dark,#a7c6ff);--focus:var(--tenant-focus-dark,#9cbdff);
+  --chrome-tint:var(--tenant-tint-dark,rgba(81,149,187,.1));--border-strong:#849abe;
+}
+@media(prefers-color-scheme:dark){.private-workspace[data-theme="clear-glass"][data-color-mode="system"]{
+  --brand:var(--tenant-brand-dark,#245de5);--on-brand:var(--tenant-on-brand-dark,#fff);
+  --brand-hover:var(--tenant-hover-dark,#1d4ac0);--brand-soft:var(--tenant-soft-dark,#20385e);
+  --link:var(--tenant-link-dark,#a7c6ff);--focus:var(--tenant-focus-dark,#9cbdff);
+  --chrome-tint:var(--tenant-tint-dark,rgba(81,149,187,.1));--border-strong:#849abe;
+}}
+.private-workspace :is(.brand-mark,.skip-link),.private-workspace .report-wizard .journey-steps li.active .step-number{color:var(--on-brand)}
+.private-workspace button:not(.subtle):not(.rail-link):not(.case-row):not(.text-action):not(.workspace-menu-toggle):not(.tenant-section-tabs button):not(.journey-steps button):not(:disabled),.private-workspace .primary-link{color:var(--on-brand)}
+.private-workspace :is(input,textarea,select):hover{border-color:var(--border-strong)}
+.private-workspace :is(.secondary-button,.secondary-link,.subtle-upload){color:var(--link);background:var(--surface);border-color:var(--border-strong)}
+.private-workspace :is(.secondary-button,.secondary-link,.subtle-upload):hover{color:var(--ink);background:var(--surface-tint);border-color:var(--border-strong)}
+.private-workspace .new-report-card textarea{border:1px solid var(--border-strong);box-shadow:none}
+.private-workspace .message-composer textarea{border:1px solid var(--border-strong);padding:8px}
+.private-workspace .new-report-card{border-top-color:var(--brand)}
+.private-workspace .next-step-note{border-left-color:var(--brand)}
+.private-workspace .conversation-events li{border-left-color:var(--brand)}
+.private-workspace button:not(.subtle):not(.rail-link):not(.case-row):not(.text-action):hover:not(:disabled){box-shadow:var(--shadow-sm)}
