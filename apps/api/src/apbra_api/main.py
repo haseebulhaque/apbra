@@ -753,10 +753,10 @@ def run_foundry_qualification(
     client_factory: Callable[..., httpx.Client] | None = None,
 ) -> dict[str, Any]:
     """Explicit owner-terminal metadata observation; no app, provider or activation."""
-    settings = settings or get_settings()
-    binding = settings.foundry_qualification_binding()
     memory: _QualificationMemory | None = None
     try:
+        settings = settings or get_settings()
+        binding = settings.foundry_qualification_binding()
         with _private_sdk_logging(), _qualification_terminal(binding) as terminal:
             memory = _QualificationMemory(settings, binding)
             try:

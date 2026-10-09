@@ -2703,3 +2703,33 @@ def test_qualification_cli_selects_discovery_only_and_rejects_ambiguous_modes(
         module.main()
     assert caught.value.code == 2
     assert calls == ["qualification"]
+
+
+@pytest.mark.parametrize("boundary", ["settings-loader", "binding-loader"])
+@pytest.mark.parametrize("failure", [ValueError, RuntimeError])
+def test_qualification_settings_loader_failure_never_exposes_private_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: type[Exception],
+    boundary: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+
+    def unavailable(*arguments: Any) -> Any:
+        raise failure(state.canary)
+
+    if boundary == "settings-loader":
+        monkeypatch.setattr(state.module, "get_settings", unavailable)
+    else:
+        monkeypatch.setattr(state.module, "get_settings", lambda: state.settings)
+        monkeypatch.setattr(type(state.settings), "foundry_qualification_binding", unavailable)
+    with pytest.raises(
+        ProviderConfigurationError, match="^FOUNDRY_QUALIFICATION_UNAVAILABLE$"
+    ) as caught:
+        state.module.run_foundry_qualification(
+            credential_factory=state.factory, client_factory=state.client_factory
+        )
+    assert caught.value.__suppress_context__ is True
+    assert state.events == [] and state.receipts == [] and state.memories == []
+    captured = capsys.readouterr()
+    assert state.canary not in captured.out + captured.err + str(caught.value)
