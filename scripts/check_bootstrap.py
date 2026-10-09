@@ -963,6 +963,15 @@ LOCAL_RECOVERY_GATE_SHA256 = {'requirements': '20a8243d2c014b9254f37f124b92062ab
 LOCAL_RECOVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
 LOCAL_RECOVERY_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
+RENDERER_GEOMETRY_PATHS = {'apps/api/tests/test_generation.py', 'apps/web/src/reportDesignNormalization.test.ts', 'apps/api/tests/test_model_provider.py', 'apps/web/src/genericPowerBI.test.ts', 'apps/web/src/App.test.tsx', 'apps/api/src/apbra_api/model_provider.py', 'apps/web/src/genericPowerBI.ts'}
+RENDERER_GEOMETRY_REGISTRATION_PATHS = {'tests/bootstrap/test_renderer_geometry_scope.py', 'tasks/APBRA-160-renderer-geometry.json', 'scripts/check_bootstrap.py'}
+RENDERER_GEOMETRY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-renderer-geometry'
+RENDERER_GEOMETRY_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-renderer-geometry-registration'
+RENDERER_GEOMETRY_TASK_SHA256 = 'a830cb4c16e3158061817170bd7f55d11c6ab7028ed1ef2f1a403d0545cf4de8'
+RENDERER_GEOMETRY_GATE_SHA256 = {'requirements': 'db66d390f0193d85cf0cd66f00984ec37432c989386a928438fb75c4193ca741', 'adrs': 'e8a051a16cf0725c9a8ca0b7975beca20b8c01eca21c5f176748d3f9ff446308', 'architecture_refs': 'd16c5e47ea6f9714d90583d4e2ab5112141d06c5550896d4172e84e0938a1566', 'restricted_paths': 'de77f67e99f52f79647e6f66f7d89bef8f3f4653c23a0675769c5e02b4c6c091', 'acceptance_criteria': '53e94807575c3b24a9314f9115c58c4b8b41b310338a0168f8226f3d2be4981a', 'verification_required': '739894cf312708c248f459746e09e5b4561cb997cdf09c812c2194a75dc9a81b', 'out_of_scope': '3b9615a6927bd8f01673cf75b5e74ac1120bea397abe9cb5729abe70352c66f9', 'escalate_when': 'fc4faa2bc3831ee4f9a2d40b16bc4db84db0a68ec7311158a4da9ee498b925c7', 'dependencies': 'c6f39de08c2e3570d8e6c395a435e2bdd4c5bd7cf2afcb8f0f2f1a4bd6f8f8bf', 'effective_release': 'a99e8261da25fde36bf810b3f7692b0529f998a3248ddb771e6ce4d2039e7a80', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+RENDERER_GEOMETRY_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
+
+
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft'
 FOUNDRY_SCHEMA_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft-registration'
 
@@ -2246,6 +2255,27 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 local_rekey_task = None
+        renderer_geometry_task = None
+        renderer_geometry_path = root / 'tasks/APBRA-160-renderer-geometry.json'
+        if renderer_geometry_path.exists():
+            renderer_geometry_task = load_json(renderer_geometry_path)
+            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), renderer_geometry_task)
+            if not extension_errors:
+                extension_errors += task_errors(renderer_geometry_task, catalog, sources)
+                if hashlib.sha256(json.dumps(renderer_geometry_task, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != RENDERER_GEOMETRY_TASK_SHA256:
+                    extension_errors.append('APBRA-160 renderer geometry contract differs from accepted authority')
+                for field, expected in RENDERER_GEOMETRY_GATE_SHA256.items():
+                    if hashlib.sha256(json.dumps(renderer_geometry_task[field], sort_keys=True, separators=(',', ':')).encode()).hexdigest() != expected:
+                        extension_errors.append('APBRA-160 renderer geometry protected gate differs: ' + field)
+                if (set(renderer_geometry_task['allowed_paths']) != RENDERER_GEOMETRY_PATHS or len(renderer_geometry_task['allowed_paths']) != 7 or any('*' in p for p in renderer_geometry_task['allowed_paths'])):
+                    extension_errors.append('APBRA-160 renderer geometry must retain exactly seven literal product paths')
+                if (renderer_geometry_task['task_id'], renderer_geometry_task['assigned_agent'], renderer_geometry_task['branch'], renderer_geometry_task['base_commit']) != ('APBRA-160', 'APBRA-DEVOPS', RENDERER_GEOMETRY_BRANCH, '2de5476a62b7ede10e003003c49f38a93c96916c'):
+                    extension_errors.append('APBRA-160 renderer geometry identity differs')
+                if hashlib.sha256(json.dumps(sources, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != RENDERER_GEOMETRY_ALL_SOURCES_SHA256:
+                    extension_errors.append('APBRA-160 renderer geometry historical source register changed')
+            errors += extension_errors
+            if extension_errors:
+                renderer_geometry_task = None
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2796,6 +2826,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
             (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
             (local_rekey_task, LOCAL_RECOVERY_PATHS),
+            (renderer_geometry_task, RENDERER_GEOMETRY_PATHS),
             (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
             (demo_ux_task, DEMO_UX_PATHS),
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
@@ -2810,6 +2841,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else renderer_geometry_task if active_branch in {RENDERER_GEOMETRY_BRANCH, RENDERER_GEOMETRY_REGISTRATION_BRANCH}
                 else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
                 else demo_ux_task if active_branch in {
                     DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
@@ -2873,6 +2905,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
                          changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
+                         active_branch == RENDERER_GEOMETRY_REGISTRATION_BRANCH and
+                         changed_paths == RENDERER_GEOMETRY_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
@@ -2908,6 +2943,10 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
                 errors.append('APBRA-160 local rekey implementation cannot change registration files')
+            if active_task_id == 'APBRA-160' and active_branch == RENDERER_GEOMETRY_REGISTRATION_BRANCH and changed_paths != RENDERER_GEOMETRY_REGISTRATION_PATHS:
+                errors.append('APBRA-160 renderer geometry registration must change exactly three governance files')
+            if active_task_id == 'APBRA-160' and active_branch == RENDERER_GEOMETRY_BRANCH and changed_paths.intersection(RENDERER_GEOMETRY_REGISTRATION_PATHS):
+                errors.append('APBRA-160 renderer geometry implementation cannot change registration files')
             if (active_task_id == 'APBRA-160' and
                     active_branch == CURRENT_DEMO_SOURCE_BRANCH and
                     changed_paths != CURRENT_DEMO_SOURCE_PATHS):
@@ -3240,6 +3279,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
                          changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS and
                          name in LOCAL_RECOVERY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == RENDERER_GEOMETRY_REGISTRATION_BRANCH and
+                         changed_paths == RENDERER_GEOMETRY_REGISTRATION_PATHS and
+                         name in RENDERER_GEOMETRY_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-160' and active_task is not None and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
