@@ -148,7 +148,23 @@ def test_workspace_branding_cannot_select_another_company_or_modify_branding(
 def test_workspace_branding_follows_only_the_explicitly_selected_owned_membership(
     client: TestClient, database: Database,
 ) -> None:
+    foreign_owner = sign_in(client, "foreign")
+    foreign_before = client.get("/api/tenant-settings").json()
+    changed = client.patch(
+        "/api/tenant-settings/sections/branding_organisation", headers=csrf(foreign_owner),
+        json={"expected_version": foreign_before["version"], "changes": {
+            "generation_policy.branding": {
+                **foreign_before["settings"]["generation_policy"]["branding"],
+                "primary": "#654321", "accent": "#ABCDEF",
+            },
+        }},
+    )
+    assert changed.status_code == 200
+    foreign_branding = client.get("/api/workspace/branding").json()
     member = sign_in(client, "member")
+    original_branding = client.get("/api/workspace/branding").json()
+    assert original_branding["primary"] != foreign_branding["primary"]
+    assert original_branding["accent"] != foreign_branding["accent"]
     original_membership = member["actor"]["membership_id"]
     with database.session() as db:
         foreign = db.scalar(
@@ -175,6 +191,9 @@ def test_workspace_branding_follows_only_the_explicitly_selected_owned_membershi
         response = client.get("/api/workspace/branding")
         assert response.status_code == 200
         assert set(response.json()) == {"version", "primary", "accent"}
+        assert response.json() == (
+            original_branding if membership_id == original_membership else foreign_branding
+        )
 
 
 def test_section_update_preserves_unrelated_settings_and_versions(client: TestClient) -> None:

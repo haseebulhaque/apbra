@@ -179,6 +179,10 @@ test('an existing company member accepts a second exact invitation and selects e
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   const originalSession=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string;role:string}});
   expect(originalSession.actor.role).toBe('COMPANY_OWNER');
+  const originalSavedSettings=await (await page.request.get('/api/tenant-settings')).json();
+  const originalSavedHistory=await (await page.request.get('/api/tenant-settings/history')).json();
+  const originalPalette={primary:'#195B99',accent:'#927000'},targetPalette={primary:'#654321',accent:'#ABCDEF'};
+  let releaseOldBranding=()=>{};
 
   const privateRequest='Review synthetic creator-only activity by week.';
   await page.getByRole('button',{name:'Create report'}).first().click();
@@ -199,6 +203,8 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(inviterPage.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const targetSession=await inviterPage.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
     expect(targetSession.actor.company_id).not.toBe(originalSession.actor.company_id);
+    const targetSavedSettings=await (await inviterPage.request.get('/api/tenant-settings')).json();
+    const targetSavedHistory=await (await inviterPage.request.get('/api/tenant-settings/history')).json();
     await inviterPage.getByRole('button',{name:'Administration'}).click();
     await inviterPage.getByText('Manage company access').click();
     await inviterPage.getByLabel('External subject').fill('dev-creator');
@@ -207,9 +213,26 @@ test('an existing company member accepts a second exact invitation and selects e
     const invitationLink=await inviterPage.getByLabel('One-time invitation link').inputValue();
     expect(invitationLink).toMatch(/\/invite#token=/);
 
+    let receivedOldBranding!:()=>void;
+    const oldBrandingReady=new Promise<void>(resolve=>{receivedOldBranding=resolve});
+    const heldOldBranding=new Promise<void>(resolve=>{releaseOldBranding=resolve});
+    let holdOriginal=true;
+    // Browser-only distinct palettes; API session/branding requests still use real tenant selection.
+    await page.route('**/api/workspace/branding',async route=>{
+      const state=await (await page.request.get('/api/auth/session')).json() as {actor?:{company_id:string}};
+      const response=await route.fetch();
+      if(response.status()!==200){await route.fulfill({response});return}
+      const branding=await response.json();
+      const isOriginal=state.actor?.company_id===originalSession.actor.company_id;
+      expect(isOriginal||state.actor?.company_id===targetSession.actor.company_id).toBe(true);
+      const palette=isOriginal?originalPalette:targetPalette;
+      if(isOriginal&&holdOriginal){holdOriginal=false;branding.version+=100;receivedOldBranding();await heldOldBranding;}
+      await route.fulfill({response,json:{...branding,...palette}});
+    });
     await page.goto(invitationLink);
     await expect(page).not.toHaveURL(/token=/);
     await expect(page.getByRole('heading',{name:'Accept company invitation'})).toBeVisible();
+    await oldBrandingReady;
     await page.getByRole('button',{name:'Accept invitation'}).click();
     await expect(page.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
     const accepted=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor:{company_id:string;membership_id:string;role:string}});
@@ -217,6 +240,12 @@ test('an existing company member accepts a second exact invitation and selects e
     expect(accepted.actor.company_id).toBe(targetSession.actor.company_id);
     expect(accepted.actor.role).toBe('MEMBER');
     expect(accepted.actor.membership_id).not.toBe(originalSession.actor.membership_id);
+    const displayedPrimary=()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'));
+    await expect.poll(displayedPrimary).toBe(targetPalette.primary.toLowerCase());
+    const oldReply=page.waitForResponse(response=>response.url().endsWith('/api/workspace/branding')&&response.status()===200);
+    releaseOldBranding();await (await oldReply).finished();
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    expect(await displayedPrimary()).toBe(targetPalette.primary.toLowerCase());
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
     await page.reload();
@@ -243,7 +272,10 @@ test('an existing company member accepts a second exact invitation and selects e
     const selectedOriginal=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedOriginal.actor.membership_id).toBe(originalSession.actor.membership_id);
     const originalBranding=await (await page.request.get('/api/workspace/branding')).json();
-    await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(originalBranding.primary.toLowerCase());
+    expect(originalBranding).toEqual({version:originalSavedSettings.version,primary:originalSavedSettings.settings.generation_policy.branding.primary,accent:originalSavedSettings.settings.generation_policy.branding.accent});
+    await expect.poll(displayedPrimary).toBe(originalPalette.primary.toLowerCase());
+    expect(await (await page.request.get('/api/tenant-settings')).json()).toEqual(originalSavedSettings);
+    expect(await (await page.request.get('/api/tenant-settings/history')).json()).toEqual(originalSavedHistory);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
 
     await page.getByRole('button',{name:'Sign out'}).click();
@@ -255,10 +287,13 @@ test('an existing company member accepts a second exact invitation and selects e
     const selectedTarget=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedTarget.actor.membership_id).toBe(accepted.actor.membership_id);
     const targetBranding=await (await page.request.get('/api/workspace/branding')).json();
-    await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(targetBranding.primary.toLowerCase());
+    expect(targetBranding).toEqual({version:targetSavedSettings.version,primary:targetSavedSettings.settings.generation_policy.branding.primary,accent:targetSavedSettings.settings.generation_policy.branding.accent});
+    await expect.poll(displayedPrimary).toBe(targetPalette.primary.toLowerCase());
+    expect(await (await inviterPage.request.get('/api/tenant-settings')).json()).toEqual(targetSavedSettings);
+    expect(await (await inviterPage.request.get('/api/tenant-settings/history')).json()).toEqual(targetSavedHistory);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
-  }finally{await inviterContext.close()}
+  }finally{releaseOldBranding();await inviterContext.close()}
 });
 
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
