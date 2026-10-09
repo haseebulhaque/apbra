@@ -973,6 +973,15 @@ FOUNDRY_HOST_GATE_SHA256 = {'requirements': '6c28746ffdbda24034f5d4ddcb645f80001
 FOUNDRY_HOST_SOURCES = FOUNDRY_SCHEMA_SOURCES
 FOUNDRY_HOST_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
+FOUNDRY_QUALIFICATION_PATHS = {'apps/api/tests/test_model_provider.py', 'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/main.py'}
+FOUNDRY_QUALIFICATION_REGISTRATION_PATHS = {'tests/bootstrap/test_foundry_qualification_scope.py', 'scripts/check_bootstrap.py', 'tasks/APBRA-160-foundry-qualification.json'}
+FOUNDRY_QUALIFICATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification'
+FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification-registration'
+FOUNDRY_QUALIFICATION_TASK_SHA256 = '7f238804977619dcc8120b58ae4df562b35a0409ddef545711d1782f51ae4aae'
+FOUNDRY_QUALIFICATION_GATE_SHA256 = {'requirements': '4e326dc8d87ad8258e5724e71f52cd438ba00695406edb09649f1368d6501337', 'adrs': '497693b8401a2c3e0871ff93ee7b48317c97339c4d916585ff1a34174ce94890', 'architecture_refs': '081817e73e3e30833aee2e5896abe65d875bcce9daf666d4a620d4dab63db808', 'restricted_paths': '9034e40a893b883fa5d2026dbd72be8af31f472d4fc1eae942fa651c33a8ff0f', 'acceptance_criteria': '42d48025bac15a836c3d17105c754544c6673178fdcd246ed90466ec059b8a22', 'verification_required': 'e39fd3bb51bdb59f46018e97628dd3fbc814746dd3e7d0fe015e594a16a4a74f', 'out_of_scope': 'f1fc7e0bb6d162f21a642b05059f8b4101ef34ce9c4163780b6b0750d1c911f1', 'escalate_when': '363d6c576984e7f41fc4171a1a947f43b7903a74780d8638a119b2a3348411df', 'dependencies': '3cc62a8204219a6d096ab3e78f4e734e9cbbff077241dd24bb8b22457b765a68', 'effective_release': '37b6482aeb18252f354ece4731884d31fd58ae9532f562f43cfb381c2cf8e8a3', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2'}
+FOUNDRY_QUALIFICATION_SOURCES = FOUNDRY_SCHEMA_SOURCES
+FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
+
 LOCAL_RECOVERY_PATHS = {'apps/api/tests/test_rekey_tenant_secrets.py', 'apps/api/src/apbra_api/rekey_tenant_secrets.py', 'apps/api/src/apbra_api/tenant_secrets.py'}
 LOCAL_RECOVERY_REGISTRATION_PATHS = {'tasks/APBRA-160-local-rekey.json', 'scripts/check_bootstrap.py', 'tests/bootstrap/test_local_rekey_scope.py'}
 LOCAL_RECOVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey'
@@ -1281,6 +1290,42 @@ def repo_files(root: Path) -> list[Path]:
         return [root / p for p in result.stdout.decode().split('\x00') if p]
     ignored = {'.git', '.venv', '__pycache__', 'artifacts'}
     return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and not ignored.intersection(p.relative_to(root).parts))
+
+
+def bound_provider_registration(root, catalog, sources, *, filename, label, branch,
+                                base, paths, task_sha, gates, source_bindings,
+                                sources_sha, count_label):
+    """Equivalent finite provider/host registrations; retain their exact errors."""
+    path = root / 'tasks' / filename
+    if not path.exists():
+        return None, []
+    registered = load_json(path)
+    failures = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), registered)
+    if not failures:
+        failures += task_errors(registered, catalog, sources)
+        def digest(value):
+            return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        prefix = 'APBRA-160 ' + label
+        if digest(registered) != task_sha:
+            failures.append(prefix + ' task binding differs')
+        if (registered['task_id'], registered['assigned_agent'], registered['agent_card_version'],
+                registered['branch'], registered['base_commit']) != ('APBRA-160', 'APBRA-DEVOPS', '0.1', branch, base):
+            failures.append(prefix + ' identity/base/branch differs')
+        if set(registered['allowed_paths']) != paths or len(registered['allowed_paths']) != len(paths):
+            failures.append(prefix + ' requires exact ' + count_label + ' literal paths')
+        if registered['source_ids'] != [row[0] for row in source_bindings]:
+            failures.append(prefix + ' requires exact accepted sources')
+        for section, expected in gates.items():
+            if digest(registered[section]) != expected:
+                failures.append(prefix + ' changed gate: ' + section)
+        if digest(sources) != sources_sha:
+            failures.append(prefix + ' historical source register changed')
+        for source_id, content_id, version, expected in source_bindings:
+            rows = [row for row in sources['sources'] if row.get('id') == source_id]
+            if (len(rows) != 1 or (rows[0].get('content_id'), rows[0].get('version'),
+                    rows[0].get('status')) != (content_id, version, 'ACCEPTED') or digest(rows[0]) != expected):
+                failures.append(prefix + ' source binding differs: ' + source_id)
+    return (None if failures else registered), failures
 
 
 def check(root: Path = ROOT, *, active_task_id: str | None = None,
@@ -2268,90 +2313,27 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 local_rekey_task = None
-        provider_retrieval_task = None
-        provider_retrieval_path = root / 'tasks/APBRA-160-provider-retrieval.json'
-        if provider_retrieval_path.exists():
-            provider_retrieval_task = load_json(provider_retrieval_path)
-            extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
-                provider_retrieval_task,
-            )
-            if not extension_errors:
-                extension_errors += task_errors(provider_retrieval_task, catalog, sources)
-                def provider_registration_digest(value):
-                    return hashlib.sha256(json.dumps(
-                        value, sort_keys=True, separators=(',', ':'),
-                    ).encode()).hexdigest()
-                if provider_registration_digest(provider_retrieval_task) != PROVIDER_RETRIEVAL_TASK_SHA256:
-                    extension_errors.append('APBRA-160 provider retrieval task binding differs')
-                if (provider_retrieval_task['task_id'], provider_retrieval_task['assigned_agent'],
-                        provider_retrieval_task['agent_card_version'], provider_retrieval_task['branch'],
-                        provider_retrieval_task['base_commit']) != (
-                        'APBRA-160', 'APBRA-DEVOPS', '0.1', PROVIDER_RETRIEVAL_BRANCH,
-                        'e3f782535e41bef1034222227ef706e1cf0bfac1'):
-                    extension_errors.append('APBRA-160 provider retrieval identity/base/branch differs')
-                if (set(provider_retrieval_task['allowed_paths']) != PROVIDER_RETRIEVAL_PATHS or
-                        len(provider_retrieval_task['allowed_paths']) != len(PROVIDER_RETRIEVAL_PATHS)):
-                    extension_errors.append('APBRA-160 provider retrieval requires exact 29 literal paths')
-                if provider_retrieval_task['source_ids'] != [row[0] for row in PROVIDER_RETRIEVAL_SOURCES]:
-                    extension_errors.append('APBRA-160 provider retrieval requires exact accepted sources')
-                for section, expected in PROVIDER_RETRIEVAL_GATE_SHA256.items():
-                    if provider_registration_digest(provider_retrieval_task[section]) != expected:
-                        extension_errors.append('APBRA-160 provider retrieval changed gate: ' + section)
-                if provider_registration_digest(sources) != PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256:
-                    extension_errors.append('APBRA-160 provider retrieval historical source register changed')
-                for source_id, content_id, version, expected in PROVIDER_RETRIEVAL_SOURCES:
-                    source_rows = [row for row in sources['sources'] if row.get('id') == source_id]
-                    if (len(source_rows) != 1 or
-                            (source_rows[0].get('content_id'), source_rows[0].get('version'),
-                             source_rows[0].get('status')) != (content_id, version, 'ACCEPTED') or
-                            provider_registration_digest(source_rows[0]) != expected):
-                        extension_errors.append('APBRA-160 provider retrieval source binding differs: ' + source_id)
-            errors += extension_errors
-            if extension_errors:
-                provider_retrieval_task = None
-        foundry_host_task = None
-        foundry_host_path = root / 'tasks/APBRA-160-foundry-host.json'
-        if foundry_host_path.exists():
-            foundry_host_task = load_json(foundry_host_path)
-            extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
-                foundry_host_task,
-            )
-            if not extension_errors:
-                extension_errors += task_errors(foundry_host_task, catalog, sources)
-                def provider_registration_digest(value):
-                    return hashlib.sha256(json.dumps(
-                        value, sort_keys=True, separators=(',', ':'),
-                    ).encode()).hexdigest()
-                if provider_registration_digest(foundry_host_task) != FOUNDRY_HOST_TASK_SHA256:
-                    extension_errors.append('APBRA-160 Foundry host task binding differs')
-                if (foundry_host_task['task_id'], foundry_host_task['assigned_agent'],
-                        foundry_host_task['agent_card_version'], foundry_host_task['branch'],
-                        foundry_host_task['base_commit']) != (
-                        'APBRA-160', 'APBRA-DEVOPS', '0.1', FOUNDRY_HOST_BRANCH,
-                        '78346bb7d253e7f649858f4a251a04d8663670b7'):
-                    extension_errors.append('APBRA-160 Foundry host identity/base/branch differs')
-                if (set(foundry_host_task['allowed_paths']) != FOUNDRY_HOST_PATHS or
-                        len(foundry_host_task['allowed_paths']) != len(FOUNDRY_HOST_PATHS)):
-                    extension_errors.append('APBRA-160 Foundry host requires exact six literal paths')
-                if foundry_host_task['source_ids'] != [row[0] for row in FOUNDRY_HOST_SOURCES]:
-                    extension_errors.append('APBRA-160 Foundry host requires exact accepted sources')
-                for section, expected in FOUNDRY_HOST_GATE_SHA256.items():
-                    if provider_registration_digest(foundry_host_task[section]) != expected:
-                        extension_errors.append('APBRA-160 Foundry host changed gate: ' + section)
-                if provider_registration_digest(sources) != FOUNDRY_HOST_ALL_SOURCES_SHA256:
-                    extension_errors.append('APBRA-160 Foundry host historical source register changed')
-                for source_id, content_id, version, expected in FOUNDRY_HOST_SOURCES:
-                    source_rows = [row for row in sources['sources'] if row.get('id') == source_id]
-                    if (len(source_rows) != 1 or
-                            (source_rows[0].get('content_id'), source_rows[0].get('version'),
-                             source_rows[0].get('status')) != (content_id, version, 'ACCEPTED') or
-                            provider_registration_digest(source_rows[0]) != expected):
-                        extension_errors.append('APBRA-160 Foundry host source binding differs: ' + source_id)
-            errors += extension_errors
-            if extension_errors:
-                foundry_host_task = None
+        provider_retrieval_task, extension_errors = bound_provider_registration(
+            root, catalog, sources, filename='APBRA-160-provider-retrieval.json', label='provider retrieval',
+            branch=PROVIDER_RETRIEVAL_BRANCH, base='e3f782535e41bef1034222227ef706e1cf0bfac1', paths=PROVIDER_RETRIEVAL_PATHS,
+            task_sha=PROVIDER_RETRIEVAL_TASK_SHA256, gates=PROVIDER_RETRIEVAL_GATE_SHA256,
+            source_bindings=PROVIDER_RETRIEVAL_SOURCES, sources_sha=PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256,
+            count_label='29')
+        errors += extension_errors
+        foundry_host_task, extension_errors = bound_provider_registration(
+            root, catalog, sources, filename='APBRA-160-foundry-host.json', label='Foundry host',
+            branch=FOUNDRY_HOST_BRANCH, base='78346bb7d253e7f649858f4a251a04d8663670b7', paths=FOUNDRY_HOST_PATHS,
+            task_sha=FOUNDRY_HOST_TASK_SHA256, gates=FOUNDRY_HOST_GATE_SHA256,
+            source_bindings=FOUNDRY_HOST_SOURCES, sources_sha=FOUNDRY_HOST_ALL_SOURCES_SHA256,
+            count_label='six')
+        errors += extension_errors
+        foundry_qualification_task, extension_errors = bound_provider_registration(
+            root, catalog, sources, filename='APBRA-160-foundry-qualification.json', label='Foundry qualification',
+            branch=FOUNDRY_QUALIFICATION_BRANCH, base='3f27674158d0924545ccf9f9f70e549c0292377b', paths=FOUNDRY_QUALIFICATION_PATHS,
+            task_sha=FOUNDRY_QUALIFICATION_TASK_SHA256, gates=FOUNDRY_QUALIFICATION_GATE_SHA256,
+            source_bindings=FOUNDRY_QUALIFICATION_SOURCES, sources_sha=FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256,
+            count_label='three')
+        errors += extension_errors
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2920,6 +2902,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
             (provider_retrieval_task, PROVIDER_RETRIEVAL_PATHS),
             (foundry_host_task, FOUNDRY_HOST_PATHS),
+            (foundry_qualification_task, FOUNDRY_QUALIFICATION_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2929,6 +2912,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else foundry_qualification_task if active_branch in {FOUNDRY_QUALIFICATION_BRANCH, FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH}
                 else foundry_host_task if active_branch in {FOUNDRY_HOST_BRANCH, FOUNDRY_HOST_REGISTRATION_BRANCH}
                 else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
                 else demo_ux_task if active_branch in {
@@ -3001,6 +2985,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
+                         active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
+                         changed_paths == FOUNDRY_QUALIFICATION_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
@@ -3048,6 +3035,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == FOUNDRY_HOST_BRANCH and
                     changed_paths.intersection(FOUNDRY_HOST_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry host implementation cannot change governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
+                    changed_paths != FOUNDRY_QUALIFICATION_REGISTRATION_PATHS):
+                errors.append('APBRA-160 Foundry qualification registration must change exactly three governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == FOUNDRY_QUALIFICATION_BRANCH and
+                    changed_paths.intersection(FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)):
+                errors.append('APBRA-160 Foundry qualification implementation cannot change governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3394,6 +3389,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS and
                          name in FOUNDRY_HOST_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
+                         changed_paths == FOUNDRY_QUALIFICATION_REGISTRATION_PATHS and
+                         name in FOUNDRY_QUALIFICATION_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-160' and active_task is not None and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and

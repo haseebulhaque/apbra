@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-FOUNDRY-QUALIFICATION-REG-20261009",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register a finite qualification-only private manual metadata discovery entrypoint, separate from strict runtime activation and without model/retrieve/tool calls or app serving.",
+  "requirements": [
+    "Owner-delegated 2026-10-09 direction authorizes a separate qualification-only host entrypoint scope. Existing accepted Confluence03.07v28 and03.08v9, every prior source row/task/checkerconstant and strict Foundry runtime gates remain unchanged. This new task supplies the finite discovery exception, not a rewrite of prior host authority.",
+    "Qualification is a separately selected manual local command within main.py, disabled by default and never reached by module import, ordinary startup, API request or background action. It must not create/serve the app, enable foundry_host_enabled, construct provider activation capability, call Responses/model/retrieve/tools, dispatch generation or mutate tenant settings/credentials/permissions.",
+    "Only the separately approved privateTTY temporary existing-owner DeviceCodeCredential flow may authenticate. Reuse the approved existing client binding and AzureIdentity1.26.0 delivered by PR122, disable automatic authentication and credential discovery, memory-only cache, fixed approved tenant and no additional tenants. No new appidentity, roles, consent, permissions, browser/CLI/defaultcredential fallback, token persistence or security change. Offline tests use synthetic SDK/transport mocks only.",
+    "Use the explicitly approved existing Microsoft SDK development public client 04b07795-8ddb-461a-bbee-02f9e1bf7b46 with the approved Portal tenant for temporary local development only; never omit client_id to discover an SDK default. Existing consent and access remain unverified. Any consent screen, permission denial or required grant stops the flow without accepting consent or changing roles.",
+    "Discovery configuration requires exact approved Portal tenant4825d1f6-89d8-4e38-9418-2827aa59a23c, project s08-cloud-ai-agent, agent s08-document-grounded-agent version6 and knowledge base s08-knowledge-base, plus reviewed endpoint/API-version/client binding and unexpired authorization deadline. These resource labels are expected metadata, not evidence of verified access. Reject different tenant/client/project/agent/version/KB, redirects, unknown endpoint or unapproved API path before metadata dispatch.",
+    "Discovery must not require a preknown home_account_id or LIVE_METADATA_VERIFIED attestation: finding and privately confirming the existing owner account and observing bounded metadata is its purpose. Explicit SDK authentication returns an account record; check exact approved tenant/client and require private owner confirmation of the selected existing account before GETs. Keep home_account_id, raw account records and bearer tokens memory-only; never emit them. A minimal selected-account display label may appear only inside the owner independently opened private OS terminal to support explicit account confirmation, never chat, a tool-managed PTY, stdout/stderr, application/API output, logs, audits or artifacts. Do not persist that private display label. Strict runtime FoundryHostBinding still requires exact known account and LIVE_METADATA_VERIFIED; discovery cannot loosen or silently populate that binding.",
+    "Network transport permits only bounded read-only GETs to the reviewed existing agent-version and knowledge-base metadata endpoints. No POST/PUT/PATCH/DELETE, resource creation/configuration/tool calls, data retrieval/search/model endpoint, pagination traversal beyond approved bounds, arbitrary links or response-directed network dispatch. Unsupported metadata shape/version fails safely; do not fabricate qualification from configuration or a successful HTTP status.",
+    "Agent version 6 is not itself the stable endpoint selector. Read both the existing agent properties and exact agent-version metadata using the ai.azure.com audience. Derive only the existing Search origin from the approved stored MCP configuration, then require the owner to confirm that exact HTTPS origin privately before requesting or attaching a Search-audience token. A separately explicit finite in-memory search.azure.com audience token acquisition is allowed only under existing consent; no grants, consent or ambient fallback. GET only the existing knowledge-base definition using reviewed API version 2025-11-01-preview; never call MCP, search, retrieve or tools.",
+    "Actual device-code interaction must use an owner independently opened operating-system terminal/privateTTY, never a tool-managed captured PTY. Recheck approval, deadline and selected account before and after each SDK/GET operation. A deadline timer closes the credential and clears token/account/raw metadata memory; do not retain an idle authenticated process. Emit only bounded public status facts. Discovery exits without serving, activation, runtime-binding export or broad LIVE_METADATA_VERIFIED attestation based merely on metadata GETs.",
+    "Validate returned exact agent identity/version and its explicit existing knowledge-base binding against approved metadata. Produce only a bounded safe qualification result of observed resource identity/version/binding and verification status, excluding agent instructions, document content, secrets, arbitrary exception/body text, account IDs, tokens and device codes. PrivateTTY challenge stays out of app/API/stdout/stderr/repository/logs/audits/artifacts; any saved reviewable metadata projection must contain public resource identifiers and safe status only.",
+    "Use bounded request/response sizes and remaining authorization time, no automatic retries or redirects. Expired/cancelled/wrong-tenant/account/client/metadata/nonTTY failures perform no further requests, close the credential and clear memory. Approval expires19:10UTC2026-10-09; later auth/GET requires renewed authority. Preserve existing runtime strict qualification, budgets, legacy adapters and all business/report behavior.",
+    "Owner renewed the total budget ceiling to A$10 with owner-reported current actual usage A$1.25, replacing the earlier owner-provided baseline. This amount is not independently reconciled; unposted usage, provisional reserves and the full nested all-in call bound remain separate gates. Missing values are unknown, never zero. Any paid model/retrieve/tool/provider call remains blocked pending a separately evidenced all-in bound and explicit authority; a metadata GET is not paid-model qualification. Registration/offline implementation cannot consume or imply paid-call authorization.",
+    "Registration changes exactly three governance paths. Product implementation changes exactly three literal API source/test paths only after separate exact-head independent PASS, hosted CI, authorized manual registration merge and verified post-registration main. The registration base is verified post-PR122 main 3f27674158d0924545ccf9f9f70e549c0292377b. No preview/app activation or authentication in this author execution."
+  ],
+  "adrs": [
+    "Qualification discovery and runtime activation are separate trust boundaries. An observed discovery result does not authorize provider use or bypass runtime account/metadata attestation.",
+    "Explicit approved privateTTY authentication is neither APBRA user authorization nor Azure role/consent administration. No ambient credential discovery or persisted tokens.",
+    "Read-only metadata observation uses a finite reviewed URL/method/identity whitelist and bounded response projection; arbitrary returned text/URLs cannot authorize actions."
+  ],
+  "architecture_refs": [
+    "Existing accepted source-register bindings apbra-160-editable-first-draft-direction page8519682v28 and apbra-160-editable-first-draft-delivery page9404417v9 remain exact and unchanged.",
+    "Owner/parent renewed 2026-10-09 gated window through 19:10 UTC and qualification-only direction. Existing runtime host task remains unchanged. PR122 supplied AzureIdentity1.26.0 and merged at verified main 3f27674158d0924545ccf9f9f70e549c0292377b after exact-head hosted CI224 run37945510891 SUCCESS and independent review5471571137 PASS. This is the final registration base; prior provisional regressions remain historical evidence, not exact-head qualification."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/tests/test_model_provider.py"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/**",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "compose.yaml",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**",
+    ".env",
+    "**/.env",
+    "artifacts/**",
+    "local-data/**",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock"
+  ],
+  "acceptance_criteria": [
+    "Exactly three governance files register exactly main.py/config.py/test_model_provider.py; no wildcard, duplicate, omitted path, model_provider.py, dependency or fourth product path. Prior task/source/checkerconstants unchanged.",
+    "Ordinary module import/startup/API/background paths perform zero qualification-specific authentication, discovery or metadata calls. Existing default app serving and strict opt-in runtime host behavior remain unchanged. Only the explicitly selected manual qualification command must exit without creating or serving the app. Discovery without preknown account or runtime LIVE_METADATA_VERIFIED can progress only through explicit approved privateTTY existing-owner confirmation; runtime still rejects missing exact account/attestation.",
+    "Synthetic tests reject nonTTY/expiry/cancellation/wrongtenant-client-account/project/agent/version/KB, redirects/unsupportedshapes/oversize/unknownURLs and every nonGET/model/retrieve/tool request; expired/cancelled authentication performs no GET.",
+    "Observed exact metadata association is checked; missing or inconsistent agentVersion/KB binding cannot produce verified status. Safe bounded result excludes instructions/documents/account/token/challenge/rawexception text. Cleanup/close executes on every success/failure.",
+    "No SDK authentication, metadata network, paid call or runtime/product edit occurs in governance registration or offline tests. Qualification remains separate from activation; no persistent attestation is silently written.",
+    "Synthetic tests enforce the separate agent-properties GET and agent-version GET, exact Search origin confirmation before second-audience token acquisition, existing consent-only behavior and deadline cleanup. Tool-managed PTY invocation, unconfirmed Search token attachment, implicit audience acquisition or broad runtime attestation fails closed."
+  ],
+  "verification_required": [
+    "Registration: focused literal-scope/source/identity/operation negative mutations, full bootstrap, standalone bootstrap/CI-policy, exactthreefileaudit, JSON/diff checks and redacted trackedHEAD/reachablehistory scan.",
+    "Registration: verified post-PR122 base 3f27674158d0924545ccf9f9f70e549c0292377b, genuinely separate exact-head independent governance PASS, hosted CI, separately authorized manual merge and verified post-registration main before product work.",
+    "Product: red/green synthetic SDK/transport/TTY tests for explicitmanualcommand-only auth, no-preknown-account discovery, strictunchangedruntimeguard, finiteGET whitelist/identityassociation, budgets/expiry/close, redaction/noappserve/noactivation/nopaidcalls; full APItests Ruff/strictmypy bootstrap/CI exactthreepath audit, fresh independent exact-head review and hosted CI. Any live approved auth/metadata check is separately recorded and cannot replace offline negative tests."
+  ],
+  "out_of_scope": [
+    "Product/runtime edit in registration, fourthproductpath/newmodule/dependency, mutation of model_provider.py or existingstrict runtimeattestation, startup/auth automation, app serving/profileactivation or previewchanges.",
+    "Model/Responses/retrieve/search/tool/generation calls, arbitraryresourceURL/method, resourcecreation or instructions/tools/settings changes, documentcontent collection, permissions/roles/appidentity/consent changes.",
+    "Token/account/devicecode persistence/logs/API/output, ambientcredentials/CLI/browserfallback, paidcalls without separately evidenced all-in bound, business/report/prompt/validation changes or automaticmerge."
+  ],
+  "escalate_when": [
+    "Unknown/changed tenant/account/client/project/agent/version/KB/endpoint or missing documented metadata association, newpermissions/consent or fourthpath is required; stop rather than fallback.",
+    "Final coordinated post-PR122 base, existingSDK dependency, sourceacceptance, hostedCI, independentPASS, authorizedmanualmerge or verifiedmain is absent/stale/failed; deadline19:10UTC expires or paidcall lacks all-in bound.",
+    "PrivateTTY/memory-only credential/cleanup, read-onlyboundedGET/redaction, startupzeroauth or strict runtimeaccount/LIVE_METADATA_VERIFIED gates cannot be preserved."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "3f27674158d0924545ccf9f9f70e549c0292377b",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-qualification",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Three-path qualification-only offline productauthority after final coordinated post-PR122 base, exact-head independentPASS/hostedCI, separately authorized manual registration merge and verifiedmain; live privateTTY auth/metadata use requires current explicit approval, no provideractivation or paidcalls.",
+  "dependencies": [
+    "PR122 supplied AzureIdentity1.26.0 and strict runtime host wiring at verified main 3f27674158d0924545ccf9f9f70e549c0292377b. This separate registration uses that exact base. All prior contracts/source rows/checker constants remain preserved.",
+    "Registration/product/livequalification/runtimeactivation remain separate gates. Existing approval window ends19:10UTC2026-10-09; incomplete or expiredgates require renewed owner authority.",
+    "No app serving/profile activation/model/retrieve/tool calls or changes to account/metadata requirements of existing runtime. Root coordinates independent review and gates; this author does not merge or authenticate."
+  ]
+}
