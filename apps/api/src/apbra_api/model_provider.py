@@ -879,6 +879,110 @@ class FoundryCredentialProvider(Protocol):
     def resolve(self, company_id: UUID, profile: ProviderProfile) -> FoundryAccess: ...
 
 
+class FoundryAccessToken(Protocol):
+    @property
+    def token(self) -> str: ...
+
+    @property
+    def expires_on(self) -> int: ...
+
+
+class FoundryTokenCredential(Protocol):
+    """Structural Azure TokenCredential boundary; no SDK dependency or login."""
+
+    def get_token(self, *scopes: str) -> FoundryAccessToken: ...
+
+
+class FoundryTokenCredentialProvider:
+    """Bind an explicitly enabled host credential to one qualified tenant/profile.
+
+    The host must complete separately authorized authentication and metadata
+    qualification before enabling this capability. Construction, ready and
+    resolve do not acquire tokens. No credential discovery, interactive login,
+    SDK construction or persistent cache is provided here.
+    """
+
+    def __init__(
+        self,
+        *,
+        company_id: UUID,
+        profile: ProviderProfile,
+        token_credential: FoundryTokenCredential,
+        enabled: Callable[[], bool],
+        knowledge_binding: str,
+        knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"],
+        agent_version: str | None,
+        qualification: Literal["OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"],
+    ) -> None:
+        self._company_id = company_id
+        self._profile = profile.model_copy(deep=True)
+        self._token_credential = token_credential
+        self._enabled = enabled
+        self._access = FoundryAccess(
+            company_id=company_id, profile_id=profile.profile_id,
+            configuration_id=profile.configuration_id,
+            credential=self._bearer, knowledge_binding=knowledge_binding,
+            knowledge_scope=knowledge_scope, agent_version=agent_version,
+            qualification=qualification,
+        )
+        _validate_foundry_access(self._profile, self._access, company_id)
+
+    def ready(self, company_id: UUID, profile: ProviderProfile) -> bool:
+        try:
+            if (
+                company_id != self._company_id
+                or profile.model_dump(mode="json") != self._profile.model_dump(mode="json")
+            ):
+                return False
+            return self._enabled() is True
+        except Exception:
+            return False
+
+    def resolve(self, company_id: UUID, profile: ProviderProfile) -> FoundryAccess:
+        if not self.ready(company_id, profile):
+            raise ProviderConfigurationError("FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE")
+        return self._access
+
+    def _bearer(self) -> FoundryBearer:
+        if not self.ready(self._company_id, self._profile):
+            raise ProviderConfigurationError("FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE")
+        try:
+            acquired = self._token_credential.get_token("https://ai.azure.com/.default")
+            token, expiry = acquired.token, acquired.expires_on
+            if (
+                not isinstance(token, str) or not token
+                or type(expiry) not in {int, float}
+                or not math.isfinite(expiry) or expiry <= time.time()
+            ):
+                raise ValueError("Invalid host capability")
+            bearer = FoundryBearer(token=token, expires_at=float(expiry))
+        except Exception:
+            # SDK messages may contain private identity or authentication details.
+            raise ProviderConfigurationError("FOUNDRY_CREDENTIAL_UNAVAILABLE") from None
+        # Host permission can expire or be revoked while SDK refresh is in flight.
+        if not self.ready(self._company_id, self._profile):
+            raise ProviderConfigurationError("FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE")
+        return bearer
+
+
+def _validate_foundry_access(
+    profile: ProviderProfile, access: FoundryAccess, company_id: UUID,
+) -> None:
+    if (
+        profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+        or not profile.capabilities.structured_output
+        or access.company_id != company_id
+        or access.profile_id != profile.profile_id
+        or access.configuration_id != profile.configuration_id
+        or access.knowledge_scope not in {"SHARED_STANDARDS", "TENANT_PRIVATE"}
+        or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", access.knowledge_binding)
+        or access.qualification not in {"OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"}
+        or (access.agent_version is not None
+            and not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", access.agent_version))
+    ):
+        raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_INVALID")
+
+
 class FoundryAgentResponsesProvider:
     """Invoke the configured agent, preserving its stored instructions and tools."""
 
@@ -890,19 +994,8 @@ class FoundryAgentResponsesProvider:
         company_id: UUID,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        if (
-            profile.protocol != "FOUNDRY_AGENT_RESPONSES"
-            or not profile.capabilities.structured_output
-            or access.company_id != company_id
-            or access.profile_id != profile.profile_id
-            or access.configuration_id != profile.configuration_id
-            or access.knowledge_scope not in {"SHARED_STANDARDS", "TENANT_PRIVATE"}
-            or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", access.knowledge_binding)
-            or access.qualification not in {"OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"}
-            or (transport is None and access.qualification != "LIVE_METADATA_VERIFIED")
-            or (access.agent_version is not None
-                and not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", access.agent_version))
-        ):
+        _validate_foundry_access(profile, access, company_id)
+        if transport is None and access.qualification != "LIVE_METADATA_VERIFIED":
             raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_INVALID")
         self.profile = profile
         self._access = access
