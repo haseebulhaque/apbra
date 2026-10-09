@@ -2,10 +2,12 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from urllib.parse import ParseResult, urlparse
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -201,6 +203,34 @@ class QualifiedIdentityProvider(BaseModel):
         return value
 
 
+class FoundryHostBinding(BaseModel):
+    """Private deployment attestation, never browser or model authorization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    company_id: UUID
+    tenant_id: UUID
+    client_id: UUID
+    home_account_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,255}$")
+    provider_profile: ProviderProfile
+    knowledge_binding: str = Field(pattern=r"^[A-Za-z0-9_.:-]{1,120}$")
+    knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
+    agent_version: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,80}$")
+    qualification: Literal["LIVE_METADATA_VERIFIED"]
+    manual_authentication_approved: bool
+    authorization_deadline: float = Field(gt=0, allow_inf_nan=False)
+
+    def binding_digest(self) -> str:
+        return hashlib.sha256(
+            json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+    def __repr__(self) -> str:
+        return "FoundryHostBinding(<private attestation>)"
+
+    def __str__(self) -> str:
+        return "<private Foundry host attestation>"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APBRA_", env_file=".env", extra="ignore")
 
@@ -227,6 +257,8 @@ class Settings(BaseSettings):
     model_provider_profile_json: str | None = None
     qualified_provider_profiles_json: str | None = None
     model_provider_api_key: SecretStr | None = None
+    foundry_host_enabled: bool = False
+    foundry_host_binding_json: SecretStr | None = Field(default=None, repr=False)
     tenant_secret_keyring_json: SecretStr | None = Field(default=None, repr=False)
     test_semantic_simulator_enabled: bool = False
     oidc_issuer: str | None = None
@@ -319,6 +351,32 @@ class Settings(BaseSettings):
         if len({profile.profile_id for profile in profiles}) != len(profiles):
             raise ProviderConfigurationError("QUALIFIED_PROFILES_DUPLICATED")
         return tuple(profiles)
+
+    def foundry_host_binding(self) -> FoundryHostBinding:
+        try:
+            if (
+                self.foundry_host_enabled is not True
+                or self.profile != "development"
+                or self.foundry_host_binding_json is None
+            ):
+                raise ValueError("Disabled host")
+            binding = FoundryHostBinding.model_validate_json(
+                self.foundry_host_binding_json.get_secret_value()
+            )
+            if (
+                binding.manual_authentication_approved is not True
+                or binding.authorization_deadline <= time.time()
+                or binding.provider_profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or not any(
+                    profile.model_dump(mode="json")
+                    == binding.provider_profile.model_dump(mode="json")
+                    for profile in self.qualified_provider_profiles()
+                )
+            ):
+                raise ValueError("Unqualified host")
+            return binding
+        except Exception:
+            raise ProviderConfigurationError("FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE") from None
 
     def model_credential(self) -> str:
         if self.model_provider_profile_json is not None and (

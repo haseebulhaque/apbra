@@ -1084,3 +1084,200 @@ def test_foundry_unknown_transport_retry_cannot_turn_known_usage_into_total() ->
     assert result.usage["total_tokens"] is None
     assert result.usage["observed_total_tokens"] == 8
     assert result.usage["total_tokens_reported_calls"] == 1
+
+
+def host_runtime_settings(**changes: Any) -> Any:
+    import time
+
+    from apbra_api.config import Settings
+
+    binding = {
+        "company_id": "00000000-0000-0000-0000-000000000001",
+        "tenant_id": "00000000-0000-0000-0000-000000000002",
+        "client_id": "00000000-0000-0000-0000-000000000003",
+        "home_account_id": "synthetic-account",
+        "provider_profile": foundry_profile().model_dump(),
+        "knowledge_binding": "synthetic-standards",
+        "knowledge_scope": "SHARED_STANDARDS",
+        "agent_version": "6",
+        "qualification": "LIVE_METADATA_VERIFIED",
+        "manual_authentication_approved": True,
+        "authorization_deadline": time.time() + 300,
+    }
+    binding.update(changes)
+    return Settings(
+        database_url="postgresql+psycopg://synthetic@127.0.0.1:15432/apbra_test",
+        session_secret="synthetic-" + "session-secret-more-than-32-characters",
+        _env_file=None,
+        foundry_host_enabled=True,
+        foundry_host_binding_json=json.dumps(binding),
+        qualified_provider_profiles_json=json.dumps([foundry_profile().model_dump()]),
+    )
+
+
+def host_runtime_module(monkeypatch: pytest.MonkeyPatch) -> Any:
+    import importlib
+    import sys
+
+    from apbra_api import api, config
+
+    configured = host_runtime_settings().model_copy(update={"foundry_host_enabled": False})
+    monkeypatch.setattr(config, "get_settings", lambda: configured)
+    monkeypatch.setattr(api, "create_app", lambda **kwargs: kwargs)
+    sys.modules.pop("apbra_api.main", None)
+    return importlib.import_module("apbra_api.main")
+
+
+def test_host_runtime_default_and_flag_only_do_not_authenticate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    calls: list[Any] = []
+    monkeypatch.setattr(module, "_device_credential", lambda **kwargs: calls.append(kwargs))
+    disabled = host_runtime_settings().model_copy(update={"foundry_host_enabled": False})
+    assert "foundry_credentials" not in module.create_runtime_app(disabled)
+    with pytest.raises(ProviderConfigurationError):
+        module.create_runtime_app(host_runtime_settings())
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"manual_authentication_approved": False},
+        {"authorization_deadline": 1},
+        {"provider_profile": profile().model_dump()},
+    ],
+)
+def test_host_runtime_unqualified_configuration_stops_before_factory(
+    monkeypatch: pytest.MonkeyPatch,
+    change: Any,
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    calls: list[Any] = []
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_device_code(
+            host_runtime_settings(**change), lambda **kwargs: calls.append(kwargs)
+        )
+    assert calls == []
+
+
+def test_host_runtime_snapshot_is_bound_expiring_and_redacted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+    from types import SimpleNamespace
+
+    from apbra_api.model_provider import FoundryMemoryTokenCredential
+
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    binding = settings.foundry_host_binding()
+    snapshot = FoundryMemoryTokenCredential(
+        SimpleNamespace(**{"token": "synthetic-private-token"}, expires_on=int(time.time() + 600)),
+        authorization_deadline=binding.authorization_deadline,
+        enabled=lambda: True,
+        binding_digest=binding.binding_digest(),
+    )
+    try:
+        token = snapshot.get_token("https://ai.azure.com/.default")
+        assert token.expires_on <= binding.authorization_deadline
+        assert "synthetic-private-token" not in repr(token)
+        assert "synthetic-private-token" not in repr(snapshot)
+        foreign = host_runtime_settings(company_id="00000000-0000-0000-0000-000000000004")
+        with pytest.raises(ProviderConfigurationError):
+            module.create_runtime_app(foreign, snapshot)
+        snapshot.close()
+        snapshot.close()
+        with pytest.raises(ProviderConfigurationError):
+            snapshot.get_token("https://ai.azure.com/.default")
+    finally:
+        snapshot.close()
+
+
+def test_host_runtime_manual_flow_closes_sdk_before_server_and_never_refreshes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import time
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    binding = settings.foundry_host_binding()
+    events: list[str] = []
+    options: dict[str, Any] = {}
+
+    class FakeSdk:
+        def authenticate(self, *, scopes: list[str]) -> Any:
+            assert scopes == ["https://ai.azure.com/.default"]
+            events.append("authenticate")
+            return SimpleNamespace(
+                tenant_id=str(binding.tenant_id),
+                client_id=str(binding.client_id),
+                home_account_id=binding.home_account_id,
+            )
+
+        def get_token(self, *scopes: str) -> Any:
+            events.append("sdk-token")
+            return SimpleNamespace(
+                **{"token": "synthetic-private-token"}, expires_on=int(time.time() + 600)
+            )
+
+        def close(self) -> None:
+            events.append("sdk-close")
+
+    def factory(**kwargs: Any) -> Any:
+        options.update(kwargs)
+        return FakeSdk()
+
+    monkeypatch.setattr(
+        module, "_private_terminal", lambda: nullcontext(SimpleNamespace(isatty=lambda: True))
+    )
+
+    def serve(app: Any, _: Any) -> None:
+        assert events == ["authenticate", "sdk-token", "sdk-close"]
+        host = app["foundry_credentials"]
+        host.resolve(binding.company_id, binding.provider_profile).credential()
+        host.resolve(binding.company_id, binding.provider_profile).credential()
+        events.append("serve")
+
+    monkeypatch.setattr(module, "_serve", serve)
+    module.run_foundry_device_code(settings, factory)
+    assert events == ["authenticate", "sdk-token", "sdk-close", "serve"]
+    assert options["disable_automatic_authentication"] is True
+    assert options["cache_persistence_options"] is None
+    assert options["enable_support_logging"] is False
+    assert options["additionally_allowed_tenants"] == []
+    assert 0 < options["timeout"] <= 300
+    assert "synthetic-private-token" not in capsys.readouterr().out
+
+
+def test_host_runtime_missing_port_blocks_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings().model_copy(update={"api_origin": "http://127.0.0.1"})
+    calls: list[Any] = []
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_device_code(settings, lambda **kwargs: calls.append(kwargs))
+    assert calls == []
+
+
+def test_host_runtime_factory_revocation_blocks_auth_and_closes_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    calls: list[str] = []
+    monkeypatch.setattr(module, "_private_terminal",
+                        lambda: nullcontext(SimpleNamespace(isatty=lambda: True)))
+    def factory(**kwargs: Any) -> Any:
+        settings.foundry_host_enabled = False
+        return SimpleNamespace(authenticate=lambda **kw: calls.append("authenticate"),
+                               get_token=lambda *args: calls.append("token"),
+                               close=lambda: calls.append("close"))
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_device_code(settings, factory)
+    assert calls == ["close"]

@@ -14,6 +14,7 @@ import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from threading import RLock, Timer
 from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 from uuid import UUID
@@ -891,6 +892,76 @@ class FoundryTokenCredential(Protocol):
     """Structural Azure TokenCredential boundary; no SDK dependency or login."""
 
     def get_token(self, *scopes: str) -> FoundryAccessToken: ...
+
+
+@dataclass(frozen=True)
+class _FoundryMemoryToken:
+    token: str = field(repr=False)
+    expires_on: int
+
+
+class FoundryMemoryTokenCredential:
+    """One approved token lease. No SDK reference, refresh or persistent cache."""
+
+    def __init__(
+        self,
+        token: FoundryAccessToken,
+        *,
+        authorization_deadline: float,
+        enabled: Callable[[], bool],
+        binding_digest: str,
+    ) -> None:
+        expiry = token.expires_on
+        if (
+            type(token.token) is not str
+            or not token.token
+            or type(expiry) not in {int, float}
+            or not math.isfinite(expiry)
+            or not math.isfinite(authorization_deadline)
+        ):
+            raise ProviderConfigurationError("FOUNDRY_CREDENTIAL_UNAVAILABLE")
+        if not re.fullmatch(r"[a-f0-9]{64}", binding_digest):
+            raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_INVALID")
+        self._binding_digest = binding_digest
+        self._lock = RLock()
+        self._token: str | None = token.token
+        self._expiry = math.floor(min(expiry, authorization_deadline))
+        self._enabled = enabled
+        self._timer = Timer(max(0, self._expiry - time.time()), self.close)
+        self._timer.daemon = True
+        if not self.ready():
+            raise ProviderConfigurationError("FOUNDRY_CREDENTIAL_UNAVAILABLE")
+        self._timer.start()
+
+    @property
+    def binding_digest(self) -> str:
+        return self._binding_digest
+
+    def ready(self) -> bool:
+        with self._lock:
+            try:
+                available = (
+                    self._token is not None
+                    and time.time() < self._expiry
+                    and self._enabled() is True
+                )
+            except Exception:
+                available = False
+            if not available:
+                self.close()
+            return available
+
+    def get_token(self, *scopes: str) -> FoundryAccessToken:
+        with self._lock:
+            if scopes != ("https://ai.azure.com/.default",) or not self.ready():
+                raise ProviderConfigurationError("FOUNDRY_CREDENTIAL_UNAVAILABLE")
+            assert self._token is not None
+            return _FoundryMemoryToken(self._token, self._expiry)
+
+    def close(self) -> None:
+        with self._lock:
+            self._token = None
+            self._timer.cancel()
 
 
 class FoundryTokenCredentialProvider:
