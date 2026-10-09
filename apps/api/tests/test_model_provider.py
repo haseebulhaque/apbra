@@ -1818,3 +1818,874 @@ def test_host_runtime_non_development_profiles_stop_before_sdk(
     with pytest.raises(ProviderConfigurationError, match="FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE"):
         module.create_runtime_app(configured)
     assert calls == []
+def qualification_settings(**changes: Any) -> Any:
+    from datetime import UTC, datetime
+
+    from apbra_api.config import Settings
+
+    values = {
+        "tenant_id": "4825d1f6-89d8-4e38-9418-2827aa59a23c",
+        "client_id": "04b07795-8ddb-461a-bbee-02f9e1bf7b46",
+        "project_endpoint": "https://s08-cloud-ai-agent-resource.services.ai.azure.com/api/projects/s08-cloud-ai-agent",
+        "agent_name": "s08-document-grounded-agent",
+        "agent_version": "6",
+        "knowledge_base": "s08-knowledge-base",
+        "agent_api_version": "v1",
+        "search_api_version": "2025-11-01-preview",
+        "manual_authentication_approved": True,
+        "independent_private_terminal_approved": True,
+        "authorization_deadline": datetime(2026, 10, 9, 18, 5, tzinfo=UTC).timestamp(),
+        "request_timeout_seconds": 30,
+        "max_metadata_response_bytes": 100000,
+        "max_projection_items": 16,
+        "max_projection_string_characters": 255,
+    }
+    values.update(changes)
+    return Settings(
+        profile="development",
+        database_url="postgresql+psycopg://synthetic@127.0.0.1:15432/apbra_test",
+        session_secret="synthetic-" + "session-secret-more-than-32-characters",
+        _env_file=None,
+        foundry_qualification_enabled=True,
+        foundry_qualification_binding_json=json.dumps(values),
+        foundry_host_enabled=False,
+    )
+
+
+def qualification_flow(monkeypatch: pytest.MonkeyPatch) -> Any:
+    import io
+    from contextlib import nullcontext
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    clock = [datetime(2026, 10, 9, 18, tzinfo=UTC).timestamp()]
+    monkeypatch.setattr(module.time, "time", lambda: clock[0])
+    configured = qualification_settings()
+    binding = configured.foundry_qualification_binding()
+    events: list[str] = []
+    options: dict[str, Any] = {}
+    receipts: list[httpx.Request] = []
+    terminal = io.StringIO()
+    monkeypatch.setattr(terminal, "isatty", lambda: True)
+    monkeypatch.setattr(
+        module, "_qualification_terminal", lambda _: nullcontext(terminal)
+    )
+    memories: list[Any] = []
+    original = module._QualificationMemory
+
+    class Memory(original):
+        def __init__(self, *args: Any) -> None:
+            super().__init__(*args)
+            memories.append(self)
+
+    monkeypatch.setattr(module, "_QualificationMemory", Memory)
+    canary = "synthetic-private-metadata-canary"
+    properties = {
+        "object": "agent",
+        "name": binding.agent_name,
+        "agent_endpoint": {
+            "version_selector": {
+                "version_selection_rules": [
+                    {
+                        "type": "FixedRatio",
+                        "agent_version": "6",
+                        "traffic_percentage": 100,
+                    },
+                ]
+            }
+        },
+        "versions": {"latest": {"version": "99"}},
+        "instructions": canary,
+    }
+    version = {
+        "object": "agent.version",
+        "name": binding.agent_name,
+        "version": "6",
+        "definition": {
+            "kind": "prompt",
+            "model": "synthetic-agent-model",
+            "instructions": canary,
+            "tools": [
+                {
+                    "type": "mcp",
+                    "server_label": "standards",
+                    "server_url": "https://synthetic-approved.search.windows.net/knowledgebases/s08-knowledge-base/mcp?api-version=2025-11-01-preview",
+                    "allowed_tools": ["knowledge_base_retrieve"],
+                    "headers": {"Authorization": canary},
+                    "authorization": canary,
+                    "project_connection_id": canary,
+                }
+            ],
+        },
+        "metadata": {"private": canary},
+    }
+    knowledge = {
+        "name": binding.knowledge_base,
+        "outputMode": "answerSynthesis",
+        "retrievalReasoningEffort": {"kind": "low"},
+        "knowledgeSources": [{"name": canary}],
+        "models": [
+            {
+                "kind": "azureOpenAI",
+                "azureOpenAIParameters": {
+                    "modelName": "synthetic-planning-model",
+                    "deploymentId": "synthetic-planning-deployment",
+                    "resourceUri": canary,
+                    "apiKey": canary,
+                },
+            }
+        ],
+        "retrievalInstructions": canary,
+        "answerInstructions": canary,
+        "encryptionKey": {"accessCredentials": {"applicationSecret": canary}},
+    }
+    state = SimpleNamespace(
+        module=module,
+        settings=configured,
+        binding=binding,
+        clock=clock,
+        events=events,
+        options=options,
+        receipts=receipts,
+        terminal=terminal,
+        properties=properties,
+        version=version,
+        knowledge=knowledge,
+        memories=memories,
+        canary=canary,
+        denied=None,
+        response=None,
+    )
+
+    def confirm(tty: Any, approval: Any, message: str, reply: str) -> None:
+        tty.write(message)
+        events.append(reply)
+        if state.denied == reply:
+            raise ProviderConfigurationError("synthetic-denied-private-confirmation")
+
+    monkeypatch.setattr(module, "_confirm_private", confirm)
+    monkeypatch.setattr(
+        module, "_serve", lambda *args: pytest.fail("Qualification served the app")
+    )
+    monkeypatch.setattr(
+        module,
+        "create_runtime_app",
+        lambda *args: pytest.fail("Qualification constructed runtime app"),
+    )
+
+    class SDK:
+        record = SimpleNamespace(
+            tenant_id=binding.tenant_id,
+            client_id=binding.client_id,
+            home_account_id="synthetic-owner-account",
+            username="owner@example.invalid",
+        )
+
+        def authenticate(self, *, scopes: list[str]) -> Any:
+            assert scopes == [module._SCOPE]
+            events.append("authenticate")
+            return self.record
+
+        def get_token(self, *scopes: str) -> Any:
+            assert len(scopes) == 1 and scopes[0] in {
+                module._SCOPE,
+                module._SEARCH_SCOPE,
+            }
+            events.append("token:" + scopes[0])
+            return SimpleNamespace(
+                **{"token": "synthetic-secret-bearer"}, expires_on=clock[0] + 600
+            )
+
+        def close(self) -> None:
+            events.append("sdk-close")
+
+    sdk = SDK()
+    state.sdk = sdk
+
+    def factory(**kwargs: Any) -> Any:
+        events.append("sdk-factory")
+        options.update(kwargs)
+        return sdk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        receipts.append(request)
+        events.append("GET:" + request.url.path)
+        assert request.method == "GET"
+        assert request.headers["Authorization"] == "Bearer synthetic-secret-bearer"
+        if state.response is not None:
+            return state.response(request)
+        if "/versions/6" in request.url.path:
+            return httpx.Response(200, json=state.version)
+        if "knowledgebases" in request.url.path:
+            return httpx.Response(200, json=state.knowledge)
+        return httpx.Response(200, json=state.properties)
+
+    clients: list[httpx.Client] = []
+
+    def client_factory(**kwargs: Any) -> httpx.Client:
+        assert kwargs["trust_env"] is False and kwargs["follow_redirects"] is False
+        assert kwargs["verify"] is True
+        client = httpx.Client(transport=httpx.MockTransport(handler), **kwargs)
+        clients.append(client)
+        return client
+
+    state.factory = factory
+    state.client_factory = client_factory
+    state.clients = clients
+    return state
+
+
+def run_qualification(state: Any) -> dict[str, Any]:
+    return state.module.run_foundry_qualification(
+        state.settings, state.factory, state.client_factory
+    )
+
+
+def assert_qualification_cleanup(state: Any) -> None:
+    assert state.events.count("sdk-close") == 1
+    assert all(client.is_closed for client in state.clients)
+    for memory in state.memories:
+        assert memory._sdk is None and memory._client is None
+        assert memory._record is None and memory._account is None
+        assert (
+            memory._tokens == {} and memory._documents == [] and memory._buffers == []
+        )
+        assert memory._closed
+
+
+def test_qualification_exact_three_gets_private_confirmations_and_safe_projection(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    result = run_qualification(state)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["observedEndpointSelector"] == [
+        {"type": "FixedRatio", "version": "6", "trafficPercentage": 100},
+    ]
+    assert (
+        result["observedVersion"] == "6"
+    )  # versions.latest=99 is deliberately ignored.
+    assert result["modelDeployment"] == "synthetic-agent-model"
+    assert result["storedInstructionUtf8Bytes"] == len(state.canary.encode("utf-8"))
+    assert result["retrievalInstructionUtf8Bytes"] == len(state.canary.encode("utf-8"))
+    assert result["answerInstructionUtf8Bytes"] == len(state.canary.encode("utf-8"))
+    assert result["responseConfigurationUtf8Bytes"] == {"response_format": None, "text": None}
+    assert result["models"][0]["deploymentId"] == "synthetic-planning-deployment"
+    assert result["knowledgeSourceMaxSubQueries"] == [None]
+    assert result["numericCaps"] is None and result["retrieveDefaults"] is None
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert not any(
+        result[key]
+        for key in (
+            "routingVerified",
+            "groundingVerified",
+            "tenantIsolationVerified",
+            "runtimeActivated",
+        )
+    )
+    assert len(state.receipts) == 3
+    assert [str(receipt.url) for receipt in state.receipts] == [
+        state.binding.project_endpoint
+        + "/agents/s08-document-grounded-agent?api-version=v1",
+        state.binding.project_endpoint
+        + "/agents/s08-document-grounded-agent/versions/6?api-version=v1",
+        "https://synthetic-approved.search.windows.net/knowledgebases('s08-knowledge-base')?api-version=2025-11-01-preview",
+    ]
+    assert state.events.index("CONFIRM ACCOUNT") < state.events.index(
+        "token:" + state.module._SCOPE
+    )
+    assert state.events.index("CONFIRM SEARCH") < state.events.index(
+        "token:" + state.module._SEARCH_SCOPE
+    )
+    assert state.options["tenant_id"] == state.binding.tenant_id
+    assert state.options["client_id"] == state.binding.client_id
+    assert state.options["cache_persistence_options"] is None
+    assert state.options["disable_automatic_authentication"] is True
+    assert state.options["additionally_allowed_tenants"] == []
+    assert state.options["retry_total"] == 0
+    assert state.options["read_timeout"] <= state.binding.request_timeout_seconds
+    output = capsys.readouterr()
+    projection = json.dumps(result)
+    for private in (
+        state.canary,
+        "owner@example.invalid",
+        "synthetic-owner-account",
+        "synthetic-secret-bearer",
+    ):
+        assert private not in projection + output.out + output.err + caplog.text
+    assert "owner@example.invalid" in state.terminal.getvalue()
+    assert "synthetic-owner-account" not in state.terminal.getvalue()
+    assert_qualification_cleanup(state)
+    assert state.settings.foundry_host_enabled is False
+    assert state.settings.foundry_host_binding_json is None
+
+
+@pytest.mark.parametrize(
+    "reply", ["CONFIRM PRIVATE TERMINAL", "CONFIRM ACCOUNT", "CONFIRM SEARCH"]
+)
+def test_qualification_declined_confirmation_stops_next_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+    reply: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    state.denied = reply
+    with pytest.raises(
+        ProviderConfigurationError, match="^FOUNDRY_QUALIFICATION_UNAVAILABLE$"
+    ):
+        run_qualification(state)
+    if reply == "CONFIRM PRIVATE TERMINAL":
+        assert state.events == [reply]
+    else:
+        assert_qualification_cleanup(state)
+    if reply == "CONFIRM ACCOUNT":
+        assert state.receipts == []
+        assert not any(event.startswith("token:") for event in state.events)
+    if reply == "CONFIRM SEARCH":
+        assert len(state.receipts) == 2
+        assert "token:" + state.module._SEARCH_SCOPE not in state.events
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "client_id", "home_account_id"])
+def test_qualification_wrong_account_stops_before_get(
+    monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    state = qualification_flow(monkeypatch)
+    setattr(state.sdk.record, field, "foreign account")
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert state.receipts == []
+    assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"tenant_id": "00000000-0000-0000-0000-000000000002"},
+        {"client_id": "00000000-0000-0000-0000-000000000003"},
+        {"agent_name": "foreign-agent"},
+        {"agent_version": "7"},
+        {"knowledge_base": "foreign-kb"},
+        {"project_endpoint": "https://foreign.invalid/api/projects/s08-cloud-ai-agent"},
+        {"agent_api_version": "foreign"},
+        {"search_api_version": "foreign"},
+        {"manual_authentication_approved": False},
+        {"independent_private_terminal_approved": False},
+        {"authorization_deadline": 1},
+        {"authorization_deadline": 9999999999},
+    ],
+)
+def test_qualification_configuration_failures_do_not_construct_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    change: Any,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    state.settings = qualification_settings(**change)
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert state.events == [] and state.receipts == []
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "properties-name",
+        "version-name",
+        "version",
+        "selector",
+        "kb",
+        "tool-kb",
+        "tool-url",
+        "tools-null",
+    ],
+)
+def test_qualification_resource_mismatch_fails_without_followup_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    if target == "properties-name":
+        state.properties["name"] = "foreign-agent"
+    elif target == "version-name":
+        state.version["name"] = "foreign-agent"
+    elif target == "version":
+        state.version["version"] = "7"
+    elif target == "selector":
+        state.properties["agent_endpoint"] = {}
+    elif target == "kb":
+        state.knowledge["name"] = "foreign-kb"
+    elif target == "tools-null":
+        state.version["definition"]["tools"][0]["allowed_tools"] = None
+    elif target == "tool-kb":
+        state.version["definition"]["tools"][0]["server_url"] = (
+            "https://synthetic-approved.search.windows.net/knowledgebases/foreign-kb/mcp"
+        )
+    else:
+        state.version["definition"]["tools"][0]["server_url"] = (
+            "https://private.invalid/knowledgebases/s08-knowledge-base/mcp"
+        )
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert len(state.receipts) == (3 if target == "kb" else 2)
+    if target != "kb":
+        assert "token:" + state.module._SEARCH_SCOPE not in state.events
+    assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "redirect",
+        "denied",
+        "oversize",
+        "malformed",
+        "duplicate",
+        "deep",
+        "digits",
+        "array",
+    ],
+)
+def test_qualification_untrusted_metadata_is_bounded_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    response: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    contents = {
+        "malformed": b'{"secret":',
+        "duplicate": b'{"name":"a","name":"b"}',
+        "deep": b"[" * 2000 + b"0" + b"]" * 2000,
+        "digits": b'{"number":' + b"1" * 5000 + b"}",
+        "array": b"[]",
+        "oversize": b"x" * (state.binding.max_metadata_response_bytes + 1),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if response == "redirect":
+            return httpx.Response(302, headers={"Location": "https://private.invalid"})
+        if response == "denied":
+            return httpx.Response(403, json={"error": state.canary})
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=contents[response],
+        )
+
+    state.response = handler
+    with pytest.raises(
+        ProviderConfigurationError, match="^FOUNDRY_QUALIFICATION_UNAVAILABLE$"
+    ):
+        run_qualification(state)
+    assert len(state.receipts) == 1
+    assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize(
+    "phase", ["factory", "authenticate", "foundry-token", "search-token", "close"]
+)
+def test_qualification_sdk_failures_suppress_emitted_logs_and_clear_state(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+    phase: str,
+) -> None:
+    import logging
+    import traceback
+
+    state = qualification_flow(monkeypatch)
+    previous = logging.root.manager.disable
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        logger = logging.getLogger("azure.identity.synthetic.qualification.new")
+        logger.setLevel(logging.DEBUG)
+        monkeypatch.setattr(logger, "handlers", [caplog.handler])
+        monkeypatch.setattr(logger, "propagate", False)
+        logger.warning("%s", state.canary)
+        raise RuntimeError(state.canary)
+
+    if phase == "factory":
+        state.factory = fail
+    elif phase == "authenticate":
+        monkeypatch.setattr(state.sdk, "authenticate", fail)
+    elif phase == "close":
+        original = state.sdk.close
+
+        def close() -> None:
+            original()
+            fail()
+
+        monkeypatch.setattr(state.sdk, "close", close)
+    else:
+        original = state.sdk.get_token
+
+        def token(*scopes: str) -> Any:
+            if (scopes[0] == state.module._SEARCH_SCOPE) == (phase == "search-token"):
+                return fail()
+            return original(*scopes)
+
+        monkeypatch.setattr(state.sdk, "get_token", token)
+    with pytest.raises(ProviderConfigurationError) as caught:
+        run_qualification(state)
+    output = capsys.readouterr()
+    rendered = "".join(traceback.format_exception(caught.value))
+    assert state.canary not in rendered + output.out + output.err + caplog.text
+    assert logging.root.manager.disable == previous
+    if phase != "factory":
+        assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize(
+    "stage,action", [
+        (stage, action)
+        for stage in ("factory", "authenticate", "token", "first-get", "second-get", "third-get")
+        for action in ("expire", "revoke", "change-account")
+        if not (action == "change-account" and stage in {"factory", "authenticate"})
+    ],
+)
+def test_qualification_deadline_revocation_account_changes_stop_operations(
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    action: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+
+    def change() -> None:
+        if action == "expire":
+            state.clock[0] = state.binding.authorization_deadline
+        elif action == "revoke":
+            state.settings.foundry_qualification_enabled = False
+        else:
+            state.sdk.record.home_account_id = "synthetic-other-account"
+
+    if stage == "factory":
+        original = state.factory
+
+        def factory(**kwargs: Any) -> Any:
+            sdk = original(**kwargs)
+            change()
+            return sdk
+
+        state.factory = factory
+    elif stage in {"authenticate", "token"}:
+        operation = "authenticate" if stage == "authenticate" else "get_token"
+        original = getattr(state.sdk, operation)
+
+        def altered(*args: Any, **kwargs: Any) -> Any:
+            value = original(*args, **kwargs)
+            change()
+            return value
+
+        monkeypatch.setattr(state.sdk, operation, altered)
+    else:
+        boundary = {"first-get": 1, "second-get": 2, "third-get": 3}[stage]
+
+        def response(request: httpx.Request) -> httpx.Response:
+            if len(state.receipts) == boundary:
+                change()
+            value = (
+                state.knowledge
+                if "knowledgebases" in request.url.path
+                else (
+                    state.version
+                    if "versions" in request.url.path
+                    else state.properties
+                )
+            )
+            return httpx.Response(200, json=value)
+
+        state.response = response
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert_qualification_cleanup(state)
+    expected = {
+        "factory": 0,
+        "authenticate": 0,
+        "token": 0,
+        "first-get": 1,
+        "second-get": 2,
+        "third-get": 3,
+    }[stage]
+    assert len(state.receipts) == expected
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "CODEX_THREAD_ID",
+        "CODEX_SESSION_ID",
+        "CODEX_CI",
+        "GITHUB_ACTIONS",
+        "CI",
+        "SSH_CONNECTION",
+        "SSH_TTY",
+        "TMUX",
+        "STY",
+    ],
+)
+def test_qualification_captured_terminal_markers_stop_before_process_sdk_or_challenge(
+    monkeypatch: pytest.MonkeyPatch,
+    marker: str,
+) -> None:
+    from datetime import UTC, datetime
+
+    module = host_runtime_module(monkeypatch)
+    monkeypatch.setattr(
+        module.time, "time", lambda: datetime(2026, 10, 9, 18, tzinfo=UTC).timestamp()
+    )
+    monkeypatch.setenv(marker, "synthetic-captured")
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        module.subprocess, "run", lambda *args, **kwargs: calls.append("process")
+    )
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_qualification(
+            qualification_settings(), lambda **kwargs: calls.append("sdk")
+        )
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "ancestry,allowed",
+    [
+        (
+            [
+                "20 python3",
+                "30 zsh",
+                "1 /Applications/Utilities/Terminal.app/Contents/MacOS/Terminal",
+            ],
+            True,
+        ),
+        (
+            ["20 python3", "30 zsh", "1 /Applications/iTerm.app/Contents/MacOS/iTerm2"],
+            True,
+        ),
+        (["20 python3", "30 zsh", "1 launchd"], False),
+        (
+            [
+                "20 python3",
+                "30 /Applications/Codex.app/Contents/MacOS/Codex",
+                "1 Terminal",
+            ],
+            False,
+        ),
+        (["20 python3", "30 Terminal", "1 Electron"], False),
+        (["20 python3", "30 sshd", "1 Terminal"], False),
+        (["10 python3"], False),
+        (["invalid-process-private-canary"], False),
+    ],
+)
+def test_qualification_terminal_provenance_requires_bounded_owner_os_ancestry(
+    monkeypatch: pytest.MonkeyPatch,
+    ancestry: list[str],
+    allowed: bool,
+) -> None:
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    monkeypatch.setattr(
+        module.time, "time", lambda: datetime(2026, 10, 9, 18, tzinfo=UTC).timestamp()
+    )
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module.os, "getpid", lambda: 10)
+    for marker in module._CAPTURED_TERMINAL_MARKERS:
+        monkeypatch.delenv(marker, raising=False)
+    calls: list[Any] = []
+    sequence = iter(ancestry)
+
+    def process(arguments: Any, **kwargs: Any) -> Any:
+        calls.append(arguments)
+        assert arguments[:4] == ["/bin/ps", "-o", "ppid=,comm=", "-p"]
+        assert arguments[4].isdigit()
+        assert kwargs["capture_output"] is True
+        return SimpleNamespace(stdout=next(sequence))
+
+    monkeypatch.setattr(module.subprocess, "run", process)
+    if allowed:
+        module._owner_terminal_provenance(
+            qualification_settings().foundry_qualification_binding()
+        )
+    else:
+        with pytest.raises(ProviderConfigurationError):
+            module._owner_terminal_provenance(
+                qualification_settings().foundry_qualification_binding()
+            )
+    assert len(calls) <= 16
+
+
+def test_qualification_private_confirmation_is_explicit_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import io
+
+    state = qualification_flow(monkeypatch)
+    # Exercise the production helper separately; fixture confirms only synthetic driver steps.
+    source = state.module._confirm_private
+    assert callable(source)
+    import importlib.util
+    from pathlib import Path
+
+    # Its code is not copied: reload a fresh module with the same mocked ordinary startup.
+    spec = importlib.util.spec_from_file_location(
+        "apbra_api.synthetic_private_confirmation", Path(state.module.__file__)
+    )
+    actual = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(actual)
+    terminal = io.StringIO("CONFIRM ACCOUNT\n")
+    monkeypatch.setattr(terminal, "isatty", lambda: True)
+    monkeypatch.setattr(terminal, "fileno", lambda: 99)
+    characters = iter(b"CONFIRM ACCOUNT\n")
+    monkeypatch.setattr(actual.os, "read", lambda *args: bytes([next(characters)]))
+    monkeypatch.setattr(actual.select, "select", lambda *args: ([terminal], [], []))
+    # Writes should not consume the simulated owner's input.
+    writes: list[str] = []
+    monkeypatch.setattr(terminal, "write", lambda text: writes.append(text))
+    actual._confirm_private(
+        terminal, state.binding, "Selected synthetic account", "CONFIRM ACCOUNT"
+    )
+    assert writes and "CONFIRM ACCOUNT" in writes[0]
+    terminal.seek(0)
+    monkeypatch.setattr(actual.select, "select", lambda *args: ([], [], []))
+    with pytest.raises(ProviderConfigurationError):
+        actual._confirm_private(
+            terminal, state.binding, "Selected synthetic account", "CONFIRM ACCOUNT"
+        )
+
+
+@pytest.mark.parametrize(
+    "scope,url",
+    [
+        ("https://ai.azure.com/.default", "https://foreign.invalid/agents/x"),
+        (
+            "https://ai.azure.com/.default",
+            "https://synthetic-approved.search.windows.net/knowledgebases('s08-knowledge-base')?api-version=2025-11-01-preview",
+        ),
+        (
+            "https://search.azure.com/.default",
+            "https://s08-cloud-ai-agent-resource.services.ai.azure.com/api/projects/s08-cloud-ai-agent/agents/s08-document-grounded-agent?api-version=v1",
+        ),
+    ],
+)
+def test_qualification_memory_whitelist_blocks_unknown_url_or_audience_before_client(
+    monkeypatch: pytest.MonkeyPatch,
+    scope: str,
+    url: str,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    with state.module._private_sdk_logging():
+        memory = state.module._QualificationMemory(state.settings, state.binding)
+        try:
+            memory.install_sdk(state.sdk)
+            memory.authenticate()
+            memory.confirm_account()
+            memory.acquire(state.module._SCOPE)
+            with pytest.raises(ProviderConfigurationError):
+                memory.get(
+                    url,
+                    scope,
+                    lambda **kwargs: pytest.fail("Unknown URL constructed a client"),
+                )
+            with pytest.raises(ProviderConfigurationError):
+                memory.acquire(state.module._SEARCH_SCOPE)
+        finally:
+            memory.close()
+    assert state.receipts == []
+    assert_qualification_cleanup(state)
+
+
+def test_qualification_idle_deadline_clears_private_memory_without_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    timers: list[Any] = []
+
+    class Timer:
+        def __init__(self, delay: float, callback: Any) -> None:
+            self.delay = delay
+            self.callback = callback
+            self.daemon = False
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self) -> None:
+            pass
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    monkeypatch.setattr(state.module, "Timer", Timer)
+    with state.module._private_sdk_logging():
+        memory = state.module._QualificationMemory(state.settings, state.binding)
+        memory.install_sdk(state.sdk)
+        memory.authenticate()
+        memory.confirm_account()
+        memory.acquire(state.module._SCOPE)
+        state.clock[0] = state.binding.authorization_deadline
+        timers[-1].callback()
+        assert_qualification_cleanup(state)
+        assert timers[-1].cancelled
+        with pytest.raises(ProviderConfigurationError):
+            memory.acquire(state.module._SEARCH_SCOPE)
+        memory.close()
+    assert state.events.count("sdk-close") == 1
+
+
+def test_qualification_safe_observed_caps_preserve_unknown_and_do_not_qualify_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = qualification_flow(monkeypatch)
+    state.knowledge["knowledgeSources"][0]["maxSubQueries"] = 4
+    state.knowledge["retrieveDefaults"] = {
+        "maxRuntimeInSeconds": 30,
+        "maxOutputSize": 2000,
+        "privateInstructions": state.canary,
+    }
+    result = run_qualification(state)
+    assert result["knowledgeSourceMaxSubQueries"] == [4]
+    assert result["numericCaps"] == {"maxRuntimeInSeconds": 30, "maxOutputSize": 2000}
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert state.canary not in json.dumps(result)
+    assert_qualification_cleanup(state)
+
+
+def test_qualification_flag_does_not_authenticate_or_export_runtime_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        module, "_device_credential", lambda **kwargs: calls.append("sdk")
+    )
+    monkeypatch.setattr(
+        module, "_QualificationMemory", lambda *args: calls.append("memory")
+    )
+    configured = qualification_settings()
+    application = module.create_runtime_app(configured)
+    assert "foundry_credentials" not in application
+    assert configured.foundry_host_binding_json is None
+    assert calls == []
+
+
+def test_qualification_cli_selects_discovery_only_and_rejects_ambiguous_modes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    calls: list[str] = []
+    monkeypatch.setattr(module.sys, "argv", ["apbra-api", "--foundry-qualify"])
+
+    def qualify() -> dict[str, str]:
+        calls.append("qualification")
+        return {"status": "METADATA_OBSERVED_ONLY"}
+
+    monkeypatch.setattr(module, "run_foundry_qualification", qualify)
+    monkeypatch.setattr(module, "run_foundry_device_code", lambda: calls.append("host"))
+    module.main()
+    assert calls == ["qualification"]
+    assert json.loads(capsys.readouterr().out) == {"status": "METADATA_OBSERVED_ONLY"}
+    monkeypatch.setattr(
+        module.sys, "argv", ["apbra-api", "--foundry-qualify", "--foundry-device-code"]
+    )
+    with pytest.raises(SystemExit) as caught:
+        module.main()
+    assert caught.value.code == 2
+    assert calls == ["qualification"]
