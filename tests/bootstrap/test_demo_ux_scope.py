@@ -34,7 +34,15 @@ class DemoUXScopeTests(unittest.TestCase):
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             source = ROOT / name
-            if source.exists():
+            if name == "apps/web/vite.config.ts" and source.exists():
+                current = source.read_bytes()
+                before = b"'/api/tenant-settings':proxy,'/api/health':proxy"
+                after = b"'/api/tenant-settings':proxy,'^/api/workspace/branding(?:\\\\?|$)':proxy,'/api/health':proxy"
+                self.assertIn(hashlib.sha256(current).hexdigest(),
+                              {c.DEMO_UX_VITE_ORIGINAL_SHA256, c.DEMO_UX_VITE_PROXY_SHA256})
+                # Both accepted pre/post-product trees use the original registration fixture.
+                target.write_bytes(current.replace(after, before))
+            elif source.exists():
                 shutil.copyfile(source, target)
             else:
                 target.write_text("APBRA-160 fixture\n")
@@ -47,7 +55,7 @@ class DemoUXScopeTests(unittest.TestCase):
             changed_paths=set(paths),
         )[0]
 
-    def test_exact_seventeen_paths_sources_and_hashes(self):
+    def test_exact_eighteen_paths_sources_and_hashes(self):
         expected = {
             "apps/api/src/apbra_api/api.py", "apps/api/src/apbra_api/tenant_settings.py",
             "apps/api/tests/test_tenant_settings.py",
@@ -58,10 +66,11 @@ class DemoUXScopeTests(unittest.TestCase):
             "apps/web/src/durableGeneration.test.tsx", "apps/web/src/style.css",
             "apps/web/e2e/private-case.spec.ts", "apps/web/e2e/tenant-settings.spec.ts",
             "apps/web/e2e/durable-conversation.spec.ts", "apps/web/e2e/protected-generation.spec.ts",
+            "apps/web/vite.config.ts",
         }
         self.assertEqual(c.DEMO_UX_PATHS, expected)
         self.assertEqual(set(self.task["allowed_paths"]), expected)
-        self.assertEqual(len(self.task["allowed_paths"]), 17)
+        self.assertEqual(len(self.task["allowed_paths"]), 18)
         self.assertTrue(all("*" not in path for path in self.task["allowed_paths"]))
         self.assertEqual(self.task["branch"], c.DEMO_UX_BRANCH)
         self.assertEqual(self.task["base_commit"], "6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7")
@@ -84,7 +93,10 @@ class DemoUXScopeTests(unittest.TestCase):
             self.copy_repository(root)
             self.assertEqual(self.check(root, c.DEMO_UX_REGISTRATION_PATHS,
                                         c.DEMO_UX_REGISTRATION_BRANCH), [])
+            original = (root / "apps/web/vite.config.ts").read_bytes()
+            (root / "apps/web/vite.config.ts").write_bytes(self.proxy_bytes(original))
             self.assertEqual(self.check(root, c.DEMO_UX_PATHS), [])
+            (root / "apps/web/vite.config.ts").write_bytes(original)
             for omitted in c.DEMO_UX_REGISTRATION_PATHS:
                 errors = self.check(root, c.DEMO_UX_REGISTRATION_PATHS - {omitted},
                                     c.DEMO_UX_REGISTRATION_BRANCH)
@@ -96,6 +108,48 @@ class DemoUXScopeTests(unittest.TestCase):
                 self.assertTrue(errors)
             errors = self.check(root, {self.task_path})
             self.assertIn("APBRA-160 demo UX implementation cannot change governance files", errors)
+
+    @staticmethod
+    def proxy_bytes(original):
+        before = b"'/api/tenant-settings':proxy,'/api/health':proxy"
+        after = b"'/api/tenant-settings':proxy,'^/api/workspace/branding(?:\\\\?|$)':proxy,'/api/health':proxy"
+        assert original.count(before) == 2
+        return original.replace(before, after)
+
+    def test_proxy_exception_allows_only_exact_bindings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            path = root / "apps/web/vite.config.ts"
+            original = path.read_bytes()
+            proposed = self.proxy_bytes(original)
+            self.assertEqual(hashlib.sha256(original).hexdigest(), c.DEMO_UX_VITE_ORIGINAL_SHA256)
+            self.assertEqual(hashlib.sha256(proposed).hexdigest(), c.DEMO_UX_VITE_PROXY_SHA256)
+            self.assertNotIn("apps/web/vite.config.ts", self.task["restricted_paths"])
+            self.assertEqual(self.check(root, {"apps/web/src/privateCases.tsx"}), [])
+            self.assertTrue(self.check(root, {"apps/web/vite.config.ts"}))
+            path.write_bytes(proposed)
+            self.assertEqual(self.check(root, {"apps/web/vite.config.ts"}), [])
+            self.assertTrue(self.check(root, c.DEMO_UX_REGISTRATION_PATHS,
+                                       c.DEMO_UX_REGISTRATION_BRANCH))
+            mutations = (
+                proposed.replace(b"^/api/workspace/branding", b"/api/workspace"),
+                proposed.replace(b"(?:\\\\?|$)", b""),
+                proposed.replace(b"http://127.0.0.1:8000", b"http://127.0.0.1:9000"),
+                proposed.replace(b"local-azure-ai-adapter", b"changed-ai-adapter"),
+                proposed.replace(b"changeOrigin:false", b"changeOrigin:true"),
+                proposed.replace(b"'/api/health':proxy", b"'/api':proxy"),
+                proposed + b"// unrelated edit\n",
+            )
+            for mutated in mutations:
+                with self.subTest(digest=hashlib.sha256(mutated).hexdigest()):
+                    self.assertNotEqual(mutated, proposed)
+                    path.write_bytes(mutated)
+                    for paths in ({"apps/web/vite.config.ts"}, {"apps/web/src/privateCases.tsx"}):
+                        self.assertIn("APBRA-160 Vite must preserve the exact accepted proxy-only bytes",
+                                      self.check(root, paths))
+            path.unlink()
+            self.assertTrue(self.check(root, {"apps/web/vite.config.ts"}))
 
     def test_member_branding_exception_is_finite_and_read_only(self):
         requirement = self.task["requirements"][-1]
