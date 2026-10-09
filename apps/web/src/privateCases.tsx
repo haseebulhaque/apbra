@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {ApiError,authApi,casesApi,companiesApi,invitationsApi,membershipsApi,profileApi,tenantSettingsApi,type CaseAccess,type CaseRecord,type CaseSummary,type IdentityProviders,type IssuedInvitation,type Membership,type RequestVersion,type Session} from './api';
+import {ApiError,authApi,casesApi,companiesApi,invitationsApi,membershipsApi,profileApi,workspaceBrandingApi,type CaseAccess,type CaseRecord,type CaseSummary,type IdentityProviders,type IssuedInvitation,type Membership,type RequestVersion,type Session} from './api';
 import {DurableConversation} from './durableConversation';
 
 type Notice={tone:'info'|'error'|'success';text:string}|null;
@@ -158,8 +158,8 @@ export function PrivateCaseWorkspace({adminPanel}:{adminPanel?:(membershipId:str
   },[session?.actor?.membership_id]);
   useEffect(()=>{
     let current=true;const actor=session?.actor;
-    if(!actor||!['COMPANY_OWNER','COMPANY_ADMIN'].includes(actor.role)){setPresentationBranding(null);return}
-    void tenantSettingsApi.current().then(version=>{if(current)syncPresentationBranding(version.settings.generation_policy.branding,version.version)}).catch(()=>{/* Retain the last successful company-scoped palette during a transient read failure. */});
+    if(!actor){setPresentationBranding(null);return}
+    void workspaceBrandingApi.current().then(branding=>{if(current)syncPresentationBranding({primary:branding.primary,accent:branding.accent},branding.version)}).catch(()=>{/* Retain the last successful company-scoped palette during a transient read failure. */});
     return()=>{current=false};
   },[session?.actor?.membership_id,session?.actor?.role,syncPresentationBranding]);
   const clearCompanyContext=()=>{const cleared=clearedCompanyContext();contextEpoch.current+=1;openRequest.current+=1;createRequest.current=null;setActive(cleared.active);setVersions(cleared.versions);setDraft(cleared.draft);setCases(cleared.cases);setView(cleared.view);setCaseReportReady(cleared.caseReportReady);setNewRequest(cleared.newRequest)};

@@ -6,6 +6,7 @@ import base64
 import json
 import secrets
 from copy import deepcopy
+from uuid import UUID
 
 import pytest
 from conftest import csrf, sign_in
@@ -22,6 +23,7 @@ from apbra_api.persistence import (
     Database,
     ExternalIdentityRow,
     MembershipRow,
+    SessionRow,
     TenantSettingsCurrentRow,
     TenantSettingsVersionRow,
 )
@@ -29,6 +31,150 @@ from apbra_api.tenant_settings import (
     create_private_preview_initial_settings,
     private_preview_onboarding_settings_v1,
 )
+
+
+@pytest.mark.parametrize("role", ["COMPANY_OWNER", "COMPANY_ADMIN", "MEMBER", "EXPERT"])
+def test_workspace_branding_projects_only_own_rendering_values_without_writes(
+    client: TestClient, database: Database, role: str,
+) -> None:
+    sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    history = client.get("/api/tenant-settings/history").json()
+    member = sign_in(client, "member")
+    with database.session() as db:
+        row = db.get(MembershipRow, UUID(member["actor"]["membership_id"]))
+        assert row is not None
+        row.role = role
+        db.commit()
+    response = client.get("/api/workspace/branding")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "version": before["version"],
+        "primary": before["settings"]["generation_policy"]["branding"]["primary"],
+        "accent": before["settings"]["generation_policy"]["branding"]["accent"],
+    }
+    if role in {"MEMBER", "EXPERT"}:
+        for path in ("", "/history", "/qualified-profiles"):
+            assert client.get("/api/tenant-settings" + path).status_code == 403
+        assert client.put("/api/tenant-settings", headers=csrf(member), json={
+            "settings": before["settings"], "expected_version": before["version"],
+        }).status_code == 403
+        assert client.patch(
+            "/api/tenant-settings/sections/branding_organisation", headers=csrf(member),
+            json={"expected_version": before["version"], "changes": {
+                "generation_policy.branding": {
+                    **before["settings"]["generation_policy"]["branding"],
+                    "primary": "#FF0000",
+                },
+            }},
+        ).status_code == 403
+    sign_in(client, "owner")
+    assert client.get("/api/tenant-settings").json() == before
+    assert client.get("/api/tenant-settings/history").json() == history
+
+
+@pytest.mark.parametrize(
+    "inactive", ["membership", "company", "identity", "selection", "wrong_identity"],
+)
+def test_workspace_branding_requires_current_active_session_membership(
+    client: TestClient, database: Database, inactive: str,
+) -> None:
+    assert client.get("/api/workspace/branding").status_code == 401
+    member = sign_in(client, "member")
+    with database.session() as db:
+        membership = db.get(MembershipRow, UUID(member["actor"]["membership_id"]))
+        assert membership is not None
+        membership.role = "EXPERT"  # Expert membership is subject to the same active binding.
+        if inactive == "membership":
+            membership.active = False
+        elif inactive == "company":
+            company = db.get(CompanyRow, membership.company_id)
+            assert company is not None
+            company.active = False
+        elif inactive == "identity":
+            identity = db.get(ExternalIdentityRow, membership.identity_id)
+            assert identity is not None
+            identity.active = False
+        else:
+            session = db.scalar(
+                select(SessionRow).where(SessionRow.identity_id == membership.identity_id)
+            )
+            assert session is not None
+            if inactive == "selection":
+                session.membership_id = None
+            else:
+                foreign = db.scalar(
+                    select(MembershipRow).where(MembershipRow.company_id != membership.company_id)
+                )
+                assert foreign is not None
+                session.membership_id = foreign.id
+        db.commit()
+    response = client.get("/api/workspace/branding")
+    assert response.status_code == 401
+    assert set(response.json()) == {"error"}
+
+
+def test_workspace_branding_cannot_select_another_company_or_modify_branding(
+    client: TestClient,
+) -> None:
+    owner = sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    foreign = sign_in(client, "foreign")
+    assert client.patch(
+        "/api/tenant-settings/sections/branding_organisation", headers=csrf(foreign),
+        json={"expected_version": 1, "changes": {"generation_policy.branding": {
+            **before["settings"]["generation_policy"]["branding"], "primary": "#654321",
+        }}},
+    ).status_code == 200
+    assert client.get("/api/workspace/branding").json()["primary"] == "#654321"
+    sign_in(client, "member")
+    assert client.get("/api/workspace/branding").json()["primary"] == (
+        before["settings"]["generation_policy"]["branding"]["primary"]
+    )
+    for query in (
+        {"company_id": foreign["actor"]["company_id"]}, {"tenant": "other"}, {"fields": "settings"},
+    ):
+        response = client.get("/api/workspace/branding", params=query)
+        assert response.status_code == 422
+        assert set(response.json()) == {"error"}
+    for method in ("post", "put", "patch", "delete"):
+        assert getattr(client, method)("/api/workspace/branding").status_code == 405
+    sign_in(client, "owner")
+    assert client.get("/api/tenant-settings").json() == before
+    assert owner["actor"]["company_id"] != foreign["actor"]["company_id"]
+
+
+def test_workspace_branding_follows_only_the_explicitly_selected_owned_membership(
+    client: TestClient, database: Database,
+) -> None:
+    member = sign_in(client, "member")
+    original_membership = member["actor"]["membership_id"]
+    with database.session() as db:
+        foreign = db.scalar(
+            select(CompanyRow).where(CompanyRow.id != UUID(member["actor"]["company_id"]))
+        )
+        assert foreign is not None
+        other = MembershipRow(
+            company_id=foreign.id, identity_id=UUID(member["actor"]["identity_id"]), role="MEMBER",
+        )
+        db.add(other)
+        db.commit()
+        other_membership = str(other.id)
+    session = sign_in(client, "member")
+    assert session["membership_state"] == "COMPANY_SELECTION_REQUIRED"
+    assert client.get("/api/workspace/branding").status_code == 401
+    for membership_id in (original_membership, other_membership, original_membership):
+        selected = client.post(
+            "/api/auth/select-company", headers=csrf(session),
+            json={"membership_id": membership_id},
+        )
+        assert selected.status_code == 200
+        state = client.get("/api/auth/session").json()
+        assert state["actor"]["membership_id"] == membership_id
+        response = client.get("/api/workspace/branding")
+        assert response.status_code == 200
+        assert set(response.json()) == {"version", "primary", "accent"}
 
 
 def test_section_update_preserves_unrelated_settings_and_versions(client: TestClient) -> None:

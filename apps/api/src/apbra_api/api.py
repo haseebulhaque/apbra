@@ -458,6 +458,18 @@ def create_app(
             ),
         }
 
+    @app.get("/api/workspace/branding")
+    def workspace_branding(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        snapshot = tenant_snapshot(db, actor)
+        branding = snapshot.settings.generation_policy.branding
+        response.headers["Cache-Control"] = "no-store"
+        return {"version": snapshot.version, "primary": branding.primary, "accent": branding.accent}
+
     @app.get("/api/tenant-settings")
     def get_tenant_settings(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)

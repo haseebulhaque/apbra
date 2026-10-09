@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi} from './api';
+import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -10,6 +10,19 @@ const inspectPlaywrightConfig=(databaseUrl:string,environment:Record<string,stri
   cwd:fileURLToPath(new URL('..',import.meta.url)),
   encoding:'utf8',
   env:{...process.env,PGHOST:undefined,PGHOSTADDR:undefined,PGPORT:undefined,PGDATABASE:undefined,PGSERVICE:undefined,PGSERVICEFILE:undefined,PGSYSCONFDIR:undefined,APBRA_E2E_DATABASE_URL:databaseUrl,APBRA_E2E_SESSION_SECRET:'synthetic-config-validation-material',APBRA_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54321/apbra',APBRA_TEST_DATABASE_URL:'postgresql+psycopg://apbra:unused@127.0.0.1:54322/apbra_test',...environment},
+});
+
+describe('Workspace branding read transport',()=>{
+  it('uses only a fixed same-origin GET without company selectors or write credentials',async()=>{
+    const branding={version:3,primary:'#17635E',accent:'#2D7D9A'},fetch=vi.fn(async()=>response(branding));vi.stubGlobal('fetch',fetch);
+    await expect(workspaceBrandingApi.current()).resolves.toEqual(branding);
+    const [path,init]=(fetch.mock.calls as unknown as Array<[RequestInfo|URL,RequestInit]>)[0];
+    expect(path).toBe('/api/workspace/branding');expect(init.method).toBe('GET');expect(init.credentials).toBe('same-origin');expect(init.body).toBeUndefined();expect(init.headers).not.toHaveProperty('X-CSRF-Token');
+  });
+  it('propagates failed membership reads without manufacturing tenant colours',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>response({error:{code:'AUTHENTICATION_REQUIRED',message:'Sign in again.'}},401)));
+    await expect(workspaceBrandingApi.current()).rejects.toMatchObject({status:401,code:'AUTHENTICATION_REQUIRED'});
+  });
 });
 
 describe('Tenant Settings section transport',()=>{

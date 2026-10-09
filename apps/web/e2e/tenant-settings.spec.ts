@@ -8,6 +8,51 @@ async function signIn(page:Page,identity:'owner'|'member'|'foreign'){
   if((page.viewportSize()?.width??1280)<=768){await expect(navigation).toBeVisible();await navigation.click();}
 }
 
+test('business members consume branding without settings navigation, direct pages or read/write authority',async({page})=>{
+  await signIn(page,'owner');
+  const before=await (await page.request.get('/api/tenant-settings')).json();
+  const history=await (await page.request.get('/api/tenant-settings/history')).json();
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await signIn(page,'member');
+  const state=await (await page.request.get('/api/auth/session')).json();
+  const read=await page.request.get('/api/workspace/branding'),branding=await read.json();
+  expect(read.status()).toBe(200);expect(read.headers()['cache-control']).toBe('no-store');
+  expect(branding).toEqual({version:before.version,primary:before.settings.generation_policy.branding.primary,accent:before.settings.generation_policy.branding.accent});
+  await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
+  for(const path of ['/tenant-settings','/administration','/?view=admin','/#tenant-settings']){
+    await page.goto(path);await expect(page.getByLabel('Appearance',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('Tenant administration')).toHaveCount(0);
+    await expect(page.getByLabel('Primary colour',{exact:true})).toHaveCount(0);
+    await expect(page.getByRole('button',{name:/Review branding changes/})).toHaveCount(0);
+  }
+  for(const path of ['/api/tenant-settings','/api/tenant-settings/history','/api/tenant-settings/qualified-profiles'])expect((await page.request.get(path)).status()).toBe(403);
+  const headers={'X-CSRF-Token':state.csrf_token};
+  expect((await page.request.put('/api/tenant-settings',{headers,data:{expected_version:before.version,settings:before.settings}})).status()).toBe(403);
+  expect((await page.request.patch('/api/tenant-settings/sections/branding_organisation',{headers,data:{expected_version:before.version,changes:{'generation_policy.branding':{...before.settings.generation_policy.branding,primary:'#FF0000'}}}})).status()).toBe(403);
+  for(const method of ['POST','PUT','PATCH','DELETE'])expect((await page.request.fetch('/api/workspace/branding',{method})).status()).toBe(405);
+  for(const mode of ['light','dark','system']){await page.getByLabel('Appearance',{exact:true}).selectOption(mode);await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());}
+  await page.getByRole('button',{name:'Sign out',exact:true}).click();await signIn(page,'owner');
+  expect(await (await page.request.get('/api/tenant-settings')).json()).toEqual(before);
+  expect(await (await page.request.get('/api/tenant-settings/history')).json()).toEqual(history);
+});
+
+test('an older branding read cannot replace a newer effective admin version',async({page})=>{
+  let release!:()=>void,received!:()=>void;
+  const held=new Promise<void>(resolve=>{release=resolve}),ready=new Promise<void>(resolve=>{received=resolve});
+  await page.route('**/api/workspace/branding',async route=>{const response=await route.fetch();received();await held;await route.fulfill({response})});
+  await page.route('**/api/tenant-settings',async route=>{const response=await route.fetch(),value=await response.json();value.version+=1;value.settings.generation_policy.branding={...value.settings.generation_policy.branding,primary:'#654321',accent:'#ABCDEF'};await route.fulfill({response,json:value})});
+  await signIn(page,'owner');await ready;
+  const before=await (await page.request.get('/api/tenant-settings')).json();
+  await page.getByRole('button',{name:'Administration',exact:true}).click();
+  const original=()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'));
+  await expect.poll(original).toBe('#654321');
+  const replied=page.waitForResponse(response=>response.url().endsWith('/api/workspace/branding')&&response.status()===200);
+  release();await (await replied).finished();
+  await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  expect(await original()).toBe('#654321');
+  expect(await (await page.request.get('/api/tenant-settings')).json()).toEqual(before);
+});
+
 test('owner edits and restores a versioned clarification policy without exposing a credential',async({page})=>{
   await signIn(page,'owner');
   const admin=page.getByLabel('Tenant administration');

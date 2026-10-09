@@ -231,6 +231,8 @@ test('an existing company member accepts a second exact invitation and selects e
     const fresh=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor?:unknown;available_companies:Array<{company_id:string;membership_id:string;name:string}>});
     expect(fresh.membership_state).toBe('COMPANY_SELECTION_REQUIRED');
     expect(fresh.actor).toBeUndefined();
+    expect((await page.request.get('/api/workspace/branding')).status()).toBe(401);
+    await expect(page.locator('.private-workspace')).toHaveCount(0);
     const original=fresh.available_companies.find(company=>company.company_id===originalSession.actor.company_id);
     const target=fresh.available_companies.find(company=>company.company_id===targetSession.actor.company_id);
     expect(original).toBeTruthy();
@@ -240,6 +242,8 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedOriginal=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedOriginal.actor.membership_id).toBe(originalSession.actor.membership_id);
+    const originalBranding=await (await page.request.get('/api/workspace/branding')).json();
+    await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(originalBranding.primary.toLowerCase());
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
 
     await page.getByRole('button',{name:'Sign out'}).click();
@@ -250,6 +254,8 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedTarget=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedTarget.actor.membership_id).toBe(accepted.actor.membership_id);
+    const targetBranding=await (await page.request.get('/api/workspace/branding')).json();
+    await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(targetBranding.primary.toLowerCase());
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
   }finally{await inviterContext.close()}
@@ -554,6 +560,7 @@ test('tenant presentation variants preserve readable controls, borders and non-o
   const palettes=[{primary:'#17635E',accent:'#2D7D9A'},{primary:'#FFFFFF',accent:'#000000'},{primary:'#000000',accent:'#FFFFFF'},{primary:'#FFFF00',accent:'#FF00FF'},{primary:'#0000FF',accent:'#00FF00'},{primary:'#777777',accent:'#777777'}];
   let palette=palettes[0];
   await page.route('**/api/tenant-settings',async route=>{const response=await route.fetch();const value=await response.json();value.settings.generation_policy.branding={...value.settings.generation_policy.branding,...palette};await route.fulfill({response,json:value})});
+  await page.route('**/api/workspace/branding',async route=>{const response=await route.fetch();const value=await response.json();await route.fulfill({response,json:{...value,...palette}})});
   const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();if(name==='Administration')await page.getByRole('button',{name,exact:true}).click();else await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
   for(const [index,branding] of palettes.entries()){
     palette=branding;await page.reload();await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
