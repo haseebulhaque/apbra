@@ -1,5 +1,14 @@
 import {expect,test,type Page} from '@playwright/test';
 
+async function setAppearance(page:Page,mode:string){const button=page.getByRole('button',{name:mode==='system'?'Use system appearance':mode==='light'?'Light appearance':'Dark appearance',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:/^Account menu for /}).click();await button.click();const menu=page.getByRole('menu',{name:'Account',exact:true});if(await menu.isVisible()){await page.keyboard.press('Escape');await expect(menu).toHaveCount(0)}}
+
+async function signOut(page:Page){
+  const account=page.getByRole('button',{name:/^Account menu for /});
+  await expect(account.or(page.getByRole('button',{name:'Sign out',exact:true}))).toBeVisible();
+  if(await account.count()){await account.click();await page.getByRole('menuitem',{name:'Sign out',exact:true}).click()}
+  else await page.getByRole('button',{name:'Sign out',exact:true}).click();
+}
+
 async function signIn(page:Page,identity:'owner'|'member'|'foreign'){
   await page.goto('/');
   await page.getByText('Local development identities').click();
@@ -12,14 +21,14 @@ test('business members consume branding without settings navigation, direct page
   await signIn(page,'owner');
   const before=await (await page.request.get('/api/tenant-settings')).json();
   const history=await (await page.request.get('/api/tenant-settings/history')).json();
-  await page.getByRole('button',{name:'Sign out',exact:true}).click();await signIn(page,'member');
+  await signOut(page);await signIn(page,'member');
   const state=await (await page.request.get('/api/auth/session')).json();
   const read=await page.request.get('/api/workspace/branding'),branding=await read.json();
   expect(read.status()).toBe(200);expect(read.headers()['cache-control']).toBe('no-store');
   expect(branding).toEqual({version:before.version,primary:before.settings.generation_policy.branding.primary,accent:before.settings.generation_policy.branding.accent});
   await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
   for(const path of ['/tenant-settings','/administration','/?view=admin','/#tenant-settings']){
-    await page.goto(path);await expect(page.getByLabel('Appearance',{exact:true})).toBeVisible();
+    await page.goto(path);await expect(page.getByRole('button',{name:/^Account menu for /})).toBeVisible();
     await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCount(0);
     await expect(page.getByLabel('Tenant administration')).toHaveCount(0);
     await expect(page.getByLabel('Primary colour',{exact:true})).toHaveCount(0);
@@ -30,8 +39,8 @@ test('business members consume branding without settings navigation, direct page
   expect((await page.request.put('/api/tenant-settings',{headers,data:{expected_version:before.version,settings:before.settings}})).status()).toBe(403);
   expect((await page.request.patch('/api/tenant-settings/sections/branding_organisation',{headers,data:{expected_version:before.version,changes:{'generation_policy.branding':{...before.settings.generation_policy.branding,primary:'#FF0000'}}}})).status()).toBe(403);
   for(const method of ['POST','PUT','PATCH','DELETE'])expect((await page.request.fetch('/api/workspace/branding',{method})).status()).toBe(405);
-  for(const mode of ['light','dark','system']){await page.getByLabel('Appearance',{exact:true}).selectOption(mode);await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());}
-  await page.getByRole('button',{name:'Sign out',exact:true}).click();await signIn(page,'owner');
+  for(const mode of ['light','dark','system']){await setAppearance(page,mode);await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());}
+  await signOut(page);await signIn(page,'owner');
   expect(await (await page.request.get('/api/tenant-settings')).json()).toEqual(before);
   expect(await (await page.request.get('/api/tenant-settings/history')).json()).toEqual(history);
 });
@@ -94,7 +103,7 @@ test('ordinary member cannot see owner settings and narrow admin form does not o
   await expect(page.getByRole('button',{name:'Administration'})).toHaveCount(0);
   await page.getByRole('button',{name:'My profile'}).click();
   await expect(page.getByRole('heading',{name:'My profile'})).toBeVisible();
-  await page.getByRole('button',{name:'Sign out'}).click();
+  await signOut(page);
   await signIn(page,'owner');
   await page.setViewportSize({width:375,height:812});
   await page.getByRole('button',{name:'Open workspace navigation',exact:true}).click();
@@ -363,12 +372,12 @@ test('owner settings fit desktop, laptop, tablet and narrow mobile viewports',as
 test('foreign owner sees only their own settings and member has no settings route',async({page})=>{
   await signIn(page,'owner');
   const owner=await (await page.request.get('/api/tenant-settings')).json();
-  await page.getByRole('button',{name:'Sign out'}).click();
+  await signOut(page);
   await signIn(page,'foreign');
   const foreign=await (await page.request.get('/api/tenant-settings')).json();
   expect(foreign.id).not.toBe(owner.id);
   expect(foreign.settings.provider_profile).toBeNull();
-  await page.getByRole('button',{name:'Sign out'}).click();
+  await signOut(page);
   await signIn(page,'member');
   await expect(page.getByLabel('Tenant administration')).toHaveCount(0);
   expect((await page.request.get('/api/tenant-settings')).status()).toBe(403);

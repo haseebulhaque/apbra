@@ -60,10 +60,12 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   const expert=await expertContext.newPage();
   await signIn(expert,'uninvited');
   const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'}).or(expert.getByRole('heading',{name:'Create Company / Workspace'}));
-  await expect(invitationRequired.or(expert.locator('.account-controls').getByText('expert',{exact:true}))).toBeVisible();
+  const expertAccount=expert.getByRole('button',{name:/^Account menu for /});await expect(invitationRequired.or(expertAccount)).toBeVisible();
+  if(await expertAccount.isVisible()){await expertAccount.click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');}
   if(await invitationRequired.isVisible()){
     await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByText('Manage company access').click();
+    await page.getByRole('button',{name:'User management',exact:true}).click();
+    await page.getByText('Invite user',{exact:true}).click();
     await page.getByLabel('External subject').fill('dev-uninvited');
     await page.getByLabel('Application role').selectOption('EXPERT');
     await page.getByRole('button',{name:'Issue invitation'}).click();
@@ -72,7 +74,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
     await expert.getByRole('button',{name:'Accept invitation'}).click();
     await expect(expert.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
   }
-  await expect(expert.locator('.account-controls').getByText('expert',{exact:true})).toBeVisible();
+  await expert.getByRole('button',{name:/^Account menu for /}).click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await page.getByText('Manage private report access').click();

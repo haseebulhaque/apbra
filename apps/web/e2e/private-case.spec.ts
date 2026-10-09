@@ -1,5 +1,14 @@
 import {expect,test,type Page} from '@playwright/test';
 
+async function setAppearance(page:Page,mode:string){const button=page.getByRole('button',{name:mode==='system'?'Use system appearance':mode==='light'?'Light appearance':'Dark appearance',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:/^Account menu for /}).click();await button.click();const menu=page.getByRole('menu',{name:'Account',exact:true});if(await menu.isVisible()){await page.keyboard.press('Escape');await expect(menu).toHaveCount(0)}}
+
+async function signOut(page:Page){
+  const account=page.getByRole('button',{name:/^Account menu for /});
+  await expect(account.or(page.getByRole('button',{name:'Sign out',exact:true}))).toBeVisible();
+  if(await account.count()){await account.click();await page.getByRole('menuitem',{name:'Sign out',exact:true}).click()}
+  else await page.getByRole('button',{name:'Sign out',exact:true}).click();
+}
+
 async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|'creator'){
   await page.goto('/');
   await page.getByText('Local development identities').click();
@@ -58,7 +67,7 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await upload.focus();
   await expect(upload).toBeFocused();
   await expect(page.locator('label.upload-button')).toBeVisible();
-  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2ViewingInformation');
+  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2Information');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
@@ -94,7 +103,7 @@ test('an expired application session is reported truthfully by the protected UI 
 
   const sessionControl=await context.newPage();
   await sessionControl.goto('/');
-  await sessionControl.getByRole('button',{name:'Sign out'}).click();
+  await signOut(sessionControl);
   await expect(sessionControl.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
 
   await page.getByLabel('Your reporting goal').fill('Review synthetic marketing effectiveness by channel.');
@@ -107,7 +116,8 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByText('Manage company access').click();
+    await page.getByRole('button',{name:'User management',exact:true}).click();
+    await page.getByText('Invite user',{exact:true}).click();
   await page.getByLabel('External subject').fill('dev-uninvited');
   await page.getByLabel('Application role').selectOption('EXPERT');
   await page.getByRole('button',{name:'Issue invitation'}).click();
@@ -148,7 +158,7 @@ test('an uninvited identity creates one company with owner and approved settings
   await expect(page.getByRole('alert')).toContainText('Company creation could not be completed. Please try again.');
   await page.getByRole('button',{name:'Create Company / Workspace'}).click();
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
-  await expect(page.locator('.account-controls')).toContainText('company owner');
+  await page.getByRole('button',{name:/^Account menu for /}).click();await expect(page.locator('.account-identity')).toContainText('company owner');await page.keyboard.press('Escape');
   const settings=await page.evaluate(async()=>{const response=await fetch('/api/tenant-settings',{credentials:'same-origin'});return{status:response.status,body:await response.json()}});
   expect(settings.status).toBe(200);
   expect(settings.body).toMatchObject({version:1,validation_status:'PASS',settings:{automatic_generation_enabled:false,provider_profile:null,generation_policy:{organisation:{name,displayName:name}}}});
@@ -158,7 +168,7 @@ test('an uninvited identity creates one company with owner and approved settings
   await page.locator('.profile-editor summary').click();
   await page.locator('.profile-editor').getByLabel('Display name').fill('Casey Creator');
   await page.getByRole('button',{name:'Save profile'}).click();
-  await expect(page.locator('.account-controls')).toContainText('Casey Creator');
+  await expect(page.getByRole('button',{name:'Account menu for Casey Creator',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Review synthetic preview activity by month.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
@@ -208,7 +218,8 @@ test('an existing company member accepts a second exact invitation and selects e
     const targetSavedSettings=await (await inviterPage.request.get('/api/tenant-settings')).json();
     const targetSavedHistory=await (await inviterPage.request.get('/api/tenant-settings/history')).json();
     await inviterPage.getByRole('button',{name:'Administration'}).click();
-    await inviterPage.getByText('Manage company access').click();
+    await inviterPage.getByRole('button',{name:'User management',exact:true}).click();
+    await inviterPage.getByText('Invite user',{exact:true}).click();
     await inviterPage.getByLabel('External subject').fill('dev-creator');
     await inviterPage.getByLabel('Application role').selectOption('MEMBER');
     await inviterPage.getByRole('button',{name:'Issue invitation'}).click();
@@ -255,7 +266,7 @@ test('an existing company member accepts a second exact invitation and selects e
     const refreshed=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
     expect(refreshed.actor.company_id).toBe(targetSession.actor.company_id);
 
-    await page.getByRole('button',{name:'Sign out'}).click();
+    await signOut(page);
     await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
     await signIn(page,'creator');
     await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
@@ -280,7 +291,7 @@ test('an existing company member accepts a second exact invitation and selects e
     expect(await (await page.request.get('/api/tenant-settings/history')).json()).toEqual(originalSavedHistory);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
 
-    await page.getByRole('button',{name:'Sign out'}).click();
+    await signOut(page);
     await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
     await signIn(page,'creator');
     await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
@@ -301,20 +312,23 @@ test('an existing company member accepts a second exact invitation and selects e
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByText('Manage company access').click();
+    await page.getByRole('button',{name:'User management',exact:true}).click();
+    await page.getByText('Invite user',{exact:true}).click();
   const owner=page.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
   const member=page.locator('.invitation-admin .membership-list li').filter({hasText:'Morgan Member'});
   await expect(owner.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
+  await member.getByText('Manage role for Morgan Member',{exact:true}).click();
   const role=member.getByLabel('Role for Morgan Member');
   await role.selectOption('COMPANY_ADMIN');
   await member.getByRole('button',{name:'Save role'}).click();
-  await expect(member).toContainText('COMPANY ADMIN');
+  await expect(member).toContainText('company admin');
   try{
     const adminContext=await browser.newContext(),adminPage=await adminContext.newPage();
     try{
       await signIn(adminPage,'member');
       await adminPage.getByRole('button',{name:'Administration'}).click();
-    await adminPage.getByText('Manage company access').click();
+    await adminPage.getByRole('button',{name:'User management',exact:true}).click();
+    await adminPage.getByText('Invite user',{exact:true}).click();
       const ownerAsAdmin=adminPage.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
       await expect(ownerAsAdmin.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
       const ownerId=await page.evaluate(async()=>{const response=await fetch('/api/memberships',{credentials:'same-origin'}),body=await response.json() as {items:Array<{id:string;role:string}>};return body.items.find(item=>item.role==='COMPANY_OWNER')?.id});
@@ -325,7 +339,7 @@ test('company role controls protect the owner while allowing a bounded member-ad
   }finally{
     await role.selectOption('MEMBER');
     await member.getByRole('button',{name:'Save role'}).click();
-    await expect(member).toContainText('MEMBER');
+    await expect(member).toContainText('member');
   }
 });
 
@@ -389,20 +403,20 @@ test('report step navigation preserves drafts and queued files without making AP
   await expect(page.getByText('Your goal has unsaved changes.',{exact:false})).toBeVisible();
   await page.getByRole('button',{name:'Next: Information',exact:true}).click();
   await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
-  await page.getByLabel('Appearance',{exact:true}).selectOption('dark');
+  await setAppearance(page,'dark');
   await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
   expect(calls).toEqual([]);
   await page.reload();
-  await expect(page.getByLabel('Appearance',{exact:true})).toHaveValue('dark');
+  await expect(page.getByRole('button',{name:'Dark appearance',exact:true})).toHaveAttribute('aria-pressed','true');
   await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
-  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+  await setAppearance(page,'system');
 });
 
 test('personal appearance has readable core text, system fallback and narrow reflow',async({page},testInfo)=>{
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Administration',exact:true}).click();
   for(const mode of ['light','dark'] as const){
-    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    await setAppearance(page,mode);
     const ratios=await page.locator('.private-workspace').evaluate(element=>{
       const style=getComputedStyle(element);
       const rgb=(name:string)=>{const probe=document.createElement('span');probe.style.color=style.getPropertyValue(name);element.append(probe);const values=getComputedStyle(probe).color.match(/\d+(?:\.\d+)?/g)!.slice(0,3).map(Number);probe.remove();return values};
@@ -414,7 +428,7 @@ test('personal appearance has readable core text, system fallback and narrow ref
     await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCSS('color',mode==='dark'?'rgb(237, 243, 252)':'rgb(25, 40, 63)');
     await page.screenshot({path:testInfo.outputPath('settings-'+mode+'.png'),fullPage:true,animations:'disabled'});
   }
-  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+  await setAppearance(page,'system');
   await page.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'});
   await expect(page.locator('.private-workspace')).toHaveCSS('color-scheme','dark');
   await page.emulateMedia({colorScheme:'light'});
@@ -455,7 +469,7 @@ test('Clear Glass has solid readable surfaces, a non-blur fallback and reduced m
   await signIn(page,'owner');await page.getByRole('button',{name:'Administration',exact:true}).click();
   const root=page.locator('.private-workspace');await expect(root).toHaveAttribute('data-theme','clear-glass');
   for(const mode of ['light','dark'] as const){
-    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    await setAppearance(page,mode);
     await expect(page.locator('.tenant-admin-surface>.panel')).toHaveCSS('background-color',mode==='dark'?'rgb(23, 35, 56)':'rgb(255, 255, 255)');
     await expect(page.locator('.tenant-settings-grid fieldset:visible').first()).toHaveCSS('border-radius','18px');
     for(const width of [1280,768,640,320]){
@@ -464,10 +478,15 @@ test('Clear Glass has solid readable surfaces, a non-blur fallback and reduced m
       expect(clipped).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     }
   }
-  await page.getByLabel('Appearance',{exact:true}).selectOption('light');
+  await setAppearance(page,'light');
   // Simulate an engine without backdrop-filter support by removing only its
   // conditional enhancement. The shipped base rules must remain usable.
   await page.evaluate(()=>{for(const sheet of document.styleSheets){for(let n=sheet.cssRules.length-1;n>=0;n--){const rule=sheet.cssRules[n];if(rule instanceof CSSSupportsRule&&rule.conditionText.includes('backdrop-filter'))sheet.deleteRule(n)}}});
+  // At narrow widths the transparent utility wrapper places the avatar over the solid compact rail header.
+  await expect(page.locator('.workspace-topbar')).toHaveCSS('position','absolute');
+  await expect(page.locator('.workspace-topbar')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  await expect(page.locator('.workspace-rail')).toHaveCSS('background-color','rgb(244, 248, 255)');
+  await page.setViewportSize({width:1280,height:900});
   await expect(page.locator('.workspace-topbar')).toHaveCSS('background-color','rgb(244, 248, 255)');
   await expect(page.locator('.workspace-topbar')).toHaveCSS('backdrop-filter','none');
   await page.emulateMedia({reducedMotion:'reduce'});
@@ -504,7 +523,7 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
     expect(await renderedTextContrast(page)).toEqual([]);
   };
   for(const mode of ['light','dark']){
-    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    await setAppearance(page,mode);
     for(const width of [1920,1601,1600,1440,1280,1024,768,701,700,600,550,320]){
       await page.setViewportSize({width,height:900});await assertLabelsFit();
       const wrapped=await page.locator('.journey-steps strong').evaluateAll(labels=>labels.filter(label=>{const range=document.createRange();range.selectNodeContents(label);return range.getClientRects().length>1}).map(label=>label.textContent));
@@ -514,7 +533,7 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
   await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
   for(const mode of ['light','dark']){
-    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    await setAppearance(page,mode);
     for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
   }
 });
@@ -534,7 +553,7 @@ async function renderedTextContrast(page:Page){
       if(style.visibility==='hidden'||!range.getBoundingClientRect().width)continue;
       const surface=background(element),text=composite(rgba(style.color),surface),a=luminance(text),b=luminance(surface),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
       const large=parseFloat(style.fontSize)>=24||parseFloat(style.fontSize)>=18.6667&&parseInt(style.fontWeight)>=700;
-      if(ratio<(large?3:4.5))errors.push(`${element.tagName}.${element.className}: ${ratio.toFixed(2)}:1`);
+      if(ratio<(large?3:4.5))errors.push(`${element.tagName}.${element.className} ${node.textContent?.trim()}: ${ratio.toFixed(2)}:1 (${style.color} on ${surface.join(',')})`);
     }
     return [...new Set(errors)];
   });
@@ -546,13 +565,13 @@ test('rendered Clear Glass text stays readable across screens, themes, hover and
   for(const scheme of ['light','dark'] as const){
     await page.emulateMedia({colorScheme:scheme,reducedMotion:'reduce'});
     for(const appearance of [scheme,'system']){
-      await page.getByLabel('Appearance',{exact:true}).selectOption(appearance);
+      await setAppearance(page,appearance);
       for(const width of [1280,768,320]){
         await page.setViewportSize({width,height:900});
         const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
         await navigate('Home');await check();for(const row of await page.locator('.case-row-copy small').all()){const marker=row.locator('span');await expect(marker).toHaveCSS('display','inline')}if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`home-${scheme}-${width}.png`),fullPage:true});
         await navigate('Create report');await check();if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`create-${scheme}-${width}.png`),fullPage:true});
-        const logout=page.getByRole('button',{name:'Sign out',exact:true});await logout.hover();await check();await page.keyboard.press('Tab');await logout.focus();await expect(logout).toHaveCSS('outline-style','solid');await check();
+        await page.getByRole('button',{name:/^Account menu for /}).click();const logout=page.getByRole('menuitem',{name:'Sign out',exact:true});await logout.hover();await check();await page.keyboard.press('ArrowUp');await expect(logout).toBeFocused();await expect(logout).toHaveCSS('outline-style','solid');await check();await page.keyboard.press('Escape');
         await page.mouse.move(0,0);
         const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();
         await page.getByRole('button',{name:'Administration',exact:true}).click();
@@ -574,6 +593,8 @@ async function renderedControlAudit(page:Page){
     for(const element of root.querySelectorAll('input:not([type="checkbox"]):not([type="file"]),textarea,select,button.subtle:not(:disabled),.new-report-card button:not(:disabled)')){
       if(!visible(element)||element.matches(':disabled'))continue;
       const style=getComputedStyle(element),outside=background(element.parentElement),fill=background(element);
+      // Icon and menu actions are identified by their painted glyph/text, not an enclosing box.
+      if(element.matches('.icon-button,[role="menuitem"]')){if(contrast(over(rgba(style.color),fill),fill)<(element.matches('.icon-button')?3:4.5))errors.push('Icon/menu action contrast');continue;}
       const boundary=parseFloat(style.borderTopWidth)>0?contrast(over(rgba(style.borderTopColor),outside),outside):0;
       if(Math.max(boundary,contrast(fill,outside))<3)errors.push(`Control boundary ${element.tagName}.${element.className}`);
       if(element.matches('input[placeholder],textarea[placeholder]')){const placeholder=getComputedStyle(element,'::placeholder');if(contrast(over(rgba(placeholder.color),fill),fill)<4.5)errors.push('Placeholder contrast');}
@@ -582,6 +603,8 @@ async function renderedControlAudit(page:Page){
     const controls=Array.from(root.querySelectorAll('button,a,input:not([type="file"]),textarea,select,summary')).filter(element=>visible(element)&&!element.classList.contains('skip-link'));
     for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++){
       const first=controls[i],second=controls[j];if(first.contains(second)||second.contains(first))continue;
+      // The account popup intentionally covers page content; this is not a layout collision.
+      const aPopup=first.closest('.account-popover'),bPopup=second.closest('.account-popover');if(aPopup!==bPopup&&(aPopup||bPopup))continue;
       const a=first.getBoundingClientRect(),b=second.getBoundingClientRect();if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)errors.push(`Overlapping controls ${first.tagName}/${second.tagName}`);
     }
     return [...new Set(errors)];
@@ -602,7 +625,7 @@ test('tenant presentation variants preserve readable controls, borders and non-o
   for(const [index,branding] of palettes.entries()){
     palette=branding;await page.reload();await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
     for(const mode of ['light','dark']){
-      await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+      await setAppearance(page,mode);
       // The visible logo letter is aria-hidden; audit its painted colours too.
       const logoContrast=await page.locator('.rail-brand .brand-mark').evaluate(element=>{
         const style=getComputedStyle(element);
@@ -626,4 +649,92 @@ test('tenant presentation variants preserve readable controls, borders and non-o
     }
   }
   const after=(await (await page.request.get('/api/tenant-settings')).json());expect(after.version).toBe(before.version);expect(after.settings.generation_policy.branding).toEqual(before.settings.generation_policy.branding);
+});
+
+async function syntheticWorkspace(page:Page,role='COMPANY_OWNER',users:'loaded'|'empty'|'error'='loaded'){
+  const name='Alexandra Morgan with a long display name',membership='synthetic-'+role;
+  const session={authenticated:true,identity:{id:'synthetic-identity',display_name:name},actor:{identity_id:'synthetic-identity',membership_id:membership,company_id:'synthetic-company',display_name:name,role},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
+  const record={id:'synthetic-report',company_id:'synthetic-company',creator_membership_id:membership,current_request_version_id:'synthetic-request',version:1,semantic_context_version:1,report_title:'Synthetic sales report',created_at:'2026-10-09T00:00:00Z',updated_at:'2026-10-09T00:00:00Z',current_request:{id:'synthetic-request',sequence:1,request_text:'Compare synthetic sales by month.',created_at:'2026-10-09T00:00:00Z'}};
+  const calls:string[]=[];
+  const members=[{id:membership,display_name:name,subject:'synthetic-owner-subject',role,active:true},{id:'synthetic-member',display_name:'Taylor Chen',subject:'synthetic-member-subject',role:'MEMBER',active:true},{id:'synthetic-inactive',display_name:'Jordan Lee',subject:'synthetic-inactive-subject',role:'MEMBER',active:false}];
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),path=new URL(request.url()).pathname;calls.push(request.method()+' '+path);
+    if(request.method()!=='GET'){await route.abort();return}
+    const body:Record<string,unknown>={'/api/auth/session':session,'/api/auth/providers':{items:[],development_identities:[]},'/api/cases':{items:[record]},'/api/workspace/branding':{version:1,primary:'#17635E',accent:'#2D7D9A'},'/api/memberships':{items:users==='empty'?[]:members},'/api/cases/synthetic-report':{case:record},'/api/cases/synthetic-report/versions':{items:[record.current_request]},'/api/cases/synthetic-report/conversation':{items:[]},'/api/cases/synthetic-report/evidence':{items:[]},'/api/cases/synthetic-report/reference-material':{items:[]},'/api/cases/synthetic-report/acceptance':{interpretation:null,confirmed_contract:null}};
+    const failure=path==='/api/memberships'&&users==='error';
+    await route.fulfill({status:!failure&&path in body?200:503,contentType:'application/json',body:JSON.stringify(!failure&&path in body?body[path]:{error:{code:'UNAVAILABLE',message:'Synthetic unavailable state'}})});
+  });
+  await page.goto('/');await expect(page.getByRole('heading',{name:'Your reports',exact:true})).toBeVisible();
+  return calls;
+}
+
+test('workspace chrome has named appearance icons, bounded geometry and a keyboard account menu',async({page},testInfo)=>{
+  test.setTimeout(120_000);const calls=await syntheticWorkspace(page);
+  const account=page.getByRole('button',{name:/^Account menu for /});
+  for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
+    await page.setViewportSize({width,height:900});await setAppearance(page,mode);
+    const geometry=await page.evaluate(()=>{const header=document.querySelector('.workspace-topbar')!,rail=document.querySelector('.workspace-rail')!,avatar=document.querySelector('.account-trigger')!;const h=header.getBoundingClientRect(),r=rail.getBoundingClientRect(),a=avatar.getBoundingClientRect();return {headerRadius:parseFloat(getComputedStyle(header).borderRadius),railRadius:parseFloat(getComputedStyle(rail).borderRadius),gap:h.left-r.right,avatarWithinRail:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,overflow:document.documentElement.scrollWidth>innerWidth}});
+    expect(geometry.overflow).toBe(false);expect(geometry.railRadius).toBeGreaterThan(0);
+    if(width>768){expect(geometry.headerRadius).toBeGreaterThan(0);expect(geometry.gap).toBeGreaterThan(0)}else expect(geometry.avatarWithinRail).toBe(true);
+    await account.focus();await page.keyboard.press('ArrowDown');const menu=page.getByRole('menu',{name:'Account',exact:true});const profile=menu.getByRole('menuitem',{name:'My profile',exact:true}),logout=menu.getByRole('menuitem',{name:'Sign out',exact:true});
+    await expect(profile,JSON.stringify({mode,width,focus:await page.evaluate(()=>({tag:document.activeElement?.tagName,text:document.activeElement?.textContent,html:document.activeElement?.outerHTML.slice(0,300)}))})).toBeFocused();await page.keyboard.press('ArrowDown');await expect(logout).toBeFocused();await page.keyboard.press('ArrowUp');await expect(profile).toBeFocused();await page.keyboard.press('End');await expect(logout).toBeFocused();await page.keyboard.press('Home');await expect(profile).toBeFocused();
+    await expect(page.locator('.account-identity')).toContainText('company owner');
+    const icons=await page.locator('.appearance-controls:visible button').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button);const channels=(colour:string)=>(colour.match(/[\d.]+/g)??[]).slice(0,3).map(Number);const luminance=(values:number[])=>values.map(value=>{const n=value/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);let parent:Element|null=button;while(parent&&getComputedStyle(parent).backgroundColor==='rgba(0, 0, 0, 0)')parent=parent.parentElement;const a=luminance(channels(s.color)),b=luminance(channels(getComputedStyle(parent!).backgroundColor));return {label:button.getAttribute('aria-label'),tooltip:button.getAttribute('title'),selected:button.getAttribute('aria-pressed'),contrast:(Math.max(a,b)+.05)/(Math.min(a,b)+.05),width:button.getBoundingClientRect().width,height:button.getBoundingClientRect().height}}));
+    expect(icons.filter(icon=>icon.selected==='true')).toHaveLength(1);for(const icon of icons){expect(icon.tooltip).toBe(icon.label);expect(icon.contrast).toBeGreaterThanOrEqual(3);expect(icon.width).toBeGreaterThanOrEqual(40);expect(icon.height).toBeGreaterThanOrEqual(40)}
+    const popup=await page.locator('.account-popover').boundingBox();expect(popup!.x).toBeGreaterThanOrEqual(0);expect(popup!.x+popup!.width).toBeLessThanOrEqual(width);
+    await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);await expect(account).toBeFocused();
+    await account.click();await page.locator('.workspace-hero h2').click();await expect(menu).toHaveCount(0);
+    await account.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Tab');await expect(menu).toHaveCount(0);
+    if(width===1440||width===320)await page.screenshot({path:testInfo.outputPath(`chrome-${mode}-${width}.png`),fullPage:true});
+  }
+  await page.setViewportSize({width:320,height:900});await account.click();await page.getByRole('button',{name:'Light appearance',exact:true}).focus();await page.keyboard.press('Escape');await expect(account).toBeFocused();
+  expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
+});
+
+test('user management remains tenant-scoped, truthful in empty/error states and hidden from business roles',async({page},testInfo)=>{
+  test.setTimeout(90_000);
+  for(const role of ['COMPANY_OWNER','COMPANY_ADMIN','MEMBER','EXPERT']){
+    const calls=await syntheticWorkspace(page,role);
+    if(role==='MEMBER'||role==='EXPERT'){
+      const open=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await open.isVisible())await open.click();
+      await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCount(0);await expect(page.getByRole('heading',{name:'User management',exact:true})).toHaveCount(0);expect(calls.some(call=>/memberships|tenant-settings/.test(call))).toBe(false);continue;
+    }
+    for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
+      await page.setViewportSize({width,height:900});await setAppearance(page,mode);const open=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await open.isVisible())await open.click();
+      await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();
+      await expect(page.getByRole('heading',{name:'User management',exact:true})).toBeVisible();await expect(page.getByText('3 users',{exact:true})).toBeVisible();
+      const list=page.locator('.membership-list');await expect(list.getByText('Taylor Chen',{exact:true})).toBeVisible();await expect(list.getByText('Deactivated',{exact:true})).toBeVisible();await expect(list.getByText('Provider subject: synthetic-member-subject',{exact:true})).toBeHidden();
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
+      if(width===320)await page.screenshot({path:testInfo.outputPath(`users-${role}-${mode}.png`),fullPage:true});
+    }
+    await page.locator('html').evaluate(element=>(element as HTMLElement).style.fontSize='200%');expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeVisible();await page.locator('html').evaluate(element=>(element as HTMLElement).style.fontSize='');
+    expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
+  }
+  for(const state of ['empty','error'] as const){await syntheticWorkspace(page,'COMPANY_OWNER',state);await page.setViewportSize({width:1440,height:900});await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();await expect(page.getByText(state==='empty'?'No company users were returned. Refresh to check again.':'Users could not be loaded.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled()}
+});
+
+test('report wizard keeps meaningful step names and recoverable goal text without redundant action labels',async({page},testInfo)=>{
+  test.setTimeout(90_000);const calls=await syntheticWorkspace(page,'MEMBER');await page.locator('.case-row').first().click();await expect(page.getByRole('heading',{name:'Synthetic sales report',exact:true})).toBeVisible();
+  const goal=page.getByLabel('Current business request');await goal.fill('Synthetic unsaved goal that must survive UI navigation.');
+  for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
+    await page.setViewportSize({width,height:900});await setAppearance(page,mode);const steps=page.getByRole('navigation',{name:'Report steps',exact:true});
+    await expect(steps.getByText('Open step',{exact:true})).toHaveCount(0);await expect(steps.getByText('Viewing',{exact:true})).toHaveCount(0);
+    for(const label of ['Information','Understanding','Confirm','Build','Report','Goal']){
+      const button=steps.getByRole('button',{name:label,exact:true});await button.focus();await page.keyboard.press('Enter');await expect(button).toHaveAttribute('aria-current','step');await expect(steps.locator('[aria-current="step"]')).toHaveCount(1);
+      const heading=page.locator('.wizard-step-heading h2');await expect(heading).toBeFocused();await expect(heading).toHaveText(label);
+    }
+    await expect(goal).toHaveValue('Synthetic unsaved goal that must survive UI navigation.');
+    const clipped=await steps.evaluate(nav=>[...nav.querySelectorAll('button')].filter(button=>{const bounds=button.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(button.querySelector('strong')!);return [...range.getClientRects()].some(rect=>rect.width&&(rect.left<bounds.left-1||rect.right>bounds.right+1||rect.top<bounds.top-1||rect.bottom>bounds.bottom+1))}).map(button=>button.textContent));
+    expect(clipped).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if(width===320||width===1440)await page.screenshot({path:testInfo.outputPath(`wizard-${mode}-${width}.png`),fullPage:true});
+  }
+  await page.locator('html').evaluate(element=>(element as HTMLElement).style.fontSize='200%');expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);await expect(goal).toHaveValue('Synthetic unsaved goal that must survive UI navigation.');
+  expect(calls.every(call=>call.startsWith('GET '))).toBe(true);expect(calls.some(call=>/automatic-design|understanding\/analyse/.test(call))).toBe(false);
+});
+
+
+test('account menu keyboard actions use existing profile and CSRF sign-out transport',async({page})=>{
+ const calls=await syntheticWorkspace(page);const account=page.getByRole('button',{name:/^Account menu for /});await account.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'My profile',exact:true})).toBeVisible();await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Alexandra Morgan with a long display name');
+ let signedOut=false;await page.route('**/api/auth/logout',async route=>{expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('synthetic-only');signedOut=true;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({logged_out:true})})});
+ await account.focus();await page.keyboard.press('ArrowUp');await expect(page.getByRole('menuitem',{name:'Sign out',exact:true})).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();expect(signedOut).toBe(true);expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
 });
