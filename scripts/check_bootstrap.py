@@ -984,13 +984,14 @@ DEMO_UX_PATHS = {
     'apps/web/e2e/tenant-settings.spec.ts',
     'apps/web/e2e/durable-conversation.spec.ts',
     'apps/web/e2e/protected-generation.spec.ts',
+    'apps/web/vite.config.ts',
 }
 DEMO_UX_REGISTRATION_PATHS = {
     'tasks/APBRA-160-demo-ux.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_demo_ux_scope.py',
 }
-DEMO_UX_TASK_SHA256 = '7f2ef21921e9a064022960a117ec27551b84f6b4c6e81e45d65e2dae61b2812a'
+DEMO_UX_TASK_SHA256 = '306263b7dd0b3f6194f826b7accfd00af993863fc922c2bb236de492337f025a'
 DEMO_UX_SOURCES = (
     ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
     ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
@@ -998,18 +999,20 @@ DEMO_UX_SOURCES = (
     ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
 )
 DEMO_UX_GATE_SHA256 = {
-    'requirements': '8203da17ac0e2f6520bf78901bccf625435ba8a153fb5e444c1d032fc96ca482',
+    'requirements': 'c5a1307d65817fd8e0c391b740df19d7b4842312f0fe78517ec5a447ec102ec5',
     'adrs': '08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7',
-    'architecture_refs': '4bf86b18527c7a373d9552e5cfb0f0e593485a3fc63ef153a9a5d001a309dd99',
-    'restricted_paths': '5e08560646f7a2eae391795146980a9e78dce061267819c5cc1cce77db7322d1',
-    'acceptance_criteria': '05397fe746103e2e41a7fe2664d47faef9d471d12a6c2f1784ed3b0c10f8a1ca',
-    'verification_required': 'd7931383c976bc76b086f7ff539eb48c2f2d7d98fdd2344ee82fb7f9758441b6',
+    'architecture_refs': '6ec72c7e222ce482456ada6b43128865470e2864884a322692b5e0c29d80307a',
+    'restricted_paths': '3ccd44f8f74a4ef21f15ddb1fcdd45bdb29b5d83e1a79fdf75bd310b0f9fbf29',
+    'acceptance_criteria': 'cfb3ba85f7b20cfe3d6f79e24270c763be58e12a3f4e01fc4de7b5d6d5f75504',
+    'verification_required': '13c9be515b02d85ed50994700e3c10da8f9734ef8cbc3c78d3b78f34369798bc',
     'out_of_scope': '4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5',
-    'escalate_when': '358bb20f1e4e80c2aed8f3d79e4366ad31e351e10f57740e5b4a94c560efce3d',
-    'dependencies': '6e65d472897e21a2cb09fa1fa00ce6bc009d01f63b202792df9f9b75f9fceb44',
+    'escalate_when': 'b32a0f51f125326763c2b20fa5c23facb3c5010b1d79afa988cd791ea3358eba',
+    'dependencies': '3fb8b59c130f0dde1d08cb116628c4211374a1684c1a941a6b861533960519cf',
 }
 DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
 DEMO_UX_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux-registration'
+DEMO_UX_VITE_ORIGINAL_SHA256 = 'dac004933ad7814f66e4ebaa2116867e151b396f60ef5d80d0a88bd786a8a320'
+DEMO_UX_VITE_PROXY_SHA256 = '9f0ec6501192d146afdea639aa0482cb836b6f2a6daf4dc333392dab606b319f'
 
 # A separate, source-only APBRA-160 amendment. Historical APBRA-173B rows
 # remain bound to their original packaging authority.
@@ -2364,6 +2367,17 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                             row.get('content_id'), row.get('version'), row.get('status')
                         ) != (content_id, version, 'ACCEPTED'):
                             extension_errors.append('APBRA-160 demo UX source differs: ' + source_id)
+                if (active_task_id == 'APBRA-160' and
+                        active_branch in {DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH}):
+                    vite_path = root / 'apps/web/vite.config.ts'
+                    allowed_vite = {DEMO_UX_VITE_ORIGINAL_SHA256, DEMO_UX_VITE_PROXY_SHA256}
+                    if active_branch == DEMO_UX_REGISTRATION_BRANCH:
+                        allowed_vite = {DEMO_UX_VITE_ORIGINAL_SHA256}
+                    elif changed_paths is not None and 'apps/web/vite.config.ts' in changed_paths:
+                        allowed_vite = {DEMO_UX_VITE_PROXY_SHA256}
+                    if (not vite_path.is_file() or
+                            hashlib.sha256(vite_path.read_bytes()).hexdigest() not in allowed_vite):
+                        extension_errors.append('APBRA-160 Vite must preserve the exact accepted proxy-only bytes')
             errors += extension_errors
             if extension_errors:
                 demo_ux_task = None

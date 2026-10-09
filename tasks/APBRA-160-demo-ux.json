@@ -17,7 +17,7 @@
     "Existing report progress and errors use actual API state, preserve recoverable input/history and show next supported action. No fake percentages, fabricated model/design/candidate results, hidden blockers or widened authority.",
     "The prior PR #98 local/CI compatibility fix does not qualify a real retail report. Paid model retries remain paused under the A$10 total cap; this UX package makes no paid call and does not alter the saved retail CSV/request/history.",
     "Hosting and PR #94 remain paused. No APBRA-167 full theme/Report Studio, ARD, Live Canvas, connected publishing, billing, new provider or unrelated backend capability is implemented.",
-    "Owner-approved 2026-10-09 member-branding extension: add only authenticated GET /api/workspace/branding returning exactly version, primary and accent from the active tenant effective branding. Existing resolve_actor and server-derived actor.company_id determine the tenant; no caller-supplied company selector. Only actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT) may read their own tenant branding. No other settings, organisation, naming conventions, provider metadata, credentials, budget, generation, governance or history fields are exposed; existing admin settings and every write permission remain unchanged."
+    "Owner-approved 2026-10-09 member-branding extension: add only authenticated GET /api/workspace/branding returning exactly version, primary and accent from the active tenant effective branding. Existing resolve_actor and server-derived actor.company_id determine the tenant; no caller-supplied company selector. Only actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT) may read their own tenant branding. No other settings, organisation, naming conventions, provider metadata, credentials, budget, generation, governance or history fields are exposed; existing admin settings and every write permission remain unchanged. Owner-approved 2026-10-09 06:16 UTC proxy exception: apps/web/vite.config.ts may add only the exact anchored /api/workspace/branding route binding to the existing development and preview proxy maps. Reuse the existing proxy object; preserve the API target, AI adapter, environment, credentials and every other proxy route byte-for-byte."
   ],
   "adrs": [
     "Existing backend Tenant Settings PUT accepts a full typed document, so it cannot satisfy 03.08 v7 section saves without resubmitting unrelated configuration. Introduce a narrow section update API/service on the existing locked current-version and immutable-history path; do not replace or weaken the existing PUT/restore/credential operations.",
@@ -30,7 +30,8 @@
     "Confluence 03.07 page 8519682 v26, 03.08 page 9404417 v7, 03.04 page 4063368 v5 and 03.05 page 4063388 v6, refreshed 2026-10-06. Existing accepted source rows are bound below without changing historical provenance.",
     "APBRA-160 owner local-demo direction comment 10533, current Jira description and Haseeb direct 2026-10-06 request for report-first Home, Administration navigation, independently saved Tenant Settings and truthful progress/errors; PLAN comment 10558.",
     "Post-PR98 main 6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7; PR #98 exact-head hosted #170 and independent review were verified before this registration. PR #94 remains draft/paused.",
-    "Finite member-branding scope accepted directly by Haseeb on 2026-10-09 at 05:01 UTC; Jira APBRA-160 proposal comment 10646 and accepted PLAN 10647. This dated extension does not replace historical Confluence source rows, their acceptance hashes, the original registration base, or earlier gates. No paid call, provider/configuration change, preview update or product merge is granted by this scope acceptance."
+    "Finite member-branding scope accepted directly by Haseeb on 2026-10-09 at 05:01 UTC; Jira APBRA-160 proposal comment 10646 and accepted PLAN 10647. This dated extension does not replace historical Confluence source rows, their acceptance hashes, the original registration base, or earlier gates. No paid call, provider/configuration change, preview update or product merge is granted by this scope acceptance.",
+    "Haseeb accepted the exact two branding-route proxy bindings and separately gated scope-amendment merge on 2026-10-09 at 06:16 UTC; APBRA-160 accepted PLAN 10653. This is a dated eighteenth-path extension, not replacement source acceptance or permission to change AI routing, credentials, provider configuration, settings permissions, resources or hosting."
   ],
   "allowed_paths": [
     "apps/api/src/apbra_api/api.py",
@@ -49,7 +50,8 @@
     "apps/web/e2e/private-case.spec.ts",
     "apps/web/e2e/tenant-settings.spec.ts",
     "apps/web/e2e/durable-conversation.spec.ts",
-    "apps/web/e2e/protected-generation.spec.ts"
+    "apps/web/e2e/protected-generation.spec.ts",
+    "apps/web/vite.config.ts"
   ],
   "restricted_paths": [
     ".github/**",
@@ -65,7 +67,6 @@
     "apps/web/src/EnterpriseUI.test.tsx",
     "apps/web/package.json",
     "apps/web/package-lock.json",
-    "apps/web/vite.config.ts",
     "apps/web/playwright.config.ts",
     "compose.yaml",
     "infrastructure/**",
@@ -83,7 +84,7 @@
     "apps/web/.env"
   ],
   "acceptance_criteria": [
-    "Registration changes exactly three governance paths. Product implementation later changes only the seventeen literal API/web/test paths after separate exact-head review, green hosted CI, authorized manual registration merge and verified post-merge main.",
+    "Registration changes exactly three governance paths. Product implementation later changes only the eighteen literal API/web/test/config paths, with Vite limited to the two exact accepted branding-route proxy bindings after separate exact-head review, green hosted CI, authorized manual registration merge and verified post-merge main.",
     "Report-first Home clearly resumes saved reports, exposes one supported Create report action and keeps current/historical report state truthful. Company context and current report remain clear on narrow and desktop layouts.",
     "Navigation exposes a separate Administration destination only for current Owner/Admin capability, with Tenant Settings and company/user access distinguished from ordinary report actions. Hiding a destination never substitutes for backend authorization.",
     "Tenant Settings has clear AI, Responses/Report Standards, Budget/Limits and Branding/Organisation sections. Each shows effective saved values, its own dirty state and Save/Cancel. The section request never resubmits unrelated configuration, another unsaved section or protected credential material.",
@@ -97,9 +98,9 @@
     "Registration: focused exact-path and negative mutation tests, full bootstrap, standalone bootstrap and CI-policy checkers, exact three-path audit, JSON parse, git diff --check and available secret scan.",
     "Registration: hosted APBRA Bootstrap on exact head, genuinely separate independent exact-head governance review, authorized manual merge before midnight AEDT if all gates pass, and verified post-merge main before product edits.",
     "Implementation: red/green API and web tests for section-only request payloads, permitted field/section validation, full typed cross-section validation, expected-version conflicts, Owner/Admin and CSRF enforcement, immutable audit, credential preservation, independent drafts/saves, role-aware navigation, report-first Home, truthful progress/errors, unchanged private access and responsive/keyboard use.",
-    "Implementation: full PostgreSQL API and web unit tests, TypeScript, production build, full Playwright, bootstrap, Ruff, strict mypy, policy checkers, exact seventeen-path audit, secret checks and exact-head hosted CI.",
+    "Implementation: full PostgreSQL API and web unit tests, TypeScript, production build, full Playwright, bootstrap, Ruff, strict mypy, policy checkers, exact eighteen-path audit, secret checks and exact-head hosted CI.",
     "Implementation: a fresh separate exact-head product/security/UX review after final changes; no self-approval or auto-merge.",
-    "Member-branding amendment: exactly tasks/APBRA-160-demo-ux.json, scripts/check_bootstrap.py and tests/bootstrap/test_demo_ux_scope.py on the existing registration-only branch; preserve seventeen literal product paths and historical sources. Focused positive/negative gate mutations, full bootstrap, scope/CI-policy checkers and secret scan; independent exact-head governance PASS, hosted CI, separately authorized manual merge and verified post-merge main before projection product edits. Product: API/web/E2E cover Owner/Admin/Member/Expert (including inactive Expert denial), response-field whitelist, unauthenticated/missing/inactive membership, company selection and cross-tenant isolation, caller-selector rejection, tenant switching/stale response, unchanged admin/write access and unchanged persisted settings; fresh exact-head independent review and hosted CI."
+    "Member-branding amendment: exactly tasks/APBRA-160-demo-ux.json, scripts/check_bootstrap.py and tests/bootstrap/test_demo_ux_scope.py on the existing registration-only branch; preserve seventeen literal product paths and historical sources. Focused positive/negative gate mutations, full bootstrap, scope/CI-policy checkers and secret scan; independent exact-head governance PASS, hosted CI, separately authorized manual merge and verified post-merge main before projection product edits. Product: API/web/E2E cover Owner/Admin/Member/Expert (including inactive Expert denial), response-field whitelist, unauthenticated/missing/inactive membership, company selection and cross-tenant isolation, caller-selector rejection, tenant switching/stale response, unchanged admin/write access and unchanged persisted settings; fresh exact-head independent review and hosted CI. Proxy amendment: same exact three governance files; full-file original/proposed Vite SHA256 binding and negative tests reject API target, AI adapter, broad routing and unrelated edits. Independent exact-head governance PASS, hosted CI, authorized manual merge and verified main before proxy product edits. Actual development and production-preview HTTP routing and full browser regressions must pass before PR115 product PASS/merge."
   ],
   "out_of_scope": [
     "Any product change in this registration, backend change outside the bounded Tenant Settings section API/service/tests and the explicitly accepted GET /api/workspace/branding three-field read-only projection, schema/identity/provider change, dependency/lockfile/workflow/IaC/cloud edit, paid model call or modification of PR #94.",
@@ -107,11 +108,12 @@
     "APBRA-167 complete selectable themes/Report Studio, ARD/Live Canvas, Power BI Service publishing, billing, public production signup or hosted qualification."
   ],
   "escalate_when": [
-    "A required demo UX behavior or meaningful regression test needs an eighteenth product path, migration, dependency or new source authority.",
+    "A required demo UX behavior or meaningful regression test needs a nineteenth product path, migration, dependency or new source authority.",
     "The bounded section update cannot preserve expected-version, full typed validation, credential isolation, immutable history or Owner/Admin and CSRF checks; stop rather than simulate independent persistence.",
     "Any change could erase the original retail request, CSV, conversation or attempt history, or spend beyond the A$10 total cap.",
     "Any mandatory local/hosted test, genuinely separate exact-head review, current source binding or authorized manual-merge gate is absent, stale or fails.",
-    "The member-branding projection needs any field beyond version, primary and accent, caller-selected tenant context, changed admin/write permissions, authentication/authorization-module edits, persisted-data writes, a migration, dependency, eighteenth product path or paid action; stop rather than broaden the accepted read-only exception."
+    "The member-branding projection needs any field beyond version, primary and accent, caller-selected tenant context, changed admin/write permissions, authentication/authorization-module edits, persisted-data writes, a migration, dependency, nineteenth product path or paid action; stop rather than broaden the accepted read-only exception.",
+    "Any Vite bytes differ from the original file or the exact accepted two-binding patch, including AI adapter, API target, other proxy routing, environment or credentials; stop rather than broaden the proxy exception."
   ],
   "task_mode": "IMPLEMENTATION",
   "readiness": "READY_FOR_IMPLEMENTATION",
@@ -132,6 +134,6 @@
     "Current 03.07 v26, 03.08 v7, 03.04 v5 and 03.05 v6 exact source rows and APBRA-160 owner direction 10533/PLAN 10558 control this finite demo UX package. Historical source records remain unchanged.",
     "The registration-only branch changes exactly tasks/APBRA-160-demo-ux.json, scripts/check_bootstrap.py and tests/bootstrap/test_demo_ux_scope.py; no product code before reviewed green registration merge and post-merge main verification.",
     "The A$10 total AI-test ceiling is exhausted on current cost evidence (APBRA-160 10557). No paid retry or successful retail Understanding is claimed by this package. PR #94 and hosting remain paused.",
-    "Member-branding scope acceptance on 2026-10-09 is amendment authority, not effective product authority before the separate exact three-file amendment has independent exact-head PASS, successful hosted CI, authorized manual merge and verified post-merge main. PR #115 remains the separate UI/product PR; no combined governance/product diff or auto-merge."
+    "Member-branding scope acceptance on 2026-10-09 is amendment authority, not effective product authority before the separate exact three-file amendment has independent exact-head PASS, successful hosted CI, authorized manual merge and verified post-merge main. PR #115 remains the separate UI/product PR; no combined governance/product diff or auto-merge. The proxy-only eighteenth path was separately accepted on 2026-10-09 at 06:16 UTC; it is not effective product authority until its separate three-file amendment has independent exact-head PASS, successful hosted CI, authorized manual merge and verified main before proxy product edits."
   ]
 }
