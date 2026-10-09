@@ -954,6 +954,16 @@ FOUNDRY_SCHEMA_GATE_SHA256 = {
     'escalate_when': '434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1',
     'dependencies': '1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded',
 }
+
+PROVIDER_RETRIEVAL_PATHS = {'apps/api/src/apbra_api/config.py', 'apps/web/src/durableConversation.tsx', 'apps/web/scripts/generation-bridge.ts', 'apps/web/scripts/semantic-bridge.ts', 'apps/web/src/deploymentGuide.test.ts', 'apps/web/src/deploymentGuide.ts', 'apps/api/src/apbra_api/model_provider.py', 'apps/web/src/privateCases.test.tsx', 'apps/web/src/durableGeneration.tsx', 'apps/web/src/api.test.ts', 'apps/api/src/apbra_api/generation.py', 'apps/web/src/durableGeneration.test.tsx', 'apps/api/tests/test_model_provider.py', 'apps/web/src/foundry.ts', 'apps/api/tests/test_conversations.py', 'apps/web/e2e/protected-generation.spec.ts', 'apps/web/src/api.ts', 'apps/api/src/apbra_api/tenant_settings.py', 'apps/web/src/foundry.test.ts', 'apps/web/src/durableConversation.test.tsx', 'apps/api/tests/test_generation.py', 'apps/web/src/EnterpriseApp.tsx', 'apps/api/src/apbra_api/api.py', 'apps/web/e2e/tenant-settings.spec.ts', 'apps/api/tests/test_tenant_settings.py', 'apps/api/tests/test_semantic_bridge.py', 'apps/web/e2e/durable-conversation.spec.ts', 'apps/api/src/apbra_api/application.py', 'apps/api/tests/test_api.py'}
+PROVIDER_RETRIEVAL_REGISTRATION_PATHS = {'tasks/APBRA-160-provider-retrieval.json', 'scripts/check_bootstrap.py', 'tests/bootstrap/test_provider_retrieval_scope.py'}
+PROVIDER_RETRIEVAL_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval'
+PROVIDER_RETRIEVAL_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval-registration'
+PROVIDER_RETRIEVAL_TASK_SHA256 = '78522272fdd8c20c0ce184eec2a22122397e2e49edb3f9fc6a79655ff2338cf2'
+PROVIDER_RETRIEVAL_GATE_SHA256 = {'requirements': '323309c11b31b810b31a895c46a1e15a8a948186ebfc5384277bfaa57748625c', 'adrs': 'ebf931961a3783807a614f29ea4be730c3664d0b147cac18d364125cdc631edf', 'architecture_refs': '35c08977912347960b51fc6b7f33ecfc186dd341dc7c864cf802389d9037cfe7', 'restricted_paths': '14419d236e945cea71dc8999014ad50d01d6c5a44a23718612b7f63766481bc7', 'acceptance_criteria': 'dbcb7e2efde54d5d219cdb438011baaf21d6a388dee2e236d53b56f2ba51d9f2', 'verification_required': 'c371ba3f93fe70d9e4aebc8dc0964e98cd0f28e26303a9864e89b1b7e2bf33d0', 'out_of_scope': '23bba94e16b368800cf68b86547a49527a4ef26076aff2067fa1c199b2191f84', 'escalate_when': 'b97ea55133cba8dd8abae0eaa5be205ee1c37aebe52df37b69e99e4137f35375', 'dependencies': 'd05be20dfc2167a0b399ad6a101dc0c91d50095ca546a4f09d797a892d234a66', 'effective_release': '6385f7bf58136115858f87c4dd65c7e39aaf1d225f3cfb3092e8eeb818cbc5cd', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+PROVIDER_RETRIEVAL_SOURCES = FOUNDRY_SCHEMA_SOURCES
+PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
+
 LOCAL_RECOVERY_PATHS = {'apps/api/tests/test_rekey_tenant_secrets.py', 'apps/api/src/apbra_api/rekey_tenant_secrets.py', 'apps/api/src/apbra_api/tenant_secrets.py'}
 LOCAL_RECOVERY_REGISTRATION_PATHS = {'tasks/APBRA-160-local-rekey.json', 'scripts/check_bootstrap.py', 'tests/bootstrap/test_local_rekey_scope.py'}
 LOCAL_RECOVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey'
@@ -2249,6 +2259,48 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += extension_errors
             if extension_errors:
                 local_rekey_task = None
+        provider_retrieval_task = None
+        provider_retrieval_path = root / 'tasks/APBRA-160-provider-retrieval.json'
+        if provider_retrieval_path.exists():
+            provider_retrieval_task = load_json(provider_retrieval_path)
+            extension_errors = schema_errors(
+                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                provider_retrieval_task,
+            )
+            if not extension_errors:
+                extension_errors += task_errors(provider_retrieval_task, catalog, sources)
+                def provider_registration_digest(value):
+                    return hashlib.sha256(json.dumps(
+                        value, sort_keys=True, separators=(',', ':'),
+                    ).encode()).hexdigest()
+                if provider_registration_digest(provider_retrieval_task) != PROVIDER_RETRIEVAL_TASK_SHA256:
+                    extension_errors.append('APBRA-160 provider retrieval task binding differs')
+                if (provider_retrieval_task['task_id'], provider_retrieval_task['assigned_agent'],
+                        provider_retrieval_task['agent_card_version'], provider_retrieval_task['branch'],
+                        provider_retrieval_task['base_commit']) != (
+                        'APBRA-160', 'APBRA-DEVOPS', '0.1', PROVIDER_RETRIEVAL_BRANCH,
+                        'e3f782535e41bef1034222227ef706e1cf0bfac1'):
+                    extension_errors.append('APBRA-160 provider retrieval identity/base/branch differs')
+                if (set(provider_retrieval_task['allowed_paths']) != PROVIDER_RETRIEVAL_PATHS or
+                        len(provider_retrieval_task['allowed_paths']) != len(PROVIDER_RETRIEVAL_PATHS)):
+                    extension_errors.append('APBRA-160 provider retrieval requires exact 29 literal paths')
+                if provider_retrieval_task['source_ids'] != [row[0] for row in PROVIDER_RETRIEVAL_SOURCES]:
+                    extension_errors.append('APBRA-160 provider retrieval requires exact accepted sources')
+                for section, expected in PROVIDER_RETRIEVAL_GATE_SHA256.items():
+                    if provider_registration_digest(provider_retrieval_task[section]) != expected:
+                        extension_errors.append('APBRA-160 provider retrieval changed gate: ' + section)
+                if provider_registration_digest(sources) != PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256:
+                    extension_errors.append('APBRA-160 provider retrieval historical source register changed')
+                for source_id, content_id, version, expected in PROVIDER_RETRIEVAL_SOURCES:
+                    source_rows = [row for row in sources['sources'] if row.get('id') == source_id]
+                    if (len(source_rows) != 1 or
+                            (source_rows[0].get('content_id'), source_rows[0].get('version'),
+                             source_rows[0].get('status')) != (content_id, version, 'ACCEPTED') or
+                            provider_registration_digest(source_rows[0]) != expected):
+                        extension_errors.append('APBRA-160 provider retrieval source binding differs: ' + source_id)
+            errors += extension_errors
+            if extension_errors:
+                provider_retrieval_task = None
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2815,6 +2867,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
             (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
             (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
+            (provider_retrieval_task, PROVIDER_RETRIEVAL_PATHS),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2827,6 +2880,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
                 else demo_ux_task if active_branch in {
                     DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
+                } else provider_retrieval_task if active_branch in {
+                    PROVIDER_RETRIEVAL_BRANCH, PROVIDER_RETRIEVAL_REGISTRATION_BRANCH,
                 } else foundry_schema_task
             )
         if active_task_id == 'APBRA-173':
@@ -2887,6 +2942,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
                          changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
+                         active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
+                         changed_paths == PROVIDER_RETRIEVAL_REGISTRATION_PATHS) and
+                    not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
@@ -2918,6 +2976,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == APBRA160_CI_CAPACITY_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
+                    changed_paths != PROVIDER_RETRIEVAL_REGISTRATION_PATHS):
+                errors.append('APBRA-160 provider retrieval registration must change exactly three governance files')
+            if (active_task_id == 'APBRA-160' and
+                    active_branch == PROVIDER_RETRIEVAL_BRANCH and
+                    changed_paths.intersection(PROVIDER_RETRIEVAL_REGISTRATION_PATHS)):
+                errors.append('APBRA-160 provider retrieval implementation cannot change governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3254,6 +3320,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
                          changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS and
                          name in LOCAL_RECOVERY_REGISTRATION_PATHS and
+                         path_allowed(name, task, card)) or
+                    (active_task_id == 'APBRA-160' and active_task is not None and
+                         active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
+                         changed_paths == PROVIDER_RETRIEVAL_REGISTRATION_PATHS and
+                         name in PROVIDER_RETRIEVAL_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-160' and active_task is not None and
                          active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
