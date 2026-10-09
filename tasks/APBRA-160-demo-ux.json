@@ -9,25 +9,28 @@
   "risk_class": "R3",
   "objective": "Register a bounded report-first local demo UX and independently scoped Tenant Settings administration package over existing server-authoritative APBRA behavior; registration changes no product code.",
   "requirements": [
-    "Current APBRA-160 owner direction and Confluence 03.07 v26, 03.08 v7, 03.04 v5 and 03.05 v6 control the six-stage Goal → Information → Understanding → Confirm → Build → Report journey, report-first Home, role-aware Administration, truthful progress/errors and categorised Tenant Settings.",
+    "Current APBRA-160 owner direction and Confluence 03.07 v26, 03.08 v7, 03.04 v5 and 03.05 v6 control the six-stage Goal \u2192 Information \u2192 Understanding \u2192 Confirm \u2192 Build \u2192 Report journey, report-first Home, role-aware Administration, truthful progress/errors and categorised Tenant Settings.",
     "Home prioritises current reports and work requiring action, one clear Create report action and direct existing report/history access; it must not become a marketing screen or invent a capability.",
     "Administration navigation separates existing Owner/Admin Tenant Settings, company membership/access and profile controls from report creation. Show only currently implemented destinations and permitted actions; backend access checks remain authoritative.",
     "Tenant Settings sections cover AI and qualified model controls, responses/report standards, budgets/limits, and branding/organisation. Each section has independent draft, Save/Cancel, effective version, validation and actionable errors. A section request contains only that section's deliberate changes; it does not resubmit unrelated AI, budget, branding or credential configuration.",
     "Add a bounded server-authoritative section update operation using expected_version, CSRF and Owner/Admin checks. Reject unknown sections, unknown fields and credential material in the ordinary section payload. The server merges only allowlisted section fields into locked current settings, validates the full typed result, creates immutable version/audit history and preserves protected credential-reference behavior. A stale version fails visibly; never silently overwrite concurrent changes. High-impact changes retain consequence-aware confirmation.",
     "Existing report progress and errors use actual API state, preserve recoverable input/history and show next supported action. No fake percentages, fabricated model/design/candidate results, hidden blockers or widened authority.",
     "The prior PR #98 local/CI compatibility fix does not qualify a real retail report. Paid model retries remain paused under the A$10 total cap; this UX package makes no paid call and does not alter the saved retail CSV/request/history.",
-    "Hosting and PR #94 remain paused. No APBRA-167 full theme/Report Studio, ARD, Live Canvas, connected publishing, billing, new provider or unrelated backend capability is implemented."
+    "Hosting and PR #94 remain paused. No APBRA-167 full theme/Report Studio, ARD, Live Canvas, connected publishing, billing, new provider or unrelated backend capability is implemented.",
+    "Owner-approved 2026-10-09 member-branding extension: add only authenticated GET /api/workspace/branding returning exactly version, primary and accent from the active tenant effective branding. Existing resolve_actor and server-derived actor.company_id determine the tenant; no caller-supplied company selector. Only active COMPANY_OWNER, COMPANY_ADMIN and MEMBER actors may read their own tenant branding. No other settings, organisation, naming conventions, provider metadata, credentials, budget, generation, governance or history fields are exposed; existing admin settings and every write permission remain unchanged."
   ],
   "adrs": [
     "Existing backend Tenant Settings PUT accepts a full typed document, so it cannot satisfy 03.08 v7 section saves without resubmitting unrelated configuration. Introduce a narrow section update API/service on the existing locked current-version and immutable-history path; do not replace or weaken the existing PUT/restore/credential operations.",
     "Each section draft is based on the effective version opened. A save transmits only that section's deliberate fields plus expected_version; the server applies them to the locked current document and revalidates the complete typed result. Unrelated local drafts and protected credential values are never transmitted. A conflict requires explicit reload/review, not automatic stale overwrite.",
     "Presentation and navigation never authorize report, company, membership, settings or artifact access. Existing server-derived actor and private-resource checks remain intact.",
-    "Registration, product implementation, separate independent exact-head review, hosted CI and Haseeb-authorized manual merge are distinct gates."
+    "Registration, product implementation, separate independent exact-head review, hosted CI and Haseeb-authorized manual merge are distinct gates.",
+    "The finite member-branding projection is a read-only presentation boundary, not member access to Tenant Settings. Reuse resolve_actor and the existing tenant_snapshot/current_settings path without changing authorization modules, schema or persisted settings. Return only version, primary and accent, reject tenant selectors, and retain membership-scoped monotonic frontend version handling. Derived accessible Light/Dark UI colours never replace stored colours or report-generation policy."
   ],
   "architecture_refs": [
     "Confluence 03.07 page 8519682 v26, 03.08 page 9404417 v7, 03.04 page 4063368 v5 and 03.05 page 4063388 v6, refreshed 2026-10-06. Existing accepted source rows are bound below without changing historical provenance.",
     "APBRA-160 owner local-demo direction comment 10533, current Jira description and Haseeb direct 2026-10-06 request for report-first Home, Administration navigation, independently saved Tenant Settings and truthful progress/errors; PLAN comment 10558.",
-    "Post-PR98 main 6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7; PR #98 exact-head hosted #170 and independent review were verified before this registration. PR #94 remains draft/paused."
+    "Post-PR98 main 6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7; PR #98 exact-head hosted #170 and independent review were verified before this registration. PR #94 remains draft/paused.",
+    "Finite member-branding scope accepted directly by Haseeb on 2026-10-09 at 05:01 UTC; Jira APBRA-160 proposal comment 10646 and accepted PLAN 10647. This dated extension does not replace historical Confluence source rows, their acceptance hashes, the original registration base, or earlier gates. No paid call, provider/configuration change, preview update or product merge is granted by this scope acceptance."
   ],
   "allowed_paths": [
     "apps/api/src/apbra_api/api.py",
@@ -87,17 +90,19 @@
     "Every section save uses the version opened against; the server locks the current settings, rejects unknown or cross-section fields and credential values, merges only the permitted section, performs full typed cross-section validation and creates immutable audited history. Stale/concurrent conflict never overwrites newer changes. High-impact settings require consequence-aware confirmation.",
     "Actual Understanding/Build/Report progress and failure states use existing API evidence and actionable next steps, without fake percent, simulated AI, hidden errors or successful-candidate claims from a failed attempt.",
     "Existing private report grants, case authorization, Owner/Admin settings authority, CSRF, provider qualification, credential protection, history, confirmation and candidate download controls remain unchanged.",
-    "No paid model retry, cloud/hosting action, APBRA-167 full theme, ARD/Live Canvas, billing, connected publishing or production-readiness claim is introduced."
+    "No paid model retry, cloud/hosting action, APBRA-167 full theme, ARD/Live Canvas, billing, connected publishing or production-readiness claim is introduced.",
+    "GET /api/workspace/branding exposes exactly version, primary and accent for active Owner/Admin/Member actors of the server-selected tenant. Unauthenticated, missing or inactive membership and company-selection-required requests fail closed. Client company/tenant selectors fail visibly rather than selecting another tenant. Tenant switching and stale responses cannot apply a previous tenant palette. No other settings or credentials are returned; admin settings routes and every write authority remain unchanged. GET leaves saved tenant settings, branding originals, report policy and version/audit history unchanged."
   ],
   "verification_required": [
     "Registration: focused exact-path and negative mutation tests, full bootstrap, standalone bootstrap and CI-policy checkers, exact three-path audit, JSON parse, git diff --check and available secret scan.",
     "Registration: hosted APBRA Bootstrap on exact head, genuinely separate independent exact-head governance review, authorized manual merge before midnight AEDT if all gates pass, and verified post-merge main before product edits.",
     "Implementation: red/green API and web tests for section-only request payloads, permitted field/section validation, full typed cross-section validation, expected-version conflicts, Owner/Admin and CSRF enforcement, immutable audit, credential preservation, independent drafts/saves, role-aware navigation, report-first Home, truthful progress/errors, unchanged private access and responsive/keyboard use.",
     "Implementation: full PostgreSQL API and web unit tests, TypeScript, production build, full Playwright, bootstrap, Ruff, strict mypy, policy checkers, exact seventeen-path audit, secret checks and exact-head hosted CI.",
-    "Implementation: a fresh separate exact-head product/security/UX review after final changes; no self-approval or auto-merge."
+    "Implementation: a fresh separate exact-head product/security/UX review after final changes; no self-approval or auto-merge.",
+    "Member-branding amendment: exactly tasks/APBRA-160-demo-ux.json, scripts/check_bootstrap.py and tests/bootstrap/test_demo_ux_scope.py on the existing registration-only branch; preserve seventeen literal product paths and historical sources. Focused positive/negative gate mutations, full bootstrap, scope/CI-policy checkers and secret scan; independent exact-head governance PASS, hosted CI, separately authorized manual merge and verified post-merge main before projection product edits. Product: API/web/E2E cover Owner/Admin/Member, response-field whitelist, unauthenticated/missing/inactive membership, company selection and cross-tenant isolation, caller-selector rejection, tenant switching/stale response, unchanged admin/write access and unchanged persisted settings; fresh exact-head independent review and hosted CI."
   ],
   "out_of_scope": [
-    "Any product change in this registration, backend change outside the bounded Tenant Settings section API/service/tests, schema/identity/provider change, dependency/lockfile/workflow/IaC/cloud edit, paid model call or modification of PR #94.",
+    "Any product change in this registration, backend change outside the bounded Tenant Settings section API/service/tests and the explicitly accepted GET /api/workspace/branding three-field read-only projection, schema/identity/provider change, dependency/lockfile/workflow/IaC/cloud edit, paid model call or modification of PR #94.",
     "New report capability, expert assignment/release flow, arbitrary permissions, new data source, generated design semantics or fake successful demo state.",
     "APBRA-167 complete selectable themes/Report Studio, ARD/Live Canvas, Power BI Service publishing, billing, public production signup or hosted qualification."
   ],
@@ -105,7 +110,8 @@
     "A required demo UX behavior or meaningful regression test needs an eighteenth product path, migration, dependency or new source authority.",
     "The bounded section update cannot preserve expected-version, full typed validation, credential isolation, immutable history or Owner/Admin and CSRF checks; stop rather than simulate independent persistence.",
     "Any change could erase the original retail request, CSV, conversation or attempt history, or spend beyond the A$10 total cap.",
-    "Any mandatory local/hosted test, genuinely separate exact-head review, current source binding or authorized manual-merge gate is absent, stale or fails."
+    "Any mandatory local/hosted test, genuinely separate exact-head review, current source binding or authorized manual-merge gate is absent, stale or fails.",
+    "The member-branding projection needs any field beyond version, primary and accent, caller-selected tenant context, changed admin/write permissions, authentication/authorization-module edits, persisted-data writes, a migration, dependency, eighteenth product path or paid action; stop rather than broaden the accepted read-only exception."
   ],
   "task_mode": "IMPLEMENTATION",
   "readiness": "READY_FOR_IMPLEMENTATION",
@@ -125,6 +131,7 @@
     "APBRA-160 current-source amendment PR #96 and CI-capacity PR #97 were separately reviewed and merged. PR #98 merged at 6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7 after independent exact-head PASS and hosted #170 SUCCESS.",
     "Current 03.07 v26, 03.08 v7, 03.04 v5 and 03.05 v6 exact source rows and APBRA-160 owner direction 10533/PLAN 10558 control this finite demo UX package. Historical source records remain unchanged.",
     "The registration-only branch changes exactly tasks/APBRA-160-demo-ux.json, scripts/check_bootstrap.py and tests/bootstrap/test_demo_ux_scope.py; no product code before reviewed green registration merge and post-merge main verification.",
-    "The A$10 total AI-test ceiling is exhausted on current cost evidence (APBRA-160 10557). No paid retry or successful retail Understanding is claimed by this package. PR #94 and hosting remain paused."
+    "The A$10 total AI-test ceiling is exhausted on current cost evidence (APBRA-160 10557). No paid retry or successful retail Understanding is claimed by this package. PR #94 and hosting remain paused.",
+    "Member-branding scope acceptance on 2026-10-09 is amendment authority, not effective product authority before the separate exact three-file amendment has independent exact-head PASS, successful hosted CI, authorized manual merge and verified post-merge main. PR #115 remains the separate UI/product PR; no combined governance/product diff or auto-merge."
   ]
 }
