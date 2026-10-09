@@ -512,6 +512,185 @@ def foundry_adapter(handler: Any, **overrides: Any) -> Any:
     )
 
 
+def token_credential_host(**overrides: Any) -> Any:
+    import time
+    from types import SimpleNamespace
+    from uuid import UUID
+
+    from apbra_api.model_provider import FoundryTokenCredentialProvider
+
+    class SyntheticCredential:
+        def __init__(self) -> None:
+            self.scopes: list[tuple[str, ...]] = []
+            self.result: Any = SimpleNamespace(
+                **{"token": "synthetic-bearer", "expires_on": time.time() + 300},
+            )
+            self.error: Exception | None = None
+
+        def get_token(self, *scopes: str) -> Any:
+            self.scopes.append(scopes)
+            if self.error is not None:
+                raise self.error
+            return self.result
+
+    credential = SyntheticCredential()
+    company = UUID("00000000-0000-0000-0000-000000000001")
+    qualified = foundry_profile()
+    activation = {"enabled": False}
+    provider = FoundryTokenCredentialProvider(
+        company_id=company, profile=qualified, token_credential=credential,
+        enabled=overrides.pop("enabled", lambda: activation["enabled"]),
+        knowledge_binding=overrides.pop("knowledge_binding", "synthetic-shared-standards"),
+        knowledge_scope=overrides.pop("knowledge_scope", "SHARED_STANDARDS"),
+        agent_version=overrides.pop("agent_version", "6"),
+        qualification=overrides.pop("qualification", "OFFLINE_FIXTURE"),
+        **overrides,
+    )
+    return provider, credential, company, qualified, activation
+
+
+def test_token_credential_host_is_disabled_and_metadata_reads_do_not_acquire_tokens() -> None:
+    host, credential, company, qualified, activation = token_credential_host()
+    assert not host.ready(company, qualified)
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE"):
+        host.resolve(company, qualified)
+    assert credential.scopes == []
+    activation["enabled"] = True
+    assert host.ready(company, qualified)
+    access = host.resolve(company, qualified)
+    assert credential.scopes == []
+    bearer = access.credential()
+    assert bearer.audience == "https://ai.azure.com"
+    assert credential.scopes == [("https://ai.azure.com/.default",)]
+    assert "synthetic-bearer" not in repr(bearer)
+    assert "synthetic-bearer" not in repr(host)
+    assert "synthetic-bearer" not in repr(access)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("profile_id", "foreign-profile"), ("configuration_id", "foreign-config"),
+    ("endpoint", "https://foreign.invalid/api/projects/project/agents/agent/endpoint/protocols/openai/responses"),
+    ("model_or_deployment", "foreign-model"), ("max_output_tokens", 500),
+    ("capabilities", {"structured_output": True, "vision": True}),
+])
+def test_token_credential_host_rejects_any_changed_profile_before_acquisition(
+    field: str, value: Any,
+) -> None:
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    changed = qualified.model_copy(update={field: value})
+    if field == "capabilities":
+        changed = type(qualified).model_validate({**qualified.model_dump(), field: value})
+    assert not host.ready(company, changed)
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE"):
+        host.resolve(company, changed)
+    assert credential.scopes == []
+
+
+def test_token_credential_host_rejects_foreign_company_and_preserves_profile_copy() -> None:
+    from uuid import UUID
+
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    foreign = UUID("00000000-0000-0000-0000-000000000002")
+    assert not host.ready(foreign, qualified)
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE"):
+        host.resolve(foreign, qualified)
+    qualified.capabilities.vision = True
+    assert not host.ready(company, qualified)
+    assert credential.scopes == []
+
+
+@pytest.mark.parametrize("enabled", [lambda: 1, lambda: "yes", lambda: None])
+def test_token_credential_host_requires_explicit_boolean_enable(enabled: Any) -> None:
+    host, credential, company, qualified, _ = token_credential_host(enabled=enabled)
+    assert not host.ready(company, qualified)
+    assert credential.scopes == []
+
+
+def test_token_credential_host_enable_failure_and_revocation_fail_closed() -> None:
+    def unavailable() -> bool:
+        raise RuntimeError("synthetic-private-host-detail")
+
+    host, credential, company, qualified, _ = token_credential_host(enabled=unavailable)
+    assert not host.ready(company, qualified)
+    assert credential.scopes == []
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    access = host.resolve(company, qualified)
+    activation["enabled"] = False
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE"):
+        access.credential()
+    assert credential.scopes == []
+
+
+@pytest.mark.parametrize("token,expiry", [
+    ("", 9999999999), (None, 9999999999), (b"synthetic", 9999999999),
+    ("synthetic", True), ("synthetic", "9999999999"),
+    ("synthetic", float("nan")), ("synthetic", float("inf")), ("synthetic", 0),
+])
+def test_token_credential_host_rejects_invalid_capability(token: Any, expiry: Any) -> None:
+    from types import SimpleNamespace
+
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    credential.result = SimpleNamespace(token=token, expires_on=expiry)
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_CREDENTIAL_UNAVAILABLE"):
+        host.resolve(company, qualified).credential()
+    assert credential.scopes == [("https://ai.azure.com/.default",)]
+
+
+def test_token_credential_host_sanitizes_sdk_failure_before_provider_http() -> None:
+    from apbra_api.model_provider import FoundryAgentResponsesProvider
+
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    credential.error = RuntimeError("synthetic-private-authentication-detail")
+    requests: list[Any] = []
+    adapter = FoundryAgentResponsesProvider(
+        qualified, host.resolve(company, qualified), company_id=company,
+        transport=httpx.MockTransport(lambda wire: requests.append(wire) or httpx.Response(200)),
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_CREDENTIAL_UNAVAILABLE") as caught:
+        adapter.structured(request())
+    assert requests == []
+    assert caught.value.observation.call_count == 0
+    assert "synthetic-private" not in str(caught.value)
+    assert caught.value.__suppress_context__
+
+
+def test_token_credential_host_refreshes_scope_for_each_mocked_provider_attempt() -> None:
+    from apbra_api.model_provider import FoundryAgentResponsesProvider
+
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    attempts: list[Any] = []
+
+    def handler(wire: Any) -> httpx.Response:
+        attempts.append(wire)
+        if len(attempts) == 1:
+            raise httpx.ReadTimeout("synthetic timeout")
+        assert wire.headers["authorization"] == "Bearer synthetic-bearer"
+        return httpx.Response(200, json=responses_payload())
+
+    result = FoundryAgentResponsesProvider(
+        qualified, host.resolve(company, qualified), company_id=company,
+        transport=httpx.MockTransport(handler),
+    ).structured(request())
+    assert result.call_count == 2
+    assert credential.scopes == [("https://ai.azure.com/.default",)] * 2
+    assert result.grounding["qualification"] == "OFFLINE_FIXTURE"
+
+
+@pytest.mark.parametrize("overrides", [
+    {"knowledge_binding": "invalid/private binding"}, {"knowledge_scope": "FOREIGN"},
+    {"agent_version": "invalid version"}, {"qualification": "UNVERIFIED"},
+])
+def test_token_credential_host_validates_qualification_without_acquisition(overrides: Any) -> None:
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_QUALIFICATION_INVALID"):
+        token_credential_host(**overrides)
+
+
 def responses_payload(value: Any = None, annotations: list[Any] | None = None) -> dict[str, Any]:
     return {
         "status": "completed",
