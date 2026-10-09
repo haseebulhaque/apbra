@@ -1,6 +1,7 @@
 """Default startup never discovers or authenticates Azure credentials."""
 
 import argparse
+import logging
 import sys
 import time
 from collections.abc import Callable, Iterator
@@ -91,6 +92,18 @@ def _private_terminal() -> Iterator[TextIO]:
         yield terminal
 
 
+@contextmanager
+def _private_sdk_logging() -> Iterator[None]:
+    # The explicit CLI has not started an application or server yet. SDK warning
+    # messages can contain private authentication data even with HTTP logging off.
+    previous = logging.root.manager.disable
+    logging.disable(max(previous, logging.CRITICAL))
+    try:
+        yield
+    finally:
+        logging.disable(previous)
+
+
 def _local_address(settings: Settings) -> tuple[str, int]:
     try:
         origin = urlparse(settings.api_origin)
@@ -153,44 +166,45 @@ def run_foundry_device_code(
                 terminal.write(f"Complete the approved sign-in at {uri} using code {code}.\n")
                 terminal.flush()
 
-            sdk = (credential_factory or _device_credential)(
-                tenant_id=str(binding.tenant_id),
-                client_id=str(binding.client_id),
-                authority="login.microsoftonline.com",
-                additionally_allowed_tenants=[],
-                disable_automatic_authentication=True,
-                cache_persistence_options=None,
-                enable_support_logging=False,
-                logging_enable=False,
-                prompt_callback=private_prompt,
-                timeout=remaining,
-            )
-            try:
-                if not _authorized(settings, binding):
-                    raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
-                record = sdk.authenticate(scopes=[_SCOPE])
-                if (
-                    not _authorized(settings, binding)
-                    or record.tenant_id != str(binding.tenant_id)
-                    or record.client_id != str(binding.client_id)
-                    or record.home_account_id != binding.home_account_id
-                ):
-                    raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
-                acquired = sdk.get_token(_SCOPE)
-                if not _authorized(settings, binding):
-                    raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
-                snapshot = FoundryMemoryTokenCredential(
-                    acquired,
-                    authorization_deadline=binding.authorization_deadline,
-                    enabled=lambda: _authorized(settings, binding),
-                    binding_digest=binding.binding_digest(),
+            with _private_sdk_logging():
+                sdk = (credential_factory or _device_credential)(
+                    tenant_id=str(binding.tenant_id),
+                    client_id=str(binding.client_id),
+                    authority="login.microsoftonline.com",
+                    additionally_allowed_tenants=[],
+                    disable_automatic_authentication=True,
+                    cache_persistence_options=None,
+                    enable_support_logging=False,
+                    logging_enable=False,
+                    prompt_callback=private_prompt,
+                    timeout=remaining,
                 )
-                del acquired, record
-            finally:
                 try:
-                    sdk.close()
+                    if not _authorized(settings, binding):
+                        raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
+                    record = sdk.authenticate(scopes=[_SCOPE])
+                    if (
+                        not _authorized(settings, binding)
+                        or record.tenant_id != str(binding.tenant_id)
+                        or record.client_id != str(binding.client_id)
+                        or record.home_account_id != binding.home_account_id
+                    ):
+                        raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
+                    acquired = sdk.get_token(_SCOPE)
+                    if not _authorized(settings, binding):
+                        raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
+                    snapshot = FoundryMemoryTokenCredential(
+                        acquired,
+                        authorization_deadline=binding.authorization_deadline,
+                        enabled=lambda: _authorized(settings, binding),
+                        binding_digest=binding.binding_digest(),
+                    )
+                    del acquired, record
                 finally:
-                    del sdk
+                    try:
+                        sdk.close()
+                    finally:
+                        del sdk
         if not _authorized(settings, binding) or not snapshot.ready():
             raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
         _serve(create_runtime_app(settings, snapshot), settings)

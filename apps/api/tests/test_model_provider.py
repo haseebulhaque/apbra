@@ -1716,3 +1716,84 @@ def test_host_runtime_invalid_origin_is_private_and_blocks_sdk(
     with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_LOCAL_HOST_REQUIRED$"):
         module.run_foundry_device_code(settings, lambda **kwargs: calls.append(kwargs))
     assert calls == []
+
+
+@pytest.mark.parametrize("failure", [None, "factory", "authenticate", "get_token", "close"])
+@pytest.mark.parametrize("previous", [0, 40, 51])
+def test_host_runtime_sdk_logs_are_suppressed_and_prior_state_is_restored(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str], failure: str | None, previous: int,
+) -> None:
+    import logging
+
+    module, settings, sdk, events, _ = fake_host_flow(monkeypatch)
+    original_disable = logging.root.manager.disable
+    canary = "synthetic-private-sdk-log-canary"
+    loggers = [logging.getLogger("azure.identity._internal.interactive"),
+               logging.getLogger("msal.application")]
+    for logger in loggers:
+        monkeypatch.setattr(logger, "level", logging.DEBUG)
+        # A direct descendant handler exercises more than a parent logger filter.
+        monkeypatch.setattr(logger, "handlers", [caplog.handler])
+        monkeypatch.setattr(logger, "propagate", False)
+
+    def emit(phase: str) -> None:
+        try:
+            raise RuntimeError(canary)
+        except RuntimeError:
+            for logger in loggers:
+                logger.warning("%s failed: %s", phase, canary, exc_info=True)
+                logger.critical("%s", canary)
+        if failure == phase:
+            raise RuntimeError(canary)
+
+    for phase in ("authenticate", "get_token", "close"):
+        operation = getattr(sdk, phase)
+
+        def wrapped(*args: Any, phase: str = phase, operation: Any = operation,
+                    **kwargs: Any) -> Any:
+            emit(phase)
+            return operation(*args, **kwargs)
+
+        monkeypatch.setattr(sdk, phase, wrapped)
+
+    def factory(**kwargs: Any) -> Any:
+        emit("factory")
+        return sdk
+
+    def serve(*args: Any) -> None:
+        assert logging.root.manager.disable == previous
+        events.append("serve")
+
+    monkeypatch.setattr(module, "_serve", serve)
+    try:
+        logging.disable(previous)
+        if failure is None:
+            module.run_foundry_device_code(settings, factory)
+            assert events == ["authenticate", "token", "close", "serve"]
+        else:
+            with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_HOST_UNAVAILABLE$"):
+                module.run_foundry_device_code(settings, factory)
+        assert logging.root.manager.disable == previous
+        captured = capsys.readouterr()
+        assert canary not in caplog.text + captured.out + captured.err
+        assert not any(canary in record.getMessage() for record in caplog.records)
+    finally:
+        logging.disable(original_disable)
+
+
+def test_host_runtime_default_startup_never_changes_logging_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import logging
+
+    calls: list[int] = []
+    before = logging.root.manager.disable
+    monkeypatch.setattr(logging, "disable", lambda level: calls.append(level))
+    module = host_runtime_module(monkeypatch)
+    disabled = host_runtime_settings().model_copy(update={"foundry_host_enabled": False})
+    module.create_runtime_app(disabled)
+    with pytest.raises(ProviderConfigurationError):
+        module.create_runtime_app(host_runtime_settings())
+    assert calls == []
+    assert logging.root.manager.disable == before
