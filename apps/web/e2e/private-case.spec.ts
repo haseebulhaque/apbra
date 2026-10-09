@@ -9,6 +9,8 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|
 }
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
+  const protectedSettingsReads:string[]=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname==='/api/tenant-settings')protectedSettingsReads.push(request.method())});
   await signIn(page,'member');
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   await expect(page.locator('main').getByRole('button',{name:'Create report'})).toHaveCount(1);
@@ -31,6 +33,7 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await expect(page.getByText('Earlier request versions · 2')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Private report access'})).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(protectedSettingsReads).toEqual([]);
 });
 
 test('business workspace remains keyboard navigable and contained on a small screen',async({page},testInfo)=>{
@@ -176,6 +179,12 @@ test('an existing company member accepts a second exact invitation and selects e
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
   const originalSession=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string;role:string}});
   expect(originalSession.actor.role).toBe('COMPANY_OWNER');
+  const originalSavedSettings=await (await page.request.get('/api/tenant-settings')).json();
+  const originalSavedHistory=await (await page.request.get('/api/tenant-settings/history')).json();
+  const originalPalette={primary:originalSavedSettings.settings.generation_policy.branding.primary,accent:originalSavedSettings.settings.generation_policy.branding.accent},targetPalette={primary:'#654321',accent:'#ABCDEF'};
+  expect(originalPalette.primary.toLowerCase()).not.toBe(targetPalette.primary.toLowerCase());
+  expect(originalPalette.accent.toLowerCase()).not.toBe(targetPalette.accent.toLowerCase());
+  let releaseOldBranding=()=>{};
 
   const privateRequest='Review synthetic creator-only activity by week.';
   await page.getByRole('button',{name:'Create report'}).first().click();
@@ -196,6 +205,8 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(inviterPage.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const targetSession=await inviterPage.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
     expect(targetSession.actor.company_id).not.toBe(originalSession.actor.company_id);
+    const targetSavedSettings=await (await inviterPage.request.get('/api/tenant-settings')).json();
+    const targetSavedHistory=await (await inviterPage.request.get('/api/tenant-settings/history')).json();
     await inviterPage.getByRole('button',{name:'Administration'}).click();
     await inviterPage.getByText('Manage company access').click();
     await inviterPage.getByLabel('External subject').fill('dev-creator');
@@ -204,9 +215,26 @@ test('an existing company member accepts a second exact invitation and selects e
     const invitationLink=await inviterPage.getByLabel('One-time invitation link').inputValue();
     expect(invitationLink).toMatch(/\/invite#token=/);
 
+    let receivedOldBranding!:()=>void;
+    const oldBrandingReady=new Promise<void>(resolve=>{receivedOldBranding=resolve});
+    const heldOldBranding=new Promise<void>(resolve=>{releaseOldBranding=resolve});
+    let holdOriginal=true;
+    // Browser-only distinct palettes; API session/branding requests still use real tenant selection.
+    await page.route('**/api/workspace/branding',async route=>{
+      const state=await (await page.request.get('/api/auth/session')).json() as {actor?:{company_id:string}};
+      const response=await route.fetch();
+      if(response.status()!==200){await route.fulfill({response});return}
+      const branding=await response.json();
+      const isOriginal=state.actor?.company_id===originalSession.actor.company_id;
+      expect(isOriginal||state.actor?.company_id===targetSession.actor.company_id).toBe(true);
+      const palette=isOriginal?originalPalette:targetPalette;
+      if(isOriginal&&holdOriginal){holdOriginal=false;branding.version+=100;receivedOldBranding();await heldOldBranding;}
+      await route.fulfill({response,json:{...branding,...palette}});
+    });
     await page.goto(invitationLink);
     await expect(page).not.toHaveURL(/token=/);
     await expect(page.getByRole('heading',{name:'Accept company invitation'})).toBeVisible();
+    await oldBrandingReady;
     await page.getByRole('button',{name:'Accept invitation'}).click();
     await expect(page.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
     const accepted=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor:{company_id:string;membership_id:string;role:string}});
@@ -214,6 +242,12 @@ test('an existing company member accepts a second exact invitation and selects e
     expect(accepted.actor.company_id).toBe(targetSession.actor.company_id);
     expect(accepted.actor.role).toBe('MEMBER');
     expect(accepted.actor.membership_id).not.toBe(originalSession.actor.membership_id);
+    const displayedPrimary=()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'));
+    await expect.poll(displayedPrimary).toBe(targetPalette.primary.toLowerCase());
+    const oldReply=page.waitForResponse(response=>response.url().endsWith('/api/workspace/branding')&&response.status()===200);
+    releaseOldBranding();await (await oldReply).finished();
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    expect(await displayedPrimary()).toBe(targetPalette.primary.toLowerCase());
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
     await page.reload();
@@ -228,6 +262,8 @@ test('an existing company member accepts a second exact invitation and selects e
     const fresh=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor?:unknown;available_companies:Array<{company_id:string;membership_id:string;name:string}>});
     expect(fresh.membership_state).toBe('COMPANY_SELECTION_REQUIRED');
     expect(fresh.actor).toBeUndefined();
+    expect((await page.request.get('/api/workspace/branding')).status()).toBe(401);
+    await expect(page.locator('.private-workspace')).toHaveCount(0);
     const original=fresh.available_companies.find(company=>company.company_id===originalSession.actor.company_id);
     const target=fresh.available_companies.find(company=>company.company_id===targetSession.actor.company_id);
     expect(original).toBeTruthy();
@@ -237,6 +273,11 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedOriginal=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedOriginal.actor.membership_id).toBe(originalSession.actor.membership_id);
+    const originalBranding=await (await page.request.get('/api/workspace/branding')).json();
+    expect(originalBranding).toEqual({version:originalSavedSettings.version,primary:originalSavedSettings.settings.generation_policy.branding.primary,accent:originalSavedSettings.settings.generation_policy.branding.accent});
+    await expect.poll(displayedPrimary).toBe(originalPalette.primary.toLowerCase());
+    expect(await (await page.request.get('/api/tenant-settings')).json()).toEqual(originalSavedSettings);
+    expect(await (await page.request.get('/api/tenant-settings/history')).json()).toEqual(originalSavedHistory);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
 
     await page.getByRole('button',{name:'Sign out'}).click();
@@ -247,9 +288,14 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
     const selectedTarget=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string;membership_id:string}});
     expect(selectedTarget.actor.membership_id).toBe(accepted.actor.membership_id);
+    const targetBranding=await (await page.request.get('/api/workspace/branding')).json();
+    expect(targetBranding).toEqual({version:targetSavedSettings.version,primary:targetSavedSettings.settings.generation_policy.branding.primary,accent:targetSavedSettings.settings.generation_policy.branding.accent});
+    await expect.poll(displayedPrimary).toBe(targetPalette.primary.toLowerCase());
+    expect(await (await inviterPage.request.get('/api/tenant-settings')).json()).toEqual(targetSavedSettings);
+    expect(await (await inviterPage.request.get('/api/tenant-settings/history')).json()).toEqual(targetSavedHistory);
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toHaveCount(0);
     expect((await page.request.get(`/api/cases/${privateCaseId}`)).status()).toBe(404);
-  }finally{await inviterContext.close()}
+  }finally{releaseOldBranding();await inviterContext.close()}
 });
 
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
@@ -438,6 +484,7 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   await expect(page.getByText('Report request created and saved.')).toBeVisible();
   await page.getByRole('button',{name:'Next: Information',exact:true}).click();
   await page.emulateMedia({reducedMotion:'reduce'});
+  await page.keyboard.press('Tab');await page.getByLabel('Add more requirements').focus();await expect(page.getByLabel('Add more requirements')).toHaveCSS('outline-style','solid');
   const assertLabelsFit=async()=>{
     const violations=await page.locator('.report-wizard').evaluate(wizard=>{
       const errors:string[]=[];
@@ -449,23 +496,20 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
         const label=button.querySelector('strong')!;check(label,button,label.textContent??'step');
         if((label as HTMLElement).scrollWidth>(label as HTMLElement).clientWidth+1)errors.push('Clipped step text');
       });
-      const rgb=(color:string)=>color.match(/\d+(?:\.\d+)?/g)!.map(Number);
-      const luminance=(values:number[])=>values.slice(0,3).map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
-      for(const selector of ['.quiet-empty','.evidence-upload strong','.evidence-upload small','.evidence-upload .upload-button','.composer-footer>span']){
-        const element=wizard.querySelector(selector)!;let background=element;
-        while(background.parentElement&&rgb(getComputedStyle(background).backgroundColor)[3]===0)background=background.parentElement;
-        const text=luminance(rgb(getComputedStyle(element).color)),surface=luminance(rgb(getComputedStyle(background).backgroundColor));
-        if((Math.max(text,surface)+.05)/(Math.min(text,surface)+.05)<4.5)errors.push('Text contrast: '+selector);
-      }
       const button=wizard.querySelector('.message-composer .composer-footer button')!;
       check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
       return [...new Set(errors)];
     });
     expect(violations).toEqual([]);
+    expect(await renderedTextContrast(page)).toEqual([]);
   };
   for(const mode of ['light','dark']){
     await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
-    for(const width of [1280,1024,768,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+    for(const width of [1920,1601,1600,1440,1280,1024,768,701,700,600,550,320]){
+      await page.setViewportSize({width,height:900});await assertLabelsFit();
+      const wrapped=await page.locator('.journey-steps strong').evaluateAll(labels=>labels.filter(label=>{const range=document.createRange();range.selectNodeContents(label);return range.getClientRects().length>1}).map(label=>label.textContent));
+      expect(wrapped).toEqual([]);
+    }
   }
   await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
   await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
@@ -473,4 +517,113 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
     await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
     for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
   }
+});
+
+
+async function renderedTextContrast(page:Page){
+  return page.locator('.private-workspace').evaluate(root=>{
+    const rgba=(value:string)=>(value.match(/[\d.]+/g)||[]).map(Number);
+    const composite=(front:number[],back:number[])=>{const alpha=front[3]??1;return front.slice(0,3).map((value,index)=>value*alpha+back[index]*(1-alpha))};
+    const background=(element:Element)=>{const ancestors:Element[]=[];for(let item:Element|null=element;item;item=item.parentElement)ancestors.unshift(item);return ancestors.reduce((back,item)=>composite(rgba(getComputedStyle(item).backgroundColor),back),[255,255,255])};
+    const luminance=(color:number[])=>color.map(value=>{const n=value/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);
+    const errors:string[]=[];const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    while(walker.nextNode()){
+      const node=walker.currentNode,element=node.parentElement;
+      if(!element||!node.textContent?.trim()||element.closest('[hidden],[aria-hidden="true"],:disabled,script,style,option'))continue;
+      const style=getComputedStyle(element),range=document.createRange();range.selectNodeContents(node);
+      if(style.visibility==='hidden'||!range.getBoundingClientRect().width)continue;
+      const surface=background(element),text=composite(rgba(style.color),surface),a=luminance(text),b=luminance(surface),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+      const large=parseFloat(style.fontSize)>=24||parseFloat(style.fontSize)>=18.6667&&parseInt(style.fontWeight)>=700;
+      if(ratio<(large?3:4.5))errors.push(`${element.tagName}.${element.className}: ${ratio.toFixed(2)}:1`);
+    }
+    return [...new Set(errors)];
+  });
+}
+
+test('rendered Clear Glass text stays readable across screens, themes, hover and focus',async({page},testInfo)=>{
+  await signIn(page,'owner');await page.emulateMedia({reducedMotion:'reduce'});
+  const check=async()=>{expect(await renderedTextContrast(page)).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)};
+  for(const scheme of ['light','dark'] as const){
+    await page.emulateMedia({colorScheme:scheme,reducedMotion:'reduce'});
+    for(const appearance of [scheme,'system']){
+      await page.getByLabel('Appearance',{exact:true}).selectOption(appearance);
+      for(const width of [1280,768,320]){
+        await page.setViewportSize({width,height:900});
+        const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
+        await navigate('Home');await check();for(const row of await page.locator('.case-row-copy small').all()){const marker=row.locator('span');await expect(marker).toHaveCSS('display','inline')}if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`home-${scheme}-${width}.png`),fullPage:true});
+        await navigate('Create report');await check();if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`create-${scheme}-${width}.png`),fullPage:true});
+        const logout=page.getByRole('button',{name:'Sign out',exact:true});await logout.hover();await check();await page.keyboard.press('Tab');await logout.focus();await expect(logout).toHaveCSS('outline-style','solid');await check();
+        await page.mouse.move(0,0);
+        const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();
+        await page.getByRole('button',{name:'Administration',exact:true}).click();
+        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();await check();if(section==='AI & models'&&appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`settings-${scheme}-${width}.png`),fullPage:true})}
+      }
+    }
+  }
+});
+
+async function renderedControlAudit(page:Page){
+  return page.locator('.private-workspace').evaluate(root=>{
+    const rgba=(value:string)=>(value.match(/[\d.]+/g)||[]).map(Number);
+    const over=(front:number[],back:number[])=>front.slice(0,3).map((value,index)=>value*(front[3]??1)+back[index]*(1-(front[3]??1)));
+    const background=(element:Element|null)=>{const parents:Element[]=[];for(let item=element;item;item=item.parentElement)parents.unshift(item);return parents.reduce((back,item)=>over(rgba(getComputedStyle(item).backgroundColor),back),[255,255,255])};
+    const luminance=(colour:number[])=>colour.map(value=>{const n=value/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[.2126,.7152,.0722][index],0);
+    const contrast=(first:number[],second:number[])=>{const a=luminance(first),b=luminance(second);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)};
+    const visible=(element:Element)=>{const closed=element.closest('details:not([open])');return element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden'&&!element.closest('[hidden],[aria-hidden="true"]')&&(!closed||Boolean(closed.querySelector(':scope > summary')?.contains(element)))};
+    const errors:string[]=[];
+    for(const element of root.querySelectorAll('input:not([type="checkbox"]):not([type="file"]),textarea,select,button.subtle:not(:disabled),.new-report-card button:not(:disabled)')){
+      if(!visible(element)||element.matches(':disabled'))continue;
+      const style=getComputedStyle(element),outside=background(element.parentElement),fill=background(element);
+      const boundary=parseFloat(style.borderTopWidth)>0?contrast(over(rgba(style.borderTopColor),outside),outside):0;
+      if(Math.max(boundary,contrast(fill,outside))<3)errors.push(`Control boundary ${element.tagName}.${element.className}`);
+      if(element.matches('input[placeholder],textarea[placeholder]')){const placeholder=getComputedStyle(element,'::placeholder');if(contrast(over(rgba(placeholder.color),fill),fill)<4.5)errors.push('Placeholder contrast');}
+    }
+    const focused=document.activeElement;if(focused&&root.contains(focused)){const style=getComputedStyle(focused);if(style.outlineStyle==='solid'&&contrast(over(rgba(style.outlineColor),background(focused.parentElement)),background(focused.parentElement))<3)errors.push('Focus contrast');}
+    const controls=Array.from(root.querySelectorAll('button,a,input:not([type="file"]),textarea,select,summary')).filter(element=>visible(element)&&!element.classList.contains('skip-link'));
+    for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++){
+      const first=controls[i],second=controls[j];if(first.contains(second)||second.contains(first))continue;
+      const a=first.getBoundingClientRect(),b=second.getBoundingClientRect();if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)errors.push(`Overlapping controls ${first.tagName}/${second.tagName}`);
+    }
+    return [...new Set(errors)];
+  });
+}
+
+test('tenant presentation variants preserve readable controls, borders and non-overlapping layouts',async({page},testInfo)=>{
+  test.setTimeout(90_000);await signIn(page,'owner');await page.emulateMedia({reducedMotion:'reduce'});
+  const before=(await (await page.request.get('/api/tenant-settings')).json());
+  await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(before.settings.generation_policy.branding.primary.toLowerCase());
+  // Fixture only the browser's existing authorized GET response. Persisted
+  // settings and report-generation policy are never written by this test.
+  const palettes=[{primary:'#17635E',accent:'#2D7D9A'},{primary:'#FFFFFF',accent:'#000000'},{primary:'#000000',accent:'#FFFFFF'},{primary:'#FFFF00',accent:'#FF00FF'},{primary:'#0000FF',accent:'#00FF00'},{primary:'#777777',accent:'#777777'}];
+  let palette=palettes[0];
+  await page.route('**/api/tenant-settings',async route=>{const response=await route.fetch();const value=await response.json();value.settings.generation_policy.branding={...value.settings.generation_policy.branding,...palette};await route.fulfill({response,json:value})});
+  await page.route('**/api/workspace/branding',async route=>{const response=await route.fetch();const value=await response.json();await route.fulfill({response,json:{...value,...palette}})});
+  const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();if(name==='Administration')await page.getByRole('button',{name,exact:true}).click();else await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
+  for(const [index,branding] of palettes.entries()){
+    palette=branding;await page.reload();await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
+    for(const mode of ['light','dark']){
+      await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+      // The visible logo letter is aria-hidden; audit its painted colours too.
+      const logoContrast=await page.locator('.rail-brand .brand-mark').evaluate(element=>{
+        const style=getComputedStyle(element);
+        const luminance=(colour:string)=>{const channels=colour.match(/[\d.]+/g)!.slice(0,3).map(Number).map(channel=>{const value=channel/255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4});return .2126*channels[0]+.7152*channels[1]+.0722*channels[2]};
+        const foreground=luminance(style.color),background=luminance(style.backgroundColor);return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);
+      });
+      expect(logoContrast).toBeGreaterThanOrEqual(4.5);
+      for(const width of [1280,768,320]){
+        await page.setViewportSize({width,height:900});await navigate('Create report');await page.getByLabel('Your reporting goal').fill('Synthetic presentation audit only');
+        const create=page.locator('.new-report-card').getByRole('button',{name:/Create report/});await create.hover();await page.keyboard.press('Tab');await create.focus();
+        expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
+        expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        if(index===0||index===3)await page.screenshot({path:testInfo.outputPath(`tenant-${index}-${mode}-${width}.png`),fullPage:true});
+        await page.mouse.move(0,0);await navigate('Administration');
+        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){
+          await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();
+          expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        }
+      }
+    }
+  }
+  const after=(await (await page.request.get('/api/tenant-settings')).json());expect(after.version).toBe(before.version);expect(after.settings.generation_policy.branding).toEqual(before.settings.generation_policy.branding);
 });

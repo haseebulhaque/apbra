@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {CaseEditor,CaseList,ReportCreationWizard,personalColorMode,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
@@ -38,4 +38,30 @@ it('bounds personal appearance to light, dark or system',()=>{
   expect(personalColorMode('dark')).toBe('dark');
   expect(personalColorMode('system')).toBe('system');
   for(const value of ['arbitrary',null,{},'DARK'])expect(personalColorMode(value)).toBe('system');
+});
+
+it('derives readable presentation variants without mutating tenant branding',()=>{
+  const colours=['#17635E','#2D7D9A','#FFFFFF','#000000','#FFFF00','#00FF00','#FF0000','#0000FF','#FF00FF','#777777','#EDF2FA','#172338'];
+  for(const primary of colours)for(const accent of colours){
+    const branding=Object.freeze({primary,accent});const tokens=tenantPresentationTokens(branding) as Record<string,string>;
+    expect(tokens['--tenant-primary-original']).toBe(primary.toLowerCase());expect(tokens['--tenant-accent-original']).toBe(accent.toLowerCase());
+    for(const dark of [false,true]){
+      const mode=dark?'dark':'light',surfaces=dark?['#101927','#172338','#1c2b43']:['#f4f7fd','#ffffff','#edf2fa'];
+      const token=(name:string)=>tokens[`--tenant-${name}-${mode}`];
+      for(const surface of surfaces){
+        expect(presentationContrast(token('brand'),surface)).toBeGreaterThanOrEqual(3);
+        expect(presentationContrast(token('hover'),surface)).toBeGreaterThanOrEqual(3);
+        expect(presentationContrast(token('link'),surface)).toBeGreaterThanOrEqual(4.5);
+        expect(presentationContrast(token('focus'),surface)).toBeGreaterThanOrEqual(3);
+      }
+      for(const fill of ['brand','hover'])expect(presentationContrast(token(fill),token('on-brand'))).toBeGreaterThanOrEqual(4.5);
+      expect(presentationContrast(token('soft'),dark?'#edf3fc':'#19283f')).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(branding).toEqual({primary,accent});
+  }
+});
+it('rejects CSS-shaped colour values and uses bounded presentation fallbacks',()=>{
+  const tokens=tenantPresentationTokens({primary:'url(https://example.invalid)',accent:'red;display:none'}) as Record<string,string>;
+  expect(tokens['--tenant-primary-original']).toBe('#245de5');expect(tokens['--tenant-accent-original']).toBe('#245de5');
+  expect(Object.values(tokens).every(value=>/^#[\da-f]{6}$/.test(value))).toBe(true);
 });

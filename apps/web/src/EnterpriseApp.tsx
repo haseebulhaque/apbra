@@ -10,7 +10,7 @@ import {parseDataFile,summarizeDataStructure,type DataStructure} from './schemaI
 import {inspectLayoutRepairSemantics,isLayoutRepairEligible,normalizeReportDesign,type LayoutRepairSemanticFinding,type LayoutRepairSemanticInspection,type ReportDesignNormalization} from './reportDesignNormalization';
 import {defaultTenantSettings,supportedTrendGrains,type TenantSettings} from './tenant';
 import {FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper,type StageState} from './EnterpriseUI';
-import {PrivateCaseWorkspace} from './privateCases';
+import {PrivateCaseWorkspace,type PresentationBranding} from './privateCases';
 import {ApiError,authApi,tenantSettingsApi,type CaseRecord,type TenantProviderProfile,type TenantSettingsDocument,type TenantSettingsHistory,type TenantSettingsSection,type TenantSettingsVersion} from './api';
 
 type View='create'|'runs'|'tenant'|'ai'|'knowledge'|'branding'|'guardrails';
@@ -86,7 +86,7 @@ export function EnterprisePrototypeApp({caseRecord}:{caseRecord?:CaseRecord}={})
   return <div className="app-shell"><aside className="side-nav"><div className="brand"><span className="brand-mark">A</span><div><strong>APBRA</strong><small>Power BI automation</small></div></div>{nav.map(section=><nav key={section.group} aria-label={section.group}><p>{section.group}</p>{section.items.map(([id,label,icon])=><NavItem key={id} active={view===id} label={label} icon={icon} onClick={()=>setView(id)}/>)}</nav>)}<p className="session-note">Runs are retained for this browser session.</p></aside><div className="app-main"><header className="top-bar"><div><strong>{tenant.organisation.displayName}</strong><span>{view==='create'?'Report generation':view==='runs'?'Run history':'Administration'}</span></div><StatusBadge tone={serviceTone}>{serviceLabel}</StatusBadge></header>{view==='create'&&<CreateReport tenant={tenant} documents={knowledgeDocuments} initialRequirement={caseRecord?.current_request.request_text} caseVersion={caseRecord?.version} onIndexed={()=>setLastIndexed(new Date().toLocaleString())} onRun={run=>setRuns(current=>[run,...current])}/>} {view==='runs'&&<MyRuns runs={runs}/>} {view==='tenant'&&<TenantSettingsPage value={tenant} onChange={setTenant}/>} {view==='ai'&&<AIModelsPage service={service} tenant={tenant}/>} {view==='knowledge'&&<KnowledgePage documents={knowledgeDocuments} lastIndexed={lastIndexed} onChange={setKnowledgeDocuments} onReindex={()=>{clearRagIndex();setLastIndexed('Index cleared; it will rebuild on the next report run.')}}/>} {view==='branding'&&<BrandingPage value={tenant} onChange={setTenant}/>} {view==='guardrails'&&<GuardrailsPage value={tenant} onChange={setTenant}/>}</div></div>
 }
 
-export function EnterpriseApp(){return <PrivateCaseWorkspace adminPanel={membershipId=><TenantSettingsAdmin key={membershipId}/>}/>}
+export function EnterpriseApp(){return <PrivateCaseWorkspace adminPanel={(membershipId,onBrandingChanged)=><TenantSettingsAdmin key={membershipId} onBrandingChanged={onBrandingChanged}/>}/>}
 
 const tenantSectionFields:Record<TenantSettingsSection,readonly string[]>={
   ai_models:['automatic_generation_enabled','clarification_enabled','expert_escalation_enabled','provider_profile'],
@@ -129,9 +129,29 @@ function matchesQualificationIdentity(selected:TenantProviderProfile,qualified:T
   return selected.profile_id===qualified.profile_id&&selected.protocol===qualified.protocol&&selected.endpoint===qualified.endpoint&&selected.model_or_deployment===qualified.model_or_deployment&&selected.api_version===qualified.api_version&&selected.region===qualified.region&&selected.prompt_version===qualified.prompt_version&&selected.configuration_id===qualified.configuration_id&&JSON.stringify(selected.capabilities)===JSON.stringify(qualified.capabilities);
 }
 
-function TenantSettingsAdmin(){
+function TenantSettingsDialog({label,busy,onClose,children}:{label:string;busy:boolean;onClose:()=>void;children:React.ReactNode}){
+  const dialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{
+    const element=dialog.current!;
+    const opener=document.activeElement;
+    element.showModal();
+    element.querySelector<HTMLButtonElement>('button')?.focus();
+    return()=>{element.close();if(opener instanceof HTMLElement&&opener.isConnected)opener.focus()};
+  },[]);
+  return <dialog ref={dialog} aria-label={label} className="tenant-dialog" onCancel={event=>{event.preventDefault();if(!busy)onClose()}} onKeyDown={event=>{
+    if(event.key!=='Tab')return;
+    const controls=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]')).filter(element=>element.getClientRects().length>0);
+    event.preventDefault();
+    const current=controls.indexOf(document.activeElement as HTMLElement);
+    const next=event.shiftKey?(current<=0?controls.length-1:current-1):(current+1)%controls.length;
+    controls[next]?.focus();
+  }}>{children}</dialog>;
+}
+
+function TenantSettingsAdmin({onBrandingChanged}:{onBrandingChanged:(colours:PresentationBranding,version:number)=>void}){
   const [session,setSession]=useState<Awaited<ReturnType<typeof authApi.session>>|null>(null);
   const [current,setCurrent]=useState<TenantSettingsVersion|null>(null);
+  useEffect(()=>{if(current)onBrandingChanged(current.settings.generation_policy.branding,current.version)},[current,onBrandingChanged]);
   const [draft,setDraft]=useState<TenantSettingsDocument|null>(null);
   const [history,setHistory]=useState<TenantSettingsHistory[]>([]);
   const [qualifiedProfiles,setQualifiedProfiles]=useState<TenantProviderProfile[]>([]);
@@ -198,10 +218,10 @@ function TenantSettingsAdmin(){
     </fieldset>
     <fieldset hidden={activeSection!=='ai_models'}><legend>Security &amp; credentials</legend><p>Provider credential: <strong>{current?.credential.status==='CONFIGURED'?'Configured · ***':'Not configured'}</strong></p><p>The existing value can never be shown or copied. Replacing it may interrupt new generation if it cannot be validated.</p><button type="button" className="subtle" disabled={busy||reconciliationRequired||!draft.provider_profile} onClick={()=>setCredentialOpen(true)}>{current?.credential.status==='CONFIGURED'?'Replace / rotate credential':'Configure credential'}</button></fieldset></div>
     {sectionActions(activeSection)}
-    {review&&<div className="tenant-dialog-backdrop"><div role="dialog" aria-modal="true" aria-label="Review tenant settings changes" className="tenant-dialog"><h3>Review before creating a new settings version</h3><p>Current version {review.expectedVersion} remains effective until you confirm. These changes can affect new or revalidated work; existing immutable report history is unchanged.</p><ul>{review.changedKeys.map(key=><li key={key}><strong>{key}</strong>: {settingConsequence(key)}</li>)}</ul><div className="command-bar"><button className="subtle" disabled={busy} onClick={()=>setReview(null)}>Cancel</button><button disabled={busy||reconciliationRequired||current?.version!==review.expectedVersion} onClick={()=>void save()}>{busy?'Saving…':'Confirm and save new version'}</button></div></div></div>}
+    {review&&<TenantSettingsDialog label="Review tenant settings changes" busy={busy} onClose={()=>setReview(null)}><h3>Review before creating a new settings version</h3><p>Current version {review.expectedVersion} remains effective until you confirm. These changes can affect new or revalidated work; existing immutable report history is unchanged.</p><ul>{review.changedKeys.map(key=><li key={key}><strong>{key}</strong>: {settingConsequence(key)}</li>)}</ul><div className="command-bar"><button className="subtle" disabled={busy} onClick={()=>setReview(null)}>Cancel</button><button disabled={busy||reconciliationRequired||current?.version!==review.expectedVersion} onClick={()=>void save()}>{busy?'Saving…':'Confirm and save new version'}</button></div></TenantSettingsDialog>}
     <details><summary>Settings history</summary><p>Restore creates a new version. It never edits or deletes the historical version.</p>{history.length===0&&<p className="tenant-history-empty">No settings history is available in this view.</p>}<ul className="tenant-settings-history">{history.map(item=><li key={item.id}><span><strong>Version {item.version}</strong> · {new Date(item.created_at).toLocaleString()} · {item.current?'Current':item.changed_keys.join(', ')||'Initial seed'}</span>{!item.current&&<button className="subtle" disabled={busy||reconciliationRequired} onClick={()=>setRestoreSource(item)}>Review restore</button>}</li>)}</ul></details>
-    {restoreSource&&<div className="tenant-dialog-backdrop"><div role="dialog" aria-modal="true" aria-label="Restore tenant settings" className="tenant-dialog"><h3>Restore version {restoreSource.version}?</h3><p>Recorded {new Date(restoreSource.created_at).toLocaleString()}. Changed fields: {restoreSource.changed_keys.join(', ')||'initial seed'}.</p><p>This creates a new effective version. A previously protected credential may have been revoked and may require replacement. New report generation and clarification may change; existing history stays intact.</p><div className="command-bar"><button className="subtle" onClick={()=>setRestoreSource(null)}>Cancel</button><button disabled={busy||reconciliationRequired} onClick={()=>void restore()}>Restore as new version</button></div></div></div>}
-    {credentialOpen&&<div className="tenant-dialog-backdrop"><div role="dialog" aria-modal="true" aria-label="Replace provider credential" className="tenant-dialog"><h3>Replace protected credential</h3><p>This may stop new report generation if the replacement cannot be validated. The old value will be revoked and cannot be recovered here.</p><label>New credential<input ref={credentialInput} type="password" autoComplete="new-password" defaultValue=""/></label><div className="command-bar"><button className="subtle" onClick={()=>{if(credentialInput.current)credentialInput.current.value='';setCredentialOpen(false)}}>Cancel</button><button disabled={busy||reconciliationRequired} onClick={()=>void replaceCredential()}>Replace credential</button></div></div></div>}
+    {restoreSource&&<TenantSettingsDialog label="Restore tenant settings" busy={busy} onClose={()=>setRestoreSource(null)}><h3>Restore version {restoreSource.version}?</h3><p>Recorded {new Date(restoreSource.created_at).toLocaleString()}. Changed fields: {restoreSource.changed_keys.join(', ')||'initial seed'}.</p><p>This creates a new effective version. A previously protected credential may have been revoked and may require replacement. New report generation and clarification may change; existing history stays intact.</p><div className="command-bar"><button className="subtle" onClick={()=>setRestoreSource(null)}>Cancel</button><button disabled={busy||reconciliationRequired} onClick={()=>void restore()}>Restore as new version</button></div></TenantSettingsDialog>}
+    {credentialOpen&&<TenantSettingsDialog label="Replace provider credential" busy={busy} onClose={()=>{if(credentialInput.current)credentialInput.current.value='';setCredentialOpen(false)}}><h3>Replace protected credential</h3><p>This may stop new report generation if the replacement cannot be validated. The old value will be revoked and cannot be recovered here.</p><label>New credential<input ref={credentialInput} type="password" autoComplete="new-password" defaultValue=""/></label><div className="command-bar"><button className="subtle" onClick={()=>{if(credentialInput.current)credentialInput.current.value='';setCredentialOpen(false)}}>Cancel</button><button disabled={busy||reconciliationRequired} onClick={()=>void replaceCredential()}>Replace credential</button></div></TenantSettingsDialog>}
   </>}</div></section>
 }
 

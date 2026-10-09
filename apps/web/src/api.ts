@@ -28,6 +28,7 @@ export type TenantSettingsDocument={clarification_enabled:boolean;max_clarificat
 export type TenantSettingsVersion={id:string;version:number;digest:string;validation_status:'PASS';applicability:'COMPANY_NEW_OR_REVALIDATED_OPERATIONS';settings:TenantSettingsDocument;credential:{status:'CONFIGURED'|'NOT_CONFIGURED';maskedValue:'***'|null;updatedAt:string|null;canReplace:boolean;canRotate:boolean};};
 export type TenantSettingsHistory={id:string;version:number;created_at:string;changed_keys:string[];safe_changes:Record<string,unknown>;restored_from_version_id:string|null;current:boolean;validation_status:string};
 export type TenantSettingsSection='ai_models'|'responses_standards'|'budgets_limits'|'branding_organisation';
+export type WorkspaceBranding={version:number;primary:string;accent:string};
 export type ReviewedDesign={id:string;confirmed_contract_id:string;summary:{page_count:number;visual_count:number;description:string};origin:'AUTO_ELIGIBLE'|'EXPERT_REVIEWED';provenance_label:string;reviewed_at:string};
 export type AutomaticDesignAttempt={id:string;confirmed_contract_id:string;status:'RUNNING'|'ELIGIBLE'|'FAILED'|'CANCELLED';provider_profile_id:string|null;model_or_deployment:string|null;prompt_version:string|null;configuration_id:string|null;capability_profile:Record<string,boolean>;usage:Record<string,number|null>;failure:{code:string;message:string}|null;validation:Record<string,unknown>|null;created_at:string;completed_at:string|null};
 export type UploadCapabilities={data_extensions:string[];reference_extensions:string[];max_file_bytes:number;max_files_per_selection:number;max_answer_characters:number};
@@ -63,6 +64,9 @@ export const profileApi={
   update:(displayName:string,csrfToken:string)=>request<{profile:Profile}>('/api/profile',{method:'PATCH',headers:csrfHeaders(csrfToken),body:JSON.stringify({display_name:displayName})}).then(value=>value.profile),
 };
 export const capabilitiesApi={uploads:()=>request<UploadCapabilities>('/api/cases/capabilities/uploads')};
+export const workspaceBrandingApi={
+  current:()=>request<WorkspaceBranding>('/api/workspace/branding',{method:'GET'}),
+};
 export const tenantSettingsApi={
   current:()=>request<TenantSettingsVersion>('/api/tenant-settings'),
   qualifiedProfiles:()=>request<{items:TenantProviderProfile[]}>('/api/tenant-settings/qualified-profiles').then(value=>value.items),
