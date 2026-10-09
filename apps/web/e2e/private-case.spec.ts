@@ -4,6 +4,8 @@ async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|
   await page.goto('/');
   await page.getByText('Local development identities').click();
   await page.getByRole('link',{name:identity,exact:true}).click();
+  const navigation=page.getByRole('button',{name:'Open workspace navigation',exact:true});
+  if((page.viewportSize()?.width??1280)<=768){await expect(navigation).toBeVisible();await navigation.click();}
 }
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
@@ -48,11 +50,12 @@ test('business workspace remains keyboard navigable and contained on a small scr
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
   await page.getByLabel('Your reporting goal').fill('Compare completed synthetic orders by depot.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
   const upload=page.getByRole('button',{name:'Add data sources or reference material'});
   await upload.focus();
   await expect(upload).toBeFocused();
   await expect(page.locator('label.upload-button')).toBeVisible();
-  await expect(page.locator('.journey-steps li.unavailable')).toHaveCount(5);
+  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2ViewingInformation');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
@@ -313,4 +316,161 @@ test('case owner grants and revokes named private access through the real UI',as
   await memberPage.reload();
   await expect(memberPage.getByRole('button',{name:new RegExp(request)})).toHaveCount(0);
   await memberContext.close();
+});
+
+test('report step navigation preserves drafts and queued files without making API calls',async({page})=>{
+  await signIn(page,'member');
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity by month.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const calls:string[]=[];
+  page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/'))calls.push(request.method()+' '+new URL(request.url()).pathname)});
+  const draft='Compare synthetic workshop activity by month. Include site comparisons.';
+  await page.getByLabel('Current business request').fill(draft);
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.locator('input[type=file]').setInputFiles({name:'synthetic-workshop.csv',mimeType:'text/csv',buffer:Buffer.from('Month,Activity\n2026-01,12\n')});
+  await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
+  for(const step of ['Understanding','Confirm','Build','Report']){
+    await page.getByRole('button',{name:'Next: '+step,exact:true}).click();
+    await expect(page.locator('.wizard-step-heading h2')).toHaveText(step);
+    await expect(page.locator('.wizard-step-heading h2')).toBeFocused();
+  }
+  await expect(page.getByRole('button',{name:'Last step',exact:true})).toBeDisabled();
+  for(let step=0;step<5;step++)await page.getByRole('button',{name:'Back',exact:true}).click();
+  await expect(page.getByLabel('Current business request')).toHaveValue(draft);
+  await expect(page.getByText('Your goal has unsaved changes.',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
+  await page.getByLabel('Appearance',{exact:true}).selectOption('dark');
+  await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
+  expect(calls).toEqual([]);
+  await page.reload();
+  await expect(page.getByLabel('Appearance',{exact:true})).toHaveValue('dark');
+  await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
+  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+});
+
+test('personal appearance has readable core text, system fallback and narrow reflow',async({page},testInfo)=>{
+  await signIn(page,'owner');
+  await page.getByRole('button',{name:'Administration',exact:true}).click();
+  for(const mode of ['light','dark'] as const){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    const ratios=await page.locator('.private-workspace').evaluate(element=>{
+      const style=getComputedStyle(element);
+      const rgb=(name:string)=>{const probe=document.createElement('span');probe.style.color=style.getPropertyValue(name);element.append(probe);const values=getComputedStyle(probe).color.match(/\d+(?:\.\d+)?/g)!.slice(0,3).map(Number);probe.remove();return values};
+      const luminance=(values:number[])=>values.map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
+      const background=luminance(rgb('--surface'));
+      return ['--ink','--text-secondary','--muted'].map(name=>{const text=luminance(rgb(name));return (Math.max(text,background)+.05)/(Math.min(text,background)+.05)});
+    });
+    for(const ratio of ratios)expect(ratio).toBeGreaterThanOrEqual(4.5);
+    await expect(page.getByRole('button',{name:'Administration',exact:true})).toHaveCSS('color',mode==='dark'?'rgb(237, 243, 252)':'rgb(25, 40, 63)');
+    await page.screenshot({path:testInfo.outputPath('settings-'+mode+'.png'),fullPage:true,animations:'disabled'});
+  }
+  await page.getByLabel('Appearance',{exact:true}).selectOption('system');
+  await page.emulateMedia({colorScheme:'dark',reducedMotion:'reduce'});
+  await expect(page.locator('.private-workspace')).toHaveCSS('color-scheme','dark');
+  await page.emulateMedia({colorScheme:'light'});
+  await expect(page.locator('.private-workspace')).toHaveCSS('color-scheme','light');
+  await page.setViewportSize({width:320,height:800});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await page.screenshot({path:testInfo.outputPath('settings-320px.png'),fullPage:true,animations:'disabled'});
+  await page.setViewportSize({width:1280,height:800});
+  await page.locator('.private-workspace').evaluate(element=>{(element as HTMLElement).style.fontSize='200%'});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
+});
+
+test('Clear Glass mobile navigation is keyboard operable, dismissible and preserves the current draft',async({page})=>{
+  await page.setViewportSize({width:320,height:800});
+  await page.goto('/');await page.getByText('Local development identities').click();await page.getByRole('link',{name:'member',exact:true}).click();
+  const menu=page.locator('.workspace-menu-toggle');
+  await expect(menu).toHaveAccessibleName('Open workspace navigation');
+  await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeHidden();
+  await menu.focus();await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('aria-expanded','true');
+  await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
+  const create=page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Create report',exact:true});
+  await create.focus();await page.keyboard.press('Enter');
+  await expect(page.locator('#workspace-main')).toBeFocused();
+  await expect(menu).toHaveAttribute('aria-expanded','false');
+  await page.getByLabel('Your reporting goal').fill('Synthetic Clear Glass draft survives interrupted navigation.');
+  let writes=0;page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/api/'))writes++});
+  for(let n=0;n<3;n++){await menu.click();await page.keyboard.press('Escape');await expect(menu).toBeFocused();await expect(menu).toHaveAttribute('aria-expanded','false');}
+  await expect(page.getByLabel('Your reporting goal')).toHaveValue('Synthetic Clear Glass draft survives interrupted navigation.');
+  await menu.click();await page.setViewportSize({width:1280,height:800});
+  await expect(menu).toHaveAttribute('aria-expanded','false');await expect(menu).toBeHidden();
+  await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
+  await page.setViewportSize({width:320,height:800});await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeHidden();
+  expect(writes).toBe(0);
+});
+
+test('Clear Glass has solid readable surfaces, a non-blur fallback and reduced motion',async({page})=>{
+  await signIn(page,'owner');await page.getByRole('button',{name:'Administration',exact:true}).click();
+  const root=page.locator('.private-workspace');await expect(root).toHaveAttribute('data-theme','clear-glass');
+  for(const mode of ['light','dark'] as const){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    await expect(page.locator('.tenant-admin-surface>.panel')).toHaveCSS('background-color',mode==='dark'?'rgb(23, 35, 56)':'rgb(255, 255, 255)');
+    await expect(page.locator('.tenant-settings-grid fieldset:visible').first()).toHaveCSS('border-radius','18px');
+    for(const width of [1280,768,640,320]){
+      await page.setViewportSize({width,height:900});
+      const clipped=await page.locator('.tenant-section-tabs').evaluate(nav=>{const errors:string[]=[];for(const button of nav.querySelectorAll('button')){const bounds=button.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(button);for(const text of range.getClientRects())if(text.width&&(text.left<bounds.left-1||text.right>bounds.right+1||text.top<bounds.top-1||text.bottom>bounds.bottom+1))errors.push(button.textContent??'section');}return errors});
+      expect(clipped).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+  }
+  await page.getByLabel('Appearance',{exact:true}).selectOption('light');
+  // Simulate an engine without backdrop-filter support by removing only its
+  // conditional enhancement. The shipped base rules must remain usable.
+  await page.evaluate(()=>{for(const sheet of document.styleSheets){for(let n=sheet.cssRules.length-1;n>=0;n--){const rule=sheet.cssRules[n];if(rule instanceof CSSSupportsRule&&rule.conditionText.includes('backdrop-filter'))sheet.deleteRule(n)}}});
+  await expect(page.locator('.workspace-topbar')).toHaveCSS('background-color','rgb(244, 248, 255)');
+  await expect(page.locator('.workspace-topbar')).toHaveCSS('backdrop-filter','none');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(page.locator('.workspace-rail')).toHaveCSS('backdrop-filter','none');
+  const duration=await page.locator('.workspace-rail .rail-link').first().evaluate(element=>getComputedStyle(element).transitionDuration);
+  expect(duration).toBe('0s');
+});
+
+test('wizard and composer labels fit their controls at narrow widths and with long text',async({page})=>{
+  await signIn(page,'member');
+  await page.getByRole('button',{name:'Create report'}).first().click();
+  await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity across locations.');
+  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const assertLabelsFit=async()=>{
+    const violations=await page.locator('.report-wizard').evaluate(wizard=>{
+      const errors:string[]=[];
+      const check=(element:Element,container:Element,label:string)=>{
+        const bounds=container.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
+        for(const rect of Array.from(range.getClientRects()))if(rect.width>0&&(rect.left<bounds.left-1||rect.right>bounds.right+1||rect.top<bounds.top-1||rect.bottom>bounds.bottom+1))errors.push(label);
+      };
+      wizard.querySelectorAll('.journey-steps button').forEach(button=>{
+        const label=button.querySelector('strong')!;check(label,button,label.textContent??'step');
+        if((label as HTMLElement).scrollWidth>(label as HTMLElement).clientWidth+1)errors.push('Clipped step text');
+      });
+      const rgb=(color:string)=>color.match(/\d+(?:\.\d+)?/g)!.map(Number);
+      const luminance=(values:number[])=>values.slice(0,3).map(v=>{const n=v/255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4}).reduce((sum,n,i)=>sum+n*[.2126,.7152,.0722][i],0);
+      for(const selector of ['.quiet-empty','.evidence-upload strong','.evidence-upload small','.evidence-upload .upload-button','.composer-footer>span']){
+        const element=wizard.querySelector(selector)!;let background=element;
+        while(background.parentElement&&rgb(getComputedStyle(background).backgroundColor)[3]===0)background=background.parentElement;
+        const text=luminance(rgb(getComputedStyle(element).color)),surface=luminance(rgb(getComputedStyle(background).backgroundColor));
+        if((Math.max(text,surface)+.05)/(Math.min(text,surface)+.05)<4.5)errors.push('Text contrast: '+selector);
+      }
+      const button=wizard.querySelector('.message-composer .composer-footer button')!;
+      check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
+      return [...new Set(errors)];
+    });
+    expect(violations).toEqual([]);
+  };
+  for(const mode of ['light','dark']){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    for(const width of [1280,1024,768,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+  }
+  await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
+  await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
+  for(const mode of ['light','dark']){
+    await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+    for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+  }
 });

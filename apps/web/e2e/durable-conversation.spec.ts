@@ -6,6 +6,12 @@ async function signIn(page:Page){
   await page.getByRole('link',{name:'member',exact:true}).click();
 }
 
+
+async function openStep(page:Page,step:'Goal'|'Information'|'Understanding'|'Confirm'|'Build'|'Report'){
+  await page.getByRole('navigation',{name:'Report steps'}).getByRole('button',{name:new RegExp(`\\b${step}$`)}).click();
+  await expect(page.locator('.wizard-step-heading').getByRole('heading',{name:step,exact:true})).toBeVisible();
+}
+
 async function expectSyntheticUploadPolicy(page:Page){
   await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible();
 }
@@ -26,6 +32,7 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await expect(page.getByText('Report request created and saved.')).toBeVisible();
 
+  await openStep(page,'Information');
   const message='Use monthly periods and keep maintenance class available for filtering.';
   await page.getByLabel('Add more requirements').fill(message);
   const savedMessage=page.waitForResponse(response=>response.url().endsWith('/conversation')&&response.request().method()==='POST');
@@ -34,6 +41,7 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await expect(page.getByLabel('Add more requirements')).toBeEmpty();
   await expect(page.getByText(message,{exact:true})).toBeVisible();
 
+  await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   await page.locator('input[type=file]').setInputFiles([
     {name:'fleet.csv',mimeType:'text/csv',buffer:Buffer.from('Date,Depot,Availability\n2026-01-01,North,0.96\n')},
@@ -49,24 +57,30 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
     if(route.request().method()==='POST')await new Promise(resolve=>setTimeout(resolve,300));
     await route.continue();
   });
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review my requirements'}).click();
   await expect(page.getByRole('status').filter({hasText:'Checking your information and preparing the understanding'})).toBeVisible();
   await expect(page.getByText('Optional refinement',{exact:false}).first()).toBeVisible();
   await expect(page.getByRole('status').filter({hasText:'Checking your information and preparing the understanding'})).toHaveCount(0);
   await page.getByRole('button',{name:/Summarise Availability and compare it by Depot/}).click();
   await expect(page.getByText('Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.')).toBeVisible();
+  await openStep(page,'Confirm');
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
 
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Information');
   await expect(page.getByText(message,{exact:true})).toBeVisible();
   await expect(page.locator('.evidence-attached')).toContainText('2 saved');
   await expect(page.getByText(/Data source.*CSV/)).toBeVisible();
   await expect(page.getByText('Saved, visual meaning not interpreted')).toBeVisible();
+  await openStep(page,'Understanding');
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+  await openStep(page,'Goal');
   await page.getByLabel('Current business request').fill('Compare synthetic fleet availability by depot and maintenance class.');
   await page.getByRole('button',{name:'Save new version'}).click();
+  await openStep(page,'Understanding');
   await expect(page.getByText(/Reconfirmation required/)).toBeVisible();
 });
 
@@ -76,6 +90,7 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   const request='Compare WaitMinutes by Clinic for appointment operations.';
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   const workbook=supportedXlsx();
   await page.locator('input[type=file]').setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
@@ -84,14 +99,18 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await expect(page.getByText(/Data source.*XLSX/)).toBeVisible();
   await page.getByText('Source details').click();
   await expect(page.getByText(/Clinic \(text\).*WaitMinutes \(integer\)/)).toBeVisible();
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review my requirements'}).click();
   await expect(page.getByText('Review the accepted assumptions, limits and supported scope before proceeding. Optional questions do not prevent acceptance.')).toBeVisible();
+  await openStep(page,'Confirm');
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
+  await openStep(page,'Information');
   await expect(page.locator('.evidence-attached')).toContainText('1 saved');
   await expect(page.getByText(/Data source.*XLSX/)).toBeVisible();
+  await openStep(page,'Understanding');
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
 });
 
@@ -100,6 +119,7 @@ test('a late interpretation response cannot repaint a newer request as current',
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Compare Availability by Depot.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   await page.locator('input[type=file]').setInputFiles({
     name:'availability.csv',
@@ -116,14 +136,17 @@ test('a late interpretation response cannot repaint a newer request as current',
     await held;
     await route.continue();
   });
+  await openStep(page,'Understanding');
   await page.getByRole('button',{name:'Review my requirements'}).click();
   await intercepted;
+  await openStep(page,'Goal');
   await page.getByLabel('Current business request').fill(
     'Compare the revised maintenance schedule by facility.',
   );
   await page.getByRole('button',{name:'Save new version'}).click();
   await expect(page.getByText('Your updated request was saved.')).toBeVisible();
   release();
+  await openStep(page,'Understanding');
   await expect(page.getByText('This local preview uses deterministic rules to propose an understanding; no AI model was called.')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Review my requirements'})).toBeDisabled();
 });

@@ -27,7 +27,7 @@ it('keeps access, stale, idempotency and network errors despite a concurrent pre
 
 it('offers a clear private report build without overstating local validation',()=>{
   const html=renderToStaticMarkup(<DurableGeneration caseId="case-1" contract={contract} csrfToken="csrf" onError={()=>{}}/>);
-  expect(html).toContain('Build and find reports');
+  expect(html).toContain('Create draft report');
   expect(html).toContain('Create the report design');
   expect(html).not.toContain('>Build report<');
   expect(html).not.toContain('Expert report design JSON');
