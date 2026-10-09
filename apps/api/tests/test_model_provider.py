@@ -2013,6 +2013,7 @@ def qualification_flow(monkeypatch: pytest.MonkeyPatch) -> Any:
         events.append("GET:" + request.url.path)
         assert request.method == "GET"
         assert request.headers["Authorization"] == "Bearer synthetic-secret-bearer"
+        assert request.headers["Accept-Encoding"] == "identity"
         if state.response is not None:
             return state.response(request)
         if "/versions/6" in request.url.path:
@@ -2245,6 +2246,8 @@ def test_qualification_resource_mismatch_fails_without_followup_dispatch(
         "deep",
         "digits",
         "array",
+        "wrong-media-type",
+        "compressed",
     ],
 )
 def test_qualification_untrusted_metadata_is_bounded_and_fail_closed(
@@ -2266,6 +2269,17 @@ def test_qualification_untrusted_metadata_is_bounded_and_fail_closed(
             return httpx.Response(302, headers={"Location": "https://private.invalid"})
         if response == "denied":
             return httpx.Response(403, json={"error": state.canary})
+        if response == "wrong-media-type":
+            return httpx.Response(
+                200, headers={"content-type": "application/json-private"}, content=b"{}"
+            )
+        if response == "compressed":
+            # Reject the header before any decoder or body iteration.
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/json", "content-encoding": "gzip"},
+                stream=httpx.ByteStream(b"synthetic-unused-body"),
+            )
         return httpx.Response(
             200,
             headers={"content-type": "application/json"},

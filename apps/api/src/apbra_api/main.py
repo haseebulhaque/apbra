@@ -474,13 +474,19 @@ class _QualificationMemory:
         with self._lock:
             self._buffers.append(data)
         with client.stream(
-            "GET", url, headers={"Authorization": "Bearer " + bearer}, timeout=timeout
+            "GET",
+            url,
+            headers={"Authorization": "Bearer " + bearer, "Accept-Encoding": "identity"},
+            timeout=timeout,
         ) as response:
             self.guard()
-            if response.status_code != 200 or not response.headers.get(
-                "content-type",
-                "",
-            ).lower().startswith("application/json"):
+            media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            encoding = response.headers.get("content-encoding", "identity").strip().lower()
+            if (
+                response.status_code != 200
+                or media_type != "application/json"
+                or encoding != "identity"
+            ):
                 raise _qualification_error()
             length = response.headers.get("content-length")
             if length is not None and (
