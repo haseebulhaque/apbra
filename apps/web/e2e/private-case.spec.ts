@@ -459,7 +459,11 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   };
   for(const mode of ['light','dark']){
     await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
-    for(const width of [1280,1024,768,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
+    for(const width of [1440,1280,1024,768,320]){
+      await page.setViewportSize({width,height:900});await assertLabelsFit();
+      const wrapped=await page.locator('.journey-steps strong').evaluateAll(labels=>labels.filter(label=>{const range=document.createRange();range.selectNodeContents(label);return range.getClientRects().length>1}).map(label=>label.textContent));
+      expect(wrapped).toEqual([]);
+    }
   }
   await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
   await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
