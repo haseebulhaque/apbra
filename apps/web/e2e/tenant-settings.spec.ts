@@ -428,3 +428,22 @@ test('settings dialogs isolate keyboard focus, dismiss safely and restore the op
   await admin.getByText('Settings history',{exact:true}).click();
   await exercise(admin.getByRole('button',{name:'Review restore',exact:true}).first(),'Restore tenant settings');
 });
+
+// Synthetic browser qualification-list fixture; no Foundry service is invoked.
+test('a Foundry profile draft uses Entra disclosure and cannot reuse the legacy credential indicator',async({page})=>{
+  await page.route('**/api/tenant-settings/qualified-profiles',async route=>{
+    const response=await route.fetch();const body=await response.json();
+    const source=body.items[0];
+    const foundry={...source,profile_id:'synthetic-foundry-profile',protocol:'FOUNDRY_AGENT_RESPONSES',endpoint:'https://provider.invalid/api/projects/project/agents/agent/endpoint/protocols/openai/responses',api_version:'v1',model_or_deployment:'synthetic-agent',configuration_id:'synthetic-foundry-configuration'};
+    await route.fulfill({response,json:{items:[...body.items,foundry]}});
+  });
+  await signIn(page,'owner');await page.getByRole('button',{name:'Administration',exact:true}).click();
+  const admin=page.getByLabel('Tenant administration');
+  await admin.getByRole('combobox',{name:'Qualified model profile'}).selectOption('synthetic-foundry-profile');
+  await expect(admin.getByText('Foundry agent · Microsoft Entra server identity',{exact:true})).toBeVisible();
+  await expect(admin.getByText(/Server authentication capability is unavailable/)).toBeVisible();
+  await expect(admin.getByText(/agent uses its stored instructions and knowledge tools/)).toBeVisible();
+  await expect(admin.getByRole('button',{name:/^(Configure credential|Replace \/ rotate credential)$/})).toHaveCount(0);
+  await admin.getByRole('button',{name:'Cancel section changes'}).click();
+  await expect(admin.getByRole('combobox',{name:'Qualified model profile'})).not.toHaveValue('synthetic-foundry-profile');
+});

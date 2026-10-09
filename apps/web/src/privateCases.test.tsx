@@ -1,3 +1,4 @@
+import {providerAuthenticationLabel} from './EnterpriseApp';
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
@@ -64,4 +65,9 @@ it('rejects CSS-shaped colour values and uses bounded presentation fallbacks',()
   const tokens=tenantPresentationTokens({primary:'url(https://example.invalid)',accent:'red;display:none'}) as Record<string,string>;
   expect(tokens['--tenant-primary-original']).toBe('#245de5');expect(tokens['--tenant-accent-original']).toBe('#245de5');
   expect(Object.values(tokens).every(value=>/^#[\da-f]{6}$/.test(value))).toBe(true);
+});
+
+it('distinguishes the Entra-only configured agent route from protected legacy keys',()=>{
+ expect(providerAuthenticationLabel('FOUNDRY_AGENT_RESPONSES')).toContain('Microsoft Entra server identity');
+ expect(providerAuthenticationLabel('OPENAI_CHAT_COMPATIBLE')).toBe('Protected provider credential');
 });

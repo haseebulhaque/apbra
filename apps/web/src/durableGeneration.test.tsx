@@ -1,6 +1,6 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {DurableGeneration,automaticDesignPreflightMessage,automaticDesignProposalError} from './durableGeneration';
+import {DurableGeneration,providerGroundingLabel,automaticDesignPreflightMessage,automaticDesignProposalError} from './durableGeneration';
 import {ApiError,type AutomaticDesignAttempt,type DurableContract} from './api';
 
 const contract:DurableContract={id:'contract-1',interpretation_id:'interpretation-1',schema_version:2,accepted_at:'2026-09-25T00:00:00Z',contract:{},current:true};
@@ -50,4 +50,13 @@ it('requires a current confirmation while keeping historical output area visible
   expect(html).toContain('Confirm your understanding to continue');
   expect(html).toContain('Earlier reports remain available below.');
   expect(html).not.toContain('>Build report<');
+});
+
+it('labels observed grounding honestly and rejects unknown reference claims',()=>{
+ const grounding={mode:'PROVIDER_MANAGED',scope:'SHARED_STANDARDS',qualification:'OFFLINE_FIXTURE',references:[],retrievalEvidence:'NO_OBSERVED_RETRIEVAL'};
+ expect(providerGroundingLabel(grounding)).toContain('no retrieval evidence recorded');
+ expect(providerGroundingLabel(grounding)).toContain('live integration is unverified');
+ expect(providerGroundingLabel({...grounding,references:['forged']})).toBeNull();
+ expect(providerGroundingLabel({...grounding,scope:'foreign tenant'})).toBeNull();
+ expect(providerGroundingLabel({...grounding,qualification:'LIVE_METADATA_VERIFIED',references:['provider:'+ 'a'.repeat(64)],retrievalEvidence:'ANNOTATIONS_ONLY'})).toContain('1 observed reference bindings');
 });

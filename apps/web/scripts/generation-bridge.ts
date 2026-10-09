@@ -9,7 +9,7 @@ import {normalizeReportDesign} from '../src/reportDesignNormalization';
 import type {DataStructure} from '../src/schemaIngestion';
 import type {TenantSettings} from '../src/tenant';
 
-type Request={operation?:'knowledge'|'validate-design'|'generate';contract:unknown;dataStructure:unknown;reportDesign?:unknown;binding:unknown;execution?:unknown;generationPolicy?:unknown;tenantConventions?:unknown;deliveryGuidePolicy?:{enabled:true;include_handover_instructions:boolean}};
+type Request={operation?:'knowledge'|'validate-design'|'generate';contract:unknown;dataStructure:unknown;reportDesign?:unknown;binding:unknown;execution?:unknown;generationPolicy?:unknown;tenantConventions?:unknown;knowledgeMode?:'PROVIDER_MANAGED';providerGrounding?:unknown;deliveryGuidePolicy?:{enabled:true;include_handover_instructions:boolean}};
 const encoder=new TextEncoder();
 
 function deterministicVector(text:string){const values=new Array<number>(48).fill(0);for(const [index,value] of encoder.encode(text.normalize('NFKC').toLocaleLowerCase('en-US')).entries())values[(value+index*17)%values.length]+=((value%29)+1)/29;const norm=Math.sqrt(values.reduce((sum,value)=>sum+value*value,0))||1;return values.map(value=>value/norm)}
@@ -34,22 +34,33 @@ function qualifiedPolicy(value:unknown):TenantSettings{if(!value||typeof value!=
 
 
 // Capability facts describe the existing renderer; AI selects page membership and slot order.
-function rendererCapabilities(tenant:TenantSettings){
+function rendererCapabilities(tenant:TenantSettings,providerManaged=false){
  const types=['card','bar','column','line','table','slicer'] as const;
- return{source:'ACTIVE_COMPILER',pageBounds:compilerCapabilities.page,physicalSlotCount:compilerCapabilities.maxVisualsPerPage,tenantLimits:{maxPages:tenant.governance.maxPages,maxVisualsPerPage:tenant.governance.maxVisualsPerPage},slots:Array.from({length:compilerCapabilities.maxVisualsPerPage},(_,index)=>({index,placements:types.map(type=>({type,...compilerVisualLayout({type},index)})).filter(item=>compilerVisualFits(item))})),layoutBinding:'AI_VISUAL_ARRAY_ORDER_SELECTS_FIXED_RENDERER_SLOTS',unsupportedInteractions:['cross-page slicer synchronization'],knowledgeScope:'BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG'};
+ return{source:'ACTIVE_COMPILER',pageBounds:compilerCapabilities.page,physicalSlotCount:compilerCapabilities.maxVisualsPerPage,tenantLimits:{maxPages:tenant.governance.maxPages,maxVisualsPerPage:tenant.governance.maxVisualsPerPage},slots:Array.from({length:compilerCapabilities.maxVisualsPerPage},(_,index)=>({index,placements:types.map(type=>({type,...compilerVisualLayout({type},index)})).filter(item=>compilerVisualFits(item))})),layoutBinding:'AI_VISUAL_ARRAY_ORDER_SELECTS_FIXED_RENDERER_SLOTS',unsupportedInteractions:['cross-page slicer synchronization'],knowledgeScope:providerManaged?'PROVIDER_MANAGED_OBSERVED_REFERENCES':'BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG'};
 }
 
 async function main(){
  const chunks:Buffer[]=[];for await(const chunk of process.stdin)chunks.push(Buffer.from(chunk));const bytes=Buffer.concat(chunks);if(bytes.length>20_000_000)throw new Error('GENERATION_INPUT_LIMIT');
  const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure),tenant=qualifiedPolicy(input.generationPolicy);
  const query=[contract.objective,contract.audience,...contract.businessQuestions.map(item=>item.question),...contract.obligations.flatMap(item=>[...item.measureNames,...item.fields])].join('\n');
- const retrieval=await retrieveKnowledge(query,50,localEmbedder),knowledge=retrieval.retrieved.map(({citation,text})=>({citation,text}));if(!knowledge.length)throw new Error('GOVERNED_KNOWLEDGE_UNAVAILABLE');
- if(input.operation==='knowledge'){respond({knowledge,rendererCapabilities:rendererCapabilities(tenant)});return}
+ const providerManaged=input.knowledgeMode==='PROVIDER_MANAGED'||input.providerGrounding!==undefined;
+ const grounding=input.providerGrounding as Record<string,unknown>|undefined;
+ if(grounding){
+  const keys=['mode','scope','profileId','configurationId','knowledgeBinding','agentVersion','qualification','references','observedToolCount','retrievalEvidence'];
+  if(Object.keys(grounding).some(key=>!keys.includes(key))||Object.keys(grounding).length!==keys.length||grounding.mode!=='PROVIDER_MANAGED'||!['SHARED_STANDARDS','TENANT_PRIVATE'].includes(String(grounding.scope))||!['OFFLINE_FIXTURE','LIVE_METADATA_VERIFIED'].includes(String(grounding.qualification))||!['OBSERVED_TOOL_TRACE','ANNOTATIONS_ONLY','NO_OBSERVED_RETRIEVAL'].includes(String(grounding.retrievalEvidence))||!['profileId','configurationId','knowledgeBinding'].every(key=>typeof grounding[key]==='string'&&String(grounding[key]).length>0&&String(grounding[key]).length<=120)||!(grounding.agentVersion===null||typeof grounding.agentVersion==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(grounding.agentVersion))||!Number.isInteger(grounding.observedToolCount)||Number(grounding.observedToolCount)<0||Number(grounding.observedToolCount)>100||!Array.isArray(grounding.references)||grounding.references.length>100||new Set(grounding.references).size!==grounding.references.length||!grounding.references.every(item=>typeof item==='string'&&/^provider:[a-f0-9]{64}$/.test(item)))throw new Error('PROVIDER_GROUNDING_INVALID');
+ }
+ const localRetrieval=providerManaged?null:await retrieveKnowledge(query,50,localEmbedder);
+ const knowledge=localRetrieval?.retrieved.map(({citation,text})=>({citation,text}))??[];
+ if(!providerManaged&&!knowledge.length)throw new Error('GOVERNED_KNOWLEDGE_UNAVAILABLE');
+ if(input.operation==='knowledge'){respond({knowledge,rendererCapabilities:rendererCapabilities(tenant,providerManaged)});return}
+ if(providerManaged&&!grounding)throw new Error('PROVIDER_GROUNDING_REQUIRED');
+ const citationIds=grounding?grounding.references as string[]:knowledge.map(item=>item.citation);
+ const retrieval={strategy:providerManaged?'PROVIDER_MANAGED_OBSERVED_REFERENCES':localRetrieval!.strategy,embeddingModel:providerManaged?null:localRetrieval!.embeddingModel};
  if(input.operation!=='generate'&&input.operation!=='validate-design')throw new Error('GENERATION_OPERATION_REQUIRED');
  if(input.operation==='generate'&&!input.execution)throw new Error('GENERATION_EXECUTION_BINDING_REQUIRED');
  if(input.reportDesign===undefined||input.reportDesign===null)throw new Error('TRUSTED_REPORT_DESIGN_REQUIRED: no ReportDesign was supplied for local no-model generation.');
  diagnosticStage='REPORT_DESIGN';
- const original=validateReportDesign(input.reportDesign,knowledge.map(item=>item.citation),dataStructure,tenant.generation.supportedTrendGrains);
+ const original=validateReportDesign(input.reportDesign,citationIds,dataStructure,tenant.generation.supportedTrendGrains);
  diagnosticStage='NORMALIZATION';
  const maxVisualsPerPage=tenant.governance.maxVisualsPerPage,normalization=normalizeReportDesign(original,dataStructure,maxVisualsPerPage);
  if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${JSON.stringify(normalization.normalizationFindings.map(item=>{const pageIndex=original.pages.findIndex(page=>page.id===item.pageId),visualIndex=pageIndex<0?-1:original.pages[pageIndex].visuals.findIndex(visual=>visual.id===item.visualId);return{code:item.code,pageIndex,visualIndex,requestedResultingVisuals:item.requestedResultingVisuals,pageBounds:item.pageBounds,overflow:item.attemptedLayoutSlots?.map(({type,index,right,bottom})=>({type,index,right,bottom}))}}))}`);
@@ -62,16 +73,16 @@ async function main(){
  diagnosticStage='COMPILER';
  const candidate=compilePowerBI(design,dataStructure,tenant);diagnosticStage='CANDIDATE_FILES';const candidateValidation=validateGenericCandidate(candidate,design,dataStructure);if(candidateValidation.status!=='PASS')throw new Error('CANDIDATE_VALIDATION_FAILED');
  if(input.operation==='validate-design'){
-  respond({projectName:candidate.projectName,files:candidate.files,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,reportDesign:design}});return
+  respond({projectName:candidate.projectName,files:candidate.files,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel,...(grounding?{grounding}:{})},binding:input.binding,execution:input.execution,reportDesign:design}});return
  }
  const binding=input.binding as Record<string,unknown>,execution=input.execution as Record<string,unknown>;
  if(!binding||!execution||typeof binding.settingsVersionId!=='string'||typeof execution.attemptId!=='string')throw new Error('GENERATION_EXECUTION_BINDING_REQUIRED');
  if(input.deliveryGuidePolicy?.enabled!==true||typeof input.deliveryGuidePolicy.include_handover_instructions!=='boolean')throw new Error('GENERATION_CONFIGURATION_INVALID');
  diagnosticStage='DELIVERY_GUIDE';
- const guide=createBoundDeliveryGuideText({design,interpretation:contract.provenance.interpretation as unknown as Record<string,unknown>,binding,execution,settings:{conventions:input.tenantConventions},includeHandoverInstructions:input.deliveryGuidePolicy.include_handover_instructions,reportDesignDigest:digest(design),candidateFilesDigest:digest(candidate.files)});
+ const guide=createBoundDeliveryGuideText({design,interpretation:contract.provenance.interpretation as unknown as Record<string,unknown>,binding,execution,settings:{conventions:input.tenantConventions},includeHandoverInstructions:input.deliveryGuidePolicy.include_handover_instructions,reportDesignDigest:digest(design),candidateFilesDigest:digest(candidate.files),grounding});
  candidate.files['Delivery-Guide.md']=guide;
  const guideDigest=createHash('sha256').update(guide).digest('hex');
- respond({projectName:candidate.projectName,files:candidate.files,guideDigest,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS',deliveryGuide:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel},binding:input.binding,execution:input.execution,reportDesign:design,guideDigest}})
+ respond({projectName:candidate.projectName,files:candidate.files,guideDigest,validation:{status:'PASS',pipelineVersion:'protected-generation-1',stages:{contract:'PASS',governedKnowledge:'PASS',reportDesign:'PASS',normalization:normalization.status,businessQuality:'NOT_CERTIFIED',draft:'EDITABLE_FIRST_DRAFT',guardrails:guardrails.outcome,compiler:'PASS',candidate:'PASS',deliveryGuide:'PASS'},candidate:candidateValidation,runtime:{providerCalls:0,powerBiDesktop:'NOT_RUN',dax:'NOT_RUN',rls:'NOT_RUN',deployment:'NOT_RUN'}},provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL',retrieval:{strategy:retrieval.strategy,citations:design.standardsApplied.map(item=>item.citation),embeddingModel:retrieval.embeddingModel,...(grounding?{grounding}:{})},binding:input.binding,execution:input.execution,reportDesign:design,guideDigest}})
 }
 
 main().catch(error=>{fail(error);process.exitCode=1});
