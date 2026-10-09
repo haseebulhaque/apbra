@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-FOUNDRY-HOST-REG-20261009",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register six finite API host/source/test/dependency paths for offline-qualified default-disabled Foundry host wiring; no authentication, activation, paid request or access change.",
+  "requirements": [
+    "Owner-delegated 2026-10-09 offline runtime-wiring direction and Jira PLAN10677 authorize this separate finite registration. Existing accepted Confluence 03.07 v28 and 03.08 v9 and all prior tasks/source rows remain unchanged; earlier provider-retrieval no-SDK authority remains historical and this task provides the separate dependency exception only after its gates.",
+    "Add only the existing Foundry Responses adapter host wiring and explicit configuration boundary. Activation is default-disabled. Importing main or ordinary application startup must never acquire a token, authenticate, invoke a device-code flow, discover ambient credentials or make a provider call, even if an activation flag is set without an explicitly supplied valid in-process credential.",
+    "Use only Azure Identity DeviceCodeCredential explicitly constructed with the existing approved tenant/account/client binding and disable_automatic_authentication enabled. Tokens and cache remain memory-only; no persistent token-cache option, CLI, environment/default credential chain, browser fallback, new role, app identity, consent, security grant or persistent access expansion.",
+    "A separate explicitly invoked manual local entrypoint within registered main.py may authenticate only after separate owner approval and then run the host in the same process with the explicitly supplied credential. This registration and offline implementation do not authorize invoking it. Device-code callback material belongs only to that separately approved private interactive SDK flow: never app/API/repository/log output, audit or artifact. No device-code acquisition during tests or qualification.",
+    "Before enabling provider use, require attested exact server-selected tenant, provider profile, endpoint/agent binding, qualification/configuration ID and version. Reject missing, stale, mismatched or expired bindings without token acquisition or provider dispatch. Scope and identity must not come from client request, prompt, model output or merely a configured flag.",
+    "Guard token expiry and credential close on host teardown; stale/expired credentials fail closed with safe bounded errors, never implicit refresh/reauthentication. Preserve existing provider budgets, timeouts/retries, qualification checks, protected legacy API-key behavior, profile compatibility and Responses evidence/redaction boundaries.",
+    "pyproject.toml and uv.lock may add only an exactly researched/pinned Azure Identity SDK and its required locked transitives. Preserve all existing direct dependency declarations and unrelated locked packages; no unrelated upgrades, package removal or resolver broadening. Root researches official entitlement/version/dependencies before the product pin; this governance PR installs no package.",
+    "No business/report interpretation, validation, prompts, provider instructions/tools, tenant settings, credentials, permissions, UI, saved request/CSV/history, existing preview or deployment change. No actual SDK authentication or paid provider calls; synthetic mocks only. No new module or seventh product path.",
+    "This registration changes exactly three governance paths. Separate exact-head independent PASS, hosted CI, authorized manual registration merge and verified post-merge main precede product edits. Any separately delegated merge authority expires at 12:37 UTC on 2026-10-09; missing gates or elapsed deadline means stop, never queue auto-merge."
+  ],
+  "adrs": [
+    "Existing ModelProvider is the integration boundary; host wiring injects an explicitly supplied short-lived credential and never changes deterministic business authority.",
+    "Authentication is separate from offline implementation and from APBRA authorization. SDK import/construction is not evidence of tenant access, provider qualification or successful live use.",
+    "The finite dependency exception belongs to this new task only; historical provider-retrieval contracts and exact hashes remain unchanged."
+  ],
+  "architecture_refs": [
+    "Accepted existing source-register bindings: apbra-160-editable-first-draft-direction, page8519682 v28; apbra-160-editable-first-draft-delivery, page9404417 v9. Existing provider-retrieval task supplies contextual Responses adapter authority but not this host/SDK exception.",
+    "Jira APBRA-160 PLAN10677 records current delegated offline registration scope, actual actor and base78346bb7d253e7f649858f4a251a04d8663670b7. Official SDK research/pin evidence must be supplied before product dependency changes."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/tests/test_model_provider.py",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/**",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "compose.yaml",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**",
+    ".env",
+    "**/.env",
+    "artifacts/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Exactly three governance registration files; exactly six literal future product paths, no wildcard/duplicate/removal/extra path; prior tasks, source rows and prior checker hashes unchanged.",
+    "Default-disabled wiring is proven offline. main import/startup, missing credential, wrong tenant/profile/version/binding and expired token perform zero authentication/token/provider calls. Activation flag alone cannot grant authority.",
+    "Only explicit approved manual local invocation could authenticate and run in the same process. Offline tests never invoke real DeviceCodeCredential.authenticate/get_token, display device codes, inspect credentials or change Azure permissions.",
+    "Memory-only cache, disabled automatic authentication, expiry guard and deterministic close are covered with synthetic mocks; no device code/token/private payload appears in app/API/log/audit output.",
+    "Exact researched dependency pin and required transitives only; legacy profiles/adapters/budgets and all business/report validations remain unchanged. No paid call, live preview activation or production-readiness claim."
+  ],
+  "verification_required": [
+    "Registration: focused scope/negative mutation tests, full bootstrap, standalone bootstrap and CI-policy checkers, exact three-file diff, JSON parse, diff check and available redacted secret scan.",
+    "Registration: genuinely separate exact-head independent governance PASS and successful hosted CI, separately authorized manual merge before applicable expiry and verified post-merge main before product work.",
+    "Product: red/green synthetic SDK/host mocks for default-disabled import/startup, explicit injection/activation guard, tenant/profile/binding/version mismatch, expiry/close, no automatic authentication and redaction; full API PostgreSQL tests, Ruff/strict mypy, dependency-lock audit, bootstrap/CI, separate exact-head product/security PASS and hosted CI. Live SDK/provider requests are not verification evidence for this offline package."
+  ],
+  "out_of_scope": [
+    "Any product edit in registration, seventh product path, new module, business/report/prompt/validation change, UI, database migration, tenant settings or credential persistence.",
+    "Actual authentication, token/device-code acquisition, paid calls, automatic credential discovery, persistent token cache, new roles/app identity/consent, access or security-grant changes, hosting/deployment/preview activation or automatic merge.",
+    "Any unrelated SDK/dependency upgrade, dependency deletion, lockfile weakening or changed legacy adapter behavior."
+  ],
+  "escalate_when": [
+    "Any authentication, token acquisition, device-code display, tenant/account/client or qualification mismatch, expired credential, new permission or seventh path is required; stop instead of falling back.",
+    "Official SDK/version/entitlement/dependency evidence, source acceptance, exact-head hosted CI, independent PASS, authorized manual merge or verified main is absent/stale/failed, or delegated12:37UTC deadline expires.",
+    "Memory-only credentials, startup zero-authentication, disabled automatic authentication, existing budgets, privacy or business validation cannot be preserved."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "78346bb7d253e7f649858f4a251a04d8663670b7",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-host",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Six-path default-disabled offline product authority only after exact-head independent PASS, hosted CI, separately authorized manual registration merge and verified main; no authentication, activation, paid call or access authorization.",
+  "dependencies": [
+    "Preserve all prior contracts/source-register rows/checker hashes, including accepted03.07v28/03.08v9. New task supplements historical provider-retrieval authority without rewriting its no-SDK boundary.",
+    "Registration and product PRs remain separate; this author has no merge authority. Expired or incomplete gates require renewed owner instruction.",
+    "SDK research/pin and synthetic compatibility must be established before dependency product edits. Any later private manual authentication and live operation require separate explicit owner approval."
+  ]
+}
