@@ -990,7 +990,7 @@ DEMO_UX_REGISTRATION_PATHS = {
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_demo_ux_scope.py',
 }
-DEMO_UX_TASK_SHA256 = '723d9d0470ffe82d4a128a4b0c387b07ee9dc7a66106e5c7717252121b21d9f9'
+DEMO_UX_TASK_SHA256 = '7f2ef21921e9a064022960a117ec27551b84f6b4c6e81e45d65e2dae61b2812a'
 DEMO_UX_SOURCES = (
     ('apbra-160-current-six-stage-direction', '8519682', 26, '53cb026ea98269dd7bc7dd7b7da67e0c9003557c183c77467ece89a546a50350'),
     ('apbra-160-current-model-led-delivery', '9404417', 7, '59aead56e1a8d3541268dbd09533c7b5803b02a9e7ab7785035c48dec6c9ffb3'),
@@ -998,12 +998,12 @@ DEMO_UX_SOURCES = (
     ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
 )
 DEMO_UX_GATE_SHA256 = {
-    'requirements': 'd6d877247fc3e9e09cf2b79c12512a659a97e00c66563f2bfd6bbdb78e48d75b',
+    'requirements': '8203da17ac0e2f6520bf78901bccf625435ba8a153fb5e444c1d032fc96ca482',
     'adrs': '08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7',
     'architecture_refs': '4bf86b18527c7a373d9552e5cfb0f0e593485a3fc63ef153a9a5d001a309dd99',
     'restricted_paths': '5e08560646f7a2eae391795146980a9e78dce061267819c5cc1cce77db7322d1',
-    'acceptance_criteria': '16764c951a72b3dd8eb2430eeedfe068e726ccb96e7926971e8c5209634f7a29',
-    'verification_required': 'c7339cbaf22ef36dffcac7e5892a1da086ea40e6a171b6b15bfb6ead871fd9a5',
+    'acceptance_criteria': '05397fe746103e2e41a7fe2664d47faef9d471d12a6c2f1784ed3b0c10f8a1ca',
+    'verification_required': 'd7931383c976bc76b086f7ff539eb48c2f2d7d98fdd2344ee82fb7f9758441b6',
     'out_of_scope': '4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5',
     'escalate_when': '358bb20f1e4e80c2aed8f3d79e4366ad31e351e10f57740e5b4a94c560efce3d',
     'dependencies': '6e65d472897e21a2cb09fa1fa00ce6bc009d01f63b202792df9f9b75f9fceb44',

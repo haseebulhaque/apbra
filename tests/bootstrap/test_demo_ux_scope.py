@@ -104,10 +104,11 @@ class DemoUXScopeTests(unittest.TestCase):
             "exactly version, primary and accent",
             "server-derived actor.company_id",
             "no caller-supplied company selector",
-            "active COMPANY_OWNER, COMPANY_ADMIN and MEMBER",
+            "actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT)",
             "existing admin settings and every write permission remain unchanged",
         ):
             self.assertIn(boundary, requirement)
+        self.assertIn("inactive Expert denial", self.task["verification_required"][-1])
         self.assertIn("before projection product edits", self.task["verification_required"][-1])
         self.assertIn("no combined governance/product diff", self.task["dependencies"][-1])
         with tempfile.TemporaryDirectory() as directory:
@@ -121,7 +122,7 @@ class DemoUXScopeTests(unittest.TestCase):
             ("requirements", "exactly version, primary and accent", "all tenant settings"),
             ("requirements", "server-derived actor.company_id", "client company_id"),
             ("requirements", "no caller-supplied company selector", "accept caller-supplied company selector"),
-            ("requirements", "active COMPANY_OWNER, COMPANY_ADMIN and MEMBER", "any authenticated identity"),
+            ("requirements", "actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT)", "any authenticated identity"),
             ("requirements", "every write permission remain unchanged", "members can write settings"),
             ("acceptance_criteria", "missing or inactive membership", "only missing membership"),
             ("acceptance_criteria", "No other settings or credentials are returned", "Include provider and credential settings"),
