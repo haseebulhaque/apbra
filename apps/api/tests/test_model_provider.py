@@ -1124,8 +1124,10 @@ def host_runtime_module(monkeypatch: pytest.MonkeyPatch) -> Any:
     configured = host_runtime_settings().model_copy(update={"foundry_host_enabled": False})
     monkeypatch.setattr(config, "get_settings", lambda: configured)
     monkeypatch.setattr(api, "create_app", lambda **kwargs: kwargs)
-    sys.modules.pop("apbra_api.main", None)
-    return importlib.import_module("apbra_api.main")
+    monkeypatch.delitem(sys.modules, "apbra_api.main", raising=False)
+    module = importlib.import_module("apbra_api.main")
+    monkeypatch.setitem(sys.modules, "apbra_api.main", module)
+    return module
 
 
 def test_host_runtime_default_and_flag_only_do_not_authenticate(
@@ -1281,3 +1283,436 @@ def test_host_runtime_factory_revocation_blocks_auth_and_closes_sdk(
     with pytest.raises(ProviderConfigurationError):
         module.run_foundry_device_code(settings, factory)
     assert calls == ["close"]
+
+
+def test_host_runtime_import_never_imports_azure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import builtins
+
+    original = builtins.__import__
+    imports: list[str] = []
+
+    def guarded(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "azure" or name.startswith("azure."):
+            imports.append(name)
+            raise AssertionError("Default startup reached the Azure SDK")
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    module = host_runtime_module(monkeypatch)
+    assert module.app is not None
+    assert imports == []
+
+
+@pytest.mark.parametrize("identity", ["tenant_id", "client_id", "home_account_id"])
+def test_host_runtime_account_mismatch_stops_before_token(
+    monkeypatch: pytest.MonkeyPatch, identity: str,
+) -> None:
+    module, settings, sdk, events, _ = fake_host_flow(monkeypatch)
+    setattr(sdk.record, identity, "synthetic-foreign-account")
+    with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_HOST_UNAVAILABLE$"):
+        module.run_foundry_device_code(settings, lambda **kwargs: sdk)
+    assert events == ["authenticate", "close"]
+
+
+def fake_host_flow(monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Any, Any, list[str], Any]:
+    import io
+    import time
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    binding = settings.foundry_host_binding()
+    events: list[str] = []
+
+    class Terminal(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    terminal = Terminal()
+
+    class FakeSdk:
+        record = SimpleNamespace(tenant_id=str(binding.tenant_id),
+                                 client_id=str(binding.client_id),
+                                 home_account_id=binding.home_account_id)
+
+        def authenticate(self, *, scopes: list[str]) -> Any:
+            events.append("authenticate")
+            return self.record
+
+        def get_token(self, *scopes: str) -> Any:
+            events.append("token")
+            return SimpleNamespace(**{"token": "synthetic-secret-canary"},
+                                   expires_on=int(time.time() + 600))
+
+        def close(self) -> None:
+            events.append("close")
+
+    monkeypatch.setattr(module, "_private_terminal", lambda: nullcontext(terminal))
+    monkeypatch.setattr(module, "_serve", lambda *args: events.append("serve"))
+    return module, settings, FakeSdk(), events, terminal
+
+
+@pytest.mark.parametrize("phase", ["authenticate", "get_token"])
+@pytest.mark.parametrize("change", ["revoke", "expire"])
+def test_host_runtime_authorization_change_during_sdk_operation(
+    monkeypatch: pytest.MonkeyPatch, phase: str, change: str,
+) -> None:
+    from pydantic import SecretStr
+
+    module, settings, sdk, events, _ = fake_host_flow(monkeypatch)
+    operation = getattr(sdk, phase)
+
+    def altered(*args: Any, **kwargs: Any) -> Any:
+        result = operation(*args, **kwargs)
+        if change == "revoke":
+            settings.foundry_host_enabled = False
+        else:
+            binding = settings.foundry_host_binding().model_dump(mode="json")
+            binding["authorization_deadline"] = 1
+            settings.foundry_host_binding_json = SecretStr(json.dumps(binding))
+        return result
+
+    monkeypatch.setattr(sdk, phase, altered)
+    with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_HOST_UNAVAILABLE$"):
+        module.run_foundry_device_code(settings, lambda **kwargs: sdk)
+    assert events == (["authenticate", "close"] if phase == "authenticate"
+                      else ["authenticate", "token", "close"])
+
+
+@pytest.mark.parametrize("phase", ["factory", "authenticate", "get_token", "close", "serve"])
+def test_host_runtime_errors_are_private_and_cleanup_is_attempted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture, phase: str,
+) -> None:
+    import traceback
+
+    module, settings, sdk, events, _ = fake_host_flow(monkeypatch)
+    canary = "synthetic-secret-error-canary"
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        events.append(phase + "-failure")
+        raise RuntimeError(canary)
+
+    def factory(**kwargs: Any) -> Any:
+        return sdk
+    if phase == "factory":
+        factory = fail
+    elif phase == "serve":
+        monkeypatch.setattr(module, "_serve", fail)
+    else:
+        monkeypatch.setattr(sdk, phase, fail)
+    with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_HOST_UNAVAILABLE$") as caught:
+        module.run_foundry_device_code(settings, factory)
+    rendered = "".join(traceback.format_exception(caught.value))
+    captured = capsys.readouterr()
+    assert canary not in rendered + captured.out + captured.err + caplog.text
+    assert caught.value.__suppress_context__ is True
+    if phase != "factory":
+        assert "close" in events or "close-failure" in events
+
+
+def test_host_runtime_prompt_is_private_and_refuses_revocation(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    module, settings, sdk, events, terminal = fake_host_flow(monkeypatch)
+    options: dict[str, Any] = {}
+
+    def factory(**kwargs: Any) -> Any:
+        options.update(kwargs)
+        return sdk
+
+    original = sdk.authenticate
+
+    def authenticate(**kwargs: Any) -> Any:
+        prompt = options["prompt_callback"]
+        prompt("https://microsoft.com/devicelogin", "synthetic-device-code",
+               datetime.now(UTC) + timedelta(minutes=1))
+        with pytest.raises(ProviderConfigurationError):
+            prompt("https://microsoft.com/devicelogin", "expired-device-code",
+                   datetime.now(UTC) - timedelta(seconds=1))
+        settings.foundry_host_enabled = False
+        with pytest.raises(ProviderConfigurationError):
+            prompt("https://microsoft.com/devicelogin", "revoked-device-code",
+                   datetime.now(UTC) + timedelta(minutes=1))
+        return original(**kwargs)
+
+    monkeypatch.setattr(sdk, "authenticate", authenticate)
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_device_code(settings, factory)
+    assert "synthetic-device-code" in terminal.getvalue()
+    assert "expired-device-code" not in terminal.getvalue()
+    assert "revoked-device-code" not in terminal.getvalue()
+    output = capsys.readouterr()
+    assert "device-code" not in output.out + output.err
+    assert events == ["authenticate", "close"]
+
+
+def test_host_runtime_noninteractive_terminal_blocks_factory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    monkeypatch.setattr(module, "_private_terminal",
+                        lambda: nullcontext(SimpleNamespace(isatty=lambda: False)))
+    calls: list[Any] = []
+    with pytest.raises(ProviderConfigurationError):
+        module.run_foundry_device_code(host_runtime_settings(),
+                                      lambda **kwargs: calls.append(kwargs))
+    assert calls == []
+
+
+def test_host_runtime_idle_timer_drops_snapshot_and_teardown_cancels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from apbra_api import model_provider
+
+    timers: list[Any] = []
+
+    class FakeTimer:
+        def __init__(self, interval: float, function: Any) -> None:
+            self.interval = interval
+            self.function = function
+            self.started = False
+            self.cancelled = False
+            self.daemon = False
+            timers.append(self)
+
+        def start(self) -> None:
+            self.started = True
+
+        def cancel(self) -> None:
+            self.cancelled = True
+
+    monkeypatch.setattr(model_provider, "Timer", FakeTimer)
+    monkeypatch.setattr(model_provider.time, "time", lambda: 1000.0)
+    snapshot = model_provider.FoundryMemoryTokenCredential(
+        SimpleNamespace(**{"token": "synthetic-secret-canary"}, expires_on=2000),
+        authorization_deadline=1010.75, enabled=lambda: True, binding_digest="a" * 64,
+    )
+    timer = timers[0]
+    assert timer.interval == 10 and timer.started and timer.daemon
+    timer.function()  # Deadline timer fires without any request or SDK operation.
+    assert snapshot._token is None
+    assert timer.cancelled
+    with pytest.raises(ProviderConfigurationError):
+        snapshot.get_token("https://ai.azure.com/.default")
+    snapshot.close()
+
+
+@pytest.mark.parametrize("state", ["expired", "revoked", "enabled-error"])
+def test_host_runtime_snapshot_drops_token_when_authorization_ends(
+    monkeypatch: pytest.MonkeyPatch, state: str,
+) -> None:
+    from types import SimpleNamespace
+
+    from apbra_api import model_provider
+
+    clock = [1000.0]
+    active = [True]
+    monkeypatch.setattr(model_provider.time, "time", lambda: clock[0])
+
+    def enabled() -> bool:
+        if not active[0] and state == "enabled-error":
+            raise RuntimeError("synthetic-private-error")
+        return active[0]
+
+    snapshot = model_provider.FoundryMemoryTokenCredential(
+        SimpleNamespace(**{"token": "synthetic-secret-canary"}, expires_on=2000),
+        authorization_deadline=1300, enabled=enabled, binding_digest="a" * 64,
+    )
+    try:
+        if state == "expired":
+            clock[0] = 1300
+        else:
+            active[0] = False
+        with pytest.raises(ProviderConfigurationError):
+            snapshot.get_token("https://ai.azure.com/.default")
+        assert snapshot._token is None
+    finally:
+        snapshot.close()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("company_id", "00000000-0000-0000-0000-000000000005"),
+    ("tenant_id", "00000000-0000-0000-0000-000000000006"),
+    ("client_id", "00000000-0000-0000-0000-000000000007"),
+    ("home_account_id", "foreign-account"),
+    ("knowledge_binding", "foreign-knowledge"),
+    ("knowledge_scope", "TENANT_PRIVATE"),
+    ("agent_version", "foreign-version"),
+    ("authorization_deadline", 9999999999),
+])
+def test_host_runtime_snapshot_cannot_be_rebound(
+    monkeypatch: pytest.MonkeyPatch, field: str, value: Any,
+) -> None:
+    import time
+    from types import SimpleNamespace
+
+    from apbra_api.model_provider import FoundryMemoryTokenCredential
+
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    snapshot = FoundryMemoryTokenCredential(
+        SimpleNamespace(**{"token": "synthetic-secret-canary"},
+                        expires_on=int(time.time() + 600)),
+        authorization_deadline=settings.foundry_host_binding().authorization_deadline,
+        enabled=lambda: True, binding_digest=settings.foundry_host_binding().binding_digest(),
+    )
+    try:
+        calls: list[str] = []
+        monkeypatch.setattr(snapshot, "get_token", lambda *args: calls.append("token"))
+        with pytest.raises(ProviderConfigurationError):
+            module.create_runtime_app(
+                host_runtime_settings(**{
+                    **settings.foundry_host_binding().model_dump(mode="json"), field: value,
+                }), snapshot,
+            )
+        assert calls == []
+    finally:
+        snapshot.close()
+
+
+def test_host_runtime_private_terminal_rejects_redirected_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    module = host_runtime_module(monkeypatch)
+    opened: list[Any] = []
+    monkeypatch.setattr(module.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: opened.append(args))
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_PRIVATE_TERMINAL_REQUIRED"):
+        with module._private_terminal():
+            raise AssertionError("Redirected input reached the private terminal")
+    assert opened == []
+
+
+def test_host_runtime_server_uses_one_local_process_without_access_logs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import uvicorn
+
+    module = host_runtime_module(monkeypatch)
+    calls: list[Any] = []
+    monkeypatch.setattr(uvicorn, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+    application = object()
+    module._serve(application, host_runtime_settings())
+    assert len(calls) == 1
+    assert calls[0][0] == (application,)
+    assert calls[0][1] == {
+        "host": "127.0.0.1", "port": 8000, "workers": 1,
+        "reload": False, "access_log": False, "log_config": None,
+    }
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_host_runtime_server_teardown_drops_token_even_on_error(
+    monkeypatch: pytest.MonkeyPatch, failure: bool,
+) -> None:
+    module, settings, sdk, events, _ = fake_host_flow(monkeypatch)
+    snapshots: list[Any] = []
+    create = module.create_runtime_app
+
+    def capture(configured: Any, snapshot: Any) -> Any:
+        snapshots.append(snapshot)
+        return create(configured, snapshot)
+
+    def serve(*args: Any) -> None:
+        if failure:
+            raise RuntimeError("synthetic-server-error")
+
+    monkeypatch.setattr(module, "create_runtime_app", capture)
+    monkeypatch.setattr(module, "_serve", serve)
+    if failure:
+        with pytest.raises(ProviderConfigurationError):
+            module.run_foundry_device_code(settings, lambda **kwargs: sdk)
+    else:
+        module.run_foundry_device_code(settings, lambda **kwargs: sdk)
+    assert events == ["authenticate", "token", "close"]
+    assert len(snapshots) == 1
+    assert snapshots[0]._token is None
+    assert not snapshots[0].ready()
+
+
+def test_host_runtime_full_profile_and_approval_are_part_of_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+    from types import SimpleNamespace
+
+    from pydantic import SecretStr
+
+    from apbra_api.model_provider import FoundryMemoryTokenCredential
+
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings()
+    binding = settings.foundry_host_binding()
+    snapshot = FoundryMemoryTokenCredential(
+        SimpleNamespace(**{"token": "synthetic-secret-canary"},
+                        expires_on=int(time.time() + 600)),
+        authorization_deadline=binding.authorization_deadline,
+        enabled=lambda: True, binding_digest=binding.binding_digest(),
+    )
+    try:
+        altered = binding.model_dump(mode="json")
+        altered["provider_profile"]["model_or_deployment"] = "synthetic-other-model"
+        foreign = settings.model_copy(update={
+            "foundry_host_binding_json": SecretStr(json.dumps(altered)),
+            "qualified_provider_profiles_json": json.dumps([altered["provider_profile"]]),
+        })
+        # Both profiles are independently in their exact configured catalogs.
+        assert (
+            foreign.foundry_host_binding().provider_profile.model_or_deployment
+            == "synthetic-other-model"
+        )
+        with pytest.raises(ProviderConfigurationError):
+            module.create_runtime_app(foreign, snapshot)
+        assert not hasattr(binding, "token")
+        assert binding.home_account_id not in repr(binding) + str(binding)
+        assert binding.home_account_id not in repr(settings)
+    finally:
+        snapshot.close()
+
+
+@pytest.mark.parametrize("token,expiry", [
+    ("", 2000), (None, 2000), (False, 2000),
+    ("synthetic-token", False), ("synthetic-token", float("inf")),
+    ("synthetic-token", float("nan")), ("synthetic-token", 999),
+])
+def test_host_runtime_malformed_or_expired_snapshot_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, token: Any, expiry: Any,
+) -> None:
+    from types import SimpleNamespace
+
+    from apbra_api import model_provider
+
+    monkeypatch.setattr(model_provider.time, "time", lambda: 1000.0)
+    with pytest.raises(ProviderConfigurationError):
+        model_provider.FoundryMemoryTokenCredential(
+            SimpleNamespace(**{"token": token}, expires_on=expiry),
+            authorization_deadline=1300, enabled=lambda: True, binding_digest="a" * 64,
+        )
+
+
+@pytest.mark.parametrize("origin", [
+    "http://127.0.0.1", "http://127.0.0.1:0", "http://127.0.0.1:65536",
+    "http://127.0.0.1:invalid", "http://external.invalid:8000", "https://localhost:8000",
+    "http://user:private-canary@localhost:8000", "http://localhost:8000/path",
+    "http://localhost:8000?private-canary", "http://localhost:8000#private-canary",
+])
+def test_host_runtime_invalid_origin_is_private_and_blocks_sdk(
+    monkeypatch: pytest.MonkeyPatch, origin: str,
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    settings = host_runtime_settings().model_copy(update={"api_origin": origin})
+    calls: list[Any] = []
+    with pytest.raises(ProviderConfigurationError, match="^FOUNDRY_LOCAL_HOST_REQUIRED$"):
+        module.run_foundry_device_code(settings, lambda **kwargs: calls.append(kwargs))
+    assert calls == []

@@ -91,16 +91,34 @@ def _private_terminal() -> Iterator[TextIO]:
         yield terminal
 
 
+def _local_address(settings: Settings) -> tuple[str, int]:
+    try:
+        origin = urlparse(settings.api_origin)
+        if (
+            origin.scheme != "http"
+            or origin.hostname not in {"127.0.0.1", "localhost"}
+            or origin.port is None
+            or origin.port < 1
+            or origin.username is not None
+            or origin.password is not None
+            or origin.path not in {"", "/"}
+            or origin.query
+            or origin.fragment
+        ):
+            raise ValueError("Invalid local origin")
+        return origin.hostname, origin.port
+    except Exception:
+        raise ProviderConfigurationError("FOUNDRY_LOCAL_HOST_REQUIRED") from None
+
+
 def _serve(application: FastAPI, settings: Settings) -> None:
     import uvicorn
 
-    origin = urlparse(settings.api_origin)
-    if origin.hostname not in {"127.0.0.1", "localhost"} or origin.port is None:
-        raise ProviderConfigurationError("FOUNDRY_LOCAL_HOST_REQUIRED")
+    host, port = _local_address(settings)
     uvicorn.run(
         application,
-        host=origin.hostname,
-        port=origin.port,
+        host=host,
+        port=port,
         workers=1,
         reload=False,
         access_log=False,
@@ -115,9 +133,7 @@ def run_foundry_device_code(
     """Explicit private manual action; offline work does not approve invocation."""
     settings = settings or get_settings()
     binding = settings.foundry_host_binding()
-    origin = urlparse(settings.api_origin)
-    if origin.hostname not in {"127.0.0.1", "localhost"} or origin.port is None:
-        raise ProviderConfigurationError("FOUNDRY_LOCAL_HOST_REQUIRED")
+    _local_address(settings)
     snapshot: FoundryMemoryTokenCredential | None = None
     try:
         with _private_terminal() as terminal:
@@ -171,8 +187,10 @@ def run_foundry_device_code(
                 )
                 del acquired, record
             finally:
-                sdk.close()
-                del sdk
+                try:
+                    sdk.close()
+                finally:
+                    del sdk
         if not _authorized(settings, binding) or not snapshot.ready():
             raise ProviderConfigurationError("FOUNDRY_HOST_UNAVAILABLE")
         _serve(create_runtime_app(settings, snapshot), settings)
