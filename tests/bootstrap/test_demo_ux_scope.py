@@ -97,6 +97,53 @@ class DemoUXScopeTests(unittest.TestCase):
             errors = self.check(root, {self.task_path})
             self.assertIn("APBRA-160 demo UX implementation cannot change governance files", errors)
 
+    def test_member_branding_exception_is_finite_and_read_only(self):
+        requirement = self.task["requirements"][-1]
+        for boundary in (
+            "authenticated GET /api/workspace/branding",
+            "exactly version, primary and accent",
+            "server-derived actor.company_id",
+            "no caller-supplied company selector",
+            "actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT)",
+            "existing admin settings and every write permission remain unchanged",
+        ):
+            self.assertIn(boundary, requirement)
+        self.assertIn("inactive Expert denial", self.task["verification_required"][-1])
+        self.assertIn("before projection product edits", self.task["verification_required"][-1])
+        self.assertIn("no combined governance/product diff", self.task["dependencies"][-1])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            self.assertEqual(self.check(root, c.DEMO_UX_REGISTRATION_PATHS,
+                                        c.DEMO_UX_REGISTRATION_BRANCH), [])
+
+    def test_member_branding_access_and_response_mutations_fail_closed(self):
+        mutations = (
+            ("requirements", "exactly version, primary and accent", "all tenant settings"),
+            ("requirements", "server-derived actor.company_id", "client company_id"),
+            ("requirements", "no caller-supplied company selector", "accept caller-supplied company selector"),
+            ("requirements", "actors with authenticated active APBRA membership (COMPANY_OWNER, COMPANY_ADMIN, MEMBER or EXPERT)", "any authenticated identity"),
+            ("requirements", "every write permission remain unchanged", "members can write settings"),
+            ("acceptance_criteria", "missing or inactive membership", "only missing membership"),
+            ("acceptance_criteria", "No other settings or credentials are returned", "Include provider and credential settings"),
+            ("acceptance_criteria", "stale responses cannot apply a previous tenant palette", "stale responses may apply any palette"),
+            ("verification_required", "before projection product edits", "after projection product edits"),
+            ("out_of_scope", "three-field read-only projection", "unrestricted settings endpoint"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy_repository(root)
+            for section, before, after in mutations:
+                with self.subTest(section=section, boundary=before):
+                    changed = copy.deepcopy(self.task)
+                    changed[section] = [entry.replace(before, after) for entry in changed[section]]
+                    self.assertNotEqual(changed[section], self.task[section])
+                    (root / self.task_path).write_text(json.dumps(changed))
+                    # Rehashing the overall document cannot authorize weakened gates.
+                    with patch.object(c, "DEMO_UX_TASK_SHA256", digest(changed)):
+                        errors = self.check(root, {"apps/api/src/apbra_api/api.py"})
+                    self.assertIn("APBRA-160 demo UX safety/review gate differs: " + section, errors)
+
     def test_scope_mutations_fail_even_with_recomputed_task_digest(self):
         mutations = [
             [p for p in self.task["allowed_paths"] if p != "apps/web/e2e/tenant-settings.spec.ts"],
