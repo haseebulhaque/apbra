@@ -2,7 +2,7 @@ import {providerAuthenticationLabel} from './EnterpriseApp';
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
@@ -28,6 +28,7 @@ it('opens the wizard at Goal and distinguishes viewing a step from completing an
   expect(html).toContain('<div hidden=""><p>Saved journey view: information</p></div>');
   expect(html).toContain('Use each step’s action to save, review, confirm or build.');
   expect(html).not.toContain('Complete');
+  expect(html).not.toContain('Open step');expect(html).not.toContain('Viewing');
 });
 it('keeps an unsaved reporting goal visible as a warning without claiming it was saved',()=>{
   const html=renderToStaticMarkup(<ReportCreationWizard hasUnsavedGoal goal={<p>Draft business question</p>}>{()=>null}</ReportCreationWizard>);
@@ -70,4 +71,15 @@ it('rejects CSS-shaped colour values and uses bounded presentation fallbacks',()
 it('distinguishes the Entra-only configured agent route from protected legacy keys',()=>{
  expect(providerAuthenticationLabel('FOUNDRY_AGENT_RESPONSES')).toContain('Microsoft Entra server identity');
  expect(providerAuthenticationLabel('OPENAI_CHAT_COMPATIBLE')).toBe('Protected provider credential');
+});
+
+it('renders named appearance icons with a single selected personal mode',()=>{
+ const html=renderToStaticMarkup(<AppearanceControls value="dark" onChange={()=>{}}/>);
+ expect(html).toContain('role="group" aria-label="Appearance"');
+ for(const name of ['Light appearance','Dark appearance','Use system appearance'])expect(html).toContain(`aria-label="${name}"`);
+ expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);expect(html).not.toContain('<select');
+});
+it('keeps the account menu closed until its named avatar button is opened',()=>{
+ const html=renderToStaticMarkup(<WorkspaceAccountMenu name="Synthetic User" role="MEMBER" busy={false} onProfile={()=>{}} onSignOut={()=>{}}/>);
+ expect(html).toContain('aria-label="Account menu for Synthetic User"');expect(html).toContain('aria-haspopup="menu"');expect(html).toContain('aria-expanded="false"');expect(html).not.toContain('role="menuitem"');
 });
