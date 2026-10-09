@@ -220,5 +220,123 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 .private-workspace .evidence-upload .upload-button{background:var(--surface);border-color:var(--border-strong);color:var(--ink)}
 .private-workspace .quiet-empty{color:var(--muted)!important}
 .private-workspace .composer-footer>span{color:var(--muted)}
+
+/* Clear Glass is the current application presentation, not tenant/report policy.
+   Keep palette, material, geometry and motion tokens reusable for later styles. */
+.private-workspace[data-theme="clear-glass"]{
+  --canvas:#f4f7fd;--surface:#fff;--surface-tint:#edf2fa;
+  --ink:#19283f;--text-secondary:#425773;--muted:#526682;
+  --brand:#245de5;--brand-hover:#1d4ac0;--brand-soft:#eaf1ff;
+  --border:#dce5f3;--border-strong:#8193ad;--focus:#245de5;
+  --chrome-solid:#f4f8ff;--chrome-glass:rgba(245,249,255,.86);
+  --chrome-tint:rgba(126,205,213,.12);--chrome-edge:rgba(131,154,191,.22);
+  --radius-sm:12px;--radius-md:18px;--radius-lg:22px;--radius-chrome:24px;
+  --shadow-sm:0 3px 14px rgba(28,49,84,.035);
+  --shadow-chrome:0 8px 28px rgba(28,49,84,.055);
+  --motion-duration:160ms;--motion-easing:cubic-bezier(.2,.7,.3,1);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  background:var(--canvas);color:var(--ink);color-scheme:light;
+  grid-template-columns:236px minmax(0,1fr);
+}
+.private-workspace[data-theme="clear-glass"][data-color-mode="dark"]{
+  --canvas:#101927;--surface:#172338;--surface-tint:#1c2b43;
+  --ink:#edf3fc;--text-secondary:#c2cfe2;--muted:#b0bfd4;
+  --brand-soft:#20385e;--border:#344662;--border-strong:#7890b4;--focus:#9cbdff;
+  --chrome-solid:#142135;--chrome-glass:rgba(20,33,53,.9);
+  --chrome-tint:rgba(81,149,187,.1);--chrome-edge:rgba(156,183,224,.2);
+  --shadow-sm:0 3px 14px rgba(0,0,0,.1);--shadow-chrome:0 8px 28px rgba(0,0,0,.13);
+  color-scheme:dark;
+}
+@media(prefers-color-scheme:dark){.private-workspace[data-theme="clear-glass"][data-color-mode="system"]{
+  --canvas:#101927;--surface:#172338;--surface-tint:#1c2b43;
+  --ink:#edf3fc;--text-secondary:#c2cfe2;--muted:#b0bfd4;
+  --brand-soft:#20385e;--border:#344662;--border-strong:#7890b4;--focus:#9cbdff;
+  --chrome-solid:#142135;--chrome-glass:rgba(20,33,53,.9);
+  --chrome-tint:rgba(81,149,187,.1);--chrome-edge:rgba(156,183,224,.2);
+  --shadow-sm:0 3px 14px rgba(0,0,0,.1);--shadow-chrome:0 8px 28px rgba(0,0,0,.13);
+  color-scheme:dark;
+}}
+.private-workspace .workspace-rail{
+  top:16px;height:calc(100dvh - 32px);margin:16px 0 16px 16px;padding:22px 10px 16px;
+  border:1px solid var(--chrome-edge);border-radius:var(--radius-chrome);
+  background:linear-gradient(155deg,transparent 65%,var(--chrome-tint)),var(--chrome-solid);
+  box-shadow:var(--shadow-chrome);
+}
+.private-workspace .rail-brand{padding:0 12px 32px}
+.private-workspace .rail-brand .brand-mark{border-radius:12px}
+.private-workspace .workspace-rail .rail-link{gap:11px;padding:11px 12px;min-height:44px;border-radius:var(--radius-sm);transition:background var(--motion-duration) var(--motion-easing),color var(--motion-duration) var(--motion-easing)}
+.private-workspace .workspace-rail .rail-link.active{background:var(--surface);box-shadow:inset 3px 0 var(--brand),var(--shadow-sm)}
+.workspace-icon{display:block;width:20px;height:20px;flex:0 0 20px}
+.private-workspace .rail-link.active>.workspace-icon{color:var(--brand)}
+.private-workspace .rail-privacy{background:var(--brand-soft);color:var(--ink);border-radius:12px}
+.private-workspace .rail-footer{margin:24px 6px 0;margin-top:auto;padding:18px 6px 0}
+.private-workspace .workspace-topbar{background:var(--chrome-solid);border:0;min-height:84px;gap:12px;padding:16px clamp(22px,3vw,48px)}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .private-workspace .workspace-rail{background:linear-gradient(155deg,transparent 65%,var(--chrome-tint)),var(--chrome-glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .private-workspace .workspace-topbar{background:var(--chrome-glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+}
+.private-workspace .workspace-breadcrumb{font-size:12px}
+.private-workspace .account-avatar{background:var(--brand-soft);color:var(--ink)}
+.private-workspace .case-content{padding:22px clamp(22px,3vw,48px) 48px}
+.private-workspace :is(button,.primary-link,.button-link,.upload-button){border-radius:var(--radius-sm)}
+.private-workspace :is(input,textarea,select){border-color:var(--border-strong);border-radius:var(--radius-sm)}
+.private-workspace :is(.panel,.case-editor,.conversation-step,.evidence-step,.acceptance-panel,.context-card,.new-report-card,.current-report){border-radius:var(--radius-lg);border-color:var(--border);box-shadow:var(--shadow-sm)}
+.private-workspace .context-card{background:var(--surface);padding:24px}
+.private-workspace :is(.understanding-objective,.understanding-grid>div,.conversation-events li,.workspace-admin,.profile-editor){background:var(--surface-tint);color:var(--ink);border-color:var(--border)}
+.private-workspace :is(.understanding-grid h5,.profile-editor label,.profile-editor summary,.new-report-card label){color:var(--text-secondary)}
+.private-workspace .state-callout.info{background:var(--brand-soft);color:var(--ink);border-color:var(--border)}
+.private-workspace .new-report-card textarea{background:var(--surface-tint);color:var(--ink)}
+.private-workspace .report-wizard .journey-steps{position:static;grid-template-columns:repeat(6,minmax(0,1fr));border:0;background:transparent;box-shadow:none;overflow:visible;gap:8px}
+.private-workspace .report-wizard .journey-steps li{border:0!important;border-radius:var(--radius-sm);background:transparent;box-shadow:none}
+.private-workspace .report-wizard .journey-steps button{flex-direction:column;align-items:flex-start;padding:10px 8px!important;gap:9px;min-height:76px}
+.private-workspace .report-wizard .journey-steps .step-number{width:28px;height:28px;flex-basis:28px;border:0;border-radius:50%;background:var(--surface-tint);color:var(--muted)}
+.private-workspace .report-wizard .journey-steps li.active .step-number{background:var(--brand);color:#fff}
+.private-workspace .report-wizard .journey-steps li.active strong{color:var(--ink)}
+.private-workspace .report-wizard .journey-steps .step-copy strong{font-size:11px;color:var(--text-secondary)}
+.private-workspace .report-wizard .journey-steps .step-copy small{font-size:9px;color:var(--muted)}
+.private-workspace .wizard-step-heading{margin:20px 0 18px}
+.private-workspace .wizard-navigation{background:var(--surface-tint);padding:14px;border:1px solid var(--border);border-radius:var(--radius-md)}
+.private-workspace .wizard-navigation p{color:var(--text-secondary);font-size:12px}
+.private-workspace .tenant-admin-surface{padding:0;background:transparent}
+.private-workspace .tenant-admin-surface>.panel{display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:24px;padding:24px}
+.private-workspace .tenant-admin-surface>.panel>*{grid-column:1 / -1;min-width:0}
+.private-workspace .tenant-admin-surface .tenant-section-tabs{grid-column:1;grid-row:span 5;display:flex;flex-direction:column;align-items:stretch;align-self:stretch;gap:10px;margin:20px 0 0;padding:12px;background:var(--surface-tint);border:0;border-radius:var(--radius-md)}
+.private-workspace .tenant-section-tabs button{display:block;width:100%;padding:12px;min-height:48px;border:0;background:transparent;color:var(--text-secondary);border-radius:var(--radius-sm)}
+.private-workspace .tenant-section-tabs button.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+.private-workspace .tenant-admin-surface>.panel>:is(.tenant-section-intro,.supporting-copy,.tenant-settings-grid,.tenant-section-actions,.tenant-history){grid-column:2}
+.private-workspace .tenant-section-intro{flex-wrap:wrap;margin-top:20px;padding-top:0}
+.private-workspace .tenant-settings-grid{grid-template-columns:minmax(0,1fr)}
+.private-workspace .tenant-settings-grid fieldset{border-radius:var(--radius-md);padding:20px}
+.private-workspace .workspace-menu-toggle{display:none}
+.private-workspace :is(button,a,input,textarea,select,[tabindex]){scroll-margin-block:24px}
+@media(max-width:1100px){.private-workspace .case-workspace-grid{grid-template-columns:minmax(0,1fr)}.private-workspace .case-context{position:static}.private-workspace .tenant-admin-surface>.panel{grid-template-columns:176px minmax(0,1fr);column-gap:18px;padding:20px}}
+@media(max-width:768px){
+  .private-workspace[data-theme="clear-glass"]{display:block}
+  .private-workspace .workspace-rail{position:relative;top:0;height:auto;min-height:76px;margin:0;padding:16px;border-radius:0;border-left:0;border-right:0;border-top:0;box-shadow:none}
+  .private-workspace .rail-brand{padding:0;gap:10px}
+  .private-workspace .rail-brand .brand-mark{width:30px;height:30px;font-size:19px;border-radius:9px}
+  .private-workspace .rail-brand small{display:none}
+  .private-workspace .workspace-menu-toggle{display:inline-flex;width:44px;height:44px;min-height:44px;flex:0 0 44px;padding:10px;background:transparent;border-color:transparent;color:var(--ink);margin-left:-6px}
+  .private-workspace .workspace-rail :is(nav,.rail-section-label,.rail-footer){display:none}
+  .private-workspace[data-navigation-open="true"] .workspace-rail nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;overflow:visible}
+  .private-workspace .workspace-rail .rail-link{width:100%;white-space:normal;text-align:left;font-size:13px}
+  .private-workspace .workspace-topbar{min-height:64px;padding:12px 16px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+  .private-workspace .workspace-topbar .account-controls{flex-wrap:wrap;gap:8px}
+  .private-workspace .case-content{padding:22px 16px 32px}
+  .private-workspace .tenant-admin-surface>.panel{display:block;padding:18px}
+  .private-workspace .tenant-admin-surface .tenant-section-tabs{display:flex;flex-direction:row;flex-wrap:wrap;gap:8px;margin:18px 0;padding:10px}
+  .private-workspace .tenant-section-tabs button{width:auto;flex:1 1 120px;padding:10px;min-height:44px}
+  .private-workspace .tenant-settings-grid fieldset{padding:16px}
+}
+@media(max-width:550px){
+  .private-workspace .report-wizard .journey-steps{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .private-workspace .report-wizard .journey-steps button{flex-direction:row;align-items:center;min-height:62px;gap:8px;padding:8px!important}
+  .private-workspace .report-wizard .journey-steps .step-copy strong{font-size:11px}
+  .private-workspace .wizard-navigation{flex-wrap:wrap;gap:10px}
+  .private-workspace .wizard-navigation p{order:3;flex:1 1 100%;max-width:none;font-size:11px}
+  .private-workspace .wizard-navigation button:last-child{flex:1}
+  .private-workspace :is(.case-editor,.conversation-step,.evidence-step,.acceptance-panel,.context-card){padding:20px 16px}
+}
+@media(prefers-reduced-motion:reduce){.private-workspace[data-theme="clear-glass"]{--motion-duration:0ms}.private-workspace .workspace-rail,.private-workspace .workspace-topbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--chrome-solid)}}
 @media(max-width:700px){.report-wizard .journey-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .report-wizard .journey-steps li.active .step-number{background:var(--brand);color:#fff}

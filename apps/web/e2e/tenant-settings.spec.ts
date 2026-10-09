@@ -4,6 +4,8 @@ async function signIn(page:Page,identity:'owner'|'member'|'foreign'){
   await page.goto('/');
   await page.getByText('Local development identities').click();
   await page.getByRole('link',{name:identity,exact:true}).click();
+  const navigation=page.getByRole('button',{name:'Open workspace navigation',exact:true});
+  if((page.viewportSize()?.width??1280)<=768){await expect(navigation).toBeVisible();await navigation.click();}
 }
 
 test('owner edits and restores a versioned clarification policy without exposing a credential',async({page})=>{
@@ -50,6 +52,7 @@ test('ordinary member cannot see owner settings and narrow admin form does not o
   await page.getByRole('button',{name:'Sign out'}).click();
   await signIn(page,'owner');
   await page.setViewportSize({width:375,height:812});
+  await page.getByRole('button',{name:'Open workspace navigation',exact:true}).click();
   const admin=page.getByLabel('Tenant administration');
   await page.getByRole('button',{name:'Administration'}).click();
   await expect(admin.getByRole('button',{name:/Review .* changes/})).toBeVisible();
@@ -60,6 +63,7 @@ test('ordinary member cannot see owner settings and narrow admin form does not o
 test('high-impact changes remain in separate section drafts and each review excludes unrelated fields',async({page})=>{
   await signIn(page,'owner');
   await page.setViewportSize({width:375,height:812});
+  await page.getByRole('button',{name:'Open workspace navigation',exact:true}).click();
   const admin=page.getByLabel('Tenant administration');
   await page.getByRole('button',{name:'Administration'}).click();
   const before=(await (await page.request.get('/api/tenant-settings')).json()).version;
@@ -91,13 +95,17 @@ test('high-impact changes remain in separate section drafts and each review excl
   expect((await (await page.request.get('/api/tenant-settings')).json()).version).toBe(before);
 });
 
-test('saving one section leaves another unsaved draft out of the committed version',async({page})=>{
+test('mobile navigation preserves section drafts and a pending save cannot be repeated',async({page})=>{
+  await page.setViewportSize({width:320,height:812});
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Administration'}).click();
   const admin=page.getByLabel('Tenant administration');
   const before=await (await page.request.get('/api/tenant-settings')).json();
   const expert=admin.getByRole('checkbox',{name:/Expert assistance/});
   if(before.settings.expert_escalation_enabled)await expert.uncheck();else await expert.check();
+  const menu=page.locator('.workspace-menu-toggle');
+  for(let n=0;n<3;n++){await menu.click();await page.keyboard.press('Escape');await expect(menu).toBeFocused();}
+  await expect(expert).toHaveJSProperty('checked',!before.settings.expert_escalation_enabled);
   await admin.getByRole('button',{name:/Budget & limits/}).click();
   const lifetime=admin.getByLabel('Invitation lifetime (days)');
   await lifetime.fill(String(before.settings.invitation_ttl_days+1));
@@ -105,16 +113,25 @@ test('saving one section leaves another unsaved draft out of the committed versi
   const review=page.getByRole('dialog',{name:'Review tenant settings changes'});
   await expect(review).toContainText('invitation_ttl_days');
   await expect(review).not.toContainText('expert_escalation_enabled');
+  let attempts=0,release!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve});
+  await page.route('**/api/tenant-settings/sections/budgets_limits',async route=>{attempts++;await gate;await route.continue()});
   await review.getByRole('button',{name:'Confirm and save new version'}).click();
+  const saving=review.getByRole('button',{name:'Saving…'});
+  await expect(saving).toBeDisabled();await expect(admin).toHaveAttribute('aria-busy','true');
+  // Native disabled buttons must reject repeated activation while the request is held.
+  await saving.evaluate(button=>{(button as HTMLButtonElement).click();(button as HTMLButtonElement).click()});
+  await expect.poll(()=>attempts).toBe(1);release();
   await expect(admin.getByText(`Tenant settings version ${before.version+1} is now effective.`,{exact:false})).toBeVisible();
+  expect(attempts).toBe(1);
   const saved=await (await page.request.get('/api/tenant-settings')).json();
   expect(saved.version).toBe(before.version+1);
   expect(saved.settings.invitation_ttl_days).toBe(before.settings.invitation_ttl_days+1);
   expect(saved.settings.expert_escalation_enabled).toBe(before.settings.expert_escalation_enabled);
   await admin.getByRole('button',{name:/AI & models/}).click();
   await expect(admin.getByRole('checkbox',{name:/Expert assistance/})).toHaveJSProperty('checked',!before.settings.expert_escalation_enabled);
-  await page.getByRole('button',{name:'Home'}).click();
-  await page.getByRole('button',{name:'Administration'}).click();
+  await menu.click();await page.getByRole('button',{name:'Home'}).click();
+  await menu.click();await page.getByRole('button',{name:'Administration'}).click();
   await expect(admin.getByRole('checkbox',{name:/Expert assistance/})).toHaveJSProperty('checked',!before.settings.expert_escalation_enabled);
   await admin.getByRole('button',{name:'Cancel section changes'}).click();
   await expect(admin.getByRole('checkbox',{name:/Expert assistance/})).toHaveJSProperty('checked',before.settings.expert_escalation_enabled);
