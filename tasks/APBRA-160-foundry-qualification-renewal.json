@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-FOUNDRY-QUALIFICATION-RENEWAL-REG-20261009",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register only the finite qualification approval-ceiling renewal to 02:09 UTC on 10 October 2026; preserve all prior qualification and runtime controls.",
+  "requirements": [
+    "The sole renewed qualification ceiling is 2026-10-10T02:09:00Z (13:09 Sydney). The owner renewed bounded APBRA development/review/test/merge authority at23:09UTC2026-10-09 for three hours. Historical19:10 and proposed22:35 windows remain expired history, never current authority.",
+    "Preserve tasks/APBRA-160-foundry-qualification.json, all historical source-register rows and original checker constants byte/value-for-value. Add this separate renewal registration; do not rewrite historical approval or reuse an old task digest for new prose.",
+    "Registration changes exactly four governance paths: this task, scripts/check_bootstrap.py, scripts/check_foundry_qualification_renewal.py and tests/bootstrap/test_foundry_qualification_renewal_scope.py. Product changes exactly config.py and test_model_provider.py only after separately reviewed/CI-passed authorized registration merge and verified main.",
+    "The sole product behavior change is the qualification-only finite approval ceiling from19:10UTC2026-10-09 to02:09UTC2026-10-10. Preserve future-deadline and exact-expiry rejection, approval flags, private owner Terminal/iTerm provenance, existing owner account/tenant/client confirmation, finite two scopes/three metadata GETs, identity/resource checks, bounded projection, SDK logging suppression, memory-only cleanup and zero default/startup authentication.",
+    "No registration execution or offline test constructs actual SDK credentials, authenticates, acquires tokens, accesses private cloud metadata, serves an app, activates a provider, persists an attestation or consumes a paid call. A live private owner handoff is a later separately gated action after released renewal bytes and exact reviewed binding.",
+    "Original strict Foundry runtime account/home_account_id/LIVE_METADATA_VERIFIED, host approval ceiling, business rules, prompts, validators, report behavior and dependencies remain unchanged. Metadata observation cannot certify routing, grounding, isolation or paid-call costs.",
+    "No new identity, role, permission, consent, resource, connection lookup, ambient credential/browser/CLI fallback, token cache/persistence or automatic refresh is authorized. Stop at unexpected account/resource, consent, denied access or expiry; no retry or permission fallback.",
+    "Total budget remains A$10 inclusive owner-reported A$1.25 baseline; unreconciled/unposted usage, reserves and nested all-in cost bounds remain unknown. Renewal grants no paid model/Responses/retrieve/search/tool/generation call."
+  ],
+  "adrs": [
+    "Time renewal is a separate finite authorization amendment, not runtime activation or expanded private-resource access.",
+    "A separate pinned helper admits exactly the new task and finite stages while all historical validator errors and constants remain preserved."
+  ],
+  "architecture_refs": [
+    "Existing accepted source-register bindings apbra-160-editable-first-draft-direction page8519682v28 and apbra-160-editable-first-draft-delivery page9404417v9 remain exact and unchanged.",
+    "Original qualification registration PR123 merged at a48bb9812ba698cba8297056449e3b3bbdf653ca; qualification implementation candidate8d5d88032e8c1243baa57cd8871297ef751f975b onb3f177a89f8831b8a4f8857198728878fa0722f6 has independent offlinePASS and published PR126; its coordinated release/verified main remains a prerequisite.",
+    "New owner work window at23:09UTC2026-10-09 ends02:09UTC2026-10-10. Earlier22:35 plan and19:10 task remain historical, not current execution authority."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/tests/test_model_provider.py"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/**",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "compose.yaml",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**",
+    ".env",
+    "**/.env",
+    "artifacts/**",
+    "local-data/**",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "apps/api/src/apbra_api/main.py"
+  ],
+  "acceptance_criteria": [
+    "Exact four governance paths and two literal product paths; no duplicate, omitted or wildcard path and no runtime edit in registration. Original task/source/history/constants and all old validation errors remain unchanged.",
+    "Only qualification deadline ceiling is renewed to2026-10-10T02:09:00Z. A binding at the ceiling is accepted only strictly before its own deadline; any later ceiling, exact expiry, old expired binding, missing/nonfinite/invalid deadline or lost approval remains unavailable before TTY/SDK.",
+    "Synthetic before/after operation and idle-expiry tests preserve cleanup, revocation and no further token/GET calls. Both settings/binding loader failures retain sanitized fromNone errors, zero SDK/TTY/GET and no raw private output.",
+    "Default import/startup, strict host/runtime account/metadata attestation, GET/identity/privacy/consent controls and cost gates remain unchanged; no cloud authentication, permission change, model/retrieve/tool call or activation occurs in registration/offline verification."
+  ],
+  "verification_required": [
+    "Registration: exact four-path audit, original constants/function/history preservation and old/new error parity, negative scope/source/identity/deadline/operation gate mutations, full bootstrap, standalone bootstrap/CI policy, lint/diff/JSON checks and redacted tracked-tree/reachable-history scans.",
+    "Registration: freeze only on verified coordinated released qualification main, fresh independent exact-head governancePASS, hosted CI, separately authorized manual merge and verified post-registration main before any product edit.",
+    "Product: exact two-path audit; meaningful synthetic ceiling/equality/beyond/expired/missing/nonfinite deadlines, lifecycle and four loader privacy regressions; appropriate full API/profile matrices, Ruff/strictmypy/bootstrap/scans, fresh independent exact-headPASS and hosted CI before authorized merge.",
+    "Handoff: new safe public binding and isolated released command with02:09UTC2026-10-10 cutoff, independently reviewed owner participation steps; never reuse expired old draft or construct credentials in captured toolPTY."
+  ],
+  "out_of_scope": [
+    "Original task/source-register/checker digest mutation, file-limit increase, broad historical validator rewrite, product edit in registration or third product path.",
+    "Any main.py/model_provider.py/dependency/web/tenant setting/host expiry/account attestation/business/report change.",
+    "Actual authentication or private cloud access in author tools; consent/role/permission/new-resource/cache/persistence changes, app serving/provider activation, paid calls or automatic merge."
+  ],
+  "escalate_when": [
+    "Owner authority expires at2026-10-10T02:09:00Z; never silently extend or use22:35/19:10 drafts.",
+    "Original qualification release, verified main, independent review, hosted CI, exact scope, safe private owner terminal or any identity/privacy/lifecycle/cost gate is absent, stale, failed or requires broader action."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "b3f177a89f8831b8a4f8857198728878fa0722f6",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-qualification-renewal",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Exactly two-path qualification-only ceiling renewal after original qualification coordinated release, exact-head independent governancePASS/hostedCI, separately authorized manual registration merge and verifiedmain; no live auth, runtime activation or paid execution granted by registration.",
+  "dependencies": [
+    "Verified coordinated original qualification release/main and accepted source03.07v28/03.08v9; the existing strict host/source/task history remains unchanged.",
+    "Owner renewed work authority23:09UTC2026-10-09 to02:09UTC2026-10-10, not an indefinite authorization. Product/handoff/live metadata/activation/paid calls remain distinct release gates.",
+    "Root coordinates exact independent review/CI and authorized merges. This author prepares local registration only, no push, actualSDK/auth/private network or paid calls."
+  ]
+}
