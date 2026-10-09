@@ -1041,11 +1041,20 @@ class FoundryAgentResponsesProvider:
         candidate_digest: str | None = None
         grounding: dict[str, Any] | None = None
         totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        seen: set[str] = set()
+        reported_calls: dict[str, int] = {name: 0 for name in totals}
 
         def observation() -> ProviderExecutionObservation:
+            usage: dict[str, int | None] = {}
+            for name, amount in totals.items():
+                complete = calls > 0 and reported_calls[name] == calls
+                usage[name] = amount if complete else None
+                if 0 < reported_calls[name] < calls:
+                    # Preserve known billed observations without presenting a
+                    # partial subtotal as the aggregate cost of this operation.
+                    usage["observed_" + name] = amount
+                    usage[name + "_reported_calls"] = reported_calls[name]
             return ProviderExecutionObservation(
-                usage={name: amount if name in seen else None for name, amount in totals.items()},
+                usage=usage,
                 latency_ms=int((time.monotonic() - started) * 1_000), call_count=calls,
                 profile_id=self.profile.profile_id,
                 model_or_deployment=self.profile.model_or_deployment,
@@ -1111,7 +1120,7 @@ class FoundryAgentResponsesProvider:
                             amount = _integer_or_none(usage.get(wire))
                             if amount is not None:
                                 totals[name] += amount
-                                seen.add(name)
+                                reported_calls[name] += 1
                     if time.monotonic() - started >= self.profile.time_budget_seconds:
                         raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
                     if response.status_code in {408, 429, 500, 502, 503, 504}:

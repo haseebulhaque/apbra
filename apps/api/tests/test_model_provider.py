@@ -832,3 +832,51 @@ def test_foundry_bootstrap_cannot_reinterpret_a_protected_api_key_as_entra(setti
     })
     with pytest.raises(ProviderConfigurationError, match="FOUNDRY_SERVER_IDENTITY_REQUIRED"):
         configured.model_credential()
+
+
+@pytest.mark.parametrize("unknown_first", [False, True])
+def test_foundry_mixed_known_and_missing_retry_usage_stays_unknown(unknown_first: bool) -> None:
+    calls = 0
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = responses_payload()
+        if (calls == 1) == unknown_first:
+            payload.pop("usage")
+        return httpx.Response(200, json=payload)
+
+    def validator(value: dict[str, Any], grounding: dict[str, Any]) -> None:
+        if calls == 1:
+            raise ValueError("synthetic typed correction")
+
+    original = request()
+    candidate = ProviderRequest(task=original.task, system_prompt=original.system_prompt,
+                                context=original.context, output_schema=original.output_schema,
+                                grounding_validator=validator)
+    result = foundry_adapter(handler).structured(candidate)
+    assert result.call_count == 2
+    assert all(result.usage[name] is None for name in (
+        "prompt_tokens", "completion_tokens", "total_tokens",
+    ))
+    assert result.usage["observed_prompt_tokens"] == 5
+    assert result.usage["observed_completion_tokens"] == 3
+    assert result.usage["observed_total_tokens"] == 8
+    assert result.usage["total_tokens_reported_calls"] == 1
+
+
+def test_foundry_unknown_transport_retry_cannot_turn_known_usage_into_total() -> None:
+    calls = 0
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ReadTimeout("synthetic timeout", request=wire)
+        return httpx.Response(200, json=responses_payload())
+
+    result = foundry_adapter(handler).structured(request())
+    assert result.call_count == 2
+    assert result.usage["total_tokens"] is None
+    assert result.usage["observed_total_tokens"] == 8
+    assert result.usage["total_tokens_reported_calls"] == 1
