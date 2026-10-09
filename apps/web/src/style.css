@@ -268,7 +268,8 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 }
 .private-workspace .rail-brand{padding:0 12px 32px}
 .private-workspace .rail-brand .brand-mark{border-radius:12px}
-.private-workspace .workspace-rail .rail-link{gap:11px;padding:11px 12px;min-height:44px;border-radius:var(--radius-sm);transition:background var(--motion-duration) var(--motion-easing),color var(--motion-duration) var(--motion-easing)}
+/* Theme surfaces and navigation text change together; interpolated colours can lose contrast. */
+.private-workspace .workspace-rail .rail-link{gap:11px;padding:11px 12px;min-height:44px;border-radius:var(--radius-sm);transition:box-shadow var(--motion-duration) var(--motion-easing)}
 .private-workspace .workspace-rail .rail-link.active{background:var(--surface);box-shadow:inset 3px 0 var(--brand),var(--shadow-sm)}
 .workspace-icon{display:block;width:20px;height:20px;flex:0 0 20px}
 .private-workspace .rail-link.active>.workspace-icon{color:var(--brand)}

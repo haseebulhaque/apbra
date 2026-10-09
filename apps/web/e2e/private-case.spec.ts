@@ -673,6 +673,14 @@ test('workspace chrome has named appearance icons, bounded geometry and a keyboa
   const account=page.getByRole('button',{name:/^Account menu for /});
   for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
     await page.setViewportSize({width,height:900});await setAppearance(page,mode);
+    // Navigation text must remain readable while the surrounding theme changes,
+    // including frames before any optional visual transitions have settled.
+    const navigationFrameFailures:string[]=[];
+    for(let frame=0;frame<12;frame++){
+      navigationFrameFailures.push(...(await renderedTextContrast(page)).filter(failure=>failure.startsWith('BUTTON.rail-link')).map(failure=>`${mode}/${width}/frame ${frame}: ${failure}`));
+      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())));
+    }
+    expect(navigationFrameFailures).toEqual([]);
     const geometry=await page.evaluate(()=>{const header=document.querySelector('.workspace-topbar')!,rail=document.querySelector('.workspace-rail')!,avatar=document.querySelector('.account-trigger')!;const h=header.getBoundingClientRect(),r=rail.getBoundingClientRect(),a=avatar.getBoundingClientRect();return {headerRadius:parseFloat(getComputedStyle(header).borderRadius),railRadius:parseFloat(getComputedStyle(rail).borderRadius),gap:h.left-r.right,avatarWithinRail:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,overflow:document.documentElement.scrollWidth>innerWidth}});
     expect(geometry.overflow).toBe(false);expect(geometry.railRadius).toBeGreaterThan(0);
     if(width>768){expect(geometry.headerRadius).toBeGreaterThan(0);expect(geometry.gap).toBeGreaterThan(0)}else expect(geometry.avatarWithinRail).toBe(true);
