@@ -682,6 +682,31 @@ def test_token_credential_host_refreshes_scope_for_each_mocked_provider_attempt(
     assert result.grounding["qualification"] == "OFFLINE_FIXTURE"
 
 
+def test_token_credential_host_revocation_during_acquisition_blocks_provider_http() -> None:
+    from apbra_api.model_provider import FoundryAgentResponsesProvider
+
+    host, credential, company, qualified, activation = token_credential_host()
+    activation["enabled"] = True
+    acquire = credential.get_token
+
+    def revoke_during_acquisition(*scopes: str) -> Any:
+        activation["enabled"] = False
+        return acquire(*scopes)
+
+    credential.get_token = revoke_during_acquisition
+    requests: list[Any] = []
+    adapter = FoundryAgentResponsesProvider(
+        qualified, host.resolve(company, qualified), company_id=company,
+        transport=httpx.MockTransport(lambda wire: requests.append(wire) or httpx.Response(200)),
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_CREDENTIAL_UNAVAILABLE") as caught:
+        adapter.structured(request())
+    assert credential.scopes == [("https://ai.azure.com/.default",)]
+    assert not host.ready(company, qualified)
+    assert requests == []
+    assert caught.value.observation.call_count == 0
+
+
 @pytest.mark.parametrize("overrides", [
     {"knowledge_binding": "invalid/private binding"}, {"knowledge_scope": "FOREIGN"},
     {"agent_version": "invalid version"}, {"qualification": "UNVERIFIED"},

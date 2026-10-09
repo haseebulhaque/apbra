@@ -955,10 +955,14 @@ class FoundryTokenCredentialProvider:
                 or not math.isfinite(expiry) or expiry <= time.time()
             ):
                 raise ValueError("Invalid host capability")
-            return FoundryBearer(token=token, expires_at=float(expiry))
+            bearer = FoundryBearer(token=token, expires_at=float(expiry))
         except Exception:
             # SDK messages may contain private identity or authentication details.
             raise ProviderConfigurationError("FOUNDRY_CREDENTIAL_UNAVAILABLE") from None
+        # Host permission can expire or be revoked while SDK refresh is in flight.
+        if not self.ready(self._company_id, self._profile):
+            raise ProviderConfigurationError("FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE")
+        return bearer
 
 
 def _validate_foundry_access(
