@@ -171,7 +171,7 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 .private-workspace :is(button,a,summary,input,textarea,select):focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .private-workspace textarea::placeholder,.private-workspace input::placeholder{color:var(--muted)}
 .private-workspace .workspace-rail{background:var(--surface);color:var(--ink);border-right:1px solid var(--border);padding:24px 12px}
-.private-workspace .rail-brand .brand-mark{background:var(--brand);color:#fff;border-radius:6px}
+.private-workspace .rail-brand .brand-mark{background:var(--brand);color:var(--on-brand);border-radius:6px}
 .private-workspace :is(.rail-brand small,.rail-section-label,.rail-footer small){color:var(--muted)}
 .private-workspace .workspace-rail .rail-link{color:var(--ink);border-radius:6px;font-weight:500}
 .private-workspace .workspace-rail .rail-link:hover,.private-workspace .workspace-rail .rail-link.active{background:var(--brand-soft);color:var(--ink)}

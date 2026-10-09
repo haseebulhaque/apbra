@@ -559,6 +559,13 @@ test('tenant presentation variants preserve readable controls, borders and non-o
     palette=branding;await page.reload();await expect.poll(()=>page.locator('.private-workspace').evaluate(root=>(root as HTMLElement).style.getPropertyValue('--tenant-primary-original'))).toBe(branding.primary.toLowerCase());
     for(const mode of ['light','dark']){
       await page.getByLabel('Appearance',{exact:true}).selectOption(mode);
+      // The visible logo letter is aria-hidden; audit its painted colours too.
+      const logoContrast=await page.locator('.rail-brand .brand-mark').evaluate(element=>{
+        const style=getComputedStyle(element);
+        const luminance=(colour:string)=>{const channels=colour.match(/[\d.]+/g)!.slice(0,3).map(Number).map(channel=>{const value=channel/255;return value<=.04045?value/12.92:((value+.055)/1.055)**2.4});return .2126*channels[0]+.7152*channels[1]+.0722*channels[2]};
+        const foreground=luminance(style.color),background=luminance(style.backgroundColor);return (Math.max(foreground,background)+.05)/(Math.min(foreground,background)+.05);
+      });
+      expect(logoContrast).toBeGreaterThanOrEqual(4.5);
       for(const width of [1280,768,320]){
         await page.setViewportSize({width,height:900});await navigate('Create report');await page.getByLabel('Your reporting goal').fill('Synthetic presentation audit only');
         const create=page.locator('.new-report-card').getByRole('button',{name:/Create report/});await create.hover();await page.keyboard.press('Tab');await create.focus();
