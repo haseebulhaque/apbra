@@ -1106,6 +1106,7 @@ def host_runtime_settings(**changes: Any) -> Any:
     }
     binding.update(changes)
     return Settings(
+        profile="development",
         database_url="postgresql+psycopg://synthetic@127.0.0.1:15432/apbra_test",
         session_secret="synthetic-" + "session-secret-more-than-32-characters",
         _env_file=None,
@@ -1803,3 +1804,17 @@ def test_host_runtime_default_startup_never_changes_logging_state(
         module.create_runtime_app(host_runtime_settings())
     assert calls == []
     assert logging.root.manager.disable == before
+
+
+@pytest.mark.parametrize("profile", ["test", "hosted"])
+def test_host_runtime_non_development_profiles_stop_before_sdk(
+    monkeypatch: pytest.MonkeyPatch, profile: str,
+) -> None:
+    module = host_runtime_module(monkeypatch)
+    configured = host_runtime_settings().model_copy(update={"profile": profile})
+    calls: list[Any] = []
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE"):
+        module.run_foundry_device_code(configured, lambda **kwargs: calls.append(kwargs))
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE"):
+        module.create_runtime_app(configured)
+    assert calls == []
