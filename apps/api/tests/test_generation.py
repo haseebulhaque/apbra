@@ -58,8 +58,10 @@ from apbra_api.persistence import (
         ("LAYOUT_LIMIT", ""), ("LAYOUT_ORDER", ""), ("LAYOUT_CAPACITY", ""),
     ],
 )
+@pytest.mark.parametrize("foundry", [False, True])
 def test_editable_draft_whole_chain_preserves_context_and_protected_download(
-    settings: Settings, database: Database, failure_kind: str, overview: str
+    settings: Settings, database: Database, failure_kind: str, overview: str, foundry: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from test_conversations import provider_analysis
 
@@ -148,14 +150,95 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         if failure_kind == "LAYOUT_LIMIT":
             design["pages"] = [{**copy.deepcopy(source), "id": f"page-{index}"}
                                for index in range(4)]
+    if overview == "Grounded draft":
+        reference = "provider:" + hashlib.sha256(json.dumps([
+            "synthetic-shared-standards", "file_citation", "file-synthetic-standard",
+        ], separators=(",", ":")).encode()).hexdigest()
+        design["standardsApplied"] = [
+            {"citation": reference, "decision": "Synthetic applied standard"}
+        ]
     original_design = copy.deepcopy(design)
     provider = automatic_test_provider([analysis, design])
     provider.profile = provider.profile.model_copy(
         update={"max_calls_per_operation": 1, "retry_limit": 0}
     )
+    wire_calls: list[dict[str, object]] = []
+    foundry_credentials = None
+    if foundry:
+        from test_model_provider import foundry_adapter, responses_payload
+
+        queued = [analysis, design]
+
+        def handler(wire: httpx.Request) -> httpx.Response:
+            body = json.loads(wire.content)
+            wire_calls.append(body)
+            assert "instructions" not in body and "model" not in body and "tools" not in body
+            assert all(message["role"] != "system" for message in body["input"])
+            value = copy.deepcopy(queued.pop(0))
+            if (overview == "Grounded draft"
+                    and wire_calls[-1]["text"]["format"]["name"] == "report_design"):
+
+                value["standardsApplied"][0]["citation"] = "file-synthetic-standard"
+                output = responses_payload(value, [{
+                    "type": "file_citation", "file_id": "file-synthetic-standard",
+                    "filename": "synthetic-standard.md", "index": 0,
+                }])
+                output["output"].insert(0, {"type": "mcp_call", "status": "completed",
+                                            "output": "PRIVATE RAW TOOL CONTENT"})
+                return httpx.Response(200, json=output)
+            return httpx.Response(200, json=responses_payload(value))
+
+        provider = foundry_adapter(handler, profile_overrides={
+            "max_input_characters": 200_000, "max_calls_per_operation": 1, "retry_limit": 0,
+        })
+        provider.requests = []
+        original_structured = provider.structured
+
+        def recording_structured(candidate: ProviderRequest):
+            provider.requests.append(candidate)
+            return original_structured(candidate)
+
+        provider.structured = recording_structured
+        from dataclasses import replace
+
+        import apbra_api.api as api_module
+
+        class Credentials:
+            def ready(self, company_id, qualified):
+                return qualified.profile_id == provider.profile.profile_id
+
+            def resolve(self, company_id, qualified):
+                assert qualified.protocol == "FOUNDRY_AGENT_RESPONSES"
+                return replace(provider._access, company_id=company_id)
+
+        def selected_adapter(qualified, access, *, company_id):
+            assert access.company_id == company_id
+            assert qualified.model_dump() == provider.profile.model_dump()
+            provider._access = access
+            return provider
+
+        foundry_credentials = Credentials()
+        monkeypatch.setattr(api_module, "FoundryAgentResponsesProvider", selected_adapter)
+        settings = settings.model_copy(update={
+            "test_semantic_simulator_enabled": False,
+            "qualified_provider_profiles_json": json.dumps([provider.profile.model_dump()]),
+        })
     with TestClient(
-        create_app(settings=settings, database=database, model_provider=provider)
+        create_app(settings=settings, database=database,
+                   model_provider=None if foundry else provider,
+                   foundry_credentials=foundry_credentials)
     ) as runtime:
+        if foundry:
+            owner = sign_in(runtime, "owner")
+            current = runtime.get("/api/tenant-settings").json()
+            active = copy.deepcopy(current["settings"])
+            active.update(automatic_generation_enabled=True,
+                          provider_profile=provider.profile.model_dump())
+            enabled = runtime.put("/api/tenant-settings", headers=csrf(owner),
+                                  json={"settings": active, "expected_version": current["version"]})
+            assert enabled.status_code == 200, enabled.text
+            assert enabled.json()["credential"]["authMode"] == "ENTRA"
+            assert enabled.json()["credential"]["canReplace"] is False
         session = sign_in(runtime, "member")
         request = (
             "Compare visits by campus and explain the additional business KPI; "
@@ -232,6 +315,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert all({p["type"] for p in slot["placements"]} == {"card"}
                    for slot in capabilities["slots"][4:])
         assert capabilities["knowledgeScope"] == (
+            "PROVIDER_MANAGED_OBSERVED_REFERENCES" if foundry else
             "BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG"
         )
         assert "APBRA will not reorder" in provider.requests[-1].system_prompt
@@ -268,6 +352,20 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                     assert position["x"] + position["width"] <= 1280
 
             assert b"editable first draft" in archive.read("Delivery-Guide.md")
+            if foundry:
+                assert b"Provider-managed grounding" in archive.read("Delivery-Guide.md")
+                assert b"OFFLINE_FIXTURE" in archive.read("Delivery-Guide.md")
+                expected_references = [reference] if overview == "Grounded draft" else []
+                evidence = (b"OBSERVED_TOOL_TRACE" if overview == "Grounded draft"
+                            else b"NO_OBSERVED_RETRIEVAL")
+                assert evidence in archive.read("Delivery-Guide.md")
+                assert (
+                    attempt["provenance"]["providerGrounding"]["references"] == expected_references
+                )
+                assert b"PRIVATE RAW TOOL CONTENT" not in download.content
+                assert attempt["validation"]["pipelineProvenance"]["retrieval"]["strategy"] == (
+                    "PROVIDER_MANAGED_OBSERVED_REFERENCES"
+                )
         with TestClient(runtime.app) as outsider:
             sign_in(outsider, "foreign")
             assert outsider.get(path).status_code in {403, 404}
@@ -282,6 +380,12 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         stored = runtime.get(f"/api/cases/{case['id']}/acceptance").json()
         assert stored["confirmed_contract"]["contract"] == before["contract"]
         assert len(provider.requests) == 2
+        if foundry:
+            assert len(wire_calls) == 2
+            assert provider.requests[1].context["governedKnowledge"] == []
+            assert result["attempt"]["validation"]["providerGrounding"]["references"] == (
+                [reference] if overview == "Grounded draft" else []
+            )
 
 
 def synthetic_large_confirmation() -> dict[str, object]:
@@ -2411,3 +2515,11 @@ def test_lost_artifact_commit_acknowledgment_preserves_successful_bytes(
         )
         assert download.status_code == 200
         assert hashlib.sha256(download.content).hexdigest() == attempt["artifact"]["content_digest"]
+
+
+def test_foundry_observed_reference_flows_through_confirmation_design_guide_and_protected_download(
+    settings: Settings, database: Database, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_editable_draft_whole_chain_preserves_context_and_protected_download(
+        settings, database, "", "Grounded draft", True, monkeypatch,
+    )

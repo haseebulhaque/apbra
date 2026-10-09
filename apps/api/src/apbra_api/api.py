@@ -57,6 +57,8 @@ from .evidence import LocalEvidenceStore
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
 from .model_provider import (
+    FoundryAgentResponsesProvider,
+    FoundryCredentialProvider,
     ModelProvider,
     OpenAICompatibleProvider,
     ProviderConfigurationError,
@@ -239,6 +241,7 @@ def create_app(
     evidence_objects: EvidenceObjectStore | None = None,
     reference_objects: EvidenceObjectStore | None = None,
     artifact_objects: ArtifactObjectStore | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
@@ -300,9 +303,23 @@ def create_app(
         if not policy.automatic_generation_enabled:
             return None
         profile = policy.provider_profile
-        if profile is None or snapshot.secret_reference_id is None:
+        if profile is None:
             raise ConfigurationUnavailable()
         validate_qualified_profile(profile, qualified_profiles)
+        if profile.protocol == "FOUNDRY_AGENT_RESPONSES":
+            if snapshot.secret_reference_id is not None or foundry_credentials is None:
+                raise ConfigurationUnavailable()
+            try:
+                if foundry_credentials.ready(snapshot.company_id, profile) is not True:
+                    raise ConfigurationUnavailable()
+                access = foundry_credentials.resolve(snapshot.company_id, profile)
+                return FoundryAgentResponsesProvider(
+                    profile, access, company_id=snapshot.company_id,
+                )
+            except Exception:
+                raise ConfigurationUnavailable() from None
+        if snapshot.secret_reference_id is None:
+            raise ConfigurationUnavailable()
         if credential_store is None:
             raise ConfigurationUnavailable()
         credential = credential_store.resolve(
@@ -444,6 +461,14 @@ def create_app(
         }
 
     def settings_response(db: Session, snapshot: TenantSettingsSnapshot) -> dict[str, Any]:
+        profile = snapshot.settings.provider_profile
+        is_foundry = profile is not None and profile.protocol == "FOUNDRY_AGENT_RESPONSES"
+        ready = False
+        if is_foundry and foundry_credentials is not None and profile is not None:
+            try:
+                ready = foundry_credentials.ready(snapshot.company_id, profile) is True
+            except Exception:
+                ready = False
         return {
             "id": str(snapshot.id),
             "version": snapshot.version,
@@ -451,7 +476,11 @@ def create_app(
             "validation_status": snapshot.validation_status,
             "applicability": "COMPANY_NEW_OR_REVALIDATED_OPERATIONS",
             "settings": snapshot.settings.model_dump(mode="json", by_alias=True),
-            "credential": credential_status(
+            "credential": {
+                "status": "CONFIGURED" if ready else "NOT_CONFIGURED",
+                "maskedValue": None, "updatedAt": None,
+                "canReplace": False, "canRotate": False, "authMode": "ENTRA",
+            } if is_foundry else credential_status(
                 db,
                 company_id=snapshot.company_id,
                 reference_id=snapshot.secret_reference_id,
@@ -501,6 +530,7 @@ def create_app(
             reason=payload.reason,
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
+            foundry_credentials=foundry_credentials,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
@@ -524,6 +554,7 @@ def create_app(
                 reason=payload.reason,
                 credential_store=credential_store,
                 qualified_profiles=qualified_profiles,
+                foundry_credentials=foundry_credentials,
             )
         except ValueError as error:
             # Validation exceptions may contain submitted content. The existing
@@ -553,6 +584,7 @@ def create_app(
             reason=payload.reason,
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
+            foundry_credentials=foundry_credentials,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_RESTORED", "TENANT_SETTINGS_VERSION", snapshot.id)
@@ -573,6 +605,8 @@ def create_app(
         current = admin_settings(db, actor)
         if current.version != payload.expected_version or current.settings.provider_profile is None:
             raise Conflict()
+        if current.settings.provider_profile.protocol == "FOUNDRY_AGENT_RESPONSES":
+            raise ConfigurationUnavailable()
         reference = credential_store.protect(
             db,
             company_id=actor.company_id,
@@ -589,6 +623,7 @@ def create_app(
             secret_reference_id=reference,
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
+            foundry_credentials=foundry_credentials,
         )
         if current.secret_reference_id is not None:
             previous = db.scalar(

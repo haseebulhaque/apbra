@@ -476,3 +476,359 @@ def test_provider_schemas_derive_capacity_and_grains_from_validated_capability()
         )
     with pytest.raises(ValueError, match="exceed the active compiler"):
         requirement_analysis_schema(["WEEK"])
+
+
+def foundry_profile(**overrides: object) -> ProviderProfile:
+    return profile(
+        protocol="FOUNDRY_AGENT_RESPONSES",
+        api_version="v1",
+        endpoint="https://provider.invalid/api/projects/project/agents/agent/endpoint/protocols/openai/responses",
+        **overrides,
+    )
+
+
+def foundry_adapter(handler: Any, **overrides: Any) -> Any:
+    import time
+    from uuid import UUID
+
+    from apbra_api.model_provider import FoundryAccess, FoundryAgentResponsesProvider, FoundryBearer
+
+    company = UUID("00000000-0000-0000-0000-000000000001")
+    qualified = foundry_profile(**overrides.pop("profile_overrides", {}))
+    access = FoundryAccess(
+        company_id=company,
+        profile_id=qualified.profile_id,
+        configuration_id=qualified.configuration_id,
+        credential=overrides.pop(
+            "credential", lambda: FoundryBearer("synthetic-token", time.time() + 300)
+        ),
+        knowledge_binding="synthetic-shared-standards",
+        knowledge_scope="SHARED_STANDARDS",
+        agent_version="6",
+        **overrides,
+    )
+    return FoundryAgentResponsesProvider(
+        qualified, access, company_id=company, transport=httpx.MockTransport(handler)
+    )
+
+
+def responses_payload(value: Any = None, annotations: list[Any] | None = None) -> dict[str, Any]:
+    return {
+        "status": "completed",
+        "error": None,
+        "incomplete_details": None,
+        "output": [
+            {
+                "type": "message",
+                "role": "assistant",
+                "status": "completed",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(value or {"pages": []}),
+                        "annotations": annotations or [],
+                    }
+                ],
+            }
+        ],
+        "usage": {"input_tokens": 5, "output_tokens": 3, "total_tokens": 8},
+    }
+
+
+@pytest.mark.parametrize("task", ["REQUIREMENT_ANALYSIS", "REPORT_DESIGN"])
+def test_foundry_agent_context_without_instruction_model_or_tool_override(task: Any) -> None:
+    received: list[httpx.Request] = []
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        received.append(wire)
+        return httpx.Response(200, json=responses_payload())
+
+    adapter = foundry_adapter(handler)
+    candidate = ProviderRequest(
+        task=task,
+        system_prompt="APPLICATION PROMPT MUST NOT OVERRIDE AGENT",
+        context={
+            "originalRequest": "Synthetic full request",
+            "history": ["turn"],
+            "tables": [{"name": "Sales"}],
+            "branding": {"primary": "#17635E"},
+        },
+        output_schema=request().output_schema,
+    )
+    result = adapter.structured(candidate)
+    body = json.loads(received[0].content)
+    assert set(body) == {"input", "text", "max_output_tokens", "store", "stream"}
+    assert body["store"] is False and body["stream"] is False
+    assert json.loads(body["input"][0]["content"]) == {"task": task, "context": candidate.context}
+    assert body["text"]["format"]["schema"] == candidate.output_schema
+    assert received[0].url.path == adapter.profile.endpoint.split("provider.invalid")[1]
+    assert received[0].headers["authorization"] == "Bearer synthetic-token"
+    assert "api-key" not in received[0].headers
+    assert result.usage == {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+    assert result.grounding["references"] == []
+    assert result.grounding["retrievalEvidence"] == "NO_OBSERVED_RETRIEVAL"
+    assert result.grounding["qualification"] == "OFFLINE_FIXTURE"
+
+
+def test_foundry_safe_observed_references_without_raw_tool_payload() -> None:
+    source = "https://documents.invalid/standard?private=signed-synthetic-value"
+    payload = responses_payload(
+        {"pages": [], "standardsApplied": [{"citation": source, "decision": "Synthetic decision"}]},
+        [
+            {
+                "type": "url_citation",
+                "url": source,
+                "title": "Private title",
+                "start_index": 0,
+                "end_index": 1,
+            }
+        ],
+    )
+    payload["output"].insert(
+        0,
+        {
+            "type": "mcp_call",
+            "status": "completed",
+            "error": None,
+            "output": "PRIVATE RAW TOOL PAYLOAD",
+            "arguments": "PRIVATE QUERY",
+        },
+    )
+    captured: list[dict[str, Any]] = []
+    original = request()
+    candidate = ProviderRequest(
+        task=original.task,
+        system_prompt=original.system_prompt,
+        context=original.context,
+        output_schema=original.output_schema,
+        grounding_validator=lambda value, grounding: captured.append(grounding),
+    )
+    result = foundry_adapter(lambda _: httpx.Response(200, json=payload)).structured(candidate)
+    assert result.value["standardsApplied"][0]["citation"] in result.grounding["references"]
+    assert result.grounding["observedToolCount"] == 1
+    safe = json.dumps(result.grounding)
+    assert "signed-synthetic" not in safe and "PRIVATE" not in safe and source not in safe
+    assert captured == [result.grounding]
+
+
+@pytest.mark.parametrize(
+    "mutation,code",
+    [
+        (lambda p: p.update(status="incomplete"), "MODEL_RESPONSE_NOT_COMPLETED"),
+        (lambda p: p.update(status="queued"), "MODEL_RESPONSE_NOT_COMPLETED"),
+        (lambda p: p.update(error={"message": "private failure"}), "MODEL_RESPONSE_NOT_COMPLETED"),
+        (lambda p: p["output"].append(p["output"][0]), "MODEL_OUTPUT_INVALID"),
+        (lambda p: p["output"][0]["content"][0].update(text="not json"), "MODEL_OUTPUT_INVALID"),
+        (lambda p: p["output"][0]["content"][0].update(type="refusal"), "MODEL_RESPONSE_REFUSED"),
+        (
+            lambda p: p["output"].insert(0, {"type": "mcp_approval_request"}),
+            "MODEL_TOOL_ACTION_UNSUPPORTED",
+        ),
+        (
+            lambda p: p["output"].insert(0, {"type": "function_call"}),
+            "MODEL_TOOL_ACTION_UNSUPPORTED",
+        ),
+        (
+            lambda p: p["output"].insert(0, {"type": "mcp_call", "error": "private"}),
+            "MODEL_TOOL_FAILED",
+        ),
+        (
+            lambda p: p["output"][0]["content"][0].update(
+                text=json.dumps({"standardsApplied": [{"citation": "forged", "decision": "x"}]})
+            ),
+            "MODEL_GROUNDING_INVALID",
+        ),
+        (lambda p: p["usage"].update(output_tokens=1001), "MODEL_OUTPUT_BUDGET_EXCEEDED"),
+    ],
+)
+def test_foundry_failures_preserve_safe_observed_usage(mutation: Any, code: str) -> None:
+    payload = responses_payload()
+    mutation(payload)
+    with pytest.raises(ProviderCallError) as caught:
+        foundry_adapter(lambda _: httpx.Response(200, json=payload)).structured(request())
+    assert caught.value.code == code
+    assert caught.value.observation.call_count == 1
+    assert caught.value.observation.usage["prompt_tokens"] == 5
+    assert "private" not in str(caught.value)
+
+
+@pytest.mark.parametrize("status", [302, 401, 403])
+def test_foundry_never_redirects_or_falls_back(status: int) -> None:
+    calls: list[str] = []
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        calls.append(str(wire.url))
+        return httpx.Response(status, headers={"Location": "https://other.invalid/"}, json={})
+
+    with pytest.raises(ProviderCallError, match="MODEL_PROVIDER_REJECTED"):
+        foundry_adapter(handler).structured(request())
+    assert len(calls) == 1 and "other.invalid" not in calls[0]
+
+
+@pytest.mark.parametrize(
+    "credential", [None, "static-key", "expired", "wrong-audience", "nonfinite"]
+)
+def test_foundry_unavailable_credential_never_calls_transport(credential: Any) -> None:
+    import time
+
+    from apbra_api.model_provider import FoundryBearer
+
+    choices = {
+        None: None,
+        "static-key": "not a token capability",
+        "expired": FoundryBearer("synthetic", time.time() - 1),
+        "wrong-audience": FoundryBearer("synthetic", time.time() + 300, "wrong"),
+        "nonfinite": FoundryBearer("synthetic", float("nan")),
+    }
+    calls: list[object] = []
+    adapter = foundry_adapter(
+        lambda wire: calls.append(wire), credential=lambda: choices[credential]
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_CREDENTIAL_UNAVAILABLE") as caught:
+        adapter.structured(request())
+    assert calls == [] and caught.value.observation.call_count == 0
+
+
+def test_foundry_bounded_retry_retains_context_and_usage() -> None:
+    calls: list[dict[str, Any]] = []
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(wire.content))
+        return httpx.Response(200, json=responses_payload({"pages": [{"id": str(len(calls))}]}))
+
+    def validate(value: dict[str, Any], grounding: dict[str, Any]) -> None:
+        if len(calls) == 1:
+            raise ValueError("typed constraint")
+
+    original = request()
+    candidate = ProviderRequest(
+        task=original.task,
+        system_prompt=original.system_prompt,
+        context=original.context,
+        output_schema=original.output_schema,
+        grounding_validator=validate,
+        retry_instruction=lambda _: "Correct typed IDs",
+    )
+    result = foundry_adapter(handler).structured(candidate)
+    assert result.call_count == 2 and result.usage["total_tokens"] == 16
+    assert len(calls[1]["input"]) == 3
+    assert "previous_response_id" not in calls[1] and "conversation" not in calls[1]
+
+
+def test_foundry_rejects_key_adapter_foreign_tenant_and_unqualified_live_transport() -> None:
+    from dataclasses import replace
+    from uuid import uuid4
+
+    from apbra_api.model_provider import FoundryAgentResponsesProvider
+
+    with pytest.raises(ProviderConfigurationError, match="MODEL_PROTOCOL_UNSUPPORTED"):
+        OpenAICompatibleProvider(foundry_profile(), "synthetic-api-key")
+    adapter = foundry_adapter(lambda _: httpx.Response(200, json=responses_payload()))
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_QUALIFICATION_INVALID"):
+        FoundryAgentResponsesProvider(
+            adapter.profile,
+            replace(adapter._access, company_id=uuid4()),
+            company_id=adapter._access.company_id,
+            transport=httpx.MockTransport(lambda _: httpx.Response(200)),
+        )
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_QUALIFICATION_INVALID"):
+        FoundryAgentResponsesProvider(
+            adapter.profile, adapter._access, company_id=adapter._access.company_id
+        )
+
+
+def test_foundry_input_retry_response_and_remaining_time_budgets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(wire: httpx.Request) -> httpx.Response:
+        calls.append(wire)
+        return httpx.Response(200, json=responses_payload())
+
+    adapter = foundry_adapter(handler, profile_overrides={"time_budget_seconds": 0.5})
+    adapter.structured(request())
+    assert 0 < calls[0].extensions["timeout"]["read"] <= 0.5
+    big = ProviderRequest(
+        task="REPORT_DESIGN",
+        system_prompt="ignored",
+        context={"full": "x" * 10_001},
+        output_schema=request().output_schema,
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_INPUT_BUDGET_EXCEEDED") as caught:
+        adapter.structured(big)
+    assert caught.value.observation.call_count == 0 and len(calls) == 1
+    huge = foundry_adapter(lambda _: httpx.Response(200, content=b"x" * 4_000_001))
+    with pytest.raises(ProviderCallError, match="MODEL_OUTPUT_BUDGET_EXCEEDED"):
+        huge.structured(request())
+    transient = foundry_adapter(
+        lambda _: httpx.Response(
+            429,
+            json={
+                "usage": {
+                    "input_tokens": 7,
+                    "output_tokens": False,
+                    "total_tokens": 7,
+                }
+            },
+        )
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_PROVIDER_TRANSIENT_FAILURE") as caught:
+        transient.structured(request())
+    assert caught.value.observation.call_count == 2
+    assert caught.value.observation.usage == {
+        "prompt_tokens": 14,
+        "completion_tokens": None,
+        "total_tokens": 14,
+    }
+
+
+def test_foundry_foreign_reference_and_raw_signed_reference_rejected() -> None:
+    import copy
+
+    annotation = {
+        "type": "file_citation",
+        "file_id": "file-synthetic",
+        "index": 0,
+        "filename": "synthetic-standard.md",
+    }
+    grounded = responses_payload(
+        {"standardsApplied": [{"citation": "file-synthetic", "decision": "x"}]}, [annotation]
+    )
+    result = foundry_adapter(lambda _: httpx.Response(200, json=grounded)).structured(request())
+    foreign = copy.deepcopy(grounded)
+    foreign["output"][0]["content"][0]["text"] = json.dumps(result.value)
+    other = foundry_adapter(lambda _: httpx.Response(200, json=foreign))
+    from dataclasses import replace
+
+    other._access = replace(other._access, knowledge_binding="foreign-knowledge")
+    with pytest.raises(ProviderCallError, match="MODEL_GROUNDING_INVALID"):
+        other.structured(request())
+    source = "https://documents.invalid/private?signed=synthetic"
+    unsafe = responses_payload(
+        {"standardsApplied": [{"citation": source, "decision": source}]},
+        [{"type": "url_citation", "url": source}],
+    )
+    with pytest.raises(ProviderCallError, match="MODEL_GROUNDING_UNSAFE"):
+        foundry_adapter(lambda _: httpx.Response(200, json=unsafe)).structured(request())
+
+
+def test_foundry_tool_listing_and_missing_usage_do_not_claim_retrieval() -> None:
+    payload = responses_payload()
+    payload.pop("usage")
+    payload["output"].insert(0, {"type": "mcp_list_tools"})
+    result = foundry_adapter(lambda _: httpx.Response(200, json=payload)).structured(request())
+    assert result.grounding["observedToolCount"] == 0
+    assert result.grounding["retrievalEvidence"] == "NO_OBSERVED_RETRIEVAL"
+    assert all(amount is None for amount in result.usage.values())
+
+
+def test_foundry_bootstrap_cannot_reinterpret_a_protected_api_key_as_entra(settings) -> None:
+    from pydantic import SecretStr
+
+    configured = settings.model_copy(update={
+        "model_provider_profile_json": foundry_profile().model_dump_json(),
+        "model_provider_api_key": SecretStr("synthetic-must-not-be-reinterpreted"),
+    })
+    with pytest.raises(ProviderConfigurationError, match="FOUNDRY_SERVER_IDENTITY_REQUIRED"):
+        configured.model_credential()

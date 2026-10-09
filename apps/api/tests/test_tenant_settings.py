@@ -779,3 +779,80 @@ def test_restore_does_not_reactivate_a_credential_without_its_current_key(
     assert restored_disabled.json()["credential"]["status"] == "NOT_CONFIGURED"
     assert "synthetic-restore-secret" not in restored_disabled.text
     assert "synthetic-restore-secret" not in restarted.get("/api/tenant-settings/history").text
+
+
+def test_foundry_settings_require_server_capability_and_never_accept_api_keys(
+    settings: Settings,
+    database: Database,
+) -> None:
+    from test_model_provider import foundry_profile
+
+    qualified = foundry_profile()
+    runtime_settings = settings.model_copy(
+        update={
+            "qualified_provider_profiles_json": json.dumps([qualified.model_dump()]),
+        }
+    )
+
+    class Unavailable:
+        def ready(self, company_id, profile):
+            return False
+
+        def resolve(self, company_id, profile):
+            raise AssertionError("Unavailable credentials must never resolve")
+
+    with TestClient(
+        create_app(settings=runtime_settings, database=database, foundry_credentials=Unavailable())
+    ) as runtime:
+        owner = sign_in(runtime)
+        current = runtime.get("/api/tenant-settings").json()
+        selected = deepcopy(current["settings"])
+        selected["provider_profile"] = qualified.model_dump()
+        selected["automatic_generation_enabled"] = True
+        denied = runtime.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"settings": selected, "expected_version": current["version"]},
+        )
+        assert denied.status_code == 503
+        assert runtime.get("/api/tenant-settings").json()["version"] == current["version"]
+        selected["automatic_generation_enabled"] = False
+        saved = runtime.put(
+            "/api/tenant-settings",
+            headers=csrf(owner),
+            json={"settings": selected, "expected_version": current["version"]},
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["credential"] == {
+            "status": "NOT_CONFIGURED",
+            "maskedValue": None,
+            "updatedAt": None,
+            "canReplace": False,
+            "canRotate": False,
+            "authMode": "ENTRA",
+        }
+        version = saved.json()["version"]
+        denied_key = runtime.post(
+            "/api/tenant-settings/credential",
+            headers=csrf(owner),
+            json={
+                "new_credential": "synthetic-must-not-be-stored",
+                "expected_version": version,
+                "confirm_disruption": True,
+            },
+        )
+        assert denied_key.status_code == 503
+        assert runtime.get("/api/tenant-settings").json()["version"] == version
+        member = sign_in(runtime, "member")
+        assert runtime.get("/api/tenant-settings/qualified-profiles").status_code == 403
+        assert (
+            runtime.patch(
+                "/api/tenant-settings/sections/ai_models",
+                headers=csrf(member),
+                json={
+                    "changes": {"automatic_generation_enabled": True},
+                    "expected_version": version,
+                },
+            ).status_code
+            == 403
+        )

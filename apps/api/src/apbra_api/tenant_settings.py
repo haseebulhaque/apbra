@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from .config import GenerationPolicy, Settings, UploadPolicy
 from .domain import Actor, ConfigurationUnavailable, Conflict, Forbidden, Role
-from .model_provider import ProviderProfile
+from .model_provider import FoundryCredentialProvider, ProviderProfile
 from .persistence import (
     CompanyRow,
     TenantSecretRow,
@@ -335,7 +335,15 @@ def _valid_secret(
     profile: ProviderProfile | None,
     reference_id: UUID | None,
     credential_store: TenantCredentialStore | None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> bool:
+    if profile is not None and profile.protocol == "FOUNDRY_AGENT_RESPONSES":
+        if reference_id is not None or foundry_credentials is None:
+            return False
+        try:
+            return foundry_credentials.ready(company_id, profile) is True
+        except Exception:
+            return False
     if profile is None or reference_id is None or credential_store is None:
         return False
     row = db.scalar(
@@ -386,10 +394,12 @@ def _insert_version(
     reason: str | None,
     restored_from: UUID | None,
     qualified_profiles: tuple[ProviderProfile, ...],
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     validate_qualified_profile(settings.provider_profile, qualified_profiles)
     if settings.automatic_generation_enabled and not _valid_secret(
-        db, company_id, settings.provider_profile, secret_reference_id, credential_store
+        db, company_id, settings.provider_profile, secret_reference_id, credential_store,
+        foundry_credentials,
     ):
         raise ConfigurationUnavailable()
     encoded = _encoded(settings)
@@ -455,6 +465,7 @@ def update_settings(
     secret_reference_id: UUID | None = None,
     credential_store: TenantCredentialStore | None = None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)
@@ -477,6 +488,10 @@ def update_settings(
     )
     if next_identity != current_identity and secret_reference_id is None:
         reference = None
+    if settings.provider_profile is not None and (
+        settings.provider_profile.protocol == "FOUNDRY_AGENT_RESPONSES"
+    ):
+        reference = None
     changed, changes = _safe_changes(current.settings, settings)
     if not changed and reference == current.secret_reference_id:
         raise Conflict()
@@ -496,6 +511,7 @@ def update_settings(
         reason=reason,
         restored_from=None,
         qualified_profiles=qualified_profiles,
+        foundry_credentials=foundry_credentials,
     )
 
 
@@ -531,6 +547,7 @@ def update_settings_section(
     reason: str | None = None,
     credential_store: TenantCredentialStore | None = None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     """Apply one allowlisted section against a locked effective version."""
     _require_admin(actor)
@@ -551,6 +568,7 @@ def update_settings_section(
     return update_settings(
         db, actor, updated, expected_version=expected_version, reason=reason,
         credential_store=credential_store, qualified_profiles=qualified_profiles,
+        foundry_credentials=foundry_credentials,
     )
 
 
@@ -563,6 +581,7 @@ def restore_settings(
     reason: str | None,
     credential_store: TenantCredentialStore | None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)
@@ -585,6 +604,7 @@ def restore_settings(
             source.settings.provider_profile,
             source.secret_reference_id,
             credential_store,
+            foundry_credentials,
         )
         else None
     )
@@ -608,6 +628,7 @@ def restore_settings(
         reason=reason,
         restored_from=source.id,
         qualified_profiles=qualified_profiles,
+        foundry_credentials=foundry_credentials,
     )
 
 

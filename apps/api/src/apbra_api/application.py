@@ -1237,6 +1237,7 @@ class AcceptanceService:
                     "usage": result.usage,
                     "latencyMs": result.latency_ms,
                     "callCount": result.call_count,
+                    **({"grounding": result.grounding} if result.grounding is not None else {}),
                 }
             except ProviderCallError as exc:
                 raise AnalysisAttemptFailed("PROVIDER_CALL", exc.code, exc.observation) from exc

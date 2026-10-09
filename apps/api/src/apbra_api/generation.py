@@ -202,7 +202,7 @@ class GenerationBridge:
             knowledge = value.get("knowledge")
             if (
                 not isinstance(knowledge, list)
-                or not knowledge
+                or (not knowledge and payload.get("knowledgeMode") != "PROVIDER_MANAGED")
                 or len(knowledge) > 100
                 or any(
                     not isinstance(item, dict)
@@ -410,6 +410,7 @@ def _apply_provider_observation(attempt: Any, observation: ProviderExecutionObse
             **observation.usage,
             "latency_ms": observation.latency_ms,
             "call_count": observation.call_count,
+            **({"grounding": observation.grounding} if observation.grounding is not None else {}),
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -1045,7 +1046,10 @@ class GenerationService:
         provider_observation: ProviderExecutionObservation | None = None
         terminal_validation: dict[str, Any] | None = None
         try:
-            design_context = bridge.design_context(payload)
+            provider_managed = model_provider.profile.protocol == "FOUNDRY_AGENT_RESPONSES"
+            design_context = bridge.design_context({
+                **payload, **({"knowledgeMode": "PROVIDER_MANAGED"} if provider_managed else {}),
+            })
             governed_knowledge = design_context["knowledge"]
             renderer_capabilities = design_context["rendererCapabilities"]
             generation_capabilities = cast(dict[str, Any], generation_policy["generation"])
@@ -1094,9 +1098,21 @@ class GenerationService:
             }
             validated_result: dict[str, Any] | None = None
 
-            def validate_candidate(candidate: dict[str, Any]) -> None:
+            def validate_candidate(
+                candidate: dict[str, Any], grounding: dict[str, Any] | None = None,
+            ) -> None:
                 nonlocal validated_result
-                validation_payload = {**payload, "reportDesign": candidate}
+                if provider_managed and (
+                    not isinstance(grounding, dict)
+                    or grounding.get("mode") != "PROVIDER_MANAGED"
+                    or grounding.get("profileId") != model_provider.profile.profile_id
+                    or grounding.get("configurationId") != model_provider.profile.configuration_id
+                ):
+                    raise GenerationFailed()
+                validation_payload = {
+                    **payload, "reportDesign": candidate,
+                    **({"providerGrounding": grounding} if provider_managed else {}),
+                }
                 input_digest = canonical_digest(validation_payload)
                 validation_payload["execution"] = {
                     "inputDigest": input_digest,
@@ -1131,6 +1147,8 @@ class GenerationService:
                     or not isinstance(normalized, dict)
                 ):
                     raise GenerationFailed()
+                if provider_managed:
+                    validation["providerGrounding"] = grounding
                 validated_result = result
 
             provider_result = model_provider.structured(
@@ -1184,6 +1202,7 @@ class GenerationService:
                         supported_trend_grains=supported_trend_grains,
                     ),
                     validator=validate_candidate,
+                    grounding_validator=validate_candidate if provider_managed else None,
                     retry_instruction=lambda exc: _automatic_design_retry_instruction(
                         exc, max_visuals_per_page=max_visuals_per_page
                     ),
@@ -1405,6 +1424,10 @@ class GenerationService:
             semantic_input_digest,
             evidence_digest,
         )
+        if reviewed.origin == "AUTO_ELIGIBLE":
+            eligibility = json.loads(reviewed.eligibility_validation_json or "{}")
+            if "providerGrounding" in eligibility:
+                payload["providerGrounding"] = eligibility["providerGrounding"]
         payload["reportDesign"] = report_design
         semantic_input_digest = canonical_digest(payload)
         input_digest = canonical_digest(
@@ -1477,6 +1500,8 @@ class GenerationService:
             "evidenceBindingDigest": evidence_digest,
             "reviewedDesignId": str(reviewed.id),
             "reviewedDesignDigest": reviewed.content_digest,
+            **({"providerGrounding": payload["providerGrounding"]}
+               if "providerGrounding" in payload else {}),
             "settingsVersionId": str(self.tenant_settings.id) if self.tenant_settings else None,
             "settingsDigest": self.tenant_settings.digest if self.tenant_settings else None,
             "runtimeEvidence": {

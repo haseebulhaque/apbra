@@ -321,6 +321,11 @@ class Settings(BaseSettings):
         return tuple(profiles)
 
     def model_credential(self) -> str:
+        if self.model_provider_profile_json is not None and (
+            ProviderProfile.parse(self.model_provider_profile_json).protocol
+            == "FOUNDRY_AGENT_RESPONSES"
+        ):
+            raise ProviderConfigurationError("FOUNDRY_SERVER_IDENTITY_REQUIRED")
         if self.model_provider_api_key is None:
             raise ProviderConfigurationError("MODEL_CREDENTIAL_MISSING")
         value = self.model_provider_api_key.get_secret_value()

@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
+from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -517,6 +520,7 @@ class ProviderExecutionObservation:
     configuration_id: str
     capability_profile: dict[str, bool]
     candidate_digest: str | None = None
+    grounding: dict[str, Any] | None = None
 
 
 class ProviderCallError(RuntimeError):
@@ -543,7 +547,9 @@ class ProviderProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     profile_id: str = Field(min_length=1, max_length=120)
-    protocol: Literal["OPENAI_CHAT_COMPATIBLE", "AZURE_OPENAI_CHAT_COMPATIBLE"]
+    protocol: Literal[
+        "OPENAI_CHAT_COMPATIBLE", "AZURE_OPENAI_CHAT_COMPATIBLE", "FOUNDRY_AGENT_RESPONSES"
+    ]
     endpoint: str = Field(min_length=1, max_length=2_000)
     model_or_deployment: str = Field(min_length=1, max_length=255)
     api_version: str = Field(min_length=1, max_length=80)
@@ -571,6 +577,15 @@ class ProviderProfile(BaseModel):
             raise ValueError("provider endpoint must be an absolute credential-free HTTPS URL")
         if self.retry_limit + 1 > self.max_calls_per_operation:
             raise ValueError("retry policy exceeds the configured call budget")
+        if self.protocol == "FOUNDRY_AGENT_RESPONSES" and (
+            self.api_version != "v1"
+            or parsed.query
+            or not re.fullmatch(
+                r"/api/projects/[^/]+/agents/[^/]+/endpoint/protocols/openai/responses",
+                parsed.path,
+            )
+        ):
+            raise ValueError("Foundry requires an explicit stable agent Responses v1 endpoint")
         return self
 
     @classmethod
@@ -593,6 +608,9 @@ class ProviderRequest:
     requires_vision: bool = False
     validator: Callable[[dict[str, Any]], None] | None = field(default=None, repr=False)
     retry_instruction: Callable[[Exception], str] | None = field(default=None, repr=False)
+    grounding_validator: Callable[[dict[str, Any], dict[str, Any]], None] | None = field(
+        default=None, repr=False
+    )
 
 
 @dataclass(frozen=True)
@@ -607,6 +625,7 @@ class ProviderResult:
     configuration_id: str
     capability_profile: dict[str, bool]
     candidate_digest: str | None = None
+    grounding: dict[str, Any] | None = None
 
     @property
     def observation(self) -> ProviderExecutionObservation:
@@ -620,6 +639,7 @@ class ProviderResult:
             configuration_id=self.configuration_id,
             capability_profile=self.capability_profile,
             candidate_digest=self.candidate_digest,
+            grounding=self.grounding,
         )
 
 
@@ -644,6 +664,8 @@ class OpenAICompatibleProvider:
         *,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        if profile.protocol == "FOUNDRY_AGENT_RESPONSES":
+            raise ProviderConfigurationError("MODEL_PROTOCOL_UNSUPPORTED")
         if not credential:
             raise ProviderConfigurationError("MODEL_CREDENTIAL_MISSING")
         if not profile.capabilities.structured_output:
@@ -820,6 +842,328 @@ class OpenAICompatibleProvider:
 
 def _integer_or_none(value: object) -> int | None:
     return value if type(value) is int and value >= 0 else None
+
+
+@dataclass(frozen=True)
+class FoundryBearer:
+    """Explicit short-lived capability supplied by an authorized host integration."""
+
+    token: str = field(repr=False)
+    expires_at: float
+    audience: str = "https://ai.azure.com"
+
+
+@dataclass(frozen=True)
+class FoundryAccess:
+    """Trusted server qualification, never populated from client/model claims.
+
+    The host owns qualification of routing, version and knowledge isolation.
+    Neither this record nor mocked tests qualify a live Foundry resource.
+    """
+
+    company_id: UUID
+    profile_id: str
+    configuration_id: str
+    credential: Callable[[], FoundryBearer] = field(repr=False)
+    knowledge_binding: str
+    knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
+    agent_version: str | None = None
+    qualification: Literal["OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"] = "OFFLINE_FIXTURE"
+
+
+class FoundryCredentialProvider(Protocol):
+    """Injected host boundary; no discovery, login, CLI or persistent credentials."""
+
+    def ready(self, company_id: UUID, profile: ProviderProfile) -> bool: ...
+
+    def resolve(self, company_id: UUID, profile: ProviderProfile) -> FoundryAccess: ...
+
+
+class FoundryAgentResponsesProvider:
+    """Invoke the configured agent, preserving its stored instructions and tools."""
+
+    def __init__(
+        self,
+        profile: ProviderProfile,
+        access: FoundryAccess,
+        *,
+        company_id: UUID,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        if (
+            profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+            or not profile.capabilities.structured_output
+            or access.company_id != company_id
+            or access.profile_id != profile.profile_id
+            or access.configuration_id != profile.configuration_id
+            or access.knowledge_scope not in {"SHARED_STANDARDS", "TENANT_PRIVATE"}
+            or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,120}", access.knowledge_binding)
+            or access.qualification not in {"OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"}
+            or (transport is None and access.qualification != "LIVE_METADATA_VERIFIED")
+            or (access.agent_version is not None
+                and not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", access.agent_version))
+        ):
+            raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_INVALID")
+        self.profile = profile
+        self._access = access
+        self._transport = transport
+
+    def _body(self, request: ProviderRequest) -> dict[str, Any]:
+        if request.requires_vision:
+            # This bounded wire contract only supports authorized textual context.
+            raise ProviderConfigurationError("VISION_UNSUPPORTED")
+        _validate_strict_wire_schema(request.output_schema)
+        content = json.dumps(
+            {"task": request.task, "context": request.context},
+            sort_keys=True, separators=(",", ":"), allow_nan=False,
+        )
+        if len(content) > self.profile.max_input_characters:
+            raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED")
+        # No application system prompt, instructions, tools or model override.
+        # No remote conversation reuse; retries carry only this operation's context.
+        return {
+            "input": [{"role": "user", "content": content}],
+            "text": {"format": {
+                "type": "json_schema", "name": request.task.lower(),
+                "strict": True, "schema": request.output_schema,
+            }},
+            "max_output_tokens": self.profile.max_output_tokens,
+            "stream": False,
+            "store": False,
+        }
+
+    def _candidate(
+        self, payload: Any,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not isinstance(payload, dict) or payload.get("status") != "completed":
+            raise ProviderCallError("MODEL_RESPONSE_NOT_COMPLETED")
+        if payload.get("error") is not None or payload.get("incomplete_details") is not None:
+            raise ProviderCallError("MODEL_RESPONSE_NOT_COMPLETED")
+        output = payload.get("output")
+        if not isinstance(output, list) or not 1 <= len(output) <= 100:
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        texts: list[str] = []
+        aliases: dict[str, str] = {}
+        references: set[str] = set()
+        tool_count = 0
+        for item in output:
+            if not isinstance(item, dict):
+                raise ProviderCallError("MODEL_OUTPUT_INVALID")
+            kind = item.get("type")
+            if kind == "reasoning":
+                continue
+            if kind in {"mcp_call", "file_search_call", "mcp_list_tools"}:
+                if item.get("status") not in {None, "completed"} or item.get("error"):
+                    raise ProviderCallError("MODEL_TOOL_FAILED")
+                if kind != "mcp_list_tools":
+                    tool_count += 1
+                # Raw arguments, tool output and document text are never retained.
+                continue
+            if kind != "message":
+                raise ProviderCallError("MODEL_TOOL_ACTION_UNSUPPORTED")
+            if item.get("role") != "assistant" or item.get("status") != "completed":
+                raise ProviderCallError("MODEL_OUTPUT_INVALID")
+            parts = item.get("content")
+            if not isinstance(parts, list) or not 1 <= len(parts) <= 100:
+                raise ProviderCallError("MODEL_OUTPUT_INVALID")
+            for part in parts:
+                if not isinstance(part, dict):
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID")
+                if part.get("type") == "refusal":
+                    raise ProviderCallError("MODEL_RESPONSE_REFUSED")
+                text = part.get("text")
+                annotations = part.get("annotations", [])
+                if (
+                    part.get("type") != "output_text" or not isinstance(text, str)
+                    or len(text.encode()) > 2_000_000
+                    or not isinstance(annotations, list) or len(annotations) > 100
+                ):
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID")
+                texts.append(text)
+                for annotation in annotations:
+                    if not isinstance(annotation, dict):
+                        raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                    annotation_type = annotation.get("type")
+                    if annotation_type == "file_citation":
+                        source = annotation.get("file_id")
+                    elif annotation_type == "url_citation":
+                        source = annotation.get("url")
+                    else:
+                        # An attachment/file-path is not evidence of retrieved standards.
+                        raise ProviderCallError("MODEL_GROUNDING_UNSUPPORTED")
+                    if not isinstance(source, str) or not 1 <= len(source) <= 2_000:
+                        raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                    if annotation_type == "url_citation":
+                        parsed = urlparse(source)
+                        if parsed.scheme != "https" or not parsed.hostname or parsed.username:
+                            raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                    identity = json.dumps([
+                        self._access.knowledge_binding, annotation_type, source,
+                    ], separators=(",", ":"))
+                    reference = "provider:" + hashlib.sha256(identity.encode()).hexdigest()
+                    aliases[source] = reference
+                    aliases[reference] = reference
+                    references.add(reference)
+        if len(texts) != 1 or len(references) > 100:
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        value = json.loads(texts[0])
+        if not isinstance(value, dict):
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        standards = value.get("standardsApplied", [])
+        if not isinstance(standards, list):
+            raise ProviderCallError("MODEL_GROUNDING_INVALID")
+        for standard in standards:
+            if not isinstance(standard, dict) or standard.get("citation") not in aliases:
+                raise ProviderCallError("MODEL_GROUNDING_INVALID")
+            # Only reference normalization; the provider's business decision is retained.
+            standard["citation"] = aliases[standard["citation"]]
+        normalized = json.dumps(value, sort_keys=True, separators=(",", ":"))
+        if any(source in normalized for source in aliases if not source.startswith("provider:")):
+            raise ProviderCallError("MODEL_GROUNDING_UNSAFE")
+        grounding: dict[str, Any] = {
+            "mode": "PROVIDER_MANAGED", "scope": self._access.knowledge_scope,
+            "profileId": self.profile.profile_id,
+            "configurationId": self.profile.configuration_id,
+            "knowledgeBinding": self._access.knowledge_binding,
+            "agentVersion": self._access.agent_version,
+            "qualification": self._access.qualification,
+            "references": sorted(references), "observedToolCount": tool_count,
+            "retrievalEvidence": (
+                "OBSERVED_TOOL_TRACE" if tool_count else
+                "ANNOTATIONS_ONLY" if references else "NO_OBSERVED_RETRIEVAL"
+            ),
+        }
+        return value, grounding
+
+    def structured(self, request: ProviderRequest) -> ProviderResult:
+        started = time.monotonic()
+        calls = 0
+        candidate_digest: str | None = None
+        grounding: dict[str, Any] | None = None
+        totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        seen: set[str] = set()
+
+        def observation() -> ProviderExecutionObservation:
+            return ProviderExecutionObservation(
+                usage={name: amount if name in seen else None for name, amount in totals.items()},
+                latency_ms=int((time.monotonic() - started) * 1_000), call_count=calls,
+                profile_id=self.profile.profile_id,
+                model_or_deployment=self.profile.model_or_deployment,
+                prompt_version=self.profile.prompt_version,
+                configuration_id=self.profile.configuration_id,
+                capability_profile=self.profile.capabilities.model_dump(),
+                candidate_digest=candidate_digest, grounding=grounding,
+            )
+
+        last_code = "MODEL_PROVIDER_FAILED"
+        limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
+        try:
+            body = self._body(request)
+            while calls < limit:
+                remaining = self.profile.time_budget_seconds - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
+                try:
+                    bearer = self._access.credential()
+                except Exception:
+                    raise ProviderCallError("MODEL_CREDENTIAL_UNAVAILABLE") from None
+                if (
+                    not isinstance(bearer, FoundryBearer) or not bearer.token
+                    or bearer.audience != "https://ai.azure.com"
+                    or type(bearer.expires_at) not in {float, int}
+                    or not math.isfinite(bearer.expires_at)
+                    or bearer.expires_at <= time.time() + remaining
+                ):
+                    raise ProviderCallError("MODEL_CREDENTIAL_UNAVAILABLE")
+                remaining = self.profile.time_budget_seconds - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
+                calls += 1
+                try:
+                    with httpx.Client(
+                        transport=self._transport, follow_redirects=False,
+                        timeout=min(self.profile.request_timeout_seconds, remaining),
+                    ) as client:
+                        with client.stream(
+                            "POST", self.profile.endpoint,
+                            headers={"Authorization": f"Bearer {bearer.token}",
+                                     "Content-Type": "application/json"},
+                            params={"api-version": self.profile.api_version}, json=body,
+                        ) as response:
+                            chunks: list[bytes] = []
+                            size = 0
+                            for chunk in response.iter_bytes():
+                                size += len(chunk)
+                                if size > 4_000_000:
+                                    raise ProviderCallError("MODEL_OUTPUT_BUDGET_EXCEEDED")
+                                if time.monotonic() - started >= self.profile.time_budget_seconds:
+                                    raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
+                                chunks.append(chunk)
+                            try:
+                                payload = json.loads(b"".join(chunks))
+                            except ValueError:
+                                payload = None
+                    usage = payload.get("usage") if isinstance(payload, dict) else None
+                    if isinstance(usage, dict):
+                        for wire, name in (("input_tokens", "prompt_tokens"),
+                                           ("output_tokens", "completion_tokens"),
+                                           ("total_tokens", "total_tokens")):
+                            amount = _integer_or_none(usage.get(wire))
+                            if amount is not None:
+                                totals[name] += amount
+                                seen.add(name)
+                    if time.monotonic() - started >= self.profile.time_budget_seconds:
+                        raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
+                    if response.status_code in {408, 429, 500, 502, 503, 504}:
+                        last_code = "MODEL_PROVIDER_TRANSIENT_FAILURE"
+                        continue
+                    if not 200 <= response.status_code < 300:
+                        raise ProviderCallError("MODEL_PROVIDER_REJECTED")
+                    output_usage = usage.get("output_tokens") if isinstance(usage, dict) else None
+                    if type(output_usage) is int and output_usage > self.profile.max_output_tokens:
+                        raise ProviderCallError("MODEL_OUTPUT_BUDGET_EXCEEDED")
+                    value, grounding = self._candidate(payload)
+                    candidate_digest = _candidate_digest(value)
+                    try:
+                        if request.grounding_validator is not None:
+                            request.grounding_validator(value, grounding)
+                        elif request.validator is not None:
+                            request.validator(value)
+                    except Exception as exc:
+                        if calls >= limit:
+                            raise ProviderCallError("MODEL_CANDIDATE_REJECTED") from exc
+                        instruction = (
+                            request.retry_instruction(exc) if request.retry_instruction else
+                            "Return a corrected complete candidate for the supplied typed contract."
+                        )
+                        if not isinstance(instruction, str) or not instruction.strip():
+                            raise ProviderCallError("MODEL_RETRY_INSTRUCTION_INVALID") from exc
+                        body["input"] = [*body["input"],
+                                         {"role": "assistant", "content": json.dumps(value)},
+                                         {"role": "user", "content": instruction[:20_000]}]
+                        if sum(len(item["content"]) for item in body["input"]) > (
+                            self.profile.max_input_characters
+                        ):
+                            raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED") from exc
+                        continue
+                    observed = observation()
+                    return ProviderResult(
+                        value=value, usage=observed.usage, latency_ms=observed.latency_ms,
+                        call_count=calls, profile_id=observed.profile_id,
+                        model_or_deployment=observed.model_or_deployment,
+                        prompt_version=observed.prompt_version,
+                        configuration_id=observed.configuration_id,
+                        capability_profile=observed.capability_profile,
+                        candidate_digest=candidate_digest, grounding=grounding,
+                    )
+                except (httpx.TimeoutException, httpx.TransportError):
+                    last_code = "MODEL_PROVIDER_TIMEOUT"
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    raise ProviderCallError("MODEL_OUTPUT_INVALID") from exc
+            raise ProviderCallError(last_code)
+        except ProviderCallError as exc:
+            exc.observation = observation()
+            raise
 
 
 class DeterministicFakeProvider:
