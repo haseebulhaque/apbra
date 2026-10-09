@@ -1738,10 +1738,16 @@ def test_host_runtime_sdk_logs_are_suppressed_and_prior_state_is_restored(
         monkeypatch.setattr(logger, "propagate", False)
 
     def emit(phase: str) -> None:
+        # SDK imports can create loggers after the suppression boundary starts.
+        lazy = logging.getLogger(f"azure.identity.synthetic.lazy.{previous}.{failure}")
+        monkeypatch.setattr(lazy, "level", logging.DEBUG)
+        monkeypatch.setattr(lazy, "handlers", [caplog.handler])
+        monkeypatch.setattr(lazy, "propagate", False)
         try:
             raise RuntimeError(canary)
         except RuntimeError:
-            for logger in loggers:
+            for logger in [*loggers, lazy]:
+                logger.debug("%s", canary, exc_info=True)
                 logger.warning("%s failed: %s", phase, canary, exc_info=True)
                 logger.critical("%s", canary)
         if failure == phase:
