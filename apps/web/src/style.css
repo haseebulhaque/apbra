@@ -390,6 +390,7 @@ html,body,#root{max-width:100%;overflow-x:clip}.private-workspace .case-content{
 .private-workspace .report-wizard .journey-steps .step-copy strong{font-size:13px}
 .private-workspace .report-wizard .journey-steps .step-copy small{font-size:12px}
 @media(min-width:701px) and (max-width:1600px){.private-workspace .report-wizard .journey-steps{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.private-workspace .report-wizard .journey-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:400px){.private-workspace .report-wizard .journey-steps button{flex-direction:column;align-items:flex-start}}
 .private-workspace .workspace-rail{overflow-y:auto}
 .private-workspace [tabindex]:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
