@@ -390,7 +390,9 @@ test('Clear Glass mobile navigation is keyboard operable, dismissible and preser
   await menu.focus();await page.keyboard.press('Enter');
   await expect(menu).toHaveAttribute('aria-expanded','true');
   await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeVisible();
-  await page.getByRole('button',{name:'Create report',exact:true}).first().click();
+  const create=page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Create report',exact:true});
+  await create.focus();await page.keyboard.press('Enter');
+  await expect(page.locator('#workspace-main')).toBeFocused();
   await expect(menu).toHaveAttribute('aria-expanded','false');
   await page.getByLabel('Your reporting goal').fill('Synthetic Clear Glass draft survives interrupted navigation.');
   let writes=0;page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname.startsWith('/api/'))writes++});
