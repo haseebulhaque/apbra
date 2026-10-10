@@ -9,6 +9,7 @@ import os
 from pathlib import Path, PurePosixPath
 import platform
 import re
+import runpy
 import stat
 import subprocess
 import sys
@@ -16,6 +17,8 @@ import sys
 from jsonschema import Draft202012Validator
 from referencing import Registry
 import yaml
+
+r = runpy.run_path(str(Path(__file__).with_name("check_foundry_qualification_renewal.py")))
 
 CAPSTONE_SHELL_PATHS = {'apps/web/src/style.css', 'apps/web/README.md', 'apps/web/src/workflow.test.ts', 'apps/web/src/App.tsx', 'apps/web/tsconfig.json', 'apps/web/package.json', 'apps/web/src/workflow.ts', 'apps/web/package-lock.json', 'apps/web/index.html', 'apps/web/src/App.test.tsx', 'apps/web/src/main.tsx'}
 
@@ -705,20 +708,9 @@ COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
 COMPANY_LIFECYCLE_TASK_SHA256 = '0aac6448de867336932cb2d8dc41dcb79be79d166f98e197e0c14aa501311f97'
-COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {
-    'requirements': '7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79',
-    'acceptance_criteria': '652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95',
-    'dependencies': 'b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630',
-    'escalate_when': 'c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc',
-}
-COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256 = {
-    'verification_required': '37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407',
-    'dependencies': '92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5',
-}
-COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256 = {
-    'verification_required': '0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9',
-    'dependencies': 'ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db',
-}
+COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {"requirements":"7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79","acceptance_criteria":"652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95","dependencies":"b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630","escalate_when":"c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc"}
+COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256 = {"verification_required":"37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407","dependencies":"92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5"}
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256 = {"verification_required":"0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9","dependencies":"ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db"}
 COMPANY_LIFECYCLE_SOURCES = (
     ('apbra-151-mvp-scope', '4063307', 6, '8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
     ('apbra-151-business-functional-requirements', '3932362', 8, '002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
@@ -749,7 +741,7 @@ CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS = {
 }
 CANDIDATE_SOURCE_SAFETY_TASK_SHA256 = 'e4b2bf150019db34f848a9e94105ac9497a71ee67694348dffe8f3ad0ce17b46'
 CANDIDATE_SOURCE_SAFETY_SOURCES = (('apbra-108-pbip-pbir-structure', '3965362', 3, '3dfd8a68066547944885370e7091c0605b6db155c171b74bedbe0b181f78b2d2'), ('apbra-108-connections-source-boundary', '4063608', 3, 'c517844c225c801e8a6653a02fa334ce0e925a0915bfdee47ce5036f4034f9d5'), ('apbra-108-candidate-validation', '4063628', 4, 'ec89a4c144e52de5bf0ee122cf630005a3a57c51de71b14a893b97cfb57c1efe'))
-CANDIDATE_SOURCE_SAFETY_GATE_SHA256 = {'requirements': '4f5ddef9ea03936295604fe8eff1d49a5464315ad3296bda0ecc6db6a09da8c0', 'acceptance_criteria': '1b9e5046c9f168a5edb8dcedbc5b611503346ecfe054155ca3905ac01b0092af', 'verification_required': '5c81450d1198062a55a8a7a93273b4c7f70274af3add4bcd0ad4f168dba11623', 'dependencies': '19890e30139c836c46452801cb7af7b3947a095d34700476886eb143d2cb3feb'}
+CANDIDATE_SOURCE_SAFETY_GATE_SHA256 = {"requirements":"4f5ddef9ea03936295604fe8eff1d49a5464315ad3296bda0ecc6db6a09da8c0","acceptance_criteria":"1b9e5046c9f168a5edb8dcedbc5b611503346ecfe054155ca3905ac01b0092af","verification_required":"5c81450d1198062a55a8a7a93273b4c7f70274af3add4bcd0ad4f168dba11623","dependencies":"19890e30139c836c46452801cb7af7b3947a095d34700476886eb143d2cb3feb"}
 CANDIDATE_SOURCE_SAFETY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety'
 CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH = CANDIDATE_SOURCE_SAFETY_BRANCH + '-registration'
 
@@ -780,12 +772,7 @@ PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_provider_neutral_sso_scope.py',
 }
 PRIVATE_CONTENT_STORAGE_TASK_SHA256 = '7f42a825c59e29f6e29bd4c3f1b24115dd27fd80b670433be45f3751a8c15d72'
-PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256 = {
-    'tests/bootstrap/test_company_lifecycle_scope.py': '96d16ce98256a66cacc35d830731fe4598d493d74a4a75352e1b69053b265b6e',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py': '258b837f7de4c124bc9de90eafbaac9f61f76cfb943649765d3cd1ea0205aab4',
-    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py': '816a6c530f73918663b48b4a361f007c245b02d22034ade11421f9432d7ec6a1',
-    'tests/bootstrap/test_provider_neutral_sso_scope.py': '05551d3e13ef3358249c9c7b7d5a995878d15db9fedd513f6d510364e2e1d2ea',
-}
+PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256 = {"tests/bootstrap/test_company_lifecycle_scope.py":"96d16ce98256a66cacc35d830731fe4598d493d74a4a75352e1b69053b265b6e","tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py":"258b837f7de4c124bc9de90eafbaac9f61f76cfb943649765d3cd1ea0205aab4","tests/bootstrap/test_owner_onboarding_identity_docs_scope.py":"816a6c530f73918663b48b4a361f007c245b02d22034ade11421f9432d7ec6a1","tests/bootstrap/test_provider_neutral_sso_scope.py":"05551d3e13ef3358249c9c7b7d5a995878d15db9fedd513f6d510364e2e1d2ea"}
 PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT = 53
 PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCES_SHA256 = '09ff501f7956cc6945dc285d0eaface788b530312212447b690f3482118ec8be'
 PRIVATE_CONTENT_STORAGE_SOURCES = (
@@ -796,17 +783,7 @@ PRIVATE_CONTENT_STORAGE_SOURCES = (
     ('apbra-173a-mvp-scope', '4063307', 9, 'd39334d670c024feb8f4e608dc008a2d89a69288e53f831fc02c59055618245b'),
     ('apbra-173a-owner-reference-decision', 'APBRA-173', 'Jira owner comment 10471, 2026-10-04', 'fdc426f778358c07814273c432f689e6de691a754e75997a11a38eaf335c9db8'),
 )
-PRIVATE_CONTENT_STORAGE_GATE_SHA256 = {
-    'adrs': '9a14402c969227774c249adb8b6a1830f5a000fff43a6a1b6e7cb2f2a46c3d33',
-    'architecture_refs': 'd6bd87b5bbe2a6ff878ec4ecbd4b7a91423085570d8ac8eee88ce2112a04540a',
-    'restricted_paths': 'f9167fc397a38b89184daf286743ae3ef45ec4dad8b95e7e0ca09bd3ab064f30',
-    'requirements': 'eae5c7c141786020c6b894bba2b5290031dcfe9887341d541ab8e7f78ff808e6',
-    'acceptance_criteria': '52b418c47b6d23163ba9be33a8fc57875f0c10e1b3e291779daa35c18592f0f7',
-    'verification_required': 'aa1cd0dbf831302043388db6524133de163954dbae72ec6c859f0ecd019ce524',
-    'dependencies': 'b016d9a7b52e9b552da33a3b96437d8062b66722e62ea6a35c81be7bf0f00a4a',
-    'out_of_scope': '1bf6bd8ea3af84cef1f5e7fe3434f0492f43c07e6083f3d796223866ed9f4f91',
-    'escalate_when': '3fc83a16b22286990df413c25806f046e85cba8e8110704cbc7904d6ea4c3df2',
-}
+PRIVATE_CONTENT_STORAGE_GATE_SHA256 = {"adrs":"9a14402c969227774c249adb8b6a1830f5a000fff43a6a1b6e7cb2f2a46c3d33","architecture_refs":"d6bd87b5bbe2a6ff878ec4ecbd4b7a91423085570d8ac8eee88ce2112a04540a","restricted_paths":"f9167fc397a38b89184daf286743ae3ef45ec4dad8b95e7e0ca09bd3ab064f30","requirements":"eae5c7c141786020c6b894bba2b5290031dcfe9887341d541ab8e7f78ff808e6","acceptance_criteria":"52b418c47b6d23163ba9be33a8fc57875f0c10e1b3e291779daa35c18592f0f7","verification_required":"aa1cd0dbf831302043388db6524133de163954dbae72ec6c859f0ecd019ce524","dependencies":"b016d9a7b52e9b552da33a3b96437d8062b66722e62ea6a35c81be7bf0f00a4a","out_of_scope":"1bf6bd8ea3af84cef1f5e7fe3434f0492f43c07e6083f3d796223866ed9f4f91","escalate_when":"3fc83a16b22286990df413c25806f046e85cba8e8110704cbc7904d6ea4c3df2"}
 PRIVATE_CONTENT_STORAGE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-private-content-storage'
 PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-private-content-storage-registration'
 
@@ -840,17 +817,7 @@ CURRENT_STATE_DOCS_SOURCES = (
     ('apbra-177-data-identity', '4063348', 6, '6162d535670ac8b1cb096f1c7062fdf96441d32638103253790ffa70f25daadd'),
     ('apbra-177-owner-doc-clarification', 'APBRA-177', 'Jira owner clarification and controller comment 10481, 2026-10-04', 'dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
 )
-CURRENT_STATE_DOCS_GATE_SHA256 = {
-    'requirements': 'ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22',
-    'adrs': '07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318',
-    'architecture_refs': 'ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428',
-    'restricted_paths': '34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e',
-    'acceptance_criteria': '56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9',
-    'verification_required': '00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631',
-    'out_of_scope': 'ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c',
-    'escalate_when': 'b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c',
-    'dependencies': '9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74',
-}
+CURRENT_STATE_DOCS_GATE_SHA256 = {"requirements":"ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22","adrs":"07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318","architecture_refs":"ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428","restricted_paths":"34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e","acceptance_criteria":"56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9","verification_required":"00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631","out_of_scope":"ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c","escalate_when":"b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c","dependencies":"9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74"}
 CURRENT_STATE_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-177-current-state-docs'
 CURRENT_STATE_DOCS_REGISTRATION_BRANCH = CURRENT_STATE_DOCS_BRANCH + '-registration'
 
@@ -889,17 +856,7 @@ HOSTED_WEB_RELEASE_SOURCES = (
     ('apbra-173b-reconciliation', '6422580', 62, '5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
     ('apbra-173b-owner-architecture-acceptance', 'APBRA-173', 'Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100', 'f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
 )
-HOSTED_WEB_RELEASE_GATE_SHA256 = {
-    'requirements': '09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30',
-    'adrs': 'e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650',
-    'architecture_refs': '9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f',
-    'restricted_paths': 'cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672',
-    'acceptance_criteria': 'b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e',
-    'verification_required': 'ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356',
-    'out_of_scope': '052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512',
-    'escalate_when': '4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81',
-    'dependencies': '6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1',
-}
+HOSTED_WEB_RELEASE_GATE_SHA256 = {"requirements":"09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30","adrs":"e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650","architecture_refs":"9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f","restricted_paths":"cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672","acceptance_criteria":"b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e","verification_required":"ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356","out_of_scope":"052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512","escalate_when":"4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81","dependencies":"6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1"}
 HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
 
@@ -943,24 +900,14 @@ FOUNDRY_SCHEMA_SOURCES = (
     ('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'),
     ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9'),
 )
-FOUNDRY_SCHEMA_GATE_SHA256 = {
-    'requirements': '843a56bc013e1c0db367b0d6c9f118e6ebbe5d51c03a1931fad930059d963b2f',
-    'adrs': '2c7a575cc35488c6e1cd10aeeef41575646c26bc9804e8b446d779c09360fd25',
-    'architecture_refs': '756a3adacb850a15bf297617b552e39af2fc630599f900a580d70d437cff8c13',
-    'restricted_paths': '5da9a2143668174dc898d0ed884c32c49b587a0524bf2c37bc7ae53e0ccf2fbe',
-    'acceptance_criteria': '24df1f8b274ff60bfe8d4a202ceffa1de766e1a00dfe357e811192e4c99c2e97',
-    'verification_required': '3e0d547686d5b640d8f207673e3017e8426874607eab3a1ce96af58c8d78582f',
-    'out_of_scope': 'd84f2cd70d79358d10e16173234e3f8e5cd9623c4ab2a6dd9432e6a1b27efa29',
-    'escalate_when': '434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1',
-    'dependencies': '1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded',
-}
+FOUNDRY_SCHEMA_GATE_SHA256 = {"requirements":"843a56bc013e1c0db367b0d6c9f118e6ebbe5d51c03a1931fad930059d963b2f","adrs":"2c7a575cc35488c6e1cd10aeeef41575646c26bc9804e8b446d779c09360fd25","architecture_refs":"756a3adacb850a15bf297617b552e39af2fc630599f900a580d70d437cff8c13","restricted_paths":"5da9a2143668174dc898d0ed884c32c49b587a0524bf2c37bc7ae53e0ccf2fbe","acceptance_criteria":"24df1f8b274ff60bfe8d4a202ceffa1de766e1a00dfe357e811192e4c99c2e97","verification_required":"3e0d547686d5b640d8f207673e3017e8426874607eab3a1ce96af58c8d78582f","out_of_scope":"d84f2cd70d79358d10e16173234e3f8e5cd9623c4ab2a6dd9432e6a1b27efa29","escalate_when":"434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1","dependencies":"1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded"}
 
 PROVIDER_RETRIEVAL_PATHS = {'apps/api/src/apbra_api/config.py', 'apps/web/src/durableConversation.tsx', 'apps/web/scripts/generation-bridge.ts', 'apps/web/scripts/semantic-bridge.ts', 'apps/web/src/deploymentGuide.test.ts', 'apps/web/src/deploymentGuide.ts', 'apps/api/src/apbra_api/model_provider.py', 'apps/web/src/privateCases.test.tsx', 'apps/web/src/durableGeneration.tsx', 'apps/web/src/api.test.ts', 'apps/api/src/apbra_api/generation.py', 'apps/web/src/durableGeneration.test.tsx', 'apps/api/tests/test_model_provider.py', 'apps/web/src/foundry.ts', 'apps/api/tests/test_conversations.py', 'apps/web/e2e/protected-generation.spec.ts', 'apps/web/src/api.ts', 'apps/api/src/apbra_api/tenant_settings.py', 'apps/web/src/foundry.test.ts', 'apps/web/src/durableConversation.test.tsx', 'apps/api/tests/test_generation.py', 'apps/web/src/EnterpriseApp.tsx', 'apps/api/src/apbra_api/api.py', 'apps/web/e2e/tenant-settings.spec.ts', 'apps/api/tests/test_tenant_settings.py', 'apps/api/tests/test_semantic_bridge.py', 'apps/web/e2e/durable-conversation.spec.ts', 'apps/api/src/apbra_api/application.py', 'apps/api/tests/test_api.py'}
 PROVIDER_RETRIEVAL_REGISTRATION_PATHS = {'tasks/APBRA-160-provider-retrieval.json', 'scripts/check_bootstrap.py', 'tests/bootstrap/test_provider_retrieval_scope.py'}
 PROVIDER_RETRIEVAL_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval'
 PROVIDER_RETRIEVAL_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval-registration'
 PROVIDER_RETRIEVAL_TASK_SHA256 = '78522272fdd8c20c0ce184eec2a22122397e2e49edb3f9fc6a79655ff2338cf2'
-PROVIDER_RETRIEVAL_GATE_SHA256 = {'requirements': '323309c11b31b810b31a895c46a1e15a8a948186ebfc5384277bfaa57748625c', 'adrs': 'ebf931961a3783807a614f29ea4be730c3664d0b147cac18d364125cdc631edf', 'architecture_refs': '35c08977912347960b51fc6b7f33ecfc186dd341dc7c864cf802389d9037cfe7', 'restricted_paths': '14419d236e945cea71dc8999014ad50d01d6c5a44a23718612b7f63766481bc7', 'acceptance_criteria': 'dbcb7e2efde54d5d219cdb438011baaf21d6a388dee2e236d53b56f2ba51d9f2', 'verification_required': 'c371ba3f93fe70d9e4aebc8dc0964e98cd0f28e26303a9864e89b1b7e2bf33d0', 'out_of_scope': '23bba94e16b368800cf68b86547a49527a4ef26076aff2067fa1c199b2191f84', 'escalate_when': 'b97ea55133cba8dd8abae0eaa5be205ee1c37aebe52df37b69e99e4137f35375', 'dependencies': 'd05be20dfc2167a0b399ad6a101dc0c91d50095ca546a4f09d797a892d234a66', 'effective_release': '6385f7bf58136115858f87c4dd65c7e39aaf1d225f3cfb3092e8eeb818cbc5cd', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+PROVIDER_RETRIEVAL_GATE_SHA256 = {"requirements":"323309c11b31b810b31a895c46a1e15a8a948186ebfc5384277bfaa57748625c","adrs":"ebf931961a3783807a614f29ea4be730c3664d0b147cac18d364125cdc631edf","architecture_refs":"35c08977912347960b51fc6b7f33ecfc186dd341dc7c864cf802389d9037cfe7","restricted_paths":"14419d236e945cea71dc8999014ad50d01d6c5a44a23718612b7f63766481bc7","acceptance_criteria":"dbcb7e2efde54d5d219cdb438011baaf21d6a388dee2e236d53b56f2ba51d9f2","verification_required":"c371ba3f93fe70d9e4aebc8dc0964e98cd0f28e26303a9864e89b1b7e2bf33d0","out_of_scope":"23bba94e16b368800cf68b86547a49527a4ef26076aff2067fa1c199b2191f84","escalate_when":"b97ea55133cba8dd8abae0eaa5be205ee1c37aebe52df37b69e99e4137f35375","dependencies":"d05be20dfc2167a0b399ad6a101dc0c91d50095ca546a4f09d797a892d234a66","effective_release":"6385f7bf58136115858f87c4dd65c7e39aaf1d225f3cfb3092e8eeb818cbc5cd","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
 PROVIDER_RETRIEVAL_SOURCES = FOUNDRY_SCHEMA_SOURCES
 PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
@@ -969,7 +916,7 @@ FOUNDRY_HOST_REGISTRATION_PATHS = {'tasks/APBRA-160-foundry-host.json', 'scripts
 FOUNDRY_HOST_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-host'
 FOUNDRY_HOST_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-host-registration'
 FOUNDRY_HOST_TASK_SHA256 = '8c2df5654d5fac6d929800881d39b54f809be5164c5bf0342328942c89aa4f93'
-FOUNDRY_HOST_GATE_SHA256 = {'requirements': '6c28746ffdbda24034f5d4ddcb645f80001e1ff048862fde8ef2e89dd700ff6a', 'adrs': '8d96bab63ecbd37614f9707a709fb9cc0376df4f257b26f1417418b6b80bddad', 'architecture_refs': '3b432bb91142e2f748282a601cd5972d8a236dea6c533f44d2efac7a600043a0', 'restricted_paths': 'be5f05d658cdefb103541b20782fd9634ffa4beb159c2ae0e9757a72bf2ae029', 'acceptance_criteria': 'e25e323fb28f2121e76f798b205a33fa7d56d50b6744a98fb5bad57531aaf848', 'verification_required': 'd071446ffde2a22023dcf474b854d4f7310c3cc066b4f56f39fd4fbe5a7b8257', 'out_of_scope': '9c97c2304236a6db9e19c2c8ed0d48e6453557fe1fa0490e160c251499f03eba', 'escalate_when': '77375135f94a2a32064a4db36dfe18a0a06d1ffedf610b14eba632b24252634c', 'dependencies': '45d36a6c2adcf36bdb7bb4d2de69bc4717e8a2bb4648d2aa33fa5c943b844a88', 'effective_release': 'a214863ef9572e831beece9d1562de0cc93d20cd09473638aa500bc5e1905684', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2'}
+FOUNDRY_HOST_GATE_SHA256 = {"requirements":"6c28746ffdbda24034f5d4ddcb645f80001e1ff048862fde8ef2e89dd700ff6a","adrs":"8d96bab63ecbd37614f9707a709fb9cc0376df4f257b26f1417418b6b80bddad","architecture_refs":"3b432bb91142e2f748282a601cd5972d8a236dea6c533f44d2efac7a600043a0","restricted_paths":"be5f05d658cdefb103541b20782fd9634ffa4beb159c2ae0e9757a72bf2ae029","acceptance_criteria":"e25e323fb28f2121e76f798b205a33fa7d56d50b6744a98fb5bad57531aaf848","verification_required":"d071446ffde2a22023dcf474b854d4f7310c3cc066b4f56f39fd4fbe5a7b8257","out_of_scope":"9c97c2304236a6db9e19c2c8ed0d48e6453557fe1fa0490e160c251499f03eba","escalate_when":"77375135f94a2a32064a4db36dfe18a0a06d1ffedf610b14eba632b24252634c","dependencies":"45d36a6c2adcf36bdb7bb4d2de69bc4717e8a2bb4648d2aa33fa5c943b844a88","effective_release":"a214863ef9572e831beece9d1562de0cc93d20cd09473638aa500bc5e1905684","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
 FOUNDRY_HOST_SOURCES = FOUNDRY_SCHEMA_SOURCES
 FOUNDRY_HOST_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
@@ -978,7 +925,7 @@ FOUNDRY_QUALIFICATION_REGISTRATION_PATHS = {'tests/bootstrap/test_foundry_qualif
 FOUNDRY_QUALIFICATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification'
 FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification-registration'
 FOUNDRY_QUALIFICATION_TASK_SHA256 = '7f238804977619dcc8120b58ae4df562b35a0409ddef545711d1782f51ae4aae'
-FOUNDRY_QUALIFICATION_GATE_SHA256 = {'requirements': '4e326dc8d87ad8258e5724e71f52cd438ba00695406edb09649f1368d6501337', 'adrs': '497693b8401a2c3e0871ff93ee7b48317c97339c4d916585ff1a34174ce94890', 'architecture_refs': '081817e73e3e30833aee2e5896abe65d875bcce9daf666d4a620d4dab63db808', 'restricted_paths': '9034e40a893b883fa5d2026dbd72be8af31f472d4fc1eae942fa651c33a8ff0f', 'acceptance_criteria': '42d48025bac15a836c3d17105c754544c6673178fdcd246ed90466ec059b8a22', 'verification_required': 'e39fd3bb51bdb59f46018e97628dd3fbc814746dd3e7d0fe015e594a16a4a74f', 'out_of_scope': 'f1fc7e0bb6d162f21a642b05059f8b4101ef34ce9c4163780b6b0750d1c911f1', 'escalate_when': '363d6c576984e7f41fc4171a1a947f43b7903a74780d8638a119b2a3348411df', 'dependencies': '3cc62a8204219a6d096ab3e78f4e734e9cbbff077241dd24bb8b22457b765a68', 'effective_release': '37b6482aeb18252f354ece4731884d31fd58ae9532f562f43cfb381c2cf8e8a3', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2'}
+FOUNDRY_QUALIFICATION_GATE_SHA256 = {"requirements":"4e326dc8d87ad8258e5724e71f52cd438ba00695406edb09649f1368d6501337","adrs":"497693b8401a2c3e0871ff93ee7b48317c97339c4d916585ff1a34174ce94890","architecture_refs":"081817e73e3e30833aee2e5896abe65d875bcce9daf666d4a620d4dab63db808","restricted_paths":"9034e40a893b883fa5d2026dbd72be8af31f472d4fc1eae942fa651c33a8ff0f","acceptance_criteria":"42d48025bac15a836c3d17105c754544c6673178fdcd246ed90466ec059b8a22","verification_required":"e39fd3bb51bdb59f46018e97628dd3fbc814746dd3e7d0fe015e594a16a4a74f","out_of_scope":"f1fc7e0bb6d162f21a642b05059f8b4101ef34ce9c4163780b6b0750d1c911f1","escalate_when":"363d6c576984e7f41fc4171a1a947f43b7903a74780d8638a119b2a3348411df","dependencies":"3cc62a8204219a6d096ab3e78f4e734e9cbbff077241dd24bb8b22457b765a68","effective_release":"37b6482aeb18252f354ece4731884d31fd58ae9532f562f43cfb381c2cf8e8a3","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
 FOUNDRY_QUALIFICATION_SOURCES = FOUNDRY_SCHEMA_SOURCES
 FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
@@ -987,7 +934,7 @@ LOCAL_RECOVERY_REGISTRATION_PATHS = {'tasks/APBRA-160-local-rekey.json', 'script
 LOCAL_RECOVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey'
 LOCAL_RECOVERY_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey-clean-registration'
 LOCAL_RECOVERY_TASK_SHA256 = '63c5ba8add3f1edaf3433460adbd9c9f504f2885bd832535d08aab6197d8b592'
-LOCAL_RECOVERY_GATE_SHA256 = {'requirements': '20a8243d2c014b9254f37f124b92062ab475b3f72429e8085e205a3cd900c9a4', 'adrs': 'b2d848dccced5dad02b35ad8823548df93ed6d26f506879e021685628a38ea51', 'architecture_refs': '3c1e5bd1055f7f60c3248686b7650b2cc39d04c5b7abe132f786c013fee98fb1', 'restricted_paths': 'e515ba02be97593fc54eef10b9284355cb36c792a827638bd1329f93b9f53b46', 'acceptance_criteria': '90d4190ce08546aada6bd478143e171efef9bd67a602b6678976d5ac606ee007', 'verification_required': 'a801e044ceaeb0e74b16035bea0d12306b692cef4a04df525a1a65f326aaa526', 'out_of_scope': '030b4ac42d4a4d59c5eb1ffcaa39c0a8e98bd70cc84d3c03e01cbb8be89e8777', 'escalate_when': '957e029f91dfe88d547fa550fd2a23a3f819f19aa4ac4760896232a3f45c745f', 'dependencies': 'a7ca3f13676c6e1427db2f2b5df9d42965e8458788ff111b22079542a9faf426', 'effective_release': '03fd13e33a9671b7647526a1f06d57fe10f5376cdb75d8e6d06402b0c215cf30', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': '7a1a4b216859154f70d8b3aa0d18b1c679ab8965bd42b97e217b11b385925890', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+LOCAL_RECOVERY_GATE_SHA256 = {"requirements":"20a8243d2c014b9254f37f124b92062ab475b3f72429e8085e205a3cd900c9a4","adrs":"b2d848dccced5dad02b35ad8823548df93ed6d26f506879e021685628a38ea51","architecture_refs":"3c1e5bd1055f7f60c3248686b7650b2cc39d04c5b7abe132f786c013fee98fb1","restricted_paths":"e515ba02be97593fc54eef10b9284355cb36c792a827638bd1329f93b9f53b46","acceptance_criteria":"90d4190ce08546aada6bd478143e171efef9bd67a602b6678976d5ac606ee007","verification_required":"a801e044ceaeb0e74b16035bea0d12306b692cef4a04df525a1a65f326aaa526","out_of_scope":"030b4ac42d4a4d59c5eb1ffcaa39c0a8e98bd70cc84d3c03e01cbb8be89e8777","escalate_when":"957e029f91dfe88d547fa550fd2a23a3f819f19aa4ac4760896232a3f45c745f","dependencies":"a7ca3f13676c6e1427db2f2b5df9d42965e8458788ff111b22079542a9faf426","effective_release":"03fd13e33a9671b7647526a1f06d57fe10f5376cdb75d8e6d06402b0c215cf30","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","source_ids":"7a1a4b216859154f70d8b3aa0d18b1c679ab8965bd42b97e217b11b385925890","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
 LOCAL_RECOVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
 LOCAL_RECOVERY_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 
@@ -1026,17 +973,7 @@ DEMO_UX_SOURCES = (
     ('apbra-160-screen-interactions', '4063368', 5, '3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f'),
     ('apbra-160-reviewer-administration', '4063388', 6, '05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
 )
-DEMO_UX_GATE_SHA256 = {
-    'requirements': 'c5a1307d65817fd8e0c391b740df19d7b4842312f0fe78517ec5a447ec102ec5',
-    'adrs': '08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7',
-    'architecture_refs': '6ec72c7e222ce482456ada6b43128865470e2864884a322692b5e0c29d80307a',
-    'restricted_paths': '3ccd44f8f74a4ef21f15ddb1fcdd45bdb29b5d83e1a79fdf75bd310b0f9fbf29',
-    'acceptance_criteria': 'cfb3ba85f7b20cfe3d6f79e24270c763be58e12a3f4e01fc4de7b5d6d5f75504',
-    'verification_required': '13c9be515b02d85ed50994700e3c10da8f9734ef8cbc3c78d3b78f34369798bc',
-    'out_of_scope': '4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5',
-    'escalate_when': 'b32a0f51f125326763c2b20fa5c23facb3c5010b1d79afa988cd791ea3358eba',
-    'dependencies': '3fb8b59c130f0dde1d08cb116628c4211374a1684c1a941a6b861533960519cf',
-}
+DEMO_UX_GATE_SHA256 = {"requirements":"c5a1307d65817fd8e0c391b740df19d7b4842312f0fe78517ec5a447ec102ec5","adrs":"08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7","architecture_refs":"6ec72c7e222ce482456ada6b43128865470e2864884a322692b5e0c29d80307a","restricted_paths":"3ccd44f8f74a4ef21f15ddb1fcdd45bdb29b5d83e1a79fdf75bd310b0f9fbf29","acceptance_criteria":"cfb3ba85f7b20cfe3d6f79e24270c763be58e12a3f4e01fc4de7b5d6d5f75504","verification_required":"13c9be515b02d85ed50994700e3c10da8f9734ef8cbc3c78d3b78f34369798bc","out_of_scope":"4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5","escalate_when":"b32a0f51f125326763c2b20fa5c23facb3c5010b1d79afa988cd791ea3358eba","dependencies":"3fb8b59c130f0dde1d08cb116628c4211374a1684c1a941a6b861533960519cf"}
 DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
 DEMO_UX_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux-registration'
 DEMO_UX_VITE_ORIGINAL_SHA256 = 'dac004933ad7814f66e4ebaa2116867e151b396f60ef5d80d0a88bd786a8a320'
@@ -1113,12 +1050,7 @@ REQUIRED = (
 ROLE_IDS = {'APBRA-' + s for s in (
     'PLANNER', 'ARCH', 'DEV-BE', 'DEV-FE', 'AI', 'RAG', 'PBI',
     'QA', 'SEC', 'REVIEW', 'DEVOPS', 'DOCS')}
-ACTION_PINS = {
-    'actions/setup-node': '249970729cb0ef3589644e2896645e5dc5ba9c38',
-    'actions/checkout': 'd23441a48e516b6c34aea4fa41551a30e30af803',
-    'actions/setup-python': 'ece7cb06caefa5fff74198d8649806c4678c61a1',
-    'actions/upload-artifact': 'ea165f8d65b6e75b540449e92b4886f43607fa02',
-}
+ACTION_PINS = {"actions/setup-node":"249970729cb0ef3589644e2896645e5dc5ba9c38","actions/checkout":"d23441a48e516b6c34aea4fa41551a30e30af803","actions/setup-python":"ece7cb06caefa5fff74198d8649806c4678c61a1","actions/upload-artifact":"ea165f8d65b6e75b540449e92b4886f43607fa02"}
 
 
 def load_json(path: Path) -> object:
@@ -2334,6 +2266,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             source_bindings=FOUNDRY_QUALIFICATION_SOURCES, sources_sha=FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256,
             count_label='three')
         errors += extension_errors
+        renewal, failures = r['bind'](root, catalog, sources, bound_provider_registration)
+        errors += failures
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2903,6 +2837,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (provider_retrieval_task, PROVIDER_RETRIEVAL_PATHS),
             (foundry_host_task, FOUNDRY_HOST_PATHS),
             (foundry_qualification_task, FOUNDRY_QUALIFICATION_PATHS),
+            (renewal, r['P']),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2912,6 +2847,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else renewal if active_branch in {r['B'], r['R']}
                 else foundry_qualification_task if active_branch in {FOUNDRY_QUALIFICATION_BRANCH, FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH}
                 else foundry_host_task if active_branch in {FOUNDRY_HOST_BRANCH, FOUNDRY_HOST_REGISTRATION_BRANCH}
                 else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
@@ -2939,6 +2875,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('Active task branch identity missing for changed paths')
                 active_task = None
             elif (active_task is not None and active_task['branch'] != active_branch and
+                    not r['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
                          active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
                          changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -3043,6 +2980,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == FOUNDRY_QUALIFICATION_BRANCH and
                     changed_paths.intersection(FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry qualification implementation cannot change governance files')
+            errors += r['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3390,6 +3328,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS and
                          name in FOUNDRY_HOST_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
+                    (active_task is not None and r['stage'](active_task_id, active_branch, changed_paths)
+                     and name in r['G'] and path_allowed(name, task, card)) or
                     (active_task_id == 'APBRA-160' and active_task is not None and
                          active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_QUALIFICATION_REGISTRATION_PATHS and
