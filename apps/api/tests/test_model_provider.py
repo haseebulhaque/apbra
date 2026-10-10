@@ -2606,10 +2606,15 @@ def test_qualification_memory_whitelist_blocks_unknown_url_or_audience_before_cl
     assert_qualification_cleanup(state)
 
 
+@pytest.mark.parametrize("renewed", [False, True])
 def test_qualification_idle_deadline_clears_private_memory_without_request(
     monkeypatch: pytest.MonkeyPatch,
+    renewed: bool,
 ) -> None:
-    state = qualification_flow(monkeypatch)
+    state = (
+        renewed_qualification_flow(monkeypatch)
+        if renewed else qualification_flow(monkeypatch)
+    )
     timers: list[Any] = []
 
     class Timer:
@@ -2733,3 +2738,101 @@ def test_qualification_settings_loader_failure_never_exposes_private_values(
     assert state.events == [] and state.receipts == [] and state.memories == []
     captured = capsys.readouterr()
     assert state.canary not in captured.out + captured.err + str(caught.value)
+
+
+def renewed_qualification_flow(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from datetime import UTC, datetime
+
+    state = qualification_flow(monkeypatch)
+    state.clock[0] = datetime(2026, 10, 10, 1, tzinfo=UTC).timestamp()
+    state.settings = qualification_settings(authorization_deadline=1791598140)
+    state.binding = state.settings.foundry_qualification_binding()
+    return state
+
+
+@pytest.mark.parametrize("deadline", [1791598139, 1791598140])
+def test_qualification_renewed_ceiling_allows_only_metadata_and_cleans_memory(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    deadline: int,
+) -> None:
+    state = renewed_qualification_flow(monkeypatch)
+    state.settings = qualification_settings(authorization_deadline=deadline)
+    state.binding = state.settings.foundry_qualification_binding()
+    result = run_qualification(state)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert len(state.receipts) == 3
+    assert state.events.count("authenticate") == 1
+    assert sum(event.startswith("token:") for event in state.events) == 2
+    assert_qualification_cleanup(state)
+    captured = capsys.readouterr()
+    assert state.canary not in captured.out + captured.err + json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "deadline,now",
+    [
+        (1791598141, 1791594000),
+        (1791598140, 1791598140),
+        (1791598140, 1791598141),
+        (1791573000, 1791594000),
+        (1791585300, 1791594000),
+        (None, 1791594000),
+        (0, 1791594000),
+        (float("nan"), 1791594000),
+        (float("inf"), 1791594000),
+        ("synthetic-private-invalid-deadline", 1791594000),
+        ("MISSING", 1791594000),
+    ],
+)
+def test_qualification_renewal_invalid_deadlines_stop_before_private_terminal_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    deadline: Any,
+    now: int,
+) -> None:
+    from pydantic import SecretStr
+
+    state = qualification_flow(monkeypatch)
+    state.clock[0] = now
+    values = json.loads(state.settings.foundry_qualification_binding_json.get_secret_value())
+    if deadline == "MISSING":
+        values.pop("authorization_deadline")
+    else:
+        values["authorization_deadline"] = deadline
+    state.settings.foundry_qualification_binding_json = SecretStr(json.dumps(values))
+    with pytest.raises(
+        ProviderConfigurationError, match="^FOUNDRY_QUALIFICATION_UNAVAILABLE$"
+    ) as caught:
+        run_qualification(state)
+    assert caught.value.__suppress_context__ is True
+    assert state.events == [] and state.receipts == [] and state.memories == []
+    assert state.terminal.getvalue() == ""
+    captured = capsys.readouterr()
+    assert "synthetic-private" not in captured.out + captured.err + str(caught.value)
+
+
+@pytest.mark.parametrize("action", ["expire", "revoke"])
+def test_qualification_renewed_window_still_stops_after_sdk_factory(
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+) -> None:
+    state = renewed_qualification_flow(monkeypatch)
+    factory = state.factory
+
+    def altered_factory(**options: Any) -> Any:
+        sdk = factory(**options)
+        if action == "expire":
+            state.clock[0] = state.binding.authorization_deadline
+        else:
+            state.settings.foundry_qualification_enabled = False
+        return sdk
+
+    state.factory = altered_factory
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert "authenticate" not in state.events
+    assert not any(event.startswith("token:") for event in state.events)
+    assert state.receipts == []
+    assert_qualification_cleanup(state)
