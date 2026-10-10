@@ -231,6 +231,35 @@ class FoundryHostBinding(BaseModel):
         return "<private Foundry host attestation>"
 
 
+class FoundryQualificationBinding(BaseModel):
+    """Finite private discovery approval; never a runtime activation attestation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    tenant_id: Literal["4825d1f6-89d8-4e38-9418-2827aa59a23c"]
+    client_id: Literal["04b07795-8ddb-461a-bbee-02f9e1bf7b46"]
+    project_endpoint: Literal[
+        "https://s08-cloud-ai-agent-resource.services.ai.azure.com/api/projects/s08-cloud-ai-agent"
+    ]
+    agent_name: Literal["s08-document-grounded-agent"]
+    agent_version: Literal["6"]
+    knowledge_base: Literal["s08-knowledge-base"]
+    agent_api_version: Literal["v1"]
+    search_api_version: Literal["2025-11-01-preview"]
+    manual_authentication_approved: bool
+    independent_private_terminal_approved: bool
+    authorization_deadline: float = Field(gt=0, allow_inf_nan=False)
+    request_timeout_seconds: float = Field(gt=0, le=300, allow_inf_nan=False)
+    max_metadata_response_bytes: int = Field(gt=0)
+    max_projection_items: int = Field(gt=0)
+    max_projection_string_characters: int = Field(gt=0)
+
+    def __repr__(self) -> str:
+        return "FoundryQualificationBinding(<private approval>)"
+
+    def __str__(self) -> str:
+        return "<private Foundry qualification approval>"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="APBRA_", env_file=".env", extra="ignore")
 
@@ -258,6 +287,8 @@ class Settings(BaseSettings):
     qualified_provider_profiles_json: str | None = None
     model_provider_api_key: SecretStr | None = None
     foundry_host_enabled: bool = False
+    foundry_qualification_enabled: bool = False
+    foundry_qualification_binding_json: SecretStr | None = Field(default=None, repr=False)
     foundry_host_binding_json: SecretStr | None = Field(default=None, repr=False)
     tenant_secret_keyring_json: SecretStr | None = Field(default=None, repr=False)
     test_semantic_simulator_enabled: bool = False
@@ -351,6 +382,32 @@ class Settings(BaseSettings):
         if len({profile.profile_id for profile in profiles}) != len(profiles):
             raise ProviderConfigurationError("QUALIFIED_PROFILES_DUPLICATED")
         return tuple(profiles)
+
+    def foundry_qualification_binding(self) -> FoundryQualificationBinding:
+        from datetime import UTC, datetime
+
+        try:
+            if (
+                self.profile != "development"
+                or self.foundry_qualification_enabled is not True
+                or self.foundry_host_enabled is not False
+                or self.foundry_qualification_binding_json is None
+            ):
+                raise ValueError("Disabled qualification")
+            binding = FoundryQualificationBinding.model_validate_json(
+                self.foundry_qualification_binding_json.get_secret_value()
+            )
+            if (
+                binding.manual_authentication_approved is not True
+                or binding.independent_private_terminal_approved is not True
+                or not time.time() < binding.authorization_deadline
+                or binding.authorization_deadline
+                > datetime(2026, 10, 9, 19, 10, tzinfo=UTC).timestamp()
+            ):
+                raise ValueError("Expired qualification approval")
+            return binding
+        except Exception:
+            raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_UNAVAILABLE") from None
 
     def foundry_host_binding(self) -> FoundryHostBinding:
         try:
