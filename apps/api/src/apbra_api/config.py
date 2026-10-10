@@ -402,7 +402,7 @@ class Settings(BaseSettings):
                 or binding.independent_private_terminal_approved is not True
                 or not time.time() < binding.authorization_deadline
                 or binding.authorization_deadline
-                > datetime(2026, 10, 9, 19, 10, tzinfo=UTC).timestamp()
+                > datetime(2026, 10, 10, 2, 9, tzinfo=UTC).timestamp()
             ):
                 raise ValueError("Expired qualification approval")
             return binding
