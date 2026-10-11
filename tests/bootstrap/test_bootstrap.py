@@ -222,11 +222,11 @@ class SchemaRetrievalTests(unittest.TestCase):
 
 class PreparationCacheTests(unittest.TestCase):
     def setUp(self):
-        c.prepared_schema.cache_clear()
+        c._checked_schema.cache_clear()
 
     def test_only_preflight_reused_values_and_registry_remain_per_call(self):
         schema = {'type': 'integer'}
-        with patch.object(c.Draft202012Validator, 'check_schema', wraps=c.Draft202012Validator.check_schema) as preflight, patch.object(c, 'Registry', wraps=c.Registry) as registry:
+        with patch.object(c._validator, 'check_schema', wraps=c._validator.check_schema) as preflight, patch.object(c, 'Registry', wraps=c.Registry) as registry:
             self.assertEqual(c.schema_errors(schema, 1), [])
             self.assertTrue(c.schema_errors(copy.deepcopy(schema), 'invalid'))
         self.assertEqual(preflight.call_count, 1)
@@ -261,7 +261,7 @@ class PreparationCacheTests(unittest.TestCase):
             with self.assertRaises(SchemaError) as actual:
                 c.schema_errors(schema, {})
             self.assertEqual(str(actual.exception), str(expected.exception))
-        self.assertEqual(c.prepared_schema.cache_info().currsize, 0)
+        self.assertEqual(c._checked_schema.cache_info().currsize, 0)
 
     def test_error_order_and_non_json_schema_inputs_preserved(self):
         from jsonschema.exceptions import SchemaError
@@ -278,18 +278,31 @@ class PreparationCacheTests(unittest.TestCase):
             c.schema_errors(schema, 1)
         self.assertEqual(str(actual.exception), str(expected_error.exception))
 
+    def test_subclass_reference_behavior_survives_warmed_content_cache(self):
+        class Ref(str):
+            def startswith(self, *args):
+                return False
+        schema = {'$defs': {'integer': {'type': 'integer'}}, '$ref': '#/$defs/integer'}
+        self.assertEqual(c.schema_errors(schema, 1), [])
+        schema['$ref'] = Ref(schema['$ref'])
+        with self.assertRaisesRegex(ValueError, 'External schema references are forbidden'):
+            c.schema_errors(schema, 1)
+        for value in (Ref('integer'), {'type': Ref('integer')}, {Ref('type'): 'integer'},
+                      ('integer',), float('nan'), float('inf')):
+            self.assertFalse(c._exact_json(value))
+
     def test_file_replacement_duplicate_keys_and_schema_reads_remain_visible(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / 'contracts/engineering/task-contract.schema.json'
             target.parent.mkdir(parents=True)
             target.write_text('{"type":"integer"}')
-            self.assertEqual(c.schema_errors(c.task_schema(root), 1), [])
+            self.assertEqual(c.schema_errors(c.load_json(target), 1), [])
             target.write_text('{"type":"string"}')
-            self.assertTrue(c.schema_errors(c.task_schema(root), 1))
+            self.assertTrue(c.schema_errors(c.load_json(target), 1))
             target.write_text('{"type":"integer","type":"string"}')
             with self.assertRaisesRegex(ValueError, 'Duplicate JSON key: type'):
-                c.task_schema(root)
+                c.load_json(target)
 
     def test_cached_paths_do_not_cache_mutable_task_or_card_decisions(self):
         task = {'allowed_paths': ['docs/**'], 'restricted_paths': []}
