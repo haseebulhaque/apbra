@@ -349,6 +349,9 @@ test('mocked recovery history read failure avoids false empty state and retries 
   await expect(page.getByText('Build history could not be refreshed',{exact:true})).toBeVisible();
   await expect(page.getByText('No current report yet',{exact:true})).toHaveCount(0);
   await expect(page.getByLabel('Current report')).toHaveCount(0);
+  await page.locator('.report-history summary').click();
+  await expect(page.getByText('No report builds yet.',{exact:true})).toHaveCount(0);
+  await expect(page.locator('.report-history summary')).toContainText('Unavailable');
   state.historyUnavailable=false;
   await page.getByRole('button',{name:'Refresh build history',exact:true}).click();
   await expect(page.getByLabel('Current report')).toBeVisible();
