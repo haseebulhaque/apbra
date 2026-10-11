@@ -2773,7 +2773,7 @@ def test_qualification_renewed_ceiling_allows_only_metadata_and_cleans_memory(
 @pytest.mark.parametrize(
     "deadline,now",
     [
-        (1791598141, 1791594000),
+        (1791598141, 1791598141),
         (1791598140, 1791598140),
         (1791598140, 1791598141),
         (1791573000, 1791594000),
@@ -2819,6 +2819,96 @@ def test_qualification_renewed_window_still_stops_after_sdk_factory(
     action: str,
 ) -> None:
     state = renewed_qualification_flow(monkeypatch)
+    factory = state.factory
+
+    def altered_factory(**options: Any) -> Any:
+        sdk = factory(**options)
+        if action == "expire":
+            state.clock[0] = state.binding.authorization_deadline
+        else:
+            state.settings.foundry_qualification_enabled = False
+        return sdk
+
+    state.factory = altered_factory
+    with pytest.raises(ProviderConfigurationError):
+        run_qualification(state)
+    assert "authenticate" not in state.events
+    assert not any(event.startswith("token:") for event in state.events)
+    assert state.receipts == []
+    assert_qualification_cleanup(state)
+
+
+# Oct11 renewal preserves historical tests and changes only the qualification ceiling.
+def oct11_qualification_flow(monkeypatch: pytest.MonkeyPatch) -> Any:
+    state = qualification_flow(monkeypatch)
+    state.clock[0] = 1791710686  # Owner window opens09:24:46UTC; all values synthetic.
+    state.settings = qualification_settings(authorization_deadline=1791721486)
+    state.binding = state.settings.foundry_qualification_binding()
+    return state
+
+
+@pytest.mark.parametrize("deadline", [1791721485, 1791721486])
+def test_qualification_oct11_ceiling_keeps_two_scopes_three_gets_private_cleanup(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], deadline: int
+) -> None:
+    state = oct11_qualification_flow(monkeypatch)
+    state.settings = qualification_settings(authorization_deadline=deadline)
+    state.binding = state.settings.foundry_qualification_binding()
+    result = run_qualification(state)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert len(state.receipts) == 3
+    assert state.events.count("authenticate") == 1
+    assert sum(event.startswith("token:") for event in state.events) == 2
+    assert_qualification_cleanup(state)
+    captured = capsys.readouterr()
+    assert state.canary not in captured.out + captured.err + json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "deadline,now",
+    [
+        (1791721487, 1791710686),
+        (1791721486, 1791721486),
+        (1791721486, 1791721487),
+        (1791598140, 1791710686),
+        (1791573000, 1791710686),
+        (1791585300, 1791710686),
+        (None, 1791710686),
+        (float("nan"), 1791710686),
+        (float("inf"), 1791710686),
+        ("private-invalid-deadline", 1791710686),
+    ],
+)
+def test_qualification_oct11_invalid_or_expired_deadline_blocks_before_tty_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    deadline: Any,
+    now: int,
+) -> None:
+    from pydantic import SecretStr
+
+    state = oct11_qualification_flow(monkeypatch)
+    state.clock[0] = now
+    values = json.loads(state.settings.foundry_qualification_binding_json.get_secret_value())
+    values["authorization_deadline"] = deadline
+    state.settings.foundry_qualification_binding_json = SecretStr(json.dumps(values))
+    with pytest.raises(
+        ProviderConfigurationError, match="^FOUNDRY_QUALIFICATION_UNAVAILABLE$"
+    ) as caught:
+        run_qualification(state)
+    assert caught.value.__suppress_context__ is True
+    assert state.events == [] and state.receipts == [] and state.memories == []
+    assert state.terminal.getvalue() == ""
+    captured = capsys.readouterr()
+    assert "private-invalid" not in captured.out + captured.err + str(caught.value)
+
+
+@pytest.mark.parametrize("action", ["expire", "revoke"])
+def test_qualification_oct11_rechecks_after_factory_without_sdk_auth(
+    monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    state = oct11_qualification_flow(monkeypatch)
     factory = state.factory
 
     def altered_factory(**options: Any) -> Any:
