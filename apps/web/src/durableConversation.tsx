@@ -55,12 +55,19 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
     setAcceptance(state);
   };
   useEffect(()=>{
+    setPendingFiles([]);
+    setMessage('');
+    setAnswer('');
+    messageCommand.current=null;
+    answerCommand.current=null;
+    refinementCommand.current=null;
+  },[record.id]);
+  useEffect(()=>{
     caseIdRef.current=record.id;
     contextVersionRef.current=record.semantic_context_version;
     setActionError('');
     setContextVersion(record.semantic_context_version);
     setReportReady(false);
-    setPendingFiles([]);
     onReportReady?.(false);
     void refresh().catch(onError);
     void capabilitiesApi.uploads().then(setCapabilities).catch(onError);

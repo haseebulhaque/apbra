@@ -2,9 +2,19 @@ import {providerAuthenticationLabel} from './EnterpriseApp';
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
+
+it('keeps the report subtree present while another workspace destination is visible',()=>{
+  expect(renderToStaticMarkup(<MountedReportWorkspace visible={false}><input defaultValue="Unsaved private draft"/></MountedReportWorkspace>)).toContain('<div hidden=""><input value="Unsaved private draft"/>');
+  expect(renderToStaticMarkup(<MountedReportWorkspace visible><p>Report content</p></MountedReportWorkspace>)).toBe('<div><p>Report content</p></div>');
+});
+it('binds report-ready presentation to membership, company, case and saved context',()=>{
+  const original=reportWorkspaceContext('member-1',record);
+  expect(reportWorkspaceContext('member-2',record)).not.toBe(original);
+  for(const change of [{company_id:'company-2'},{id:'case-2'},{version:3},{semantic_context_version:2}])expect(reportWorkspaceContext('member-1',{...record,...change})).not.toBe(original);
+});
 
 it('renders a truthful signed-out boundary without company or role inputs',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'entra-test',display_label:'External ID email sign-in'}],development_identities:[]}}/>);expect(html).toContain('Sign in to continue');expect(html).toContain('checks active company membership and private-case access');expect(html).toContain('External ID email sign-in');expect(html).not.toMatch(/company id|select role|Local development identities/i)});
 it('shows deterministic identity choices only when the server lists them',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'local-test',display_label:'Local development identity'}],development_identities:['owner','member']}}/>);expect(html).toContain('Local development identities');expect(html).toContain('identity=owner');expect(html).not.toContain('uninvited')});
