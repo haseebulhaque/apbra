@@ -75,5 +75,3 @@ class PurePathMemoTests(unittest.TestCase):
         self.assertTrue(c.matches('README.md', '*.md'))
         with patch.object(c.fnmatch, 'fnmatchcase', return_value=False):
             self.assertFalse(c.matches('README.md', '*.md'))
-
-
