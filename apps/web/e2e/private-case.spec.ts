@@ -1,4 +1,4 @@
-import {expect,test,type Page} from '@playwright/test';
+import {expect,test,type Page,type Route} from '@playwright/test';
 
 async function setAppearance(page:Page,mode:string){const button=page.getByRole('button',{name:mode==='system'?'Use system appearance':mode==='light'?'Light appearance':'Dark appearance',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:/^Account menu for /}).click();await button.click();const menu=page.getByRole('menu',{name:'Account',exact:true});if(await menu.isVisible()){await page.keyboard.press('Escape');await expect(menu).toHaveCount(0)}}
 
@@ -668,6 +668,89 @@ async function syntheticWorkspace(page:Page,role='COMPANY_OWNER',users:'loaded'|
   return calls;
 }
 
+async function syntheticRecoveryWorkspace(page:Page){
+  const member='recovery-owner',company='recovery-company',created='2026-10-11T00:00:00Z';
+  const reports=['a','b'].map(id=>({id:'recovery-'+id,company_id:company,creator_membership_id:member,current_request_version_id:'request-'+id,version:1,semantic_context_version:1,report_title:'Recovery report '+id,created_at:created,updated_at:created,current_request:{id:'request-'+id,sequence:1,request_text:'Synthetic recovery goal '+id,created_at:created}}));
+  const calls:string[]=[],events:Array<Record<string,unknown>>=[],evidence:Array<Record<string,unknown>>=[];
+  let signedIn=true,failUpload=true;
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),path=new URL(request.url()).pathname,method=request.method();calls.push(method+' '+path);
+    const actor={identity_id:'recovery-identity',membership_id:member,company_id:company,display_name:'Recovery Owner',role:'COMPANY_OWNER'};
+    let body:unknown,status=200;
+    const record=reports.find(item=>path.startsWith('/api/cases/'+item.id));
+    if(path==='/api/auth/session')body=signedIn?{authenticated:true,identity:{id:actor.identity_id,display_name:actor.display_name},actor,csrf_token:'synthetic-only',membership_state:'ACTIVE'}:{authenticated:false};
+    else if(path==='/api/auth/providers')body={items:[],development_identities:[]};
+    else if(path==='/api/auth/logout'){signedIn=false;body={logged_out:true}}
+    else if(path==='/api/workspace/branding')body={version:1,primary:'#17635E',accent:'#2D7D9A'};
+    else if(path==='/api/memberships')body={items:[]};
+    else if(path==='/api/cases/capabilities/uploads')body={data_extensions:['CSV','XLSX'],reference_extensions:['PNG','JPEG','JPG'],max_file_bytes:5000000,max_files_per_selection:8,max_answer_characters:2000};
+    else if(path==='/api/cases')body={items:reports};
+    else if(record&&path.endsWith('/versions'))body={items:[record.current_request]};
+    else if(record&&path.endsWith('/conversation')){
+      if(method==='POST'){const input=request.postDataJSON();record.semantic_context_version+=1;const event={id:'event-'+events.length,kind:input.kind,payload:input.payload,semantic_context_version:record.semantic_context_version,created_at:created};events.push(event);body={event}}
+      else body={items:record.id==='recovery-a'?events:[]};
+    }else if(record&&path.endsWith('/evidence')){
+      if(method==='POST'){
+        const failed=new URL(request.url()).searchParams.get('filename')==='retry.csv'&&failUpload;
+        if(failed){status=503;body={error:{code:'UPLOAD_UNAVAILABLE',message:'Synthetic upload temporarily unavailable'}}}
+        else{record.semantic_context_version+=1;const item={id:'evidence-'+evidence.length,filename:new URL(request.url()).searchParams.get('filename'),format:'CSV',semantic_context_version:record.semantic_context_version,observed_schema:{tables:[{name:'Observations',rowCount:1,columns:[{name:'Value',type:'number'}]}]}};evidence.push(item);body={evidence:item}}
+      }else body={items:record.id==='recovery-a'?evidence:[]};
+    }else if(record&&path.endsWith('/reference-material'))body={items:[]};
+    else if(record&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
+    else if(record&&path.endsWith('/generation'))body={items:[]};
+    else if(record&&path.endsWith('/access'))body={items:[]};
+    else if(record&&path==='/api/cases/'+record.id)body={case:record};
+    else{status=503;body={error:{code:'UNAVAILABLE',message:'Synthetic endpoint not available'}}}
+    await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.goto('/');await page.getByRole('button',{name:'Recovery report a'}).click();await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible();
+  return{calls,allowUploads:()=>{failUpload=false}};
+}
+
+test('same-report workspace navigation preserves the stage, draft and queued file without saving',async({page})=>{
+  const {calls}=await syntheticRecoveryWorkspace(page);
+  await page.getByLabel('Add more requirements').fill('Unsaved synthetic priority.');
+  await page.locator('input[type=file]').setInputFiles({name:'queued.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n12\n')});
+  await page.waitForLoadState('networkidle');calls.length=0;
+  for(const destination of ['Home','My reports','My profile','Administration']){
+    const navigation=destination==='My profile'||destination==='Administration'?'Account sections':'Workspace sections';
+    await page.getByRole('navigation',{name:navigation}).getByRole('button',{name:destination==='My reports'?/^My reports/:destination,exact:destination!=='My reports'}).click();
+    await expect(page.getByLabel('Add more requirements')).toBeHidden();
+    await page.getByRole('button',{name:'Current report',exact:true}).click();
+    await expect(page.locator('.wizard-step-heading h2')).toHaveText('Information');
+    await expect(page.getByLabel('Add more requirements')).toHaveValue('Unsaved synthetic priority.');
+    await expect(page.locator('.pending-files')).toContainText('queued.csv');
+  }
+  expect(calls).toEqual([]);
+  await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
+  await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report a'}).click();
+  await page.getByRole('button',{name:'Next: Information',exact:true}).click();await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
+  await page.getByRole('button',{name:'Account menu for Recovery Owner'}).click();await page.getByRole('menuitem',{name:'Sign out'}).click();await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();await expect(page.getByLabel('Add more requirements')).toHaveCount(0);
+});
+
+test('failed uploads remain retryable after a successful file changes the saved context',async({page})=>{
+  const {calls,allowUploads}=await syntheticRecoveryWorkspace(page);
+  await page.locator('input[type=file]').setInputFiles([{name:'saved.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n12\n')},{name:'retry.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n14\n')}]);
+  await page.getByRole('button',{name:'Add selected files',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Retry failed uploads',exact:true})).toBeEnabled();await expect(page.locator('.pending-files')).toContainText('retry.csv');await expect(page.locator('.pending-files')).not.toContainText('saved.csv');
+  await expect(page.locator('.evidence-attached')).toContainText('saved.csv');
+  await page.getByLabel('Add more requirements').fill('Keep the queued retry while saving this synthetic requirement.');
+  await page.getByRole('button',{name:'Add to report requirements'}).click();await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toContainText('retry.csv');
+  allowUploads();await page.getByRole('button',{name:'Retry failed uploads',exact:true}).click();await expect(page.locator('.pending-files')).toHaveCount(0);
+  expect(calls.filter(call=>call==='POST /api/cases/recovery-a/evidence')).toHaveLength(3);
+  expect(calls.some(call=>/acceptance|design/.test(call)&&call.startsWith('POST'))).toBe(false);
+});
+
+test('mobile account appearance controls are reachable by keyboard without leaving the menu',async({page})=>{
+  await page.setViewportSize({width:375,height:800});await syntheticWorkspace(page);
+  const account=page.getByRole('button',{name:/Account menu for/});await account.focus();await account.press('Enter');await expect(page.getByRole('menuitem',{name:'My profile'})).toBeFocused();
+  await page.keyboard.press('Shift+Tab');const system=page.locator('.account-mobile-appearance').getByRole('button',{name:'System appearance'});await expect(system).toBeFocused();
+  await page.keyboard.press('Shift+Tab');await page.keyboard.press('Enter');await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');await expect(account).toHaveAttribute('aria-expanded','true');
+  await page.keyboard.press('Tab');await expect(system).toBeFocused();await page.keyboard.press('Tab');await expect(page.getByRole('menuitem',{name:'My profile'})).toBeFocused();await page.keyboard.press('Escape');await expect(account).toBeFocused();await expect(account).toHaveAttribute('aria-expanded','false');
+});
+
 test('workspace chrome has named appearance icons, bounded geometry and a keyboard account menu',async({page},testInfo)=>{
   test.setTimeout(120_000);const calls=await syntheticWorkspace(page);
   const account=page.getByRole('button',{name:/^Account menu for /});
@@ -745,4 +828,24 @@ test('account menu keyboard actions use existing profile and CSRF sign-out trans
  const calls=await syntheticWorkspace(page);const account=page.getByRole('button',{name:/^Account menu for /});await account.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'My profile',exact:true})).toBeVisible();await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Alexandra Morgan with a long display name');
  let signedOut=false;await page.route('**/api/auth/logout',async route=>{expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('synthetic-only');signedOut=true;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({logged_out:true})})});
  await account.focus();await page.keyboard.press('ArrowUp');await expect(page.getByRole('menuitem',{name:'Sign out',exact:true})).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();expect(signedOut).toBe(true);expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
+});
+
+
+test('an older user refresh cannot overwrite a completed explicit role change',async({page})=>{
+  await syntheticWorkspace(page);await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();
+  const member=page.locator('.membership-list li').filter({hasText:'Taylor Chen'});await expect(member.locator('.member-role')).toHaveText('member');
+  let held:Route|undefined,role='MEMBER',gets=0;const items=()=>[{id:'synthetic-member',display_name:'Taylor Chen',subject:'synthetic-member-subject',role,active:true}];
+  await page.route('**/api/memberships**',async route=>{if(route.request().method()==='GET'){if(++gets===1){held=route;return}await route.fulfill({json:{items:items()}})}else{expect(route.request().postDataJSON()).toEqual({role:'COMPANY_ADMIN'});role='COMPANY_ADMIN';await route.fulfill({json:{membership:items()[0]}})}});
+  await page.getByRole('button',{name:'Refresh users',exact:true}).click();await expect.poll(()=>Boolean(held)).toBe(true);
+  await member.getByText('Manage role for Taylor Chen',{exact:true}).click();await member.getByLabel('Role for Taylor Chen').selectOption('COMPANY_ADMIN');await member.getByRole('button',{name:'Save role',exact:true}).click();
+  await expect(member.locator('.member-role')).toHaveText('company admin');await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled();
+  await held!.fulfill({json:{items:[{...items()[0],role:'MEMBER'}]}});await page.waitForLoadState('networkidle');await expect(member.locator('.member-role')).toHaveText('company admin');await expect(member.getByRole('button',{name:'Save role',exact:true})).toBeDisabled();
+});
+
+test('pending profile save protects its submitted draft and a late refresh cannot restore a signed-out session',async({page})=>{
+  await syntheticWorkspace(page);await page.getByRole('button',{name:'My profile',exact:true}).click();await page.locator('.profile-editor summary').click();let save:Route|undefined,refresh:Route|undefined;
+  await page.route('**/api/profile',route=>{save=route});await page.route('**/api/auth/session',route=>{refresh=route});await page.route('**/api/auth/logout',route=>route.fulfill({json:{}}));
+  const input=page.getByLabel('Display name',{exact:true});await input.fill('Saved synthetic name');await page.getByRole('button',{name:'Save profile',exact:true}).click();await expect.poll(()=>Boolean(save)).toBe(true);await expect(input).toBeDisabled();
+  await save!.fulfill({json:{profile:{identity_id:'synthetic-identity',display_name:'Saved synthetic name'}}});await expect.poll(()=>Boolean(refresh)).toBe(true);await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
+  await refresh!.fulfill({json:{authenticated:true,identity:{id:'synthetic-identity',display_name:'Saved synthetic name'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-COMPANY_OWNER',company_id:'synthetic-company',display_name:'Saved synthetic name',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'}});await page.waitForLoadState('networkidle');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();await expect(page.locator('.private-workspace')).toHaveCount(0);
 });

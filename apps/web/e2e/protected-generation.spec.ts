@@ -251,6 +251,138 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await foreignContext.close();
 });
 
+// These recovery fixtures intercept every API request, including commands. They
+// exercise browser reloads and delayed reads without a backend or provider.
+async function syntheticGenerationWorkspace(page:Page){
+  const calls:string[]=[],timestamp='2026-10-11T00:00:00Z';
+  const records=['a','b'].map(letter=>({id:`recovery-${letter}`,company_id:'synthetic-company',creator_membership_id:'synthetic-owner',current_request_version_id:`request-${letter}`,version:1,semantic_context_version:1,report_title:`Recovery report ${letter.toUpperCase()}`,created_at:timestamp,updated_at:timestamp,current_request:{id:`request-${letter}`,sequence:1,request_text:`Compare synthetic results for ${letter.toUpperCase()}.`,created_at:timestamp}}));
+  const contract=(id:string)=>({id:`contract-${id}`,interpretation_id:`meaning-${id}`,schema_version:2,accepted_at:timestamp,contract:{},current:true});
+  const design=(id:string)=>({id:`design-${id}`,confirmed_contract_id:`contract-${id}`,origin:'AUTO_ELIGIBLE',provenance_label:'Synthetic eligibility check',summary:{page_count:1,visual_count:1,description:'Mocked browser recovery fixture.'}});
+  const attempt=(id:string,status:'RUNNING'|'SUCCEEDED')=>({id:`attempt-${id}`,case_id:id,confirmed_contract_id:`contract-${id}`,reviewed_design_id:`design-${id}`,interpretation_id:`meaning-${id}`,request_version_id:'synthetic-request',status,attempt_number:1,retry_of_attempt_id:null,supersedes_attempt_id:null,provenance:{mode:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'},validation:null,failure:null,created_at:timestamp,started_at:timestamp,completed_at:status==='SUCCEEDED'?timestamp:null,cancelled_at:null,artifact:status==='SUCCEEDED'?{filename:'synthetic-candidate.zip',sha256:'a'.repeat(64)}:null});
+  const state={calls,attempt,finished:false,designUnavailable:false,historyUnavailable:false,automaticUnavailable:false,holdCaseA:false,releaseCaseA:()=>{},caseARequested:Promise.resolve()};
+  let received!:()=>void,release!:()=>void;
+  state.caseARequested=new Promise<void>(resolve=>{received=resolve});
+  const held=new Promise<void>(resolve=>{release=resolve});state.releaseCaseA=release;
+  await page.route('**/api/**',async route=>{
+    const request=route.request(),path=new URL(request.url()).pathname;calls.push(request.method()+' '+path);
+    // Unexpected mutations can never escape to a real service.
+    if(request.method()!=='GET'){await route.abort('failed');return}
+    const record=records.find(item=>path.startsWith(`/api/cases/${item.id}`));
+    let body:unknown,status=200;
+    if(path==='/api/auth/session')body={authenticated:true,identity:{id:'synthetic-identity',display_name:'Synthetic Owner'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-owner',company_id:'synthetic-company',display_name:'Synthetic Owner',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
+    else if(path==='/api/auth/providers')body={items:[],development_identities:[]};
+    else if(path==='/api/workspace/branding')body={version:1,primary:'#17635E',accent:'#2D7D9A'};
+    else if(path==='/api/cases')body={items:records};
+    else if(path==='/api/cases/capabilities/uploads')body={data_extensions:['CSV','XLSX'],reference_extensions:['PNG','JPG','JPEG'],max_file_bytes:5000000,max_files_per_selection:8,max_data_items_per_report:20,max_reference_items_per_report:20};
+    else if(record&&path===`/api/cases/${record.id}`)body={case:record};
+    else if(record&&path.endsWith('/versions'))body={items:[record.current_request]};
+    else if(record&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:contract(record.id)};
+    else if(record&&path.endsWith('/reviewed-designs')){
+      if(state.designUnavailable){status=409;body={error:{code:'CONTEXT_VERSION_CONFLICT',message:'Synthetic design read conflict'}}}
+      else body={items:[design(record.id)],can_build:true,can_submit:false};
+      if(record.id==='recovery-a'&&state.holdCaseA)await held;
+    }else if(record&&path.endsWith('/automatic-designs')&&state.automaticUnavailable){
+      status=409;body={error:{code:'CONTEXT_VERSION_CONFLICT',message:'Synthetic automatic design read conflict'}};
+    }else if(record&&path.endsWith('/generation')){
+      // Capture A's result before delaying it, as a real in-flight response would.
+      body={items:record.id==='recovery-a'?[attempt(record.id,state.finished?'SUCCEEDED':'RUNNING')]:[]};
+      if(state.historyUnavailable){status=503;body={error:{code:'SYNTHETIC_HISTORY_UNAVAILABLE',message:'Synthetic history read failed'}}}
+      if(record.id==='recovery-a'&&state.holdCaseA){received();await held}
+    }else if(record&&['conversation','evidence','reference-material','automatic-designs'].some(suffix=>path.endsWith('/'+suffix)))body={items:[]};
+    else {status=503;body={error:{code:'SYNTHETIC_UNHANDLED_READ',message:'Synthetic read is not configured'}}}
+    await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  });
+  await page.goto('/');await expect(page.getByRole('heading',{name:'Your reports',exact:true})).toBeVisible();
+  return state;
+}
+
+test('mocked recovery reload polls a saved running build to success without resubmitting',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();
+  await openStep(page,'Build');await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toBeVisible();
+  await page.reload();await page.getByRole('button',{name:/Recovery report A/}).first().click();
+  await openStep(page,'Build');await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toBeVisible();
+  const reads=()=>state.calls.filter(call=>call==='GET /api/cases/recovery-a/generation').length;
+  const afterReload=reads();await expect.poll(reads).toBeGreaterThan(afterReload);
+  state.finished=true;
+  await expect(page.locator('.case-identity')).toContainText('Candidate ready');
+  await openStep(page,'Report');await expect(page.getByLabel('Current report')).toContainText('Your editable first draft is ready');
+  await page.locator('.report-history summary').click();await expect(page.locator('.generation-history li')).toContainText('Report ready');
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('mocked recovery design-read conflict preserves build history and explicit refresh restores commands',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;state.designUnavailable=true;
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  await expect(page.getByText('Report design could not be refreshed',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/^(Build report|Build another version|Create report design|Create another design|Cancel build|Retry failed build)/})).toHaveCount(0);
+  await expect(page.locator('.case-identity')).toContainText('Candidate ready');
+  await openStep(page,'Report');await page.locator('.report-history summary').click();
+  await expect(page.locator('.generation-history li')).toContainText('Report ready');
+  await expect(page.getByLabel('Current report')).toBeVisible();
+  await openStep(page,'Build');state.designUnavailable=false;
+  await page.getByRole('button',{name:'Refresh report design',exact:true}).click();
+  await expect(page.getByText('Report design could not be refreshed',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Synthetic design read conflict',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();
+  await expect(page.getByLabel('Eligible report design')).toBeVisible();
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('mocked recovery automatic-design read failure keeps history visible and commands closed',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;state.automaticUnavailable=true;
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  await expect(page.getByText('Report design could not be refreshed',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:/^(Build report|Build another version|Create report design|Create another design|Cancel build|Retry failed build)/})).toHaveCount(0);
+  await openStep(page,'Report');await expect(page.getByLabel('Current report')).toBeVisible();
+  await openStep(page,'Build');state.automaticUnavailable=false;
+  await page.getByRole('button',{name:'Refresh report design',exact:true}).click();
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();
+  await expect(page.getByText('Report design could not be refreshed',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Synthetic automatic design read conflict',{exact:true})).toHaveCount(0);
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('mocked recovery history read failure avoids false empty state and retries without a command',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;state.historyUnavailable=true;
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Report');
+  await expect(page.getByText('Build history could not be refreshed',{exact:true})).toBeVisible();
+  await expect(page.getByText('No current report yet',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('Current report')).toHaveCount(0);
+  await page.locator('.report-history summary').click();
+  await expect(page.getByText('No report builds yet.',{exact:true})).toHaveCount(0);
+  await expect(page.locator('.report-history summary')).toContainText('Unavailable');
+  state.historyUnavailable=false;
+  await page.getByRole('button',{name:'Refresh build history',exact:true}).click();
+  await expect(page.getByLabel('Current report')).toBeVisible();
+  await expect(page.getByText('Build history could not be refreshed',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('Synthetic history read failed',{exact:true})).toHaveCount(0);
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('mocked recovery delayed completed build from an unmounted case cannot mark the next report ready',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;state.holdCaseA=true;
+  try{
+    await page.getByRole('button',{name:/Recovery report A/}).first().click();await state.caseARequested;
+    await page.getByRole('button',{name:'All reports',exact:true}).click();
+    await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Report');
+    await expect(page.locator('.case-identity')).toContainText('Recovery report B');
+    await expect(page.locator('.case-identity')).toContainText('In progress');
+    await expect(page.getByText('No current report yet',{exact:true})).toBeVisible();
+    const oldResponses=Promise.all(['generation','reviewed-designs'].map(suffix=>page.waitForResponse(response=>new URL(response.url()).pathname==='/api/cases/recovery-a/'+suffix)));
+    state.releaseCaseA();await oldResponses;
+    // Flush the completed fetch and its React effects, rather than relying on a sleep.
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    await expect(page.locator('.case-identity')).not.toContainText('Candidate ready');
+    await expect(page.getByLabel('Current report')).toHaveCount(0);
+    await expect(page.getByText('No current report yet',{exact:true})).toBeVisible();
+    await openStep(page,'Build');
+    await expect(page.getByLabel('Eligible report design')).toHaveValue('design-recovery-b');
+    await expect(page.getByLabel('Eligible report design').locator('option')).toHaveCount(1);
+    expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+  }finally{state.releaseCaseA()}
+});
+
 test('business UI cancels an active attempt and keeps its truthful history',async({page})=>{
   await signIn(page);
   await page.getByRole('button',{name:'Create report'}).first().click();
