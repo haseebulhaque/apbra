@@ -220,91 +220,19 @@ class SchemaRetrievalTests(unittest.TestCase):
             retrieve.assert_not_called()
 
 
-class PreparationCacheTests(unittest.TestCase):
-    def setUp(self):
-        c._checked_schema.cache_clear()
+class PurePathMemoTests(unittest.TestCase):
+    def test_exact_builtin_strings_reuse_only_pure_validation(self):
+        from unittest.mock import Mock
+        original = lambda value: value == 'docs/example.md'
+        measured = Mock(side_effect=original)
+        wrapped = c._memoized_path(measured)
+        self.assertTrue(wrapped('docs/example.md'))
+        self.assertTrue(wrapped(''.join(['docs/', 'example.md'])))
+        self.assertFalse(wrapped('../unsafe'))
+        self.assertFalse(wrapped('../unsafe'))
+        self.assertEqual(measured.call_count, 2)
 
-    def test_only_preflight_reused_values_and_registry_remain_per_call(self):
-        schema = {'type': 'integer'}
-        with patch.object(c._validator, 'check_schema', wraps=c._validator.check_schema) as preflight, patch.object(c, 'Registry', wraps=c.Registry) as registry:
-            self.assertEqual(c.schema_errors(schema, 1), [])
-            self.assertTrue(c.schema_errors(copy.deepcopy(schema), 'invalid'))
-        self.assertEqual(preflight.call_count, 1)
-        self.assertEqual(registry.call_count, 2)
-
-    def test_mutated_schema_and_cross_schema_values_never_share_authority(self):
-        schema = {'type': 'integer'}
-        self.assertEqual(c.schema_errors(schema, 1), [])
-        schema['type'] = 'string'
-        self.assertTrue(c.schema_errors(schema, 1))
-        self.assertEqual(c.schema_errors(schema, 'valid'), [])
-        schema['type'] = 'integer'
-        self.assertTrue(c.schema_errors(schema, 'invalid'))
-
-    def test_mutated_external_reference_rejected_after_success(self):
-        schema = {'properties': {'value': {'type': 'integer'}}}
-        self.assertEqual(c.schema_errors(schema, {'value': 1}), [])
-        for keyword in ('$ref', '$dynamicRef'):
-            changed = copy.deepcopy(schema)
-            changed['properties']['value'][keyword] = 'https://invalid.example/schema'
-            with patch('urllib.request.urlopen') as retrieve:
-                with self.assertRaisesRegex(ValueError, 'External schema references are forbidden'):
-                    c.schema_errors(changed, {'value': 1})
-                retrieve.assert_not_called()
-
-    def test_invalid_schema_precedes_external_ref_and_never_cached(self):
-        from jsonschema.exceptions import SchemaError
-        schema = {'type': 'invalid', '$ref': 'https://invalid.example/schema'}
-        with self.assertRaises(SchemaError) as expected:
-            c.Draft202012Validator.check_schema(schema)
-        for _ in range(2):
-            with self.assertRaises(SchemaError) as actual:
-                c.schema_errors(schema, {})
-            self.assertEqual(str(actual.exception), str(expected.exception))
-        self.assertEqual(c._checked_schema.cache_info().currsize, 0)
-
-    def test_error_order_and_non_json_schema_inputs_preserved(self):
-        from jsonschema.exceptions import SchemaError
-        schema = {'properties': {'z': {'type': 'integer'}, 'a': {'type': 'integer'}}}
-        value = {'z': 'invalid', 'a': 'invalid'}
-        expected = [str(e.json_path) + ': ' + e.message for e in sorted(
-            c.Draft202012Validator(schema, registry=c.Registry()).iter_errors(value), key=lambda e: e.json_path)]
-        for _ in range(2):
-            self.assertEqual(c.schema_errors(schema, value), expected)
-        schema = {'type': ('integer', 'string')}
-        with self.assertRaises(SchemaError) as expected_error:
-            c.Draft202012Validator.check_schema(schema)
-        with self.assertRaises(SchemaError) as actual:
-            c.schema_errors(schema, 1)
-        self.assertEqual(str(actual.exception), str(expected_error.exception))
-
-    def test_subclass_reference_behavior_survives_warmed_content_cache(self):
-        class Ref(str):
-            def startswith(self, *args):
-                return False
-        schema = {'$defs': {'integer': {'type': 'integer'}}, '$ref': '#/$defs/integer'}
-        self.assertEqual(c.schema_errors(schema, 1), [])
-        schema['$ref'] = Ref(schema['$ref'])
-        with self.assertRaisesRegex(ValueError, 'External schema references are forbidden'):
-            c.schema_errors(schema, 1)
-        for value in (Ref('integer'), {'type': Ref('integer')}, {Ref('type'): 'integer'},
-                      ('integer',), float('nan'), float('inf')):
-            self.assertFalse(c._exact_json(value))
-
-    def test_file_replacement_duplicate_keys_and_schema_reads_remain_visible(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            target = root / 'contracts/engineering/task-contract.schema.json'
-            target.parent.mkdir(parents=True)
-            target.write_text('{"type":"integer"}')
-            self.assertEqual(c.schema_errors(c.load_json(target), 1), [])
-            target.write_text('{"type":"string"}')
-            self.assertTrue(c.schema_errors(c.load_json(target), 1))
-            target.write_text('{"type":"integer","type":"string"}')
-            with self.assertRaisesRegex(ValueError, 'Duplicate JSON key: type'):
-                c.load_json(target)
-
-    def test_cached_paths_do_not_cache_mutable_task_or_card_decisions(self):
+    def test_mutable_task_and_card_decisions_are_never_cached(self):
         task = {'allowed_paths': ['docs/**'], 'restricted_paths': []}
         card = {'allowed_paths': ['*']}
         self.assertTrue(c.path_allowed('docs/example.md', task, card))
@@ -313,10 +241,50 @@ class PreparationCacheTests(unittest.TestCase):
         task['restricted_paths'].clear()
         card['allowed_paths'] = ['scripts/**']
         self.assertFalse(c.path_allowed('docs/example.md', task, card))
-        self.assertFalse(c.valid_path([]))
-        for function, args in ((c.valid_path, (['x'],)), (c.matches, (['x'], '*'))):
-            with self.assertRaises(AttributeError):
-                function(*args)
+
+    def test_string_subclass_behavior_is_rechecked(self):
+        class MutablePath(str):
+            blocked = False
+            def startswith(self, prefix):
+                return self.blocked or super().startswith(prefix)
+        value = MutablePath('docs/example.md')
+        self.assertTrue(c.valid_path(value))
+        value.blocked = True
+        self.assertFalse(c.valid_path(value))
+        self.assertTrue(c.valid_path(str(value)))
+
+    def test_keyword_calls_preserve_original_result_and_errors(self):
+        for value, expected in [('docs/example.md', True), ('../unsafe', False)]:
+            self.assertEqual(c.valid_path(path=value), expected)
+        original = next(cell.cell_contents for cell in c.valid_path.__closure__
+                        if getattr(cell.cell_contents, '__name__', None) == 'valid_path')
+        for args, kwargs in [((), {}), (('a', 'b'), {}), ((), {'unexpected': 'a'})]:
+            with self.assertRaises(TypeError) as expected:
+                original(*args, **kwargs)
+            with self.assertRaises(TypeError) as actual:
+                c.valid_path(*args, **kwargs)
+            self.assertEqual(str(actual.exception), str(expected.exception))
+
+    def test_non_string_inputs_preserve_original_results_and_exception_details(self):
+        original = next(cell.cell_contents for cell in c.valid_path.__closure__
+                        if getattr(cell.cell_contents, '__name__', None) == 'valid_path')
+        for value in [None, [], {}, 0, False]:
+            self.assertEqual(c.valid_path(value), original(value))
+        for value in [['x'], {'x': 1}, 1, True]:
+            try:
+                original(value)
+            except Exception as expected:
+                with self.assertRaises(type(expected)) as actual:
+                    c.valid_path(value)
+                self.assertEqual(str(actual.exception), str(expected))
+
+    def test_matches_observes_current_dependencies_after_path_cache_warms(self):
+        self.assertTrue(c.matches('docs/example.md', 'docs/**'))
+        with patch.object(c, 'valid_path', return_value=False):
+            self.assertFalse(c.matches('docs/example.md', 'docs/**'))
+        self.assertTrue(c.matches('README.md', '*.md'))
+        with patch.object(c.fnmatch, 'fnmatchcase', return_value=False):
+            self.assertFalse(c.matches('README.md', '*.md'))
 
 
 class ReportContainmentTests(unittest.TestCase):
