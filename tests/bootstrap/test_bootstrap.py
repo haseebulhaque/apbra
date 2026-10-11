@@ -220,6 +220,92 @@ class SchemaRetrievalTests(unittest.TestCase):
             retrieve.assert_not_called()
 
 
+class PreparationCacheTests(unittest.TestCase):
+    def setUp(self):
+        c.prepared_schema.cache_clear()
+
+    def test_only_preflight_reused_values_and_registry_remain_per_call(self):
+        schema = {'type': 'integer'}
+        with patch.object(c.Draft202012Validator, 'check_schema', wraps=c.Draft202012Validator.check_schema) as preflight, patch.object(c, 'Registry', wraps=c.Registry) as registry:
+            self.assertEqual(c.schema_errors(schema, 1), [])
+            self.assertTrue(c.schema_errors(copy.deepcopy(schema), 'invalid'))
+        self.assertEqual(preflight.call_count, 1)
+        self.assertEqual(registry.call_count, 2)
+
+    def test_mutated_schema_and_cross_schema_values_never_share_authority(self):
+        schema = {'type': 'integer'}
+        self.assertEqual(c.schema_errors(schema, 1), [])
+        schema['type'] = 'string'
+        self.assertTrue(c.schema_errors(schema, 1))
+        self.assertEqual(c.schema_errors(schema, 'valid'), [])
+        schema['type'] = 'integer'
+        self.assertTrue(c.schema_errors(schema, 'invalid'))
+
+    def test_mutated_external_reference_rejected_after_success(self):
+        schema = {'properties': {'value': {'type': 'integer'}}}
+        self.assertEqual(c.schema_errors(schema, {'value': 1}), [])
+        for keyword in ('$ref', '$dynamicRef'):
+            changed = copy.deepcopy(schema)
+            changed['properties']['value'][keyword] = 'https://invalid.example/schema'
+            with patch('urllib.request.urlopen') as retrieve:
+                with self.assertRaisesRegex(ValueError, 'External schema references are forbidden'):
+                    c.schema_errors(changed, {'value': 1})
+                retrieve.assert_not_called()
+
+    def test_invalid_schema_precedes_external_ref_and_never_cached(self):
+        from jsonschema.exceptions import SchemaError
+        schema = {'type': 'invalid', '$ref': 'https://invalid.example/schema'}
+        with self.assertRaises(SchemaError) as expected:
+            c.Draft202012Validator.check_schema(schema)
+        for _ in range(2):
+            with self.assertRaises(SchemaError) as actual:
+                c.schema_errors(schema, {})
+            self.assertEqual(str(actual.exception), str(expected.exception))
+        self.assertEqual(c.prepared_schema.cache_info().currsize, 0)
+
+    def test_error_order_and_non_json_schema_inputs_preserved(self):
+        from jsonschema.exceptions import SchemaError
+        schema = {'properties': {'z': {'type': 'integer'}, 'a': {'type': 'integer'}}}
+        value = {'z': 'invalid', 'a': 'invalid'}
+        expected = [str(e.json_path) + ': ' + e.message for e in sorted(
+            c.Draft202012Validator(schema, registry=c.Registry()).iter_errors(value), key=lambda e: e.json_path)]
+        for _ in range(2):
+            self.assertEqual(c.schema_errors(schema, value), expected)
+        schema = {'type': ('integer', 'string')}
+        with self.assertRaises(SchemaError) as expected_error:
+            c.Draft202012Validator.check_schema(schema)
+        with self.assertRaises(SchemaError) as actual:
+            c.schema_errors(schema, 1)
+        self.assertEqual(str(actual.exception), str(expected_error.exception))
+
+    def test_file_replacement_duplicate_keys_and_schema_reads_remain_visible(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / 'contracts/engineering/task-contract.schema.json'
+            target.parent.mkdir(parents=True)
+            target.write_text('{"type":"integer"}')
+            self.assertEqual(c.schema_errors(c.task_schema(root), 1), [])
+            target.write_text('{"type":"string"}')
+            self.assertTrue(c.schema_errors(c.task_schema(root), 1))
+            target.write_text('{"type":"integer","type":"string"}')
+            with self.assertRaisesRegex(ValueError, 'Duplicate JSON key: type'):
+                c.task_schema(root)
+
+    def test_cached_paths_do_not_cache_mutable_task_or_card_decisions(self):
+        task = {'allowed_paths': ['docs/**'], 'restricted_paths': []}
+        card = {'allowed_paths': ['*']}
+        self.assertTrue(c.path_allowed('docs/example.md', task, card))
+        task['restricted_paths'].append('docs/**')
+        self.assertFalse(c.path_allowed('docs/example.md', task, card))
+        task['restricted_paths'].clear()
+        card['allowed_paths'] = ['scripts/**']
+        self.assertFalse(c.path_allowed('docs/example.md', task, card))
+        self.assertFalse(c.valid_path([]))
+        for function, args in ((c.valid_path, (['x'],)), (c.matches, (['x'], '*'))):
+            with self.assertRaises(AttributeError):
+                function(*args)
+
+
 class ReportContainmentTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

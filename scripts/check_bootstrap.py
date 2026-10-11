@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+from functools import cache
 import hashlib
 import json
 import os
@@ -1066,12 +1067,22 @@ def load_json(path: Path) -> object:
 
 
 def valid_path(path: str) -> bool:
+    return cached_valid_path(path) if type(path) is str else cached_valid_path.__wrapped__(path)
+
+
+@cache
+def cached_valid_path(path: str) -> bool:
     return bool(path) and not any(c in path for c in '\\:\x00\n\r') and (
         not path.startswith('/') and all(p not in ('', '.', '..') for p in path.split('/'))
 )
 
 
 def matches(path: str, pattern: str) -> bool:
+    return cached_matches(path, pattern) if type(path) is str and type(pattern) is str else cached_matches.__wrapped__(path, pattern)
+
+
+@cache
+def cached_matches(path: str, pattern: str) -> bool:
     if not valid_path(path) or not valid_path(pattern):
         return False
     if pattern == '*':
@@ -1120,7 +1131,7 @@ def whole_tree_safe(path: str, bootstrap_task: dict,
     return False
 
 
-def schema_errors(schema: dict, value: object) -> list[str]:
+def prepare_schema(schema):
     Draft202012Validator.check_schema(schema)
     # All current engineering schemas are self-contained: no remote resolution.
     def inspect(node):
@@ -1134,8 +1145,30 @@ def schema_errors(schema: dict, value: object) -> list[str]:
             for item in node:
                 inspect(item)
     inspect(schema)
+
+
+@cache
+def prepared_schema(content: str):
+    prepare_schema(json.loads(content))
+
+
+def schema_errors(schema: dict, value: object) -> list[str]:
+    # Cache only successful preflight by content; preserve non-JSON inputs/errors.
+    try:
+        content = json.dumps(schema)
+    except (TypeError, ValueError):
+        prepare_schema(schema)
+    else:
+        if json.loads(content) == schema:
+            prepared_schema(content)
+        else:
+            prepare_schema(schema)
     return [str(e.json_path) + ': ' + e.message for e in
         sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
+
+
+def task_schema(root):
+    return load_json(root / 'contracts/engineering/task-contract.schema.json')
 
 
 def catalog_errors(catalog: dict) -> list[str]:
@@ -1233,7 +1266,7 @@ def bound_provider_registration(root, catalog, sources, *, filename, label, bran
     if not path.exists():
         return None, []
     registered = load_json(path)
-    failures = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), registered)
+    failures = schema_errors(task_schema(root), registered)
     if not failures:
         failures += task_errors(registered, catalog, sources)
         def digest(value):
@@ -1272,7 +1305,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         task = load_json(root / 'tasks/APBRA-85-bootstrap.json')
         sources = load_json(root / 'docs/source-register.json')
         errors += schema_errors(load_json(root / 'contracts/engineering/agent-catalog.schema.json'), catalog)
-        errors += schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), task)
+        errors += schema_errors(task_schema(root), task)
         if errors:
             return errors, {}
         errors += catalog_errors(catalog)
@@ -1323,7 +1356,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         shell_task = None
         if shell_path.exists():
             shell_task = load_json(shell_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), shell_task)
+            extension_errors = schema_errors(task_schema(root), shell_task)
             if not extension_errors:
                 extension_errors += task_errors(shell_task, catalog, sources)
                 if shell_task['task_id'] != 'APBRA-129' or shell_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1341,7 +1374,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         requirements_task = None
         if requirements_path.exists():
             requirements_task = load_json(requirements_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), requirements_task)
+            extension_errors = schema_errors(task_schema(root), requirements_task)
             if not extension_errors:
                 extension_errors += task_errors(requirements_task, catalog, sources)
                 if requirements_task['task_id'] != 'APBRA-130' or requirements_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1359,7 +1392,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         knowledge_path = root / 'tasks/APBRA-131-curated-knowledge.json'
         if knowledge_path.exists():
             knowledge_task = load_json(knowledge_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), knowledge_task)
+            extension_errors = schema_errors(task_schema(root), knowledge_task)
             if not extension_errors:
                 extension_errors += task_errors(knowledge_task, catalog, sources)
                 if knowledge_task['task_id'] != 'APBRA-131' or knowledge_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1377,7 +1410,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         design_path = root / 'tasks/APBRA-132-design-plan.json'
         if design_path.exists():
             design_task = load_json(design_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), design_task)
+            extension_errors = schema_errors(task_schema(root), design_task)
             if not extension_errors:
                 extension_errors += task_errors(design_task, catalog, sources)
                 if design_task['task_id'] != 'APBRA-132' or design_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1395,7 +1428,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         generation_path = root / 'tasks/APBRA-133-powerbi-project.json'
         if generation_path.exists():
             generation_task = load_json(generation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), generation_task)
+            extension_errors = schema_errors(task_schema(root), generation_task)
             if not extension_errors:
                 extension_errors += task_errors(generation_task, catalog, sources)
                 if generation_task['task_id'] != 'APBRA-133' or generation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1413,7 +1446,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         validation_path = root / 'tasks/APBRA-134-validation.json'
         if validation_path.exists():
             validation_task = load_json(validation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), validation_task)
+            extension_errors = schema_errors(task_schema(root), validation_task)
             if not extension_errors:
                 extension_errors += task_errors(validation_task, catalog, sources)
                 if validation_task['task_id'] != 'APBRA-134' or validation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1431,7 +1464,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         governance_path = root / 'tasks/APBRA-135-release.json'
         if governance_path.exists():
             governance_task = load_json(governance_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), governance_task)
+            extension_errors = schema_errors(task_schema(root), governance_task)
             if not extension_errors:
                 extension_errors += task_errors(governance_task, catalog, sources)
                 if governance_task['task_id'] != 'APBRA-135' or governance_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1449,7 +1482,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         orchestration_path = root / 'tasks/APBRA-136-orchestration.json'
         if orchestration_path.exists():
             orchestration_task = load_json(orchestration_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), orchestration_task)
+            extension_errors = schema_errors(task_schema(root), orchestration_task)
             if not extension_errors:
                 extension_errors += task_errors(orchestration_task, catalog, sources)
                 if orchestration_task['task_id'] != 'APBRA-136' or orchestration_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1467,7 +1500,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         evaluation_path = root / 'tasks/APBRA-92-evaluation.json'
         if evaluation_path.exists():
             evaluation_task = load_json(evaluation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), evaluation_task)
+            extension_errors = schema_errors(task_schema(root), evaluation_task)
             if not extension_errors:
                 extension_errors += task_errors(evaluation_task, catalog, sources)
                 if evaluation_task['task_id'] != 'APBRA-92' or evaluation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1485,7 +1518,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         deployment_guide_path = root / 'tasks/APBRA-76-deployment-guide.json'
         if deployment_guide_path.exists():
             deployment_guide_task = load_json(deployment_guide_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), deployment_guide_task)
+            extension_errors = schema_errors(task_schema(root), deployment_guide_task)
             if not extension_errors:
                 extension_errors += task_errors(deployment_guide_task, catalog, sources)
                 if deployment_guide_task['task_id'] != 'APBRA-76' or deployment_guide_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1503,7 +1536,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         ux_path = root / 'tasks/APBRA-137-final-capstone-ux.json'
         if ux_path.exists():
             ux_task = load_json(ux_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), ux_task)
+            extension_errors = schema_errors(task_schema(root), ux_task)
             if not extension_errors:
                 extension_errors += task_errors(ux_task, catalog, sources)
                 if ux_task['task_id'] != 'APBRA-137' or ux_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1521,7 +1554,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         measure_resolution_path = root / 'tasks/APBRA-138-measure-resolution.json'
         if measure_resolution_path.exists():
             measure_resolution_task = load_json(measure_resolution_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), measure_resolution_task)
+            extension_errors = schema_errors(task_schema(root), measure_resolution_task)
             if not extension_errors:
                 extension_errors += task_errors(measure_resolution_task, catalog, sources)
                 if measure_resolution_task['task_id'] != 'APBRA-138' or measure_resolution_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1539,7 +1572,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         report_design_normalization_path = root / 'tasks/APBRA-139-report-design-normalization.json'
         if report_design_normalization_path.exists():
             report_design_normalization_task = load_json(report_design_normalization_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), report_design_normalization_task)
+            extension_errors = schema_errors(task_schema(root), report_design_normalization_task)
             if not extension_errors:
                 extension_errors += task_errors(report_design_normalization_task, catalog, sources)
                 if report_design_normalization_task['task_id'] != 'APBRA-139' or report_design_normalization_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1557,7 +1590,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         capstone_documentation_path = root / 'tasks/APBRA-140-capstone-documentation.json'
         if capstone_documentation_path.exists():
             capstone_documentation_task = load_json(capstone_documentation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), capstone_documentation_task)
+            extension_errors = schema_errors(task_schema(root), capstone_documentation_task)
             if not extension_errors:
                 extension_errors += task_errors(capstone_documentation_task, catalog, sources)
                 if capstone_documentation_task['task_id'] != 'APBRA-140' or capstone_documentation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1575,7 +1608,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         measure_contract_pipeline_path = root / 'tasks/APBRA-141-measure-contract-pipeline.json'
         if measure_contract_pipeline_path.exists():
             measure_contract_pipeline_task = load_json(measure_contract_pipeline_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), measure_contract_pipeline_task)
+            extension_errors = schema_errors(task_schema(root), measure_contract_pipeline_task)
             if not extension_errors:
                 extension_errors += task_errors(measure_contract_pipeline_task, catalog, sources)
                 if measure_contract_pipeline_task['task_id'] != 'APBRA-141' or measure_contract_pipeline_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1597,7 +1630,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         layout_repair_path = root / 'tasks/APBRA-142-layout-repair.json'
         if layout_repair_path.exists():
             layout_repair_task = load_json(layout_repair_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), layout_repair_task)
+            extension_errors = schema_errors(task_schema(root), layout_repair_task)
             if not extension_errors:
                 extension_errors += task_errors(layout_repair_task, catalog, sources)
                 if layout_repair_task['task_id'] != 'APBRA-142' or layout_repair_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1619,7 +1652,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         typed_confirmed_requirements_path = root / 'tasks/APBRA-143-typed-confirmed-requirements.json'
         if typed_confirmed_requirements_path.exists():
             typed_confirmed_requirements_task = load_json(typed_confirmed_requirements_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), typed_confirmed_requirements_task)
+            extension_errors = schema_errors(task_schema(root), typed_confirmed_requirements_task)
             if not extension_errors:
                 extension_errors += task_errors(typed_confirmed_requirements_task, catalog, sources)
                 if typed_confirmed_requirements_task['task_id'] != 'APBRA-143' or typed_confirmed_requirements_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1641,7 +1674,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         ai_native_clarification_path = root / 'tasks/APBRA-144-ai-native-iterative-clarification.json'
         if ai_native_clarification_path.exists():
             ai_native_clarification_task = load_json(ai_native_clarification_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), ai_native_clarification_task)
+            extension_errors = schema_errors(task_schema(root), ai_native_clarification_task)
             if not extension_errors:
                 extension_errors += task_errors(ai_native_clarification_task, catalog, sources)
                 if ai_native_clarification_task['task_id'] != 'APBRA-144' or ai_native_clarification_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1663,7 +1696,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         generic_time_grain_path = root / 'tasks/APBRA-145-generic-time-grain-support.json'
         if generic_time_grain_path.exists():
             generic_time_grain_task = load_json(generic_time_grain_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), generic_time_grain_task)
+            extension_errors = schema_errors(task_schema(root), generic_time_grain_task)
             if not extension_errors:
                 extension_errors += task_errors(generic_time_grain_task, catalog, sources)
                 if generic_time_grain_task['task_id'] != 'APBRA-145' or generic_time_grain_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1685,7 +1718,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         post_capstone_mvp_baseline_path = root / 'tasks/APBRA-146-post-capstone-mvp-baseline-reconciliation.json'
         if post_capstone_mvp_baseline_path.exists():
             post_capstone_mvp_baseline_task = load_json(post_capstone_mvp_baseline_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), post_capstone_mvp_baseline_task)
+            extension_errors = schema_errors(task_schema(root), post_capstone_mvp_baseline_task)
             if not extension_errors:
                 extension_errors += task_errors(post_capstone_mvp_baseline_task, catalog, sources)
                 if post_capstone_mvp_baseline_task['task_id'] != 'APBRA-146' or post_capstone_mvp_baseline_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1707,7 +1740,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         post_capstone_product_reconciliation_path = root / 'tasks/APBRA-148-post-capstone-product-reconciliation.json'
         if post_capstone_product_reconciliation_path.exists():
             post_capstone_product_reconciliation_task = load_json(post_capstone_product_reconciliation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), post_capstone_product_reconciliation_task)
+            extension_errors = schema_errors(task_schema(root), post_capstone_product_reconciliation_task)
             if not extension_errors:
                 extension_errors += task_errors(post_capstone_product_reconciliation_task, catalog, sources)
                 if post_capstone_product_reconciliation_task['task_id'] != 'APBRA-148' or post_capstone_product_reconciliation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1729,7 +1762,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         data_model_documentation_reconciliation_path = root / 'tasks/APBRA-159-data-model-documentation-reconciliation.json'
         if data_model_documentation_reconciliation_path.exists():
             data_model_documentation_reconciliation_task = load_json(data_model_documentation_reconciliation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), data_model_documentation_reconciliation_task)
+            extension_errors = schema_errors(task_schema(root), data_model_documentation_reconciliation_task)
             if not extension_errors:
                 extension_errors += task_errors(data_model_documentation_reconciliation_task, catalog, sources)
                 if data_model_documentation_reconciliation_task['task_id'] != 'APBRA-159' or data_model_documentation_reconciliation_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1751,7 +1784,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         confirmation_readiness_integrity_path = root / 'tasks/APBRA-147-confirmation-readiness-integrity.json'
         if confirmation_readiness_integrity_path.exists():
             confirmation_readiness_integrity_task = load_json(confirmation_readiness_integrity_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), confirmation_readiness_integrity_task)
+            extension_errors = schema_errors(task_schema(root), confirmation_readiness_integrity_task)
             if not extension_errors:
                 extension_errors += task_errors(confirmation_readiness_integrity_task, catalog, sources)
                 if confirmation_readiness_integrity_task['task_id'] != 'APBRA-147' or confirmation_readiness_integrity_task['assigned_agent'] != 'APBRA-DEVOPS':
@@ -1773,7 +1806,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         invited_private_case_foundation_path = root / 'tasks/APBRA-162-invited-private-case-foundation.json'
         if invited_private_case_foundation_path.exists():
             invited_private_case_foundation_task = load_json(invited_private_case_foundation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), invited_private_case_foundation_task)
+            extension_errors = schema_errors(task_schema(root), invited_private_case_foundation_task)
             if not extension_errors:
                 extension_errors += task_errors(invited_private_case_foundation_task, catalog, sources)
                 canonical_task = json.dumps(invited_private_case_foundation_task, sort_keys=True, separators=(',', ':')).encode()
@@ -1817,7 +1850,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         durable_conversation_evidence_acceptance_path = root / 'tasks/APBRA-163-durable-conversation-evidence-acceptance.json'
         if durable_conversation_evidence_acceptance_path.exists():
             durable_conversation_evidence_acceptance_task = load_json(durable_conversation_evidence_acceptance_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), durable_conversation_evidence_acceptance_task)
+            extension_errors = schema_errors(task_schema(root), durable_conversation_evidence_acceptance_task)
             if not extension_errors:
                 extension_errors += task_errors(durable_conversation_evidence_acceptance_task, catalog, sources)
                 canonical_task = json.dumps(durable_conversation_evidence_acceptance_task, sort_keys=True, separators=(',', ':')).encode()
@@ -1869,7 +1902,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         protected_generation_output_history_path = root / 'tasks/APBRA-164-protected-generation-output-history.json'
         if protected_generation_output_history_path.exists():
             protected_generation_output_history_task = load_json(protected_generation_output_history_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), protected_generation_output_history_task)
+            extension_errors = schema_errors(task_schema(root), protected_generation_output_history_task)
             if not extension_errors:
                 extension_errors += task_errors(protected_generation_output_history_task, catalog, sources)
                 canonical_task = json.dumps(protected_generation_output_history_task, sort_keys=True, separators=(',', ':')).encode()
@@ -1911,7 +1944,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         business_friendly_ux_application_shell_path = root / 'tasks/APBRA-169-business-friendly-ux-application-shell.json'
         if business_friendly_ux_application_shell_path.exists():
             business_friendly_ux_application_shell_task = load_json(business_friendly_ux_application_shell_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), business_friendly_ux_application_shell_task)
+            extension_errors = schema_errors(task_schema(root), business_friendly_ux_application_shell_task)
             if not extension_errors:
                 extension_errors += task_errors(business_friendly_ux_application_shell_task, catalog, sources)
                 canonical_task = json.dumps(business_friendly_ux_application_shell_task, sort_keys=True, separators=(',', ':')).encode()
@@ -1953,7 +1986,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         professional_saas_experience_visual_system_path = root / 'tasks/APBRA-170-professional-saas-experience-visual-system.json'
         if professional_saas_experience_visual_system_path.exists():
             professional_saas_experience_visual_system_task = load_json(professional_saas_experience_visual_system_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), professional_saas_experience_visual_system_task)
+            extension_errors = schema_errors(task_schema(root), professional_saas_experience_visual_system_task)
             if not extension_errors:
                 extension_errors += task_errors(professional_saas_experience_visual_system_task, catalog, sources)
                 canonical_task = json.dumps(professional_saas_experience_visual_system_task, sort_keys=True, separators=(',', ':')).encode()
@@ -1988,7 +2021,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         business_user_intelligent_generation_path = root / 'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json'
         if business_user_intelligent_generation_path.exists():
             business_user_intelligent_generation_task = load_json(business_user_intelligent_generation_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), business_user_intelligent_generation_task)
+            extension_errors = schema_errors(task_schema(root), business_user_intelligent_generation_task)
             if not extension_errors:
                 extension_errors += task_errors(business_user_intelligent_generation_task, catalog, sources)
                 canonical_task = json.dumps(business_user_intelligent_generation_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2040,7 +2073,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         model_led_flexible_delivery_path = root / 'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json'
         if model_led_flexible_delivery_path.exists():
             model_led_flexible_delivery_task = load_json(model_led_flexible_delivery_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), model_led_flexible_delivery_task)
+            extension_errors = schema_errors(task_schema(root), model_led_flexible_delivery_task)
             if not extension_errors:
                 extension_errors += task_errors(model_led_flexible_delivery_task, catalog, sources)
                 canonical_task = json.dumps(model_led_flexible_delivery_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2096,7 +2129,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         deployment_portability_entitlement_docs_path = root / 'tasks/APBRA-175-deployment-portability-entitlement-docs.json'
         if deployment_portability_entitlement_docs_path.exists():
             deployment_portability_entitlement_docs_task = load_json(deployment_portability_entitlement_docs_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), deployment_portability_entitlement_docs_task)
+            extension_errors = schema_errors(task_schema(root), deployment_portability_entitlement_docs_task)
             if not extension_errors:
                 extension_errors += task_errors(deployment_portability_entitlement_docs_task, catalog, sources)
                 canonical_task = json.dumps(deployment_portability_entitlement_docs_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2139,7 +2172,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         owner_onboarding_identity_docs_path = root / 'tasks/APBRA-176-owner-onboarding-identity-docs.json'
         if owner_onboarding_identity_docs_path.exists():
             owner_onboarding_identity_docs_task = load_json(owner_onboarding_identity_docs_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), owner_onboarding_identity_docs_task)
+            extension_errors = schema_errors(task_schema(root), owner_onboarding_identity_docs_task)
             if not extension_errors:
                 extension_errors += task_errors(owner_onboarding_identity_docs_task, catalog, sources)
                 canonical_task = json.dumps(owner_onboarding_identity_docs_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2182,7 +2215,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         candidate_source_safety_path = root / 'tasks/APBRA-108-candidate-source-safety.json'
         if candidate_source_safety_path.exists():
             candidate_source_safety_task = load_json(candidate_source_safety_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), candidate_source_safety_task)
+            extension_errors = schema_errors(task_schema(root), candidate_source_safety_task)
             if not extension_errors:
                 extension_errors += task_errors(candidate_source_safety_task, catalog, sources)
                 canonical_task = json.dumps(candidate_source_safety_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2224,7 +2257,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         local_rekey_path = root / 'tasks/APBRA-160-local-rekey.json'
         if local_rekey_path.exists():
             local_rekey_task = load_json(local_rekey_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), local_rekey_task)
+            extension_errors = schema_errors(task_schema(root), local_rekey_task)
             if not extension_errors:
                 extension_errors += task_errors(local_rekey_task, catalog, sources)
                 if hashlib.sha256(json.dumps(local_rekey_task, sort_keys=True, separators=(',', ':')).encode()).hexdigest() != LOCAL_RECOVERY_TASK_SHA256:
@@ -2276,7 +2309,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if foundry_schema_path.exists():
             foundry_schema_task = load_json(foundry_schema_path)
             extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                task_schema(root),
             foundry_schema_task,
         )
             if not extension_errors:
@@ -2338,7 +2371,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if demo_ux_path.exists():
             demo_ux_task = load_json(demo_ux_path)
             extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                task_schema(root),
             demo_ux_task,
         )
             if not extension_errors:
@@ -2408,7 +2441,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if private_content_storage_path.exists():
             private_content_storage_task = load_json(private_content_storage_path)
             extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                task_schema(root),
             private_content_storage_task,
         )
             if not extension_errors:
@@ -2527,7 +2560,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if current_state_docs_path.exists():
             current_state_docs_task = load_json(current_state_docs_path)
             extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                task_schema(root),
             current_state_docs_task,
         )
             if not extension_errors:
@@ -2622,7 +2655,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if hosted_web_release_path.exists():
             hosted_web_release_task = load_json(hosted_web_release_path)
             extension_errors = schema_errors(
-                load_json(root / 'contracts/engineering/task-contract.schema.json'),
+                task_schema(root),
             hosted_web_release_task,
         )
             if not extension_errors:
@@ -2703,7 +2736,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         provider_neutral_sso_path = root / 'tasks/APBRA-172-provider-neutral-sso.json'
         if provider_neutral_sso_path.exists():
             provider_neutral_sso_task = load_json(provider_neutral_sso_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), provider_neutral_sso_task)
+            extension_errors = schema_errors(task_schema(root), provider_neutral_sso_task)
             if not extension_errors:
                 extension_errors += task_errors(provider_neutral_sso_task, catalog, sources)
                 canonical_task = json.dumps(provider_neutral_sso_task, sort_keys=True, separators=(',', ':')).encode()
@@ -2741,7 +2774,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         company_lifecycle_path = root / 'tasks/APBRA-151-company-lifecycle.json'
         if company_lifecycle_path.exists():
             company_lifecycle_task = load_json(company_lifecycle_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), company_lifecycle_task)
+            extension_errors = schema_errors(task_schema(root), company_lifecycle_task)
             if not extension_errors:
                 extension_errors += task_errors(company_lifecycle_task, catalog, sources)
                 canonical_task = json.dumps(company_lifecycle_task, sort_keys=True, separators=(',', ':')).encode()
