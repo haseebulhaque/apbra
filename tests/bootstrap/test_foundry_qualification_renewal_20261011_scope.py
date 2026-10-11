@@ -152,7 +152,6 @@ class FoundryQualificationOct11ScopeTests(unittest.TestCase):
             for root in roots:
                 root.mkdir()
                 self.copy(root)
-                (root / TASK).unlink()
             original = json.loads((ROOT / 'tasks/APBRA-160-foundry-qualification-renewal.json').read_text())
             for mutation in [None, 'paths', 'base', 'gate']:
                 changed = copy.deepcopy(original)
@@ -170,6 +169,57 @@ class FoundryQualificationOct11ScopeTests(unittest.TestCase):
                     after = c.check(roots[1], **kwargs)[0]
                     self.assertEqual(after, before)
                     self.assertEqual(bool(before), mutation is not None)
+
+
+    def test_original_branch_errors_preserved_with_dated_task_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            outer = Path(directory)
+            for name in ['check_bootstrap.py', 'check_foundry_qualification_renewal.py']:
+                (outer / name).write_bytes(subprocess.check_output(
+                    ['git', 'show', BASE + ':scripts/' + name], cwd=ROOT))
+            spec = importlib.util.spec_from_file_location('original_oct11_checker', outer / 'check_bootstrap.py')
+            old = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(old)
+            roots = [outer / 'old', outer / 'new']
+            filename = 'tasks/APBRA-160-foundry-qualification.json'
+            for root in roots:
+                root.mkdir()
+                self.copy(root)
+                (root / 'tasks/APBRA-160-foundry-qualification-renewal.json').unlink()
+            accepted = json.loads((ROOT / filename).read_text())
+            for mutation in [None, 'scope', 'identity', 'gate', 'sources']:
+                changed = copy.deepcopy(accepted)
+                if mutation == 'scope':
+                    changed['allowed_paths'].append('apps/api/src/apbra_api/unregistered.py')
+                elif mutation == 'identity':
+                    changed['base_commit'] = '0' * 40
+                elif mutation == 'gate':
+                    changed['effective_release'] += ' broader authority'
+                elif mutation == 'sources':
+                    changed['source_ids'] = ['apbra-160-current-six-stage-direction']
+                for root in roots:
+                    (root / filename).write_text(json.dumps(changed))
+                kwargs = {'active_task_id': 'APBRA-160',
+                          'active_branch': c.FOUNDRY_QUALIFICATION_BRANCH,
+                          'changed_paths': c.FOUNDRY_QUALIFICATION_PATHS}
+                before, after = old.check(roots[0], **kwargs)[0], c.check(roots[1], **kwargs)[0]
+                self.assertEqual(after, before)
+                self.assertEqual(bool(before), mutation is not None)
+
+    def test_mismatched_history_blocks_new_stage_even_after_old_task_pin_recomputed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.copy(root)
+            filename = 'tasks/APBRA-160-foundry-qualification.json'
+            changed = json.loads((root / filename).read_text())
+            changed['objective'] += ' rewritten history'
+            (root / filename).write_text(json.dumps(changed))
+            with patch.object(c, 'FOUNDRY_QUALIFICATION_TASK_SHA256', h['digest'](changed)), \
+                    patch.dict(h, {'ORIGINAL_TASK_SHA': h['digest'](changed)}):
+                errors = self.check(root)
+            self.assertIn('Unknown or invalid active task authority: APBRA-160', errors)
+            self.assertIn('File outside active task scope: apps/api/src/apbra_api/config.py', errors)
+            self.assertIn('File outside active task scope: apps/api/tests/test_model_provider.py', errors)
 
 
 if __name__ == '__main__':
