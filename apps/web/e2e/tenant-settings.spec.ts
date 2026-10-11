@@ -1,4 +1,5 @@
-import {expect,test,type Page} from '@playwright/test';
+import {defaultTenantSettings} from '../src/tenant';
+import {expect,test,type Page,type Route} from '@playwright/test';
 
 async function setAppearance(page:Page,mode:string){const button=page.getByRole('button',{name:mode==='system'?'Use system appearance':mode==='light'?'Light appearance':'Dark appearance',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:/^Account menu for /}).click();await button.click();const menu=page.getByRole('menu',{name:'Account',exact:true});if(await menu.isVisible()){await page.keyboard.press('Escape');await expect(menu).toHaveCount(0)}}
 
@@ -455,4 +456,37 @@ test('a Foundry profile draft uses Entra disclosure and cannot reuse the legacy 
   await expect(admin.getByRole('button',{name:/^(Configure credential|Replace \/ rotate credential)$/})).toHaveCount(0);
   await admin.getByRole('button',{name:'Cancel section changes'}).click();
   await expect(admin.getByRole('combobox',{name:'Qualified model profile'})).not.toHaveValue('synthetic-foundry-profile');
+});
+
+async function syntheticSettingsDialogFixture(page:Page){
+ const profile={profile_id:'synthetic',protocol:'OPENAI_CHAT_COMPATIBLE',endpoint:'https://example.invalid',model_or_deployment:'synthetic',api_version:'v1',region:'synthetic',prompt_version:'v1',configuration_id:'synthetic',capabilities:{structured_output:true,vision:false},max_calls_per_operation:1,max_input_characters:1000,max_output_tokens:128,time_budget_seconds:30,request_timeout_seconds:10,retry_limit:0};
+ const settings={clarification_enabled:false,max_clarification_rounds_per_cycle:3,max_clarification_rounds_overall:12,expert_escalation_enabled:true,automatic_generation_enabled:false,invitation_ttl_days:7,upload_policy:{data_extensions:['CSV'],reference_extensions:['PNG'],max_file_bytes:5000000,max_files_per_selection:8,max_data_items_per_report:20,max_reference_items_per_report:20},clarification_policy:{max_questions_per_round:5,max_answer_characters:2000},generation_policy:{organisation:structuredClone(defaultTenantSettings.organisation),branding:structuredClone(defaultTenantSettings.branding),governance:{...defaultTenantSettings.governance,maxVisualsPerPage:6},generation:structuredClone(defaultTenantSettings.generation)},provider_profile:profile,delivery_guide_policy:{enabled:true,include_handover_instructions:true},conventions:{report_naming:'Synthetic',semantic_modelling:'Synthetic',accessibility:'Synthetic',terminology:{}}};
+ const version=(n:number)=>({id:'v'+n,version:n,digest:'synthetic',validation_status:'PASS',applicability:'COMPANY_NEW_OR_REVALIDATED_OPERATIONS',settings:structuredClone(settings),credential:{status:'CONFIGURED',maskedValue:'***',updatedAt:null,canReplace:true,canRotate:true}});
+ const state:{held?:Route;posts:string[]}={posts:[]};
+ await page.route('**/api/**',async(route:Route)=>{
+  const r=route.request(),p=new URL(r.url()).pathname;let body:any={items:[]};
+  if(r.method()!=='GET'){if(r.method()==='POST'&&['/api/tenant-settings/restore','/api/tenant-settings/credential'].includes(p)){state.posts.push(p);state.held=route;return}await route.abort();return}
+  if(p==='/api/auth/session')body={authenticated:true,identity:{id:'i',display_name:'Synthetic Owner'},actor:{identity_id:'i',membership_id:'owner',company_id:'c',display_name:'Synthetic Owner',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
+  else if(p==='/api/auth/providers')body={items:[],development_identities:[]};
+  else if(p==='/api/workspace/branding')body={version:2,primary:settings.generation_policy.branding.primary,accent:settings.generation_policy.branding.accent};
+  else if(p==='/api/tenant-settings')body=version(2);
+  else if(p==='/api/tenant-settings/qualified-profiles')body={items:[profile]};
+  else if(p==='/api/tenant-settings/history')body={items:[{id:'h1',version:1,created_at:'2026-10-11T00:00:00Z',changed_keys:[],safe_changes:{},restored_from_version_id:null,current:false,validation_status:'PASS'}]};
+  await route.fulfill({json:body});
+ });
+ await page.goto('/');await page.getByRole('button',{name:'Administration',exact:true}).click();await expect(page.getByLabel('Tenant administration')).toContainText('Current effective version 2');
+ return{state,version};
+}
+
+for(const operation of ['restore','credential'] as const)for(const outcome of ['success','failure'] as const)test(`pending ${operation} dialog locks dismissal and competing drafts until ${outcome}`,async({page})=>{
+ const {state,version}=await syntheticSettingsDialogFixture(page),admin=page.getByLabel('Tenant administration');
+ await admin.getByRole('button',{name:/Branding & organisation/}).click();const branding=admin.getByLabel('Display name',{exact:true});await branding.fill('Preserved synthetic branding draft');await admin.getByRole('button',{name:/AI & models/}).click();
+ let opener:ReturnType<Page['getByRole']>;
+ if(operation==='restore'){await admin.getByText('Settings history',{exact:true}).click();opener=admin.getByRole('button',{name:'Review restore',exact:true});await opener.focus();await page.keyboard.press('Enter')}
+ else{opener=admin.getByRole('button',{name:'Replace / rotate credential'});await opener.focus();await page.keyboard.press('Enter');await page.getByLabel('New credential').fill('synthetic-noncredential-fixture')}
+ const dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:operation==='restore'?'Restore as new version':'Replace credential',exact:true}).click();await expect.poll(()=>Boolean(state.held)).toBe(true);await expect(admin).toHaveAttribute('aria-busy','true');await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeDisabled();await expect(branding).toBeDisabled();await expect(admin.getByRole('button',{name:/Branding & organisation/})).toBeDisabled();if(operation==='credential')await expect(dialog.getByLabel('New credential')).toBeDisabled();
+ await page.keyboard.press('Escape');await expect(dialog).toBeVisible();for(const key of ['Tab','Shift+Tab']){await page.keyboard.press(key);expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true)}expect(state.posts).toEqual(['/api/tenant-settings/'+operation]);
+ if(outcome==='success'){await state.held!.fulfill({json:version(3)});await expect(dialog).toHaveCount(0);await expect(admin).toHaveAttribute('aria-busy','false');await expect(admin).toContainText('Current effective version 3');await admin.getByRole('button',{name:/Branding & organisation/}).click();await expect(branding).toBeEnabled();await expect(branding).toHaveValue(operation==='credential'?'Preserved synthetic branding draft':defaultTenantSettings.organisation.displayName)}
+ else{await state.held!.fulfill({status:400,json:{error:{code:'SYNTHETIC_REJECTED',message:'Synthetic operation rejected; no settings changed.'}}});await expect(admin).toHaveAttribute('aria-busy','false');await expect(admin).toContainText('Synthetic operation rejected; no settings changed.');await expect(dialog.getByRole('button',{name:'Cancel',exact:true})).toBeEnabled();if(operation==='credential')await expect(dialog.getByLabel('New credential')).toHaveValue('');await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(opener).toBeFocused();await admin.getByRole('button',{name:/Branding & organisation/}).click();await expect(branding).toBeEnabled();await expect(branding).toHaveValue('Preserved synthetic branding draft');await expect(admin).toContainText('Current effective version 2')}
+ expect(state.posts).toEqual(['/api/tenant-settings/'+operation]);await expect(page.locator('body')).not.toContainText('synthetic-noncredential-fixture');
 });
