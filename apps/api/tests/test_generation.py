@@ -403,9 +403,29 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             pages_root = f"{original_design['projectName']}.Report/definition/pages"
             page_order = json.loads(archive.read(f"{pages_root}/pages.json"))["pageOrder"]
             assert len(page_order) == len(original_design["pages"])
-            measure_bindings = {
-                item["id"]: f"Metrics.{item['name']}" for item in original_design["measures"]
-            }
+            measure_bindings = {}
+            table_root = f"{original_design['projectName']}.SemanticModel/definition/tables/"
+            for measure in original_design["measures"]:
+                table, column = measure["field"].split(".")
+                expression = f"{measure['aggregation']}({table}[{column}])"
+                quoted_name = "'" + measure["name"].replace("'", "''") + "'"
+                declarations = []
+                for name in archive.namelist():
+                    if name.startswith(table_root) and name.endswith(".tmdl"):
+                        lines = archive.read(name).decode().splitlines()
+                        if any(f"\tmeasure {label} = {expression}" in lines
+                               for label in (measure["name"], quoted_name)):
+                            declarations.append(Path(name).stem)
+                assert len(declarations) == 1
+                home = declarations[0]
+                if overview == "Shared-name draft":
+                    assert home.startswith("__APBRA_Measures_")
+                    assert "\tcolumn Visits" in archive.read(
+                        table_root + "Metrics.tmdl"
+                    ).decode().splitlines()
+                else:
+                    assert home == "Metrics"
+                measure_bindings[measure["id"]] = f"{home}.{measure['name']}"
             compiled_types = {"card": "cardVisual", "bar": "barChart", "column": "columnChart",
                               "line": "lineChart", "table": "tableEx", "slicer": "slicer"}
             for page_id, planned_page in zip(page_order, original_design["pages"], strict=True):
