@@ -1313,9 +1313,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         )
         workflow_text = workflow_bytes.decode('utf-8')
         if historical_capacity_fixture:
-            # The original bytes are digest-bound above and again in APBRA-163's
-            # scope check below. Validate every other control through the current
-            # checker after normalizing only this historical timeout in memory.
+            # Validate digest-bound history with only the historical timeout normalized.
             workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
         errors += workflow_errors(workflow_text)
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
@@ -2268,6 +2266,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += extension_errors
         renewal, failures = r['bind'](root, catalog, sources, bound_provider_registration)
         errors += failures
+        renewal11, e = r['bind11'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2812,9 +2812,6 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (data_model_documentation_reconciliation_task, DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS),
             (confirmation_readiness_integrity_task, CONFIRMATION_READINESS_INTEGRITY_PATHS),
         )
-        # Each task object has passed the checks above, or is None if its
-        # registration is missing/invalid. Future bound tasks join this ordered
-        # sequence without their own whole-tree admission clause or new-file list.
         bound_authorities = (
             (invited_private_case_foundation_task, INVITED_PRIVATE_CASE_FOUNDATION_PATHS),
             (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
@@ -2838,6 +2835,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (foundry_host_task, FOUNDRY_HOST_PATHS),
             (foundry_qualification_task, FOUNDRY_QUALIFICATION_PATHS),
             (renewal, r['P']),
+            (renewal11, r['N_PATHS']),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2847,6 +2845,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else renewal11 if active_branch == r['N_BRANCH']
                 else renewal if active_branch in {r['B'], r['R']}
                 else foundry_qualification_task if active_branch in {FOUNDRY_QUALIFICATION_BRANCH, FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH}
                 else foundry_host_task if active_branch in {FOUNDRY_HOST_BRANCH, FOUNDRY_HOST_REGISTRATION_BRANCH}
@@ -2980,7 +2979,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     active_branch == FOUNDRY_QUALIFICATION_BRANCH and
                     changed_paths.intersection(FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry qualification implementation cannot change governance files')
-            errors += r['errors'](active_task_id, active_branch, changed_paths)
+            errors += r['errors'](active_task_id, active_branch, changed_paths) + r['errors11'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3132,7 +3131,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-108 implementation branch cannot change governance registration files')
             if (active_task_id == 'APBRA-160' and
                     changed_paths.intersection(FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
-                    changed_paths.intersection(FOUNDRY_SCHEMA_PATHS)):
+                    changed_paths.intersection(FOUNDRY_SCHEMA_PATHS) and
+                    not (renewal11 is not None and active_branch == r['N_BRANCH'] and
+                         changed_paths == r['N_PATHS'])):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
