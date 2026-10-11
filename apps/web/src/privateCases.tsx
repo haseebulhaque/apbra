@@ -141,9 +141,14 @@ export function WorkspaceAccountMenu({name,role,busy,onProfile,onSignOut,appeara
   };
   const appearanceKey=(event:React.KeyboardEvent)=>{
     if(event.key!=='Tab')return;
-    const buttons=Array.from(container.current?.querySelectorAll<HTMLButtonElement>('.account-mobile-appearance button')??[]).filter(button=>button.getClientRects().length>0);
-    if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();close(true)}
-    else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();profile.current?.focus()}
+    const buttons=Array.from(container.current?.querySelectorAll<HTMLButtonElement>('.account-mobile-appearance button')??[]).filter(button=>!button.disabled&&button.getClientRects().length>0&&getComputedStyle(button).visibility!=='hidden');
+    const current=buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if(current<0)return;
+    event.preventDefault();
+    const next=current+(event.shiftKey?-1:1);
+    if(next<0)close(true);
+    else if(next>=buttons.length)profile.current?.focus();
+    else buttons[next].focus();
   };
   return <div className="workspace-account" ref={container} onKeyDown={event=>{if(event.key==='Escape'&&open){event.preventDefault();event.stopPropagation();close(true)}}} onBlur={event=>{if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget as Node))setOpen(false)}}><button ref={trigger} className="subtle account-trigger" type="button" aria-label={`Account menu for ${name}`} title={`Account menu for ${name}`} aria-haspopup="menu" aria-expanded={open} aria-controls="workspace-account-menu" onClick={()=>{initialFocus.current='first';setOpen(value=>!value)}} onKeyDown={event=>{if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();initialFocus.current=event.key==='ArrowUp'?'last':'first';if(open)(initialFocus.current==='last'&&!signOut.current?.disabled?signOut:profile).current?.focus();else setOpen(true)}else if(event.key==='Escape'&&open){event.preventDefault();close(true)}}}><span className="account-avatar" aria-hidden="true">{name.trim().slice(0,1).toUpperCase()}</span></button>{open&&<div className="account-popover"><div className="account-identity"><span className="account-avatar" aria-hidden="true">{name.trim().slice(0,1).toUpperCase()}</span><div><strong>{name}</strong><span>{role.replaceAll('_',' ').toLowerCase()}</span></div></div>{appearance&&<div className="account-mobile-appearance" onKeyDown={appearanceKey}><span>Appearance</span><AppearanceControls value={appearance.value} onChange={appearance.onChange}/></div>}<div id="workspace-account-menu" role="menu" aria-label="Account" onKeyDown={menuKey}><button ref={profile} type="button" role="menuitem" tabIndex={-1} className="subtle" onClick={()=>{close();onProfile()}}><WorkspaceIcon name="profile"/>My profile</button><button ref={signOut} type="button" role="menuitem" tabIndex={-1} className="subtle" disabled={busy} onClick={()=>{close();onSignOut()}}><WorkspaceIcon name="signout"/>Sign out</button></div></div>}</div>;
 }
