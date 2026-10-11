@@ -21,6 +21,7 @@ import yaml
 
 r=runpy.run_path(str(Path(__file__).with_name("check_foundry_qualification_renewal.py")))
 g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.py")))
+a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 
@@ -1098,9 +1099,9 @@ def path_allowed(path: str, task: dict, card: dict) -> bool:
 
 
 def whole_tree_safe(path: str, bootstrap_task: dict,
-                legacy_authorities: tuple[tuple[dict | None, set[str]], ...],
-                bound_authorities: tuple[tuple[dict | None, set[str]], ...],
-                card: dict) -> bool:
+    legacy_authorities: tuple[tuple[dict | None, set[str]], ...],
+    bound_authorities: tuple[tuple[dict | None, set[str]], ...],
+    card: dict) -> bool:
     """Preserve legacy coverage; admit newer files through their first bound scope.
 
     Existing Capstone tasks may independently cover the same legacy file. New
@@ -1110,10 +1111,10 @@ def whole_tree_safe(path: str, bootstrap_task: dict,
     if path_allowed(path, bootstrap_task, card):
         return True
     if any(registered is not None and path_allowed(path, registered, card)
-       for registered, _ in legacy_authorities):
+    for registered, _ in legacy_authorities):
         return True
     if any(matches(path, pattern) for _, scope in legacy_authorities
-       for pattern in scope):
+    for pattern in scope):
         return False
     for registered, expected_scope in bound_authorities:
         if any(matches(path, pattern) for pattern in expected_scope):
@@ -1136,7 +1137,7 @@ def schema_errors(schema: dict, value: object) -> list[str]:
                 inspect(item)
     inspect(schema)
     return [str(e.json_path) + ': ' + e.message for e in
-        sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
+    sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
 
 
 def catalog_errors(catalog: dict) -> list[str]:
@@ -1220,15 +1221,15 @@ def workflow_errors(text: str) -> list[str]:
 def repo_files(root: Path) -> list[Path]:
     if (root / '.git').exists():
         result = subprocess.run(['git', '-C', str(root), 'ls-files', '-z'], check=True,
-                            capture_output=True, timeout=10)
+    capture_output=True, timeout=10)
         return [root / p for p in result.stdout.decode().split('\x00') if p]
     ignored = {'.git', '.venv', '__pycache__', 'artifacts'}
     return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and not ignored.intersection(p.relative_to(root).parts))
 
 
 def bound_provider_registration(root, catalog, sources, *, filename, label, branch,
-                            base, paths, task_sha, gates, source_bindings,
-                            sources_sha, count_label):
+    base, paths, task_sha, gates, source_bindings,
+    sources_sha, count_label):
     """Equivalent finite provider/host registrations; retain their exact errors."""
     path = root / 'tasks' / filename
     if not path.exists():
@@ -1263,8 +1264,8 @@ def bound_provider_registration(root, catalog, sources, *, filename, label, bran
 
 
 def check(root: Path = ROOT, *, active_task_id: str | None = None,
-      active_branch: str | None = None,
-      changed_paths: set[str] | None = None) -> tuple[list[str], dict]:
+    active_branch: str | None = None,
+    changed_paths: set[str] | None = None) -> tuple[list[str], dict]:
     errors = [f'Missing required file: {name}' for name in REQUIRED if not (root / name).is_file()]
     if errors:
         return errors, {}
@@ -1280,14 +1281,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += task_errors(task, catalog, sources)
         current_rows = sources['sources']
         if hashlib.sha256(json.dumps(
-        current_rows[:CURRENT_DEMO_HISTORICAL_SOURCE_COUNT],
+    current_rows[:CURRENT_DEMO_HISTORICAL_SOURCE_COUNT],
             sort_keys=True, separators=(',', ':'),
     ).encode()).hexdigest() != CURRENT_DEMO_HISTORICAL_SOURCES_SHA256:
             errors.append('APBRA-160 current-demo historical source provenance changed')
         appended_rows = current_rows[CURRENT_DEMO_HISTORICAL_SOURCE_COUNT:]
         if (len(appended_rows) != len(CURRENT_DEMO_SOURCES) or
                 [row.get('id') for row in appended_rows] !=
-            [row[0] for row in CURRENT_DEMO_SOURCES]):
+    [row[0] for row in CURRENT_DEMO_SOURCES]):
             errors.append('APBRA-160 current-demo source block is not exact and append-only')
         for source_id, content_id, version, expected_sha in CURRENT_DEMO_SOURCES:
             matches = [row for row in current_rows if row.get('id') == source_id]
@@ -1297,21 +1298,21 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             row = matches[0]
             if (row.get('content_id'), row.get('version'), row.get('status')) != (
                 content_id, version, 'ACCEPTED',
-        ):
+    ):
                 errors.append('APBRA-160 current-demo source binding differs: ' + source_id)
             if hashlib.sha256(json.dumps(
                 row, sort_keys=True, separators=(',', ':'),
-        ).encode()).hexdigest() != expected_sha:
+    ).encode()).hexdigest() != expected_sha:
                 errors.append('APBRA-160 current-demo source differs from provenance: ' + source_id)
         workflow_path = root / '.github/workflows/bootstrap.yml'
         workflow_bytes = workflow_path.read_bytes()
         historical_capacity_fixture = (
             active_task_id == 'APBRA-163' and
             active_branch == 'agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acceptance' and
-        changed_paths == DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS and
-        not workflow_path.is_symlink() and
-        hashlib.sha256(workflow_bytes).hexdigest() ==
-        DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256
+    changed_paths == DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS and
+    not workflow_path.is_symlink() and
+    hashlib.sha256(workflow_bytes).hexdigest() ==
+    DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256
     )
         workflow_text = workflow_bytes.decode('utf-8')
         if historical_capacity_fixture:
@@ -2008,9 +2009,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if (business_user_intelligent_generation_task['task_mode'], business_user_intelligent_generation_task['readiness'], business_user_intelligent_generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('Business-user intelligent generation requires issued implementation acceptance')
                 if business_user_intelligent_generation_task['source_ids'] != [
-                    BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID,
-                    BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID,
-                    BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID]:
+    BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID,
+    BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID,
+    BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Business-user intelligent generation requires its specific accepted source')
                 source_map = {source['id']: source for source in sources['sources']}
                 package_source = source_map.get(BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID)
@@ -2055,16 +2056,16 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if model_led_flexible_delivery_task['base_commit'] != 'b2fba8d507262cf912e161b491549ab0d5680b0d':
                     extension_errors.append('Stale APBRA-174 base')
                 if set(model_led_flexible_delivery_task['allowed_paths']) != (
-                    MODEL_LED_FLEXIBLE_DELIVERY_PATHS | MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS):
+    MODEL_LED_FLEXIBLE_DELIVERY_PATHS | MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS):
                     extension_errors.append('Unexpected APBRA-174 implementation scope')
                 if (model_led_flexible_delivery_task['task_mode'], model_led_flexible_delivery_task['readiness'],
                         model_led_flexible_delivery_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('APBRA-174 requires issued implementation acceptance')
                 if model_led_flexible_delivery_task['source_ids'] != [
-                MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID,
-                MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID,
-                MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID,
-            ]:
+    MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID,
+    MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID,
+    MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID,
+    ]:
                     extension_errors.append('APBRA-174 requires its specific accepted sources')
                 package_source = next((source for source in sources['sources']
                                        if source['id'] == MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID), None)
@@ -2116,13 +2117,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         deployment_portability_entitlement_docs_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('APBRA-175 requires issued documentation-only acceptance')
                 if deployment_portability_entitlement_docs_task['source_ids'] != [
-                DEPLOYMENT_PORTABILITY_SOURCE_ID, ENTITLEMENT_ARCHITECTURE_SOURCE_ID,
-            ]:
+    DEPLOYMENT_PORTABILITY_SOURCE_ID, ENTITLEMENT_ARCHITECTURE_SOURCE_ID,
+    ]:
                     extension_errors.append('APBRA-175 requires its two accepted sources')
                 for source_id, content_id, expected_sha in (
                     (DEPLOYMENT_PORTABILITY_SOURCE_ID, '9568258', DEPLOYMENT_PORTABILITY_SOURCE_SHA256),
                     (ENTITLEMENT_ARCHITECTURE_SOURCE_ID, '9535525', ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256),
-            ):
+    ):
                     package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
                     if package_source is None:
                         extension_errors.append('APBRA-175 accepted source is missing: ' + source_id)
@@ -2159,13 +2160,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         owner_onboarding_identity_docs_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('APBRA-176 requires issued documentation-only acceptance')
                 if owner_onboarding_identity_docs_task['source_ids'] != [
-                OWNER_ONBOARDING_IDENTITY_SOURCE_ID, OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID,
-            ]:
+    OWNER_ONBOARDING_IDENTITY_SOURCE_ID, OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID,
+    ]:
                     extension_errors.append('APBRA-176 requires its two accepted sources')
                 for source_id, content_id, version, expected_sha in (
                     (OWNER_ONBOARDING_IDENTITY_SOURCE_ID, '4030847', 4, OWNER_ONBOARDING_IDENTITY_SOURCE_SHA256),
                     (OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID, '3932362', 7, OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256),
-            ):
+    ):
                     package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
                     if package_source is None:
                         extension_errors.append('APBRA-176 accepted source is missing: ' + source_id)
@@ -2248,22 +2249,22 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         provider_retrieval_task, extension_errors = bound_provider_registration(
             root, catalog, sources, filename='APBRA-160-provider-retrieval.json', label='provider retrieval',
             branch=PROVIDER_RETRIEVAL_BRANCH, base='e3f782535e41bef1034222227ef706e1cf0bfac1', paths=PROVIDER_RETRIEVAL_PATHS,
-        task_sha=PROVIDER_RETRIEVAL_TASK_SHA256, gates=PROVIDER_RETRIEVAL_GATE_SHA256,
-        source_bindings=PROVIDER_RETRIEVAL_SOURCES, sources_sha=PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256,
+    task_sha=PROVIDER_RETRIEVAL_TASK_SHA256, gates=PROVIDER_RETRIEVAL_GATE_SHA256,
+    source_bindings=PROVIDER_RETRIEVAL_SOURCES, sources_sha=PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256,
             count_label='29')
         errors += extension_errors
         foundry_host_task, extension_errors = bound_provider_registration(
             root, catalog, sources, filename='APBRA-160-foundry-host.json', label='Foundry host',
             branch=FOUNDRY_HOST_BRANCH, base='78346bb7d253e7f649858f4a251a04d8663670b7', paths=FOUNDRY_HOST_PATHS,
-        task_sha=FOUNDRY_HOST_TASK_SHA256, gates=FOUNDRY_HOST_GATE_SHA256,
-        source_bindings=FOUNDRY_HOST_SOURCES, sources_sha=FOUNDRY_HOST_ALL_SOURCES_SHA256,
+    task_sha=FOUNDRY_HOST_TASK_SHA256, gates=FOUNDRY_HOST_GATE_SHA256,
+    source_bindings=FOUNDRY_HOST_SOURCES, sources_sha=FOUNDRY_HOST_ALL_SOURCES_SHA256,
             count_label='six')
         errors += extension_errors
         foundry_qualification_task, extension_errors = bound_provider_registration(
             root, catalog, sources, filename='APBRA-160-foundry-qualification.json', label='Foundry qualification',
             branch=FOUNDRY_QUALIFICATION_BRANCH, base='3f27674158d0924545ccf9f9f70e549c0292377b', paths=FOUNDRY_QUALIFICATION_PATHS,
-        task_sha=FOUNDRY_QUALIFICATION_TASK_SHA256, gates=FOUNDRY_QUALIFICATION_GATE_SHA256,
-        source_bindings=FOUNDRY_QUALIFICATION_SOURCES, sources_sha=FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256,
+    task_sha=FOUNDRY_QUALIFICATION_TASK_SHA256, gates=FOUNDRY_QUALIFICATION_GATE_SHA256,
+    source_bindings=FOUNDRY_QUALIFICATION_SOURCES, sources_sha=FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256,
             count_label='three')
         errors += extension_errors
         renewal, failures = r['bind'](root, catalog, sources, bound_provider_registration)
@@ -2272,19 +2273,21 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         geometry, e = g['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        ai_layout, e = a['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
             foundry_schema_task = load_json(foundry_schema_path)
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
-            foundry_schema_task,
-        )
+    foundry_schema_task,
+    )
             if not extension_errors:
                 extension_errors += task_errors(foundry_schema_task, catalog, sources)
                 canonical_task = json.dumps(
                     foundry_schema_task, sort_keys=True, separators=(',', ':'),
-            ).encode()
+    ).encode()
                 if hashlib.sha256(canonical_task).hexdigest() != FOUNDRY_SCHEMA_TASK_SHA256:
                     extension_errors.append('APBRA-160 Foundry contract differs from accepted authority')
                 if (
@@ -2300,7 +2303,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if (
                     set(foundry_schema_task['allowed_paths']) != FOUNDRY_SCHEMA_PATHS
                     or len(foundry_schema_task['allowed_paths']) != len(FOUNDRY_SCHEMA_PATHS)
-            ):
+    ):
                     extension_errors.append('Unexpected APBRA-160 Foundry implementation scope')
                 if (
                     foundry_schema_task['task_mode'],
@@ -2313,7 +2316,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 for section, expected in FOUNDRY_SCHEMA_GATE_SHA256.items():
                     actual = json.dumps(
                         foundry_schema_task[section], sort_keys=True, separators=(',', ':'),
-                ).encode()
+    ).encode()
                     if hashlib.sha256(actual).hexdigest() != expected:
                         extension_errors.append('APBRA-160 Foundry safety/review gate differs: ' + section)
                 for source_id, content_id, version, expected_sha in FOUNDRY_SCHEMA_SOURCES:
@@ -2324,12 +2327,12 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         row = rows[0]
                         actual = hashlib.sha256(json.dumps(
                             row, sort_keys=True, separators=(',', ':'),
-                    ).encode()).hexdigest()
+    ).encode()).hexdigest()
                         if actual != expected_sha:
                             extension_errors.append('APBRA-160 Foundry source differs from provenance: ' + source_id)
                         if (row.get('content_id'), row.get('version'), row.get('status')) != (
                             content_id, version, 'ACCEPTED',
-                    ):
+    ):
                             extension_errors.append('APBRA-160 Foundry source binding differs: ' + source_id)
             errors += extension_errors
             if extension_errors:
@@ -2340,29 +2343,29 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             demo_ux_task = load_json(demo_ux_path)
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
-            demo_ux_task,
-        )
+    demo_ux_task,
+    )
             if not extension_errors:
                 extension_errors += task_errors(demo_ux_task, catalog, sources)
                 canonical_task = json.dumps(
                     demo_ux_task, sort_keys=True, separators=(',', ':'),
-            ).encode()
+    ).encode()
                 if hashlib.sha256(canonical_task).hexdigest() != DEMO_UX_TASK_SHA256:
                     extension_errors.append('APBRA-160 demo UX contract differs from accepted authority')
                 if (
                     demo_ux_task['task_id'], demo_ux_task['assigned_agent'],
                     demo_ux_task['agent_card_version'], demo_ux_task['branch'],
                     demo_ux_task['base_commit'],
-            ) != (
+    ) != (
                     'APBRA-160', 'APBRA-DEVOPS', '0.1', DEMO_UX_BRANCH,
                     '6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7',
-            ):
+    ):
                     extension_errors.append('Unexpected APBRA-160 demo UX identity, branch or base')
                 if (
                     set(demo_ux_task['allowed_paths']) != DEMO_UX_PATHS
                     or len(demo_ux_task['allowed_paths']) != len(DEMO_UX_PATHS)
                     or any('*' in path for path in demo_ux_task['allowed_paths'])
-            ):
+    ):
                     extension_errors.append('Unexpected APBRA-160 demo UX implementation scope')
                 if (
                     demo_ux_task['task_mode'], demo_ux_task['readiness'],
@@ -2374,7 +2377,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 for section, expected in DEMO_UX_GATE_SHA256.items():
                     actual = json.dumps(
                         demo_ux_task[section], sort_keys=True, separators=(',', ':'),
-                ).encode()
+    ).encode()
                     if hashlib.sha256(actual).hexdigest() != expected:
                         extension_errors.append('APBRA-160 demo UX safety/review gate differs: ' + section)
                 for source_id, content_id, version, expected_sha in DEMO_UX_SOURCES:
@@ -2385,13 +2388,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         row = rows[0]
                         actual = hashlib.sha256(json.dumps(
                             row, sort_keys=True, separators=(',', ':'),
-                    ).encode()).hexdigest()
+    ).encode()).hexdigest()
                         if actual != expected_sha or (
                             row.get('content_id'), row.get('version'), row.get('status')
                         ) != (content_id, version, 'ACCEPTED'):
                             extension_errors.append('APBRA-160 demo UX source differs: ' + source_id)
                 if (active_task_id == 'APBRA-160' and
-                    active_branch in {DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH}):
+    active_branch in {DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH}):
                     vite_path = root / 'apps/web/vite.config.ts'
                     allowed_vite = {DEMO_UX_VITE_ORIGINAL_SHA256, DEMO_UX_VITE_PROXY_SHA256}
                     if active_branch == DEMO_UX_REGISTRATION_BRANCH:
@@ -2399,7 +2402,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     elif changed_paths is not None and 'apps/web/vite.config.ts' in changed_paths:
                         allowed_vite = {DEMO_UX_VITE_PROXY_SHA256}
                     if (not vite_path.is_file() or
-                        hashlib.sha256(vite_path.read_bytes()).hexdigest() not in allowed_vite):
+    hashlib.sha256(vite_path.read_bytes()).hexdigest() not in allowed_vite):
                         extension_errors.append('APBRA-160 Vite must preserve the exact accepted proxy-only bytes')
             errors += extension_errors
             if extension_errors:
@@ -2410,13 +2413,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             private_content_storage_task = load_json(private_content_storage_path)
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
-            private_content_storage_task,
-        )
+    private_content_storage_task,
+    )
             if not extension_errors:
                 extension_errors += task_errors(private_content_storage_task, catalog, sources)
                 canonical_task = json.dumps(
                     private_content_storage_task, sort_keys=True, separators=(',', ':')
-            ).encode()
+    ).encode()
                 if hashlib.sha256(canonical_task).hexdigest() != PRIVATE_CONTENT_STORAGE_TASK_SHA256:
                     extension_errors.append('APBRA-173A contract differs from accepted authority')
                 if (
@@ -2432,7 +2435,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 if (
                     set(private_content_storage_task['allowed_paths']) != PRIVATE_CONTENT_STORAGE_PATHS
                     or len(private_content_storage_task['allowed_paths']) != len(PRIVATE_CONTENT_STORAGE_PATHS)
-            ):
+    ):
                     extension_errors.append('Unexpected APBRA-173A implementation scope')
                 if (
                     private_content_storage_task['task_mode'],
@@ -2441,47 +2444,47 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 ) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
                     extension_errors.append('APBRA-173A requires issued implementation acceptance')
                 if private_content_storage_task['source_ids'] != [
-                row[0] for row in PRIVATE_CONTENT_STORAGE_SOURCES
-            ]:
+    row[0] for row in PRIVATE_CONTENT_STORAGE_SOURCES
+    ]:
                     extension_errors.append('APBRA-173A requires exact accepted sources')
                 source_rows = sources['sources']
                 historic = source_rows[:PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT]
                 historic_digest = hashlib.sha256(
                     json.dumps(historic, sort_keys=True, separators=(',', ':')).encode()
-            ).hexdigest()
+    ).hexdigest()
                 if historic_digest != PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCES_SHA256:
                     extension_errors.append('APBRA-173A historical source provenance changed')
                 new_source_ids = [
                     row.get('id') for row in source_rows[
-                    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT:
-                    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
-                ]
-            ]
+    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT:
+    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
+    ]
+    ]
                 if new_source_ids != [row[0] for row in PRIVATE_CONTENT_STORAGE_SOURCES]:
                     extension_errors.append('APBRA-173A new source ordering differs')
                 if (
-                active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
-                and len(source_rows) !=
-                PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
-            ):
+    active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
+    and len(source_rows) !=
+    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
+    ):
                     # A historical registration remains valid after a separately
                     # pinned, append-only APBRA-177 source block is registered.
                     later_rows = source_rows[
-                    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
-                    + len(PRIVATE_CONTENT_STORAGE_SOURCES):
-                ]
+    PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
+    + len(PRIVATE_CONTENT_STORAGE_SOURCES):
+    ]
                     expected_later = (
-                    CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES +
-                    CURRENT_DEMO_SOURCES
-                )
+    CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES +
+    CURRENT_DEMO_SOURCES
+    )
                     if (
-                    len(later_rows) != len(expected_later)
-                    or any(
+    len(later_rows) != len(expected_later)
+    or any(
                             (row.get('id'), hashlib.sha256(
                                 json.dumps(row, sort_keys=True, separators=(',', ':')).encode()
-                        ).hexdigest()) != (source_id, expected_sha)
-                        for row, (source_id, _content_id, _version, expected_sha)
-                        in zip(later_rows, expected_later)
+    ).hexdigest()) != (source_id, expected_sha)
+    for row, (source_id, _content_id, _version, expected_sha)
+    in zip(later_rows, expected_later)
                     )
                 ):
                         extension_errors.append('APBRA-173A registration added unrelated source rows')
@@ -2841,6 +2844,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (renewal, r['P']),
             (renewal11, r['N_PATHS']),
             (geometry, g['P']),
+            (ai_layout, a['P']),
         )
         registered_tasks = {registered['task_id']: registered for registered, _ in
                             legacy_authorities + bound_authorities if registered is not None}
@@ -2850,6 +2854,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 task if active_branch in {
                     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
                 }
+                else ai_layout if active_branch in {a['B'], a['R']}
                 else geometry if active_branch in {g['B'], g['R']}
                 else renewal11 if active_branch == r['N_BRANCH']
                 else renewal if active_branch in {r['B'], r['R']}
@@ -2882,6 +2887,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             elif (active_task is not None and active_task['branch'] != active_branch and
                     not r['stage'](active_task_id, active_branch, changed_paths) and
                     not g['stage'](active_task_id, active_branch, changed_paths) and
+                    not a['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
                          active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
                          changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -2988,6 +2994,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-160 Foundry qualification implementation cannot change governance files')
             errors += r['errors'](active_task_id, active_branch, changed_paths) + r['errors11'](active_task_id, active_branch, changed_paths)
             errors += g['errors'](active_task_id, active_branch, changed_paths)
+            errors += a['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3337,6 +3344,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                          changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS and
                          name in FOUNDRY_HOST_REGISTRATION_PATHS and
                          path_allowed(name, task, card)) or
+                    (active_task is not None and a['stage'](active_task_id, active_branch, changed_paths)
+                     and name in a['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)
                      and name in g['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and r['stage'](active_task_id, active_branch, changed_paths)
