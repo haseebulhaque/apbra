@@ -39,7 +39,8 @@ def bind(root, catalog, sources, validate):
         current = {name: hashlib.sha256((root / 'tasks' / name).read_bytes()).hexdigest()
                    for name in HISTORY if (root / 'tasks' / name).is_file()}
         if digest(current) != HISTORY_SHA:
-            failures.append('APBRA-160 Oct11 renderer geometry historical task bytes differ or are missing')
+            # Withdraw only new authority; retain historical branches' exact errors.
+            return None, failures
     return (None if failures else task), failures
 
 
