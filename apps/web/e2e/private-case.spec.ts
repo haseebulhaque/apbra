@@ -849,3 +849,71 @@ test('pending profile save protects its submitted draft and a late refresh canno
   await save!.fulfill({json:{profile:{identity_id:'synthetic-identity',display_name:'Saved synthetic name'}}});await expect.poll(()=>Boolean(refresh)).toBe(true);await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
   await refresh!.fulfill({json:{authenticated:true,identity:{id:'synthetic-identity',display_name:'Saved synthetic name'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-COMPANY_OWNER',company_id:'synthetic-company',display_name:'Saved synthetic name',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'}});await page.waitForLoadState('networkidle');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();await expect(page.locator('.private-workspace')).toHaveCount(0);
 });
+
+
+test('late report access reads cannot replace the current report recipients',async({page})=>{
+ const ts='2026-10-11T00:00:00Z',calls:string[]=[];
+ const records=['a','b'].map(id=>({id,company_id:'c',creator_membership_id:'owner',current_request_version_id:'r'+id,version:1,semantic_context_version:1,report_title:'Audit report '+id,created_at:ts,updated_at:ts,current_request:{id:'r'+id,sequence:1,request_text:'Synthetic '+id,created_at:ts}}));
+ let held:Route|undefined,heldB:Route|undefined;const heldAReads:Route[]=[],heldBReads:Route[]=[];
+ await page.route('**/api/**',async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname;calls.push(req.method()+' '+path);if(req.method()!=='GET'){await route.abort();return}
+  const rec=records.find(r=>path.startsWith('/api/cases/'+r.id));let body:any={items:[]};
+  if(path==='/api/auth/session')body={authenticated:true,identity:{id:'i',display_name:'Audit Owner'},actor:{identity_id:'i',membership_id:'owner',company_id:'c',display_name:'Audit Owner',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
+  else if(path==='/api/auth/providers')body={items:[],development_identities:[]};
+  else if(path==='/api/cases')body={items:records};
+  else if(path==='/api/workspace/branding')body={version:1,primary:'#17635E',accent:'#2D7D9A'};
+  else if(path==='/api/cases/capabilities/uploads')body={data_extensions:['CSV'],reference_extensions:['PNG'],max_file_bytes:5000000,max_files_per_selection:8};
+  else if(rec&&path==='/api/cases/'+rec.id)body={case:rec};
+  else if(rec&&path.endsWith('/versions'))body={items:[rec.current_request]};
+  else if(rec&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
+  else if(path==='/api/cases/a/access'){held=route;heldAReads.push(route);return}
+  else if(path==='/api/cases/b/access'){heldB=route;heldBReads.push(route);return}
+  else if(path.startsWith('/api/tenant-settings')){await route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic settings not loaded'}}});return}
+  await route.fulfill({json:body});
+ });
+ await page.goto('/');await page.getByRole('button',{name:'Audit report a'}).click();await expect.poll(()=>Boolean(held)).toBe(true);
+ await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await page.locator('.workspace-admin summary').click();
+ await expect.poll(()=>Boolean(heldB)).toBe(true);const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');
+ await Promise.all(heldAReads.map(route=>route.fulfill({json:{items:[{membership_id:'member-a',display_name:'A only recipient',subject:'synthetic-a',access_level:'VIEWER',active:true}]}})));
+ await expect(page.locator('.case-identity')).toContainText('Audit report b');await page.waitForLoadState('networkidle');await expect(panel).not.toContainText('A only recipient');await expect(panel).toContainText('B only recipient');
+ expect(calls.every(c=>c.startsWith('GET '))).toBe(true);
+});
+
+test('report access composer resets on case change and failed reads require explicit retry',async({page})=>{
+ const ts='2026-10-11T00:00:00Z',calls:string[]=[];
+ const records=['a','b'].map(id=>({id,company_id:'c',creator_membership_id:'owner',current_request_version_id:'r'+id,version:1,semantic_context_version:1,report_title:'Audit report '+id,created_at:ts,updated_at:ts,current_request:{id:'r'+id,sequence:1,request_text:'Synthetic '+id,created_at:ts}}));
+ let held:Route|undefined,heldB:Route|undefined;const heldAReads:Route[]=[],heldBReads:Route[]=[];
+ await page.route('**/api/**',async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname;calls.push(req.method()+' '+path);if(req.method()!=='GET'){await route.abort();return}
+  const rec=records.find(r=>path.startsWith('/api/cases/'+r.id));let body:any={items:[]};
+  if(path==='/api/auth/session')body={authenticated:true,identity:{id:'i',display_name:'Audit Owner'},actor:{identity_id:'i',membership_id:'owner',company_id:'c',display_name:'Audit Owner',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
+  else if(path==='/api/auth/providers')body={items:[],development_identities:[]};
+  else if(path==='/api/cases')body={items:records};
+  else if(path==='/api/workspace/branding')body={version:1,primary:'#17635E',accent:'#2D7D9A'};
+  else if(path==='/api/cases/capabilities/uploads')body={data_extensions:['CSV'],reference_extensions:['PNG'],max_file_bytes:5000000,max_files_per_selection:8};
+  else if(rec&&path==='/api/cases/'+rec.id)body={case:rec};
+  else if(rec&&path.endsWith('/versions'))body={items:[rec.current_request]};
+  else if(rec&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
+  else if(path==='/api/cases/a/access')body={items:[{membership_id:'member-a',display_name:'A only recipient',subject:'synthetic-a',access_level:'VIEWER',active:true}]};
+  else if(path==='/api/memberships')body={items:[{id:'synthetic-new-recipient',display_name:'New recipient',subject:'synthetic-new',role:'MEMBER',active:true}]};
+  else if(path==='/api/cases/b/access'){heldB=route;heldBReads.push(route);return}
+  else if(path.startsWith('/api/tenant-settings')){await route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic settings not loaded'}}});return}
+  await route.fulfill({json:body});
+ });
+ await page.goto('/');await page.getByRole('button',{name:'Audit report a'}).click();await page.locator('.workspace-admin summary').click();const firstPanel=page.locator('.case-access-admin');await expect(firstPanel).toContainText('A only recipient');await firstPanel.getByLabel('Company member').selectOption('synthetic-new-recipient');await firstPanel.getByLabel('Report permission').selectOption('EDITOR');await expect(firstPanel.getByRole('button',{name:'Grant report access'})).toBeEnabled();
+ await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await expect(page.locator('.case-identity')).toContainText('Audit report b');if(!await page.locator('.case-access-admin').isVisible())await page.locator('.workspace-admin summary').click();
+ await expect.poll(()=>Boolean(heldB)).toBe(true);const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await expect(panel.getByLabel('Company member')).toHaveValue('');await expect(panel.getByLabel('Report permission')).toHaveValue('VIEWER');await expect(panel).not.toContainText('A only recipient');
+ await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic unavailable'}}})));await expect(panel.getByRole('alert')).toContainText('Private report access could not be loaded.');await expect(panel.getByLabel('Company member')).toBeDisabled();
+ const previous=heldB;await panel.getByRole('button',{name:'Retry access',exact:true}).click();await expect.poll(()=>heldB!==previous).toBe(true);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.getByRole('alert')).toHaveCount(0);await expect(page.locator('.workspace-notice.error')).toHaveCount(0);await expect(page.getByText('Synthetic unavailable',{exact:true})).toHaveCount(0);await expect(panel.getByLabel('Company member')).toBeEnabled();
+ expect(calls.every(c=>c.startsWith('GET '))).toBe(true);
+});
+
+
+test('a current private access read with an expired session still signs out',async({page})=>{
+  await syntheticWorkspace(page);
+  await page.route('**/api/cases/synthetic-report/access',route=>route.fulfill({status:401,json:{error:{code:'AUTHENTICATION_REQUIRED',message:'Synthetic expired session'}}}));
+  await page.getByRole('button',{name:'Synthetic sales report'}).click();
+  await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
+  await expect(page.locator('.private-workspace')).toHaveCount(0);
+  await expect(page.getByText('Your APBRA session has expired. Sign in again to continue.',{exact:true})).toBeVisible();
+});
