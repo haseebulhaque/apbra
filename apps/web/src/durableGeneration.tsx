@@ -146,6 +146,7 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
       await refresh();
     }catch(error){
       if(!isCurrent(epoch))return;
+      if(error instanceof ApiError&&error.status===409&&error.code==='AUTOMATIC_DESIGN_UNAVAILABLE')designCommand.current=null;
       const history=await refresh().catch(()=>null);
       if(!isCurrent(epoch))return;
       onError(automaticDesignProposalError(error,history?.find(item=>!existingAttemptIds.has(item.id))));

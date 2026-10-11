@@ -492,3 +492,52 @@ test('design feedback remains pending across Back, prevents repeat submission an
     expect(requests).toBe(2);
   }finally{release()}
 });
+
+for(const firstResponse of ['definitive failure','lost reply','server error'] as const){
+  test(`mocked design retry ${firstResponse} preserves the correct proposal identity`,async({page})=>{
+    await syntheticGenerationWorkspace(page);
+    const keys:string[]=[],cached=new Map<string,any>();let proposals=0,eligible=false;
+    const timestamp='2026-10-11T00:00:00Z';
+    const reviewed={id:'retry-design',confirmed_contract_id:'contract-recovery-b',origin:'AUTO_ELIGIBLE',provenance_label:'Synthetic eligibility check',summary:{page_count:1,visual_count:1,description:'Cached synthetic proposal.'}};
+    await page.route('**/api/cases/recovery-b/reviewed-designs**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:eligible?[reviewed]:[],can_build:true,can_submit:false})}));
+    await page.route('**/api/cases/recovery-b/automatic-designs**',async route=>{
+      if(route.request().method()==='GET'){
+        await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[...cached.values()].map(result=>result.attempt)})});return;
+      }
+      expect(route.request().method()).toBe('POST');
+      const body=route.request().postDataJSON();expect(body.confirmed_contract_id).toBe('contract-recovery-b');
+      expect(route.request().headers()['x-csrf-token']).toBe('synthetic-only');
+      const key=body.command_key as string;expect(key).toBeTruthy();keys.push(key);
+      let result=cached.get(key);
+      if(!result){
+        proposals+=1;const failed=firstResponse==='definitive failure'&&proposals===1;
+        result={attempt:{id:`synthetic-proposal-${proposals}`,confirmed_contract_id:'contract-recovery-b',status:failed?'FAILED':'ELIGIBLE',provider_profile_id:null,model_or_deployment:null,prompt_version:null,configuration_id:null,capability_profile:{},usage:{call_count:0},failure:failed?{code:'SYNTHETIC_DESIGN_FAILED',message:'Synthetic definitive design failure.'}:null,validation:null,created_at:timestamp,completed_at:timestamp},reviewed_design:failed?null:reviewed};
+        cached.set(key,result);eligible=!failed;
+      }
+      // All commands are intercepted; this counter simulates new work, never a provider call.
+      if(keys.length===1&&firstResponse==='lost reply'){await route.abort('failed');return}
+      if(keys.length===1&&firstResponse==='server error'){
+        await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'AUTOMATIC_DESIGN_UNAVAILABLE',message:'Synthetic ambiguous server failure.'}})});return;
+      }
+      if(result.attempt.status==='FAILED'){
+        await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'AUTOMATIC_DESIGN_UNAVAILABLE',message:'Synthetic definitive design failure.'}})});return;
+      }
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(result)});
+    });
+    await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');
+    await page.getByRole('button',{name:'Create report design',exact:true}).click();
+    await expect(page.getByRole('alert')).toBeVisible();
+    const retry=page.getByRole('button',{name:/^Create (report design|another design)$/});
+    await expect(retry).toBeEnabled();expect(keys).toHaveLength(1);await retry.click();
+    await expect.poll(()=>keys.length).toBe(2);
+    if(firstResponse==='definitive failure'){
+      expect(keys[1]).not.toBe(keys[0]);expect(proposals).toBe(2);
+      expect([...cached.values()].map(result=>result.attempt.status)).toEqual(['FAILED','ELIGIBLE']);
+    }else{
+      expect(keys[1]).toBe(keys[0]);expect(proposals).toBe(1);
+      expect([...cached.values()].map(result=>result.attempt.id)).toEqual(['synthetic-proposal-1']);
+    }
+    await expect(page.getByLabel('Eligible report design')).toHaveValue('retry-design');
+    await expect(page.getByRole('button',{name:'Build report',exact:true})).toBeEnabled();
+  });
+}
