@@ -904,6 +904,16 @@ test('report access composer resets on case change and failed reads require expl
  await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await expect(page.locator('.case-identity')).toContainText('Audit report b');if(!await page.locator('.case-access-admin').isVisible())await page.locator('.workspace-admin summary').click();
  await expect.poll(()=>Boolean(heldB)).toBe(true);const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await expect(panel.getByLabel('Company member')).toHaveValue('');await expect(panel.getByLabel('Report permission')).toHaveValue('VIEWER');await expect(panel).not.toContainText('A only recipient');
  await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic unavailable'}}})));await expect(panel.getByRole('alert')).toContainText('Private report access could not be loaded.');await expect(panel.getByLabel('Company member')).toBeDisabled();
- const previous=heldB;await panel.getByRole('button',{name:'Retry access',exact:true}).click();await expect.poll(()=>heldB!==previous).toBe(true);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.getByRole('alert')).toHaveCount(0);await expect(panel.getByLabel('Company member')).toBeEnabled();
+ const previous=heldB;await panel.getByRole('button',{name:'Retry access',exact:true}).click();await expect.poll(()=>heldB!==previous).toBe(true);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.getByRole('alert')).toHaveCount(0);await expect(page.locator('.workspace-notice.error')).toHaveCount(0);await expect(page.getByText('Synthetic unavailable',{exact:true})).toHaveCount(0);await expect(panel.getByLabel('Company member')).toBeEnabled();
  expect(calls.every(c=>c.startsWith('GET '))).toBe(true);
+});
+
+
+test('a current private access read with an expired session still signs out',async({page})=>{
+  await syntheticWorkspace(page);
+  await page.route('**/api/cases/synthetic-report/access',route=>route.fulfill({status:401,json:{error:{code:'AUTHENTICATION_REQUIRED',message:'Synthetic expired session'}}}));
+  await page.getByRole('button',{name:'Synthetic sales report'}).click();
+  await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
+  await expect(page.locator('.private-workspace')).toHaveCount(0);
+  await expect(page.getByText('Your APBRA session has expired. Sign in again to continue.',{exact:true})).toBeVisible();
 });
