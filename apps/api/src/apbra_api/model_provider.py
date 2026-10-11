@@ -413,9 +413,10 @@ def report_design_schema(
             "type": "array",
             "description": (
                 f"Compiler-ordered visual list. The validated runtime permits at most "
-                f"{max_visuals_per_page} visuals on this page. The active compiler has four "
-                "non-card slots and two additional card-only slots; every visual must fit "
-                "one of those physical slots without changing its business bindings."
+                f"{max_visuals_per_page} visuals on this page. The active compiler has six "
+                "physical slots, each supporting card, bar, column, line, table, and slicer. "
+                "Preserve the model-chosen visual order and business bindings within "
+                "the configured page limit."
             ),
             "items": {
                 "type": "object",

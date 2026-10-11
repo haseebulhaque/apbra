@@ -78,16 +78,31 @@ export function validateGenericCandidate(candidate:GenericCandidate,design:Repor
  };
  for(const [path,content] of Object.entries(candidate.files))if(path.endsWith('/visual.json')){try{checkBindings(JSON.parse(content))}catch{valid=false}}
  const check={id:'SEMANTIC_NAMESPACE',status:valid?'PASS' as const:'FAIL' as const,message:'Every measure is declared once in a table without a case/Unicode-equivalent column or generated-column name; visible measure names remain unchanged.'};
- const checks=[...base.checks,sourceCheck,check];return{status:checks.every(item=>item.status==='PASS')?'PASS':'FAIL',checks};
+ let geometryValid=true;
+ try{
+  const report=`${candidate.projectName}.Report/definition/pages`,pageOrder=JSON.parse(candidate.files[`${report}/pages.json`]).pageOrder;
+  if(JSON.stringify(pageOrder)!==JSON.stringify(design.pages.map(page=>stableId(`page:${page.id}:${page.name}`))))geometryValid=false;
+  for(const page of design.pages){
+   const pageId=stableId(`page:${page.id}:${page.name}`),root=`${report}/${pageId}`,definition=JSON.parse(candidate.files[`${root}/page.json`]);
+   if(definition.width!==compilerCapabilities.page.width||definition.height!==compilerCapabilities.page.height)geometryValid=false;
+   page.visuals.forEach((visual,index)=>{
+    const slot=compilerVisualLayout(visual,index),name=stableId(`${pageId}:${visual.id}:${index}`),position=JSON.parse(candidate.files[`${root}/visuals/${name}/visual.json`]).position;
+    const expected={x:slot.x,y:slot.y,z:1000-index,width:slot.width,height:slot.height,tabOrder:index+1};
+    if(!compilerVisualFits(slot)||!position||Object.keys(position).length!==Object.keys(expected).length||Object.entries(expected).some(([key,value])=>!Number.isFinite(position[key])||position[key]!==value))geometryValid=false;
+   });
+  }
+ }catch{geometryValid=false}
+ const geometryCheck={id:'RENDERER_GEOMETRY',status:geometryValid?'PASS' as const:'FAIL' as const,message:'Authored page order and every visual position match finite, in-bounds compiler-derived slots.'};
+ const checks=[...base.checks,sourceCheck,check,geometryCheck];return{status:checks.every(item=>item.status==='PASS')?'PASS':'FAIL',checks};
 }
 
 export type GenericCandidate={kind:'PowerBICandidate';generatorVersion:'bounded-generic-pbip-1';projectName:string;files:Record<string,string>;runtime:{desktop:'NOT_RUN';dax:'NOT_RUN'};release:'NOT_ELIGIBLE'};
 export type CandidateValidation={status:'PASS'|'FAIL';checks:Array<{id:string;status:'PASS'|'FAIL';message:string}>};
-export const compilerCapabilities={maxVisualsPerPage:6,supportedTrendGrains:['DAY','MONTH','QUARTER','YEAR'] as readonly SupportedTrendGrain[],page:{width:1280,height:720},layout:{columns:[20,630] as const,rows:[30,290,550] as const,card:{width:285,height:120},standard:{width:580,height:230}}} as const;
+export const compilerCapabilities={maxVisualsPerPage:6,supportedTrendGrains:['DAY','MONTH','QUARTER','YEAR'] as readonly SupportedTrendGrain[],page:{width:1280,height:720},layout:{columns:[20,630] as const,rows:[30,260,490] as const,card:{width:285,height:120},standard:{width:580,height:200}}} as const;
 export type CompilerLayoutSlot={index:number;x:number;y:number;width:number;height:number;right:number;bottom:number};
 export function validateCompilerCapabilities(settings:TenantSettings){const grains=settings.generation.supportedTrendGrains,max=settings.governance.maxVisualsPerPage;if(!Array.isArray(grains)||!grains.length||new Set(grains).size!==grains.length||grains.some(grain=>!compilerCapabilities.supportedTrendGrains.includes(grain))||!Number.isInteger(max)||max<1||max>compilerCapabilities.maxVisualsPerPage)throw new Error('GENERATION_CONFIGURATION_INVALID: configured generation capabilities exceed the active compiler');}
 export function compilerVisualLayout(visual:Pick<VisualDesign,'type'>,index:number):CompilerLayoutSlot{const x=compilerCapabilities.layout.columns[index%compilerCapabilities.layout.columns.length],y=compilerCapabilities.layout.rows[Math.floor(index/compilerCapabilities.layout.columns.length)]??compilerCapabilities.page.height,width=visual.type==='card'?compilerCapabilities.layout.card.width:compilerCapabilities.layout.standard.width,height=visual.type==='card'?compilerCapabilities.layout.card.height:compilerCapabilities.layout.standard.height;return{index,x,y,width,height,right:x+width,bottom:y+height}}
-export function compilerVisualFits(slot:CompilerLayoutSlot){return slot.x>=0&&slot.y>=0&&slot.right<=compilerCapabilities.page.width&&slot.bottom<=compilerCapabilities.page.height}
+export function compilerVisualFits(slot:CompilerLayoutSlot){return Number.isInteger(slot.index)&&slot.index>=0&&slot.index<compilerCapabilities.maxVisualsPerPage&&slot.x>=0&&slot.y>=0&&slot.right<=compilerCapabilities.page.width&&slot.bottom<=compilerCapabilities.page.height}
 const root='https://developer.microsoft.com/json-schemas/';const schemaUrl=(name:string,version='1.0.0')=>root+`fabric/item/report/definition/${name}/${version}/schema.json`;const json=(value:unknown)=>JSON.stringify(value,null,2)+'\n';
 const literal=(value:string)=>({expr:{Literal:{Value:value}}});const quoted=(value:string)=>"'"+value.replaceAll("'","''")+"'";const field=(binding:string,measure=false)=>{const [table,column]=binding.split('.');return{[measure?'Measure':'Column']:{Expression:{SourceRef:{Entity:table}},Property:column}}};const projection=(binding:string,measure=false)=>({field:field(binding,measure),queryRef:binding,nativeQueryRef:binding.split('.')[1],active:true});
 const identifier=(value:string,fallback:string)=>{const cleaned=value.replace(/[^A-Za-z0-9_]/g,'').replace(/^([^A-Za-z_])/,'_$1');return cleaned||fallback};
