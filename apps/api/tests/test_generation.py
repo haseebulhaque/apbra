@@ -55,7 +55,9 @@ from apbra_api.persistence import (
         ("", "An imperfect first draft"), ("", ""), ("", "   "),
         ("UNKNOWN_FIELD", ""), ("TIME_GRAIN_FIELD", ""), ("", "Shared-name draft"),
         ("", "AI-chosen pages"), ("", "AI-chosen alternative"),
-        ("LAYOUT_LIMIT", ""), ("LAYOUT_ORDER", ""), ("LAYOUT_CAPACITY", ""),
+        ("", "Six standard visuals"), ("", "Model-reordered mixed visuals"),
+        ("", "Former layout order"),
+        ("LAYOUT_LIMIT", ""), ("LAYOUT_CAPACITY", ""),
     ],
 )
 @pytest.mark.parametrize("foundry", [False, True])
@@ -124,7 +126,12 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         "generationRequirements": [],
     }
     model_layout = overview in {"AI-chosen pages", "AI-chosen alternative"}
-    if model_layout or failure_kind in {"LAYOUT_LIMIT", "LAYOUT_ORDER", "LAYOUT_CAPACITY"}:
+    single_page_layout = overview in {
+        "Six standard visuals", "Model-reordered mixed visuals", "Former layout order"
+    }
+    if model_layout or single_page_layout or failure_kind in {
+        "LAYOUT_LIMIT", "LAYOUT_CAPACITY"
+    }:
         source = design["pages"][0]
         source["visuals"] = [
             {**copy.deepcopy(source["visuals"][0]), "id": f"chart-{index}",
@@ -141,7 +148,26 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             if overview == "AI-chosen alternative":
                 design["pages"].reverse()
                 design["pages"][0]["visuals"].reverse()
-        if failure_kind == "LAYOUT_ORDER":
+        if overview == "Six standard visuals":
+            source["visuals"][-1] = {
+                **copy.deepcopy(source["visuals"][0]), "id": "sixth-standard-chart"
+            }
+        if overview == "Model-reordered mixed visuals":
+            templates = {}
+            for kind in ("card", "bar", "column", "line", "table", "slicer"):
+                visual = {**copy.deepcopy(source["visuals"][0]), "id": f"mixed-{kind}",
+                          "type": kind, "title": f"AI {kind}"}
+                if kind in {"card", "table", "slicer"}:
+                    visual["categoryField"] = ""
+                if kind in {"table", "slicer"}:
+                    visual["fields"] = ["Metrics.Campus"]
+                if kind == "slicer":
+                    visual["measureIds"] = []
+                templates[kind] = visual
+            source["visuals"] = [templates[kind] for kind in (
+                "slicer", "card", "table", "column", "bar", "line"
+            )]
+        if overview == "Former layout order":
             source["visuals"] = [copy.deepcopy(design["pages"][0]["visuals"][0]) for _ in range(6)]
             for index, visual in enumerate(source["visuals"]):
                 visual["id"] = f"ordered-{index}"
@@ -150,6 +176,10 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         if failure_kind == "LAYOUT_LIMIT":
             design["pages"] = [{**copy.deepcopy(source), "id": f"page-{index}"}
                                for index in range(4)]
+        if failure_kind == "LAYOUT_CAPACITY":
+            source["visuals"].append({
+                **copy.deepcopy(source["visuals"][0]), "id": "seventh-overflow-chart"
+            })
     if overview == "Grounded draft":
         reference = "provider:" + hashlib.sha256(json.dumps([
             "synthetic-shared-standards", "file_citation", "file-synthetic-standard",
@@ -228,17 +258,21 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                    model_provider=None if foundry else provider,
                    foundry_credentials=foundry_credentials)
     ) as runtime:
-        if foundry:
+        if foundry or failure_kind == "LAYOUT_LIMIT":
             owner = sign_in(runtime, "owner")
             current = runtime.get("/api/tenant-settings").json()
             active = copy.deepcopy(current["settings"])
-            active.update(automatic_generation_enabled=True,
-                          provider_profile=provider.profile.model_dump())
+            if foundry:
+                active.update(automatic_generation_enabled=True,
+                              provider_profile=provider.profile.model_dump())
+            if failure_kind == "LAYOUT_LIMIT":
+                active["generation_policy"]["governance"]["maxVisualsPerPage"] = 4
             enabled = runtime.put("/api/tenant-settings", headers=csrf(owner),
                                   json={"settings": active, "expected_version": current["version"]})
             assert enabled.status_code == 200, enabled.text
-            assert enabled.json()["credential"]["authMode"] == "ENTRA"
-            assert enabled.json()["credential"]["canReplace"] is False
+            if foundry:
+                assert enabled.json()["credential"]["authMode"] == "ENTRA"
+                assert enabled.json()["credential"]["canReplace"] is False
         session = sign_in(runtime, "member")
         request = (
             "Compare visits by campus and explain the additional business KPI; "
@@ -312,8 +346,17 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert capabilities["source"] == "ACTIVE_COMPILER"
         assert capabilities["pageBounds"] == {"width": 1280, "height": 720}
         assert [slot["index"] for slot in capabilities["slots"]] == list(range(6))
-        assert all({p["type"] for p in slot["placements"]} == {"card"}
-                   for slot in capabilities["slots"][4:])
+        supported = {"card", "bar", "column", "line", "table", "slicer"}
+        for slot in capabilities["slots"]:
+            assert {placement["type"] for placement in slot["placements"]} == supported
+            for placement in slot["placements"]:
+                assert placement["index"] == slot["index"]
+                assert placement["x"] == (20, 630)[slot["index"] % 2]
+                assert placement["y"] == (30, 260, 490)[slot["index"] // 2]
+                assert placement["width"] == (285 if placement["type"] == "card" else 580)
+                assert placement["height"] == (120 if placement["type"] == "card" else 200)
+                assert placement["y"] + placement["height"] <= 720
+                assert placement["x"] + placement["width"] <= 1280
         assert capabilities["knowledgeScope"] == (
             "PROVIDER_MANAGED_OBSERVED_REFERENCES" if foundry else
             "BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG"
@@ -337,6 +380,10 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         attempt = built.json()["attempt"]
         assert attempt["status"] == "SUCCEEDED"
         assert attempt["validation"]["stages"]["businessQuality"] == "NOT_CERTIFIED"
+        assert attempt["validation"]["runtime"] == {
+            "providerCalls": 0, "powerBiDesktop": "NOT_RUN", "dax": "NOT_RUN",
+            "rls": "NOT_RUN", "deployment": "NOT_RUN",
+        }
         path = f"/api/cases/{case['id']}/generation/{attempt['id']}/artifact"
         download = runtime.get(path)
         assert download.status_code == 200
@@ -350,6 +397,79 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                     position = json.loads(archive.read(name))["position"]
                     assert position["y"] + position["height"] <= 720
                     assert position["x"] + position["width"] <= 1280
+
+            # Validate physical files in the model's page and visual order, not
+            # just the source JSON retained alongside the compiled candidate.
+            pages_root = f"{original_design['projectName']}.Report/definition/pages"
+            page_order = json.loads(archive.read(f"{pages_root}/pages.json"))["pageOrder"]
+            assert len(page_order) == len(original_design["pages"])
+            measure_bindings = {}
+            table_root = f"{original_design['projectName']}.SemanticModel/definition/tables/"
+            for measure in original_design["measures"]:
+                table, column = measure["field"].split(".")
+                expression = f"{measure['aggregation']}({table}[{column}])"
+                quoted_name = "'" + measure["name"].replace("'", "''") + "'"
+                declarations = []
+                for name in archive.namelist():
+                    if name.startswith(table_root) and name.endswith(".tmdl"):
+                        lines = archive.read(name).decode().splitlines()
+                        if any(f"\tmeasure {label} = {expression}" in lines
+                               for label in (measure["name"], quoted_name)):
+                            declarations.append(Path(name).stem)
+                assert len(declarations) == 1
+                home = declarations[0]
+                if overview == "Shared-name draft":
+                    assert home.startswith("__APBRA_Measures_")
+                    assert "\tcolumn Visits" in archive.read(
+                        table_root + "Metrics.tmdl"
+                    ).decode().splitlines()
+                else:
+                    assert home == "Metrics"
+                measure_bindings[measure["id"]] = f"{home}.{measure['name']}"
+            compiled_types = {"card": "cardVisual", "bar": "barChart", "column": "columnChart",
+                              "line": "lineChart", "table": "tableEx", "slicer": "slicer"}
+            for page_id, planned_page in zip(page_order, original_design["pages"], strict=True):
+                prefix = f"{pages_root}/{page_id}"
+                assert json.loads(archive.read(f"{prefix}/page.json"))["displayName"] == (
+                    planned_page["name"]
+                )
+                visual_files = [json.loads(archive.read(name)) for name in archive.namelist()
+                                if name.startswith(prefix + "/visuals/")
+                                and name.endswith("/visual.json")]
+                ordered_visuals = sorted(
+                    visual_files, key=lambda item: item["position"]["tabOrder"]
+                )
+                assert len(ordered_visuals) == len(planned_page["visuals"])
+                for index, (physical, planned) in enumerate(zip(
+                    ordered_visuals, planned_page["visuals"], strict=True
+                )):
+                    kind = planned["type"]
+                    assert physical["position"] == {
+                        "x": (20, 630)[index % 2], "y": (30, 260, 490)[index // 2],
+                        "z": 1000 - index, "width": 285 if kind == "card" else 580,
+                        "height": 120 if kind == "card" else 200, "tabOrder": index + 1,
+                    }
+                    assert physical["visual"]["visualType"] == compiled_types[kind]
+                    measures = [measure_bindings[item] for item in planned["measureIds"]]
+                    if kind == "card":
+                        expected_roles = {"Data": measures}
+                    elif kind in {"bar", "column", "line"}:
+                        expected_roles = {"Category": [planned["categoryField"]], "Y": measures}
+                    else:
+                        expected_roles = {"Values": planned["fields"] + measures}
+                    query = physical["visual"]["query"]["queryState"]
+                    assert {role: [item["queryRef"] for item in value["projections"]]
+                            for role, value in query.items()} == expected_roles
+                for index, physical in enumerate(ordered_visuals):
+                    left = physical["position"]
+                    for other in ordered_visuals[index + 1:]:
+                        right = other["position"]
+                        assert not (
+                            left["x"] < right["x"] + right["width"]
+                            and right["x"] < left["x"] + left["width"]
+                            and left["y"] < right["y"] + right["height"]
+                            and right["y"] < left["y"] + left["height"]
+                        )
 
             assert b"editable first draft" in archive.read("Delivery-Guide.md")
             if foundry:

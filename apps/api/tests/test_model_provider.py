@@ -446,7 +446,13 @@ def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
     visuals = properties["pages"]["items"]["properties"]["visuals"]
     assert "maxItems" not in visuals
     assert f"at most {COMPILER_MAX_VISUALS_PER_PAGE} visuals" in visuals["description"]
-    assert "four non-card slots and two additional card-only slots" in visuals["description"]
+    assert "six physical slots" in visuals["description"]
+    assert "card, bar, column, line, table, and slicer" in visuals["description"]
+    assert "model-chosen visual order and business bindings" in visuals["description"]
+    assert "card-only" not in visuals["description"]
+    assert visuals["items"]["properties"]["type"]["enum"] == [
+        "card", "bar", "column", "line", "table", "slicer"
+    ]
     filters = properties["filters"]
     assert "Exact Table.Column" in filters["description"]
     assert "chosen by the model" in filters["description"]
@@ -467,6 +473,8 @@ def test_provider_schemas_derive_capacity_and_grains_from_validated_capability()
     assert design_grains == ["NONE", "DAY", "MONTH"]
     assert "maxItems" not in visual
     assert "at most 4 visuals" in visual["description"]
+    assert "six physical slots" in visual["description"]
+    assert "configured page limit" in visual["description"]
     assert "WEEK" not in requirement_grains
     assert "WEEK" not in design_grains
     with pytest.raises(ValueError, match="exceed the active compiler"):
