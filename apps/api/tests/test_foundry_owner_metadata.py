@@ -1384,6 +1384,7 @@ def owned_nonseekable_tty(monkeypatch: pytest.MonkeyPatch) -> Any:
                 stream = stack.enter_context(original_open(os.dup(slave), mode, buffering=0))
                 patch.setattr(module.sys, name, stream)
             patch.setattr(module.os, "environ", {})
+            patch.setattr(module.sys, "platform", "darwin")
 
             def ps(args: list[str], **kwargs: Any) -> Any:
                 assert args == ["/bin/ps", "-o", "ppid=,comm=", "-p", str(os.getpid())]
@@ -1450,4 +1451,16 @@ def test_private_terminal_captured_context_rejects_before_opening_owned_pty(
             with pytest.raises(ProviderConfigurationError):
                 with module._qualification_terminal(module._PLAN):
                     pytest.fail("captured terminal accepted")
+    assert owned_nonseekable_tty.opened == []
+
+
+
+def test_private_terminal_unsupported_platform_rejects_before_opening_owned_pty(
+    owned_nonseekable_tty: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with owned_nonseekable_tty.activate(), monkeypatch.context() as platform:
+        platform.setattr(module.sys, "platform", "linux")
+        with pytest.raises(ProviderConfigurationError):
+            with module._qualification_terminal(module._PLAN):
+                pytest.fail("unsupported platform accepted")
     assert owned_nonseekable_tty.opened == []
