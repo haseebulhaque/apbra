@@ -440,50 +440,55 @@ def test_invalid_wire_schema_is_rejected_before_any_provider_request(
     assert observed == []
 
 
-def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
+def test_report_design_schema_preserves_ai_authored_geometry_without_count_limits() -> None:
     schema = design_schema()
-    properties = schema["properties"]
-    visuals = properties["pages"]["items"]["properties"]["visuals"]
-    assert "maxItems" not in visuals
-    assert f"at most {COMPILER_MAX_VISUALS_PER_PAGE} visuals" in visuals["description"]
-    assert "six physical slots" in visuals["description"]
-    assert "card, bar, column, line, table, and slicer" in visuals["description"]
-    assert "model-chosen visual order and business bindings" in visuals["description"]
-    assert "card-only" not in visuals["description"]
-    assert visuals["items"]["properties"]["type"]["enum"] == [
-        "card", "bar", "column", "line", "table", "slicer"
+    assert schema["properties"]["schema_version"]["enum"] == [2]
+    page = schema["properties"]["pages"]["items"]["properties"]
+    assert page["width"]["type"] == ["number", "null"]
+    assert page["height"]["type"] == ["number", "null"]
+    assert page["displayOption"]["enum"] == [
+        "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
     ]
-    filters = properties["filters"]
-    assert "Exact Table.Column" in filters["description"]
-    assert "chosen by the model" in filters["description"]
-    assert "editable draft" in filters["description"]
-
-
-def test_provider_schemas_derive_capacity_and_grains_from_validated_capability() -> None:
-    requirement = requirement_analysis_schema(["DAY", "MONTH"])
-    requirement_grains = requirement["properties"]["interpretation"]["properties"][
-        "coverageRequirements"
-    ]["items"]["properties"]["timeGrain"]["enum"]
-    design = report_design_schema(
-        max_visuals_per_page=4, supported_trend_grains=["DAY", "MONTH"]
-    )
-    visual = design["properties"]["pages"]["items"]["properties"]["visuals"]
-    design_grains = visual["items"]["properties"]["timeGrain"]["enum"]
-    assert requirement_grains == ["NONE", "DAY", "MONTH"]
-    assert design_grains == ["NONE", "DAY", "MONTH"]
+    assert schema["properties"]["pages"]["items"]["required"] == [
+        "id", "name", "purpose", "displayOption", "width", "height", "visuals",
+    ]
+    visual = page["visuals"]
     assert "maxItems" not in visual
-    assert "at most 4 visuals" in visual["description"]
-    assert "six physical slots" in visual["description"]
-    assert "configured page limit" in visual["description"]
-    assert "WEEK" not in requirement_grains
-    assert "WEEK" not in design_grains
-    with pytest.raises(ValueError, match="exceed the active compiler"):
-        report_design_schema(
-            max_visuals_per_page=COMPILER_MAX_VISUALS_PER_PAGE + 1,
-            supported_trend_grains=COMPILER_SUPPORTED_TREND_GRAINS,
+    assert "fixed slots" in visual["description"]
+    position = visual["items"]["properties"]["position"]
+    assert set(position["required"]) == {"x", "y", "width", "height", "z", "tabOrder", "angle"}
+    for name in ("x", "y", "width", "height"):
+        assert position["properties"][name] == {"type": "number"}
+    for name in ("z", "tabOrder", "angle"):
+        assert position["properties"][name] == {"type": ["number", "null"]}
+
+
+def test_provider_schema_retains_grain_qualification_not_historical_capacity() -> None:
+    for historical_limit in (4, 7, 20, 100):
+        design = report_design_schema(
+            max_visuals_per_page=historical_limit, supported_trend_grains=["DAY", "MONTH"]
         )
+        visual = design["properties"]["pages"]["items"]["properties"]["visuals"]
+        assert visual["items"]["properties"]["timeGrain"]["enum"] == ["NONE", "DAY", "MONTH"]
+        assert "maxItems" not in visual
+        assert str(historical_limit) not in visual["description"]
     with pytest.raises(ValueError, match="exceed the active compiler"):
         requirement_analysis_schema(["WEEK"])
+
+
+@pytest.mark.parametrize("union", [["null", "number"], ["string", "null"],
+                                   ["number", "null", "string"], ["number"]])
+def test_strict_wire_rejects_unqualified_union_types(union: list[str]) -> None:
+    from apbra_api.model_provider import _validate_strict_wire_schema
+    schema = {"type": "object", "additionalProperties": False, "required": ["value"],
+              "properties": {"value": {"type": union}}}
+    with pytest.raises(ProviderCallError, match="MODEL_SCHEMA_UNSUPPORTED"):
+        _validate_strict_wire_schema(schema)
+
+
+def test_strict_wire_accepts_exact_nullable_geometry_schema() -> None:
+    from apbra_api.model_provider import _validate_strict_wire_schema
+    _validate_strict_wire_schema(design_schema())
 
 
 def foundry_profile(**overrides: object) -> ProviderProfile:

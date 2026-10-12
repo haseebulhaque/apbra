@@ -1,3 +1,4 @@
+import formatV2 from '../knowledge/report-design-format-contract-v2.md?raw';
 import branding from '../knowledge/corporate-branding.md?raw';
 import modelling from '../knowledge/powerbi-modelling-standards.md?raw';
 import design from '../knowledge/report-design-standards.md?raw';
@@ -18,6 +19,8 @@ export const documents:KnowledgeDocument[]=[
   {source:'accessibility-standards.md',version:'1.0.0',prefix:'AC',content:accessibility},
   {source:'deployment-standards.md',version:'1.0.0',prefix:'DP',content:deployment},
 ];
+
+export const geometryDocuments:KnowledgeDocument[]=[...documents,{source:'report-design-format-contract-v2.md',version:'2.0.0',prefix:'RF2',content:formatV2}];
 
 /** Policy headings are the semantic boundary. Sections under 600 estimated tokens
  * remain intact; longer sections use ~500-token windows with ~50-token overlap. */

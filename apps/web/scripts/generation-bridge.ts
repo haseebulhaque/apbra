@@ -1,10 +1,11 @@
+import {assertAuthoredGeometry,geometryFormat} from '../src/aiGeometry';
 import {validateConfirmedRequirementContract,type ConfirmedRequirementContract} from '../src/confirmedRequirements';
 import {createHash} from 'node:crypto';
 import {createBoundDeliveryGuideText} from '../src/deploymentGuide';
 import {validateReportDesign,reportDesignFailureDiagnostic,type AIResult,type RequirementInterpretation} from '../src/foundry';
-import {compilePowerBI,compilerCapabilities,compilerVisualLayout,compilerVisualFits,validateCompilerCapabilities,validateGenericCandidate} from '../src/genericPowerBI';
+import {compilePowerBI,validateCompilerCapabilities,validateGenericCandidate} from '../src/genericPowerBI';
 import {evaluateGuardrails} from '../src/guardrail';
-import {retrieveKnowledge,type Embedder} from '../src/rag';
+import {retrieveKnowledge,geometryDocuments,type Embedder} from '../src/rag';
 import {normalizeReportDesign} from '../src/reportDesignNormalization';
 import type {DataStructure} from '../src/schemaIngestion';
 import type {TenantSettings} from '../src/tenant';
@@ -33,10 +34,9 @@ function fail(error:unknown){
 function qualifiedPolicy(value:unknown):TenantSettings{if(!value||typeof value!=='object')throw new Error('GENERATION_CONFIGURATION_REQUIRED');const policy=value as Record<string,unknown>,generation=policy.generation as Record<string,unknown>|undefined,organisation=policy.organisation as Record<string,unknown>|undefined,branding=policy.branding as Record<string,unknown>|undefined,governance=policy.governance as Record<string,unknown>|undefined;if(!generation||!organisation||!branding||!governance||!Array.isArray(generation.supportedTrendGrains)||typeof organisation.locale!=='string'||typeof branding.themeName!=='string'||typeof branding.primary!=='string'||typeof branding.accent!=='string')throw new Error('GENERATION_CONFIGURATION_INVALID');const tenant=structuredClone(value) as TenantSettings;validateCompilerCapabilities(tenant);return tenant}
 
 
-// Capability facts describe the existing renderer; AI selects page membership and slot order.
-function rendererCapabilities(tenant:TenantSettings,providerManaged=false){
- const types=['card','bar','column','line','table','slicer'] as const;
- return{source:'ACTIVE_COMPILER',pageBounds:compilerCapabilities.page,physicalSlotCount:compilerCapabilities.maxVisualsPerPage,tenantLimits:{maxPages:tenant.governance.maxPages,maxVisualsPerPage:tenant.governance.maxVisualsPerPage},slots:Array.from({length:compilerCapabilities.maxVisualsPerPage},(_,index)=>({index,placements:types.map(type=>({type,...compilerVisualLayout({type},index)})).filter(item=>compilerVisualFits(item))})),layoutBinding:'AI_VISUAL_ARRAY_ORDER_SELECTS_FIXED_RENDERER_SLOTS',unsupportedInteractions:['cross-page slicer synchronization'],knowledgeScope:providerManaged?'PROVIDER_MANAGED_OBSERVED_REFERENCES':'BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG'};
+// Format facts never prescribe presentation or a layout grid.
+function rendererCapabilities(_tenant:TenantSettings,providerManaged=false){
+ return{source:'ACTIVE_COMPILER',...geometryFormat,unsupportedInteractions:['cross-page slicer synchronization'],knowledgeScope:providerManaged?'PROVIDER_MANAGED_OBSERVED_REFERENCES':'BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG'};
 }
 
 async function main(){
@@ -49,7 +49,7 @@ async function main(){
   const keys=['mode','scope','profileId','configurationId','knowledgeBinding','agentVersion','qualification','references','observedToolCount','retrievalEvidence'];
   if(Object.keys(grounding).some(key=>!keys.includes(key))||Object.keys(grounding).length!==keys.length||grounding.mode!=='PROVIDER_MANAGED'||!['SHARED_STANDARDS','TENANT_PRIVATE'].includes(String(grounding.scope))||!['OFFLINE_FIXTURE','LIVE_METADATA_VERIFIED'].includes(String(grounding.qualification))||!['OBSERVED_TOOL_TRACE','ANNOTATIONS_ONLY','NO_OBSERVED_RETRIEVAL'].includes(String(grounding.retrievalEvidence))||!['profileId','configurationId','knowledgeBinding'].every(key=>typeof grounding[key]==='string'&&String(grounding[key]).length>0&&String(grounding[key]).length<=120)||!(grounding.agentVersion===null||typeof grounding.agentVersion==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(grounding.agentVersion))||!Number.isInteger(grounding.observedToolCount)||Number(grounding.observedToolCount)<0||Number(grounding.observedToolCount)>100||!Array.isArray(grounding.references)||grounding.references.length>100||new Set(grounding.references).size!==grounding.references.length||!grounding.references.every(item=>typeof item==='string'&&/^provider:[a-f0-9]{64}$/.test(item)))throw new Error('PROVIDER_GROUNDING_INVALID');
  }
- const localRetrieval=providerManaged?null:await retrieveKnowledge(query,50,localEmbedder);
+ const localRetrieval=providerManaged?null:await retrieveKnowledge(query,50,localEmbedder,geometryDocuments);
  const knowledge=localRetrieval?.retrieved.map(({citation,text})=>({citation,text}))??[];
  if(!providerManaged&&!knowledge.length)throw new Error('GOVERNED_KNOWLEDGE_UNAVAILABLE');
  if(input.operation==='knowledge'){respond({knowledge,rendererCapabilities:rendererCapabilities(tenant,providerManaged)});return}
@@ -60,7 +60,7 @@ async function main(){
  if(input.operation==='generate'&&!input.execution)throw new Error('GENERATION_EXECUTION_BINDING_REQUIRED');
  if(input.reportDesign===undefined||input.reportDesign===null)throw new Error('TRUSTED_REPORT_DESIGN_REQUIRED: no ReportDesign was supplied for local no-model generation.');
  diagnosticStage='REPORT_DESIGN';
- const original=validateReportDesign(input.reportDesign,citationIds,dataStructure,tenant.generation.supportedTrendGrains);
+ const original=validateReportDesign(input.reportDesign,citationIds,dataStructure,tenant.generation.supportedTrendGrains);assertAuthoredGeometry(original);
  diagnosticStage='NORMALIZATION';
  const maxVisualsPerPage=tenant.governance.maxVisualsPerPage,normalization=normalizeReportDesign(original,dataStructure,maxVisualsPerPage);
  if(normalization.status==='FAILED')throw new Error(`REPORT_DESIGN_NORMALIZATION_FAILED: ${JSON.stringify(normalization.normalizationFindings.map(item=>{const pageIndex=original.pages.findIndex(page=>page.id===item.pageId),visualIndex=pageIndex<0?-1:original.pages[pageIndex].visuals.findIndex(visual=>visual.id===item.visualId);return{code:item.code,pageIndex,visualIndex,requestedResultingVisuals:item.requestedResultingVisuals,pageBounds:item.pageBounds,overflow:item.attemptedLayoutSlots?.map(({type,index,right,bottom})=>({type,index,right,bottom}))}}))}`);

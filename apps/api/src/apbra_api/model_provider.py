@@ -22,6 +22,8 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+# Historical callers may still carry this policy metadata. Version-2 schemas
+# never use it to bound or manufacture AI-authored geometry.
 COMPILER_MAX_VISUALS_PER_PAGE = 6
 COMPILER_SUPPORTED_TREND_GRAINS = ("DAY", "MONTH", "QUARTER", "YEAR")
 
@@ -36,10 +38,6 @@ def _validated_schema_capabilities(
         not grains
         or len(set(grains)) != len(grains)
         or any(item not in COMPILER_SUPPORTED_TREND_GRAINS for item in grains)
-        or (
-            max_visuals_per_page is not None
-            and not 1 <= max_visuals_per_page <= COMPILER_MAX_VISUALS_PER_PAGE
-        )
     ):
         raise ValueError("provider schema capabilities exceed the active compiler")
     return grains
@@ -69,6 +67,9 @@ def _validate_strict_wire_schema(schema: dict[str, Any]) -> None:
         if not isinstance(node, dict) or set(node) - allowed:
             raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
         kind = node.get("type")
+        # Only this exact nullable numeric union is qualified for geometry.
+        if kind == ["number", "null"]:
+            kind = "number"
         if not isinstance(kind, str):
             raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
         if kind == "object":
@@ -353,13 +354,11 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
 
 
 def report_design_schema(
-    *, max_visuals_per_page: int, supported_trend_grains: Sequence[str]
+    *, supported_trend_grains: Sequence[str], max_visuals_per_page: int | None = None
 ) -> dict[str, Any]:
-    """Strict provider schema mirroring the canonical ReportDesign contract."""
+    """Strict version-2 wire contract; legacy count metadata does not constrain geometry."""
 
-    grains = _validated_schema_capabilities(
-        supported_trend_grains, max_visuals_per_page=max_visuals_per_page
-    )
+    grains = _validated_schema_capabilities(supported_trend_grains)
     relationship_fields = {
         "fromTable": {"type": "string"},
         "fromColumn": {"type": "string"},
@@ -399,6 +398,14 @@ def report_design_schema(
             "empty categoryField and measureIds."
         ),
         "altText": {"type": "string"},
+        "position": {
+            "type": "object", "additionalProperties": False,
+            "required": ["x", "y", "width", "height", "z", "tabOrder", "angle"],
+            "properties": {
+                **{name: {"type": "number"} for name in ("x", "y", "width", "height")},
+                **{name: {"type": ["number", "null"]} for name in ("z", "tabOrder", "angle")},
+            },
+        },
     }
     page_fields = {
         "id": {"type": "string"},
@@ -409,14 +416,16 @@ def report_design_schema(
             ),
         },
         "purpose": {"type": "string"},
+        "displayOption": {"type": "string", "enum": [
+            "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
+        ]},
+        "width": {"type": ["number", "null"]},
+        "height": {"type": ["number", "null"]},
         "visuals": {
             "type": "array",
             "description": (
-                f"Compiler-ordered visual list. The validated runtime permits at most "
-                f"{max_visuals_per_page} visuals on this page. The active compiler has six "
-                "physical slots, each supporting card, bar, column, line, table, and slicer. "
-                "Preserve the model-chosen visual order and business bindings within "
-                "the configured page limit."
+                "AI-authored visual list. Preserve its exact order, geometry and bindings. "
+                "No fixed slots or visual-count limit is imposed on version-2 geometry."
             ),
             "items": {
                 "type": "object",
@@ -428,7 +437,7 @@ def report_design_schema(
     }
     properties = {
         "artifact_kind": {"type": "string", "enum": ["ReportDesign"]},
-        "schema_version": {"type": "integer", "enum": [1]},
+        "schema_version": {"type": "integer", "enum": [2]},
         "projectName": {"type": "string"},
         "overview": {"type": "string"},
         "audience": {"type": "string"},

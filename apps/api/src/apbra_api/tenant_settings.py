@@ -168,6 +168,8 @@ def private_preview_onboarding_settings_v1(company_display_name: str) -> TenantS
                     "requireKnowledge": True,
                     "requireAccessibility": True,
                     "requireValidation": True,
+                    # Historical policy metadata remains byte-compatible; version-2
+                    # AI geometry does not derive layout or capacity from these numbers.
                     "maxVisualsPerPage": 6,
                     "maxPages": 5,
                     "humanReviewAtVisuals": 6,

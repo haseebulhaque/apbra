@@ -123,7 +123,7 @@ def test_enabled_automatic_generation_requires_valid_provider_configuration(
 
 @pytest.mark.parametrize(
     ("field", "value"),
-    [("maxVisualsPerPage", 7), ("supportedTrendGrains", ["DAY", "WEEK"])],
+    [("maxVisualsPerPage", "not-a-number"), ("supportedTrendGrains", ["DAY", "WEEK"])],
 )
 def test_generation_policy_rejects_unsupported_compiler_capabilities(
     settings: Settings, field: str, value: object

@@ -49,6 +49,20 @@ from apbra_api.persistence import (
 )
 
 
+def authored_test_geometry(design: dict[str, object]) -> dict[str, object]:
+    """Synthetic AI response fixture, never a production geometry fallback."""
+    design["schema_version"] = 2
+    for page_index, page in enumerate(design["pages"]):
+        page.update(displayOption="ActualSizeTopLeft", width=None, height=721.5 + page_index)
+        for index, visual in enumerate(page["visuals"]):
+            visual["position"] = {
+                "x": -10.25 + index * 3, "y": 800.5, "width": 0.5,
+                "height": -2.25, "z": 2.5, "tabOrder": index + 0.25,
+                "angle": None if index % 2 else 13.75,
+            }
+    return design
+
+
 @pytest.mark.parametrize(
     ("failure_kind", "overview"),
     [
@@ -187,6 +201,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         design["standardsApplied"] = [
             {"citation": reference, "decision": "Synthetic applied standard"}
         ]
+    authored_test_geometry(design)
     original_design = copy.deepcopy(design)
     provider = automatic_test_provider([analysis, design])
     provider.profile = provider.profile.model_copy(
@@ -315,7 +330,7 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
             headers=csrf(session),
         )
-        if failure_kind:
+        if failure_kind in {"UNKNOWN_FIELD", "TIME_GRAIN_FIELD"}:
             assert proposed.status_code == 409, proposed.text
             history = runtime.get(
                 f"/api/cases/{case['id']}/automatic-designs",
@@ -344,24 +359,14 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
         assert result["attempt"]["status"] == "ELIGIBLE"
         capabilities = provider.requests[-1].context["rendererCapabilities"]
         assert capabilities["source"] == "ACTIVE_COMPILER"
-        assert capabilities["pageBounds"] == {"width": 1280, "height": 720}
-        assert [slot["index"] for slot in capabilities["slots"]] == list(range(6))
-        supported = {"card", "bar", "column", "line", "table", "slicer"}
-        for slot in capabilities["slots"]:
-            assert {placement["type"] for placement in slot["placements"]} == supported
-            for placement in slot["placements"]:
-                assert placement["index"] == slot["index"]
-                assert placement["x"] == (20, 630)[slot["index"] % 2]
-                assert placement["y"] == (30, 260, 490)[slot["index"] // 2]
-                assert placement["width"] == (285 if placement["type"] == "card" else 580)
-                assert placement["height"] == (120 if placement["type"] == "card" else 200)
-                assert placement["y"] + placement["height"] <= 720
-                assert placement["x"] + placement["width"] <= 1280
+        assert capabilities["designVersion"] == 2
+        assert capabilities["geometryBinding"] == "AI_AUTHORED_EXACT"
+        assert "slots" not in capabilities and "pageBounds" not in capabilities
         assert capabilities["knowledgeScope"] == (
             "PROVIDER_MANAGED_OBSERVED_REFERENCES" if foundry else
             "BUNDLED_DOCUMENTS_ONLY_NO_PROVIDER_MANAGED_TENANT_RAG"
         )
-        assert "APBRA will not reorder" in provider.requests[-1].system_prompt
+        assert "will not supply coordinates, resize, reorder" in provider.requests[-1].system_prompt
         with database.session() as db:
             stored = json.loads(db.scalar(text(
                 "SELECT design_json FROM reviewed_report_designs WHERE id=:id"
@@ -392,12 +397,6 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             assert any(name.endswith(".pbip") for name in archive.namelist())
             assert json.loads(archive.read("ReportDesign.json")) == original_design
             assert "Physical layout pagination" not in archive.read("Delivery-Guide.md").decode()
-            for name in archive.namelist():
-                if name.endswith("/visual.json"):
-                    position = json.loads(archive.read(name))["position"]
-                    assert position["y"] + position["height"] <= 720
-                    assert position["x"] + position["width"] <= 1280
-
             # Validate physical files in the model's page and visual order, not
             # just the source JSON retained alongside the compiled candidate.
             pages_root = f"{original_design['projectName']}.Report/definition/pages"
@@ -440,14 +439,13 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                     visual_files, key=lambda item: item["position"]["tabOrder"]
                 )
                 assert len(ordered_visuals) == len(planned_page["visuals"])
-                for index, (physical, planned) in enumerate(zip(
+                for _index, (physical, planned) in enumerate(zip(
                     ordered_visuals, planned_page["visuals"], strict=True
                 )):
                     kind = planned["type"]
                     assert physical["position"] == {
-                        "x": (20, 630)[index % 2], "y": (30, 260, 490)[index // 2],
-                        "z": 1000 - index, "width": 285 if kind == "card" else 580,
-                        "height": 120 if kind == "card" else 200, "tabOrder": index + 1,
+                        key: value for key, value in planned["position"].items()
+                        if value is not None
                     }
                     assert physical["visual"]["visualType"] == compiled_types[kind]
                     measures = [measure_bindings[item] for item in planned["measureIds"]]
@@ -871,7 +869,7 @@ def reviewed_synthetic_report_design(snapshot: dict[str, object]) -> dict[str, o
     fact_names = {
         measure["field"].split(".")[0] for measure in measures.values() if measure["field"]
     }
-    return {
+    return authored_test_geometry({
         "artifact_kind": "ReportDesign",
         "schema_version": 1,
         "projectName": "ReviewedSyntheticCandidate",
@@ -898,7 +896,7 @@ def reviewed_synthetic_report_design(snapshot: dict[str, object]) -> dict[str, o
         "assumptions": [],
         "warnings": ["LOCAL_DETERMINISTIC_NO_MODEL_CALL: synthetic reviewed test design."],
         "generationRequirements": ["Validate the supplied design through the canonical pipeline."],
-    }
+    })
 
 
 def automatic_test_provider(responses: list[dict[str, object]]) -> DeterministicFakeProvider:
@@ -2312,11 +2310,9 @@ def test_layout_retry_is_ai_authored_and_other_rejections_remain_generic() -> No
         ),
         max_visuals_per_page=6,
     )
-    assert "You own its correction" in layout
-    assert "choose page membership" in layout
-    assert "rendererCapabilities" in layout
-    assert "will not independently allocate pages" in layout
-    assert "do not silently delete content" in layout
+    assert "fixed slots" not in layout
+    assert "tenant page limit" not in layout
+    assert "fully revalidated" in layout
     semantic = _automatic_design_retry_instruction(
         GenerationBridgeFailure(
             "REPORT_DESIGN_SEMANTICS_FAILED",
@@ -2643,3 +2639,88 @@ def test_foundry_observed_reference_flows_through_confirmation_design_guide_and_
     test_editable_draft_whole_chain_preserves_context_and_protected_download(
         settings, database, "", "Grounded draft", True, monkeypatch,
     )
+
+
+@pytest.mark.parametrize("cache", ["command", "equivalent", "none", "conflict"])
+def test_legacy_build_replays_original_artifact_before_new_geometry_gate(
+    monkeypatch: pytest.MonkeyPatch, cache: str,
+) -> None:
+    from types import SimpleNamespace
+
+    import apbra_api.generation as generation_module
+    from apbra_api.domain import IdempotencyConflict
+    from apbra_api.generation import AIAuthoredGeometryRequired, canonical_digest
+
+    design_id = uuid4()
+    design = {"artifact_kind": "ReportDesign", "schema_version": 1, "pages": []}
+    payload = {"binding": {"synthetic": "current-protected-binding"}}
+    semantic = canonical_digest({**payload, "reportDesign": design})
+    historical_input = canonical_digest({"semanticInputDigest": semantic,
+        "reviewedDesignId": str(design_id), "pipelineExecutableDigest": "old-pipeline"})
+    saved = SimpleNamespace(id=uuid4(), input_digest=historical_input,
+        provenance_json=json.dumps({"pipelineExecutableDigest": "old-pipeline"}),
+        command_payload_digest=canonical_digest({"inputDigest": historical_input,
+            "mode": "BUILD", "sourceAttemptId": None}))
+    if cache == "conflict":
+        saved.command_payload_digest = "changed-command"
+    store = SimpleNamespace(
+        generation_attempt_by_command=lambda *args: saved if cache in {"command", "conflict"}
+        else None,
+        equivalent_generation_attempt=lambda *args: None,
+        generation_attempts=lambda *args: [saved] if cache == "equivalent" else [],
+    )
+    service = GenerationService(SimpleNamespace(pipeline_digest="new-pipeline"), None, None)
+    monkeypatch.setattr(service, "_current_payload", lambda *args: (
+        copy.deepcopy(payload), "semantic", "evidence", None, None))
+    monkeypatch.setattr(service, "_eligible_design", lambda *args: (
+        SimpleNamespace(id=design_id, origin="EXPERT_REVIEWED"), design))
+    monkeypatch.setattr(generation_module, "attempt_json", lambda *args: {"id": str(saved.id)})
+    def call() -> tuple[dict[str, object], bool]:
+        return service.start(store, None, uuid4(), contract_id=uuid4(),
+            command_key="synthetic-original-command", reviewed_design_id=design_id)
+    if cache == "none":
+        with pytest.raises(AIAuthoredGeometryRequired):
+            call()
+    elif cache == "conflict":
+        with pytest.raises(IdempotencyConflict):
+            call()
+    else:
+        assert call() == ({"id": str(saved.id)}, False)
+    assert design == {"artifact_kind": "ReportDesign", "schema_version": 1, "pages": []}
+
+
+@pytest.mark.parametrize(
+    "invalid", ["legacy", "unknown-version", "boolean-position", "no-position"],
+)
+def test_new_design_intake_rejects_legacy_or_invalid_geometry_without_saved_version_changes(
+    client: TestClient, database: Database, invalid: str,
+) -> None:
+    member = sign_in(client, "member")
+    case, contract = confirmed_case(client, member, "Show duration by team.", "duration.csv",
+        b"Team,Duration\nA,2\nB,5\n")
+    design = copy.deepcopy(contract["reviewed_report_design"])
+    if invalid == "legacy":
+        design["schema_version"] = 1
+    elif invalid == "unknown-version":
+        design["schema_version"] = 3
+    elif invalid == "boolean-position":
+        design["pages"][0]["visuals"][0]["position"]["x"] = True
+    else:
+        del design["pages"][0]["visuals"][0]["position"]
+    with database.session() as db:
+        before = db.execute(text("SELECT id, design_json, content_digest "
+            "FROM reviewed_report_designs"
+            " WHERE case_id=:id ORDER BY id"), {"id": case["id"]}).all()
+    with TestClient(client.app) as expert:
+        session = sign_in(expert, "uninvited")
+        response = expert.post(f"/api/cases/{case['id']}/reviewed-designs", headers=csrf(session),
+            json={"confirmed_contract_id": contract["id"], "report_design": design})
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == (
+            "AI_AUTHORED_GEOMETRY_REQUIRED" if invalid == "legacy"
+            else "TRUSTED_REPORT_DESIGN_REQUIRED")
+    with database.session() as db:
+        after = db.execute(text("SELECT id, design_json, content_digest "
+            "FROM reviewed_report_designs"
+            " WHERE case_id=:id ORDER BY id"), {"id": case["id"]}).all()
+    assert after == before

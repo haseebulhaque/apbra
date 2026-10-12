@@ -677,11 +677,11 @@ def test_no_qualified_catalog_cannot_authorize_tenant_profile(
     assert isolated.get("/api/tenant-settings").json()["version"] == 1
 
 
-def test_compiler_capability_rejected_at_tenant_boundary(client: TestClient) -> None:
+def test_invalid_historical_policy_type_rejected_at_tenant_boundary(client: TestClient) -> None:
     owner = sign_in(client)
     current = client.get("/api/tenant-settings").json()
     invalid = deepcopy(current["settings"])
-    invalid["generation_policy"]["governance"]["maxVisualsPerPage"] = 7
+    invalid["generation_policy"]["governance"]["maxVisualsPerPage"] = "not-a-number"
     response = client.put(
         "/api/tenant-settings",
         headers=csrf(owner),
@@ -856,3 +856,24 @@ def test_foundry_settings_require_server_capability_and_never_accept_api_keys(
             ).status_code
             == 403
         )
+
+
+def test_historical_policy_capacity_metadata_is_versioned_without_six_visual_coupling(
+    client: TestClient, database: Database,
+) -> None:
+    owner = sign_in(client)
+    current = client.get("/api/tenant-settings").json()
+    with database.session() as db:
+        before = [(row.id, row.settings_json, row.settings_digest) for row in db.scalars(
+            select(TenantSettingsVersionRow)).all()]
+    edited = deepcopy(current["settings"])
+    edited["generation_policy"]["governance"]["maxVisualsPerPage"] = 7
+    updated = client.put("/api/tenant-settings", headers=csrf(owner),
+        json={"expected_version": current["version"], "settings": edited})
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["settings"]["generation_policy"]["governance"]["maxVisualsPerPage"] == 7
+    with database.session() as db:
+        after = {row.id: (row.settings_json, row.settings_digest) for row in db.scalars(
+            select(TenantSettingsVersionRow)).all()}
+    for identity, contents, digest in before:
+        assert after[identity] == (contents, digest)

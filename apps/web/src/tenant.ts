@@ -6,6 +6,7 @@ export type TenantSettings={
   ai:{provider:'Azure AI Foundry';authentication:'API key'|'Entra ID'};
   rag:{enabled:boolean;topK:number;chunkTargetTokens:number;overlapStrategy:string;indexType:string;strategy:string};
   clarification:{defaultMode:'BUSINESS'|'ADVANCED';maxRounds:number;maxQuestionsPerRound:number;maxAnswerCharacters:number};
+  /** Numeric layout preferences are historical metadata for schema2, not generation gates. */
   governance:{requireKnowledge:boolean;requireAccessibility:boolean;requireValidation:boolean;maxVisualsPerPage:number;maxPages:number;humanReviewAtVisuals:number};
   generation:{enabled:boolean;supportedCapabilities:string[];supportedTrendGrains:SupportedTrendGrain[];validationRequired:boolean;policy:string};
   branding:{primary:string;accent:string;reportNaming:string;pageNaming:string;executiveConvention:string;themeName:string};
