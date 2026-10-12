@@ -1,4 +1,4 @@
-import {assertAuthoredGeometry,geometryFormat} from '../src/aiGeometry';
+import {assertAuthoredGeometry,assertGeometryJSONNumbers,geometryFormat,stringifyExactNumbers} from '../src/aiGeometry';
 import {validateConfirmedRequirementContract,type ConfirmedRequirementContract} from '../src/confirmedRequirements';
 import {createHash} from 'node:crypto';
 import {createBoundDeliveryGuideText} from '../src/deploymentGuide';
@@ -16,8 +16,8 @@ const encoder=new TextEncoder();
 function deterministicVector(text:string){const values=new Array<number>(48).fill(0);for(const [index,value] of encoder.encode(text.normalize('NFKC').toLocaleLowerCase('en-US')).entries())values[(value+index*17)%values.length]+=((value%29)+1)/29;const norm=Math.sqrt(values.reduce((sum,value)=>sum+value*value,0))||1;return values.map(value=>value/norm)}
 const localEmbedder:Embedder=async(input:string[]):Promise<AIResult<number[][]>>=>({value:input.map(deterministicVector),metrics:{model:'LOCAL_DETERMINISTIC_HASH_EMBEDDING_NO_MODEL_CALL',latencyMs:0,promptTokens:null,completionTokens:null,totalTokens:null}});
 
-function respond(value:unknown){process.stdout.write(`${JSON.stringify({ok:true,value})}\n`)}
-const digest=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+function respond(value:unknown){process.stdout.write(`${stringifyExactNumbers({ok:true,value})}\n`)}
+const digest=(value:unknown)=>createHash('sha256').update(stringifyExactNumbers(value)).digest('hex');
 const diagnosticCodes=new Set(['CONFIRMED_REQUIREMENT_CONTRACT_INVALID','GENERATION_CONFIGURATION_REQUIRED','GENERATION_CONFIGURATION_INVALID','GOVERNED_KNOWLEDGE_UNAVAILABLE','GENERATION_INPUT_LIMIT','GENERATION_OPERATION_REQUIRED','GENERATION_EXECUTION_BINDING_REQUIRED','TRUSTED_REPORT_DESIGN_REQUIRED','REPORT_DESIGN_NORMALIZATION_FAILED','REPORT_DESIGN_SEMANTICS_FAILED','GUARDRAILS_BLOCKED','CANDIDATE_VALIDATION_FAILED']);
 let diagnosticStage='INPUT';
 function fail(error:unknown){
@@ -41,7 +41,7 @@ function rendererCapabilities(_tenant:TenantSettings,providerManaged=false){
 
 async function main(){
  const chunks:Buffer[]=[];for await(const chunk of process.stdin)chunks.push(Buffer.from(chunk));const bytes=Buffer.concat(chunks);if(bytes.length>20_000_000)throw new Error('GENERATION_INPUT_LIMIT');
- const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure),tenant=qualifiedPolicy(input.generationPolicy);
+ assertGeometryJSONNumbers(bytes.toString('utf8'));const input=JSON.parse(bytes.toString('utf8')) as Request,dataStructure=input.dataStructure as DataStructure,contract=validateConfirmedRequirementContract(input.contract as ConfirmedRequirementContract,dataStructure),tenant=qualifiedPolicy(input.generationPolicy);
  const query=[contract.objective,contract.audience,...contract.businessQuestions.map(item=>item.question),...contract.obligations.flatMap(item=>[...item.measureNames,...item.fields])].join('\n');
  const providerManaged=input.knowledgeMode==='PROVIDER_MANAGED'||input.providerGrounding!==undefined;
  const grounding=input.providerGrounding as Record<string,unknown>|undefined;

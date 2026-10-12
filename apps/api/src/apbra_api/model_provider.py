@@ -14,8 +14,9 @@ import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from threading import RLock, Timer
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -660,6 +661,49 @@ class ModelProvider(Protocol):
     def structured(self, request: ProviderRequest) -> ProviderResult: ...
 
 
+def _decode_structured_candidate(text: str) -> Any:
+    """Check raw geometry numerals before Python's float parser can lose precision."""
+    value = json.loads(text)
+    if not isinstance(value, dict) or value.get("artifact_kind") != "ReportDesign" \
+            or value.get("schema_version") != 2:
+        return value
+    raw = json.loads(text, parse_float=Decimal)
+    pages = raw.get("pages")
+    if not isinstance(pages, list):
+        return value
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+        visuals = page.get("visuals")
+        if isinstance(visuals, list):
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+        for values, names in groups:
+            for name in names:
+                original = values.get(name)
+                if type(original) not in (int, float, Decimal):
+                    continue
+                try:
+                    parsed = float(cast(int | float | Decimal, original))
+                    if not math.isfinite(parsed):
+                        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
+                    if isinstance(original, Decimal):
+                        same = (parsed == int(original) if original == original.to_integral_value()
+                                else Decimal(str(parsed)) == original)
+                    else:
+                        same = parsed == original
+                    if not same:
+                        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
+                except (OverflowError, ValueError):
+                    raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE") from None
+    return value
+
+
 def _candidate_digest(value: dict[str, Any]) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -780,7 +824,9 @@ class OpenAICompatibleProvider:
                         usage_totals[name] += amount
                         usage_seen.add(name)
                 content = payload["choices"][0]["message"]["content"]
-                value = json.loads(content) if isinstance(content, str) else content
+                value = (
+                    _decode_structured_candidate(content) if isinstance(content, str) else content
+                )
                 if not isinstance(value, dict):
                     raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
                 candidate_digest = _candidate_digest(value)
@@ -1180,7 +1226,7 @@ class FoundryAgentResponsesProvider:
                     references.add(reference)
         if len(texts) != 1 or len(references) > 100:
             raise ProviderCallError("MODEL_OUTPUT_INVALID")
-        value = json.loads(texts[0])
+        value = _decode_structured_candidate(texts[0])
         if not isinstance(value, dict):
             raise ProviderCallError("MODEL_OUTPUT_INVALID")
         standards = value.get("standardsApplied", [])

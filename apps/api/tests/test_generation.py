@@ -70,7 +70,7 @@ def authored_test_geometry(design: dict[str, object]) -> dict[str, object]:
         ("UNKNOWN_FIELD", ""), ("TIME_GRAIN_FIELD", ""), ("", "Shared-name draft"),
         ("", "AI-chosen pages"), ("", "AI-chosen alternative"),
         ("", "Six standard visuals"), ("", "Model-reordered mixed visuals"),
-        ("", "Former layout order"),
+        ("", "Former layout order"), ("", "Large exact geometry"),
         ("LAYOUT_LIMIT", ""), ("LAYOUT_CAPACITY", ""),
     ],
 )
@@ -202,6 +202,9 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
             {"citation": reference, "decision": "Synthetic applied standard"}
         ]
     authored_test_geometry(design)
+    if overview == "Large exact geometry":
+        design["pages"][0]["width"] = 2**60
+        design["pages"][0]["visuals"][0]["position"].update(x=2**60, z=2**60)
     original_design = copy.deepcopy(design)
     provider = automatic_test_provider([analysis, design])
     provider.profile = provider.profile.model_copy(
@@ -429,9 +432,14 @@ def test_editable_draft_whole_chain_preserves_context_and_protected_download(
                               "line": "lineChart", "table": "tableEx", "slicer": "slicer"}
             for page_id, planned_page in zip(page_order, original_design["pages"], strict=True):
                 prefix = f"{pages_root}/{page_id}"
-                assert json.loads(archive.read(f"{prefix}/page.json"))["displayName"] == (
-                    planned_page["name"]
-                )
+                physical_page = json.loads(archive.read(f"{prefix}/page.json"))
+                assert physical_page["displayName"] == planned_page["name"]
+                assert physical_page["displayOption"] == planned_page["displayOption"]
+                for dimension in ("width", "height"):
+                    if planned_page.get(dimension) is None:
+                        assert dimension not in physical_page
+                    else:
+                        assert physical_page[dimension] == planned_page[dimension]
                 visual_files = [json.loads(archive.read(name)) for name in archive.namelist()
                                 if name.startswith(prefix + "/visuals/")
                                 and name.endswith("/visual.json")]
@@ -2690,7 +2698,8 @@ def test_legacy_build_replays_original_artifact_before_new_geometry_gate(
 
 
 @pytest.mark.parametrize(
-    "invalid", ["legacy", "unknown-version", "boolean-position", "no-position"],
+    "invalid", ["legacy", "unknown-version", "boolean-position", "no-position",
+                "precision-position", "precision-page"],
 )
 def test_new_design_intake_rejects_legacy_or_invalid_geometry_without_saved_version_changes(
     client: TestClient, database: Database, invalid: str,
@@ -2705,6 +2714,10 @@ def test_new_design_intake_rejects_legacy_or_invalid_geometry_without_saved_vers
         design["schema_version"] = 3
     elif invalid == "boolean-position":
         design["pages"][0]["visuals"][0]["position"]["x"] = True
+    elif invalid == "precision-position":
+        design["pages"][0]["visuals"][0]["position"]["angle"] = 9007199254740993
+    elif invalid == "precision-page":
+        design["pages"][0]["height"] = 9007199254740993
     else:
         del design["pages"][0]["visuals"][0]["position"]
     with database.session() as db:
@@ -2718,6 +2731,7 @@ def test_new_design_intake_rejects_legacy_or_invalid_geometry_without_saved_vers
         assert response.status_code == 422, response.text
         assert response.json()["error"]["code"] == (
             "AI_AUTHORED_GEOMETRY_REQUIRED" if invalid == "legacy"
+            else "REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE" if invalid.startswith("precision-")
             else "TRUSTED_REPORT_DESIGN_REQUIRED")
     with database.session() as db:
         after = db.execute(text("SELECT id, design_json, content_digest "

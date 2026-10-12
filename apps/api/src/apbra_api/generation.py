@@ -77,15 +77,78 @@ def canonical_digest(value: object) -> str:
     ).hexdigest()
 
 
+def _geometry_number_representable(value: object) -> bool:
+    """Preserve stored numeric values through JSON parsing into binary64 numbers.
+
+    This is an exact representation check, not a magnitude or safe-integer cap.
+    Python floats already use binary64; integers must survive its conversion.
+    """
+    if type(value) not in (int, float):
+        return False
+    try:
+        encoded = float(cast(int | float, value))
+    except OverflowError:
+        return False
+    return math.isfinite(encoded) and encoded == value
+
+
+def _assert_geometry_representable(design: object) -> None:
+    if not isinstance(design, dict) or design.get("schema_version") != 2:
+        return
+    pages = design.get("pages")
+    if not isinstance(pages, list):
+        return
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+        visuals = page.get("visuals")
+        if isinstance(visuals, list):
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+        for values, names in groups:
+            for name in names:
+                value = values.get(name)
+                if type(value) in (int, float) and not _geometry_number_representable(value):
+                    raise GeometryRepresentationUnsupported()
+
+
+def _geometry_wire_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    wire_payload = copy.deepcopy(payload)
+    design = wire_payload.get("reportDesign")
+    if isinstance(design, dict) and design.get("schema_version") == 2:
+        pages = design.get("pages")
+        if not isinstance(pages, list):
+            return wire_payload
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+            visuals = page.get("visuals")
+            if not isinstance(visuals, list):
+                continue
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+            for values, names in groups:
+                for name in names:
+                    value = values.get(name)
+                    if type(value) is float and value.is_integer():
+                        # Equivalent numeric wire spelling, not a geometry repair.
+                        # Python's shortest float decimal can spell a different integer.
+                        values[name] = int(value)
+    return wire_payload
+
+
 def _has_ai_geometry(design: dict[str, Any]) -> bool:
     """Document-format geometry only; no layout or business quality judgement."""
-    def number(value: object) -> bool:
-        if type(value) not in (int, float):
-            return False
-        try:
-            return math.isfinite(cast(int | float, value))
-        except OverflowError:
-            return False
 
     pages = design.get("pages")
     if type(design.get("schema_version")) is not int or design["schema_version"] != 2:
@@ -97,7 +160,8 @@ def _has_ai_geometry(design: dict[str, Any]) -> bool:
             "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
         ):
             return False
-        if any(page.get(key) is not None and not number(page[key]) for key in ("width", "height")):
+        if any(page.get(key) is not None and not _geometry_number_representable(page[key])
+               for key in ("width", "height")):
             return False
         if not isinstance(page.get("visuals"), list):
             return False
@@ -107,9 +171,11 @@ def _has_ai_geometry(design: dict[str, Any]) -> bool:
                 "x", "y", "width", "height", "z", "tabOrder", "angle",
             }:
                 return False
-            if any(not number(position.get(key)) for key in ("x", "y", "width", "height")):
+            if any(not _geometry_number_representable(position.get(key))
+                   for key in ("x", "y", "width", "height")):
                 return False
-            if any(position.get(key) is not None and not number(position[key])
+            if any(position.get(key) is not None
+                   and not _geometry_number_representable(position[key])
                    for key in ("z", "tabOrder", "angle")):
                 return False
     return True
@@ -120,6 +186,15 @@ class AIAuthoredGeometryRequired(GenerationUnavailable):
     public_message = (
         "This saved plan predates AI-authored geometry. Request a fresh report proposal "
         "before a new build; existing plans, build history and files remain available."
+    )
+
+
+class GeometryRepresentationUnsupported(GenerationFailed):
+    code = "REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE"
+    public_message = (
+        "This report plan contains geometry the renderer cannot preserve exactly. "
+        "Request a revised proposal with representable numeric geometry. "
+        "Saved plans, build history and existing files remain available."
     )
 
 
@@ -151,11 +226,13 @@ class GenerationBridge:
         self.pipeline_digest = hashlib.sha256(self.executable.read_bytes()).hexdigest()
 
     def _call(self, payload: dict[str, Any], *, validate_candidate: bool) -> dict[str, Any]:
+        _assert_geometry_representable(payload.get("reportDesign"))
         if not hmac.compare_digest(
             hashlib.sha256(self.executable.read_bytes()).hexdigest(), self.pipeline_digest
         ):
             raise GenerationFailed()
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        wire_payload = _geometry_wire_payload(payload)
+        encoded = json.dumps(wire_payload, sort_keys=True, separators=(",", ":")).encode()
         if len(encoded) > MAX_BRIDGE_BYTES:
             raise GenerationFailed()
         process: subprocess.Popen[bytes] | None = None
@@ -977,6 +1054,7 @@ class GenerationService:
             raise ReviewedDesignRequired() from exc
         if report_design.get("schema_version") == 1:
             raise AIAuthoredGeometryRequired()
+        _assert_geometry_representable(report_design)
         if (
             report_design.get("artifact_kind") != "ReportDesign"
             or report_design.get("schema_version") != 2
@@ -1534,6 +1612,7 @@ class GenerationService:
                     if hmac.compare_digest(saved.input_digest, original_input):
                         return attempt_json(store, saved), False
             raise AIAuthoredGeometryRequired()
+        _assert_geometry_representable(report_design)
         if not _has_ai_geometry(report_design):
             raise ReviewedDesignRequired()
         if mode == "RETRY":

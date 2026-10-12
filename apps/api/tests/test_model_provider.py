@@ -2939,3 +2939,41 @@ def test_qualification_oct11_rechecks_after_factory_without_sdk_auth(
     assert not any(event.startswith("token:") for event in state.events)
     assert state.receipts == []
     assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize("where", ["page.width", "page.height", "x", "y", "width", "height",
+                                  "z", "tabOrder", "angle"])
+@pytest.mark.parametrize("token,accepted", [
+    ("9007199254740993", False), ("9007199254740993.0", False),
+    ("9.007199254740993e15", False), ("1.0000000000000001", False),
+    ("0.123456789012345678901", False),
+    ("1152921504606846976", True), ("-1152921504606846976", True),
+    ("0.1", True), ("-0.25", True), ("0", True),
+])
+def test_raw_model_geometry_precision_is_checked_before_float_decoding(
+    where: str, token: str, accepted: bool,
+) -> None:
+    from apbra_api.model_provider import _decode_structured_candidate
+    value = {"artifact_kind": "ReportDesign", "schema_version": 2,
+             "pages": [{"width": None, "height": None, "visuals": [{"position": {}}]}]}
+    target = value["pages"][0] if where.startswith("page.") else (
+        value["pages"][0]["visuals"][0]["position"])
+    target[where.split(".")[-1]] = "RAW_GEOMETRY_TOKEN"
+    text = json.dumps(value).replace('"RAW_GEOMETRY_TOKEN"', token)
+    if accepted:
+        decoded = _decode_structured_candidate(text)
+        result = decoded["pages"][0] if where.startswith("page.") else (
+            decoded["pages"][0]["visuals"][0]["position"])
+        assert result[where.split(".")[-1]] == json.loads(token)
+    else:
+        with pytest.raises(ProviderCallError, match="^REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE$"):
+            _decode_structured_candidate(text)
+
+
+def test_raw_precision_guard_does_not_rewrite_legacy_design_or_non_geometry_numbers() -> None:
+    from apbra_api.model_provider import _decode_structured_candidate
+    legacy = ('{"artifact_kind":"ReportDesign","schema_version":1,'
+              '"pages":[{"width":9007199254740993}]}')
+    assert _decode_structured_candidate(legacy) == json.loads(legacy)
+    other = '{"artifact_kind":"ReportDesign","schema_version":2,"unrelated":9007199254740993}'
+    assert _decode_structured_candidate(other) == json.loads(other)
