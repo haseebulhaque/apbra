@@ -25,6 +25,7 @@ a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
 f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
+k=runpy.run_path(str(Path(__file__).with_name("check_knowledge_lifecycle_20261012.py")))
 
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 
@@ -38,220 +39,220 @@ CAPSTONE_VALIDATION_PATHS={'apps/web/README.md','apps/web/src/validation.ts','ap
 CAPSTONE_GENERATION_PATHS={'apps/web/src/archive.ts','apps/web/src/App.test.tsx','apps/web/src/raw.d.ts','apps/web/src/App.tsx','apps/web/src/powerbi.ts','apps/web/src/powerbi.test.ts','apps/web/README.md'}
 CAPSTONE_DESIGN_PATHS={'apps/web/src/KnowledgePanel.tsx','apps/web/src/knowledge.test.tsx','apps/web/README.md','apps/web/src/designPlan.ts','apps/web/src/App.tsx','apps/web/src/designPlan.test.ts'}
 DEPLOYMENT_GUIDE_PATHS={
-    'apps/web/src/deploymentGuide.ts',
-    'apps/web/src/deploymentGuide.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/package.json',
-    'apps/web/package-lock.json',
+'apps/web/src/deploymentGuide.ts',
+'apps/web/src/deploymentGuide.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/package.json',
+'apps/web/package-lock.json',
 }
 CAPSTONE_UX_PATHS={
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/style.css',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/EnterpriseUI.tsx',
-    'apps/web/src/EnterpriseUI.test.tsx',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/style.css',
+'apps/web/src/App.test.tsx',
+'apps/web/src/EnterpriseUI.tsx',
+'apps/web/src/EnterpriseUI.test.tsx',
 }
 MEASURE_RESOLUTION_PATHS={
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/guardrail.ts',
-    'apps/web/src/guardrail.test.ts',
-    'apps/web/src/genericPowerBI.ts',
-    'apps/web/src/genericPowerBI.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/guardrail.ts',
+'apps/web/src/guardrail.test.ts',
+'apps/web/src/genericPowerBI.ts',
+'apps/web/src/genericPowerBI.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
 }
 REPORT_DESIGN_NORMALIZATION_PATHS={
-    'apps/web/src/reportDesignNormalization.ts',
-    'apps/web/src/reportDesignNormalization.test.ts',
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
+'apps/web/src/reportDesignNormalization.ts',
+'apps/web/src/reportDesignNormalization.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
 }
 CAPSTONE_DOCUMENTATION_PATHS={
-    'README.md',
-    'ARCHITECTURE.md',
-    'REQUIREMENTS.md',
-    'AI-RAG-SPEC.md',
-    'POWERBI-GENERATION-SPEC.md',
-    'MVP-ACCEPTANCE-CRITERIA.md',
-    'apps/web/README.md',
-    'docs/engineering/capstone-evidence.md',
-    'docs/engineering/codex-handoff.md',
+'README.md',
+'ARCHITECTURE.md',
+'REQUIREMENTS.md',
+'AI-RAG-SPEC.md',
+'POWERBI-GENERATION-SPEC.md',
+'MVP-ACCEPTANCE-CRITERIA.md',
+'apps/web/README.md',
+'docs/engineering/capstone-evidence.md',
+'docs/engineering/codex-handoff.md',
 }
 CAPSTONE_DOCUMENTATION_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-140-capstone-documentation.json',
-    'tests/bootstrap/test_capstone_documentation_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-140-capstone-documentation.json',
+'tests/bootstrap/test_capstone_documentation_scope.py',
 }
 MEASURE_CONTRACT_PIPELINE_PATHS={
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
 }
 MEASURE_CONTRACT_PIPELINE_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-141-measure-contract-pipeline.json',
-    'tests/bootstrap/test_measure_contract_pipeline_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-141-measure-contract-pipeline.json',
+'tests/bootstrap/test_measure_contract_pipeline_scope.py',
 }
 LAYOUT_REPAIR_PATHS={
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/reportDesignNormalization.ts',
-    'apps/web/src/reportDesignNormalization.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/src/reportDesignNormalization.ts',
+'apps/web/src/reportDesignNormalization.test.ts',
 }
 LAYOUT_REPAIR_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-142-layout-repair.json',
-    'tests/bootstrap/test_layout_repair_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-142-layout-repair.json',
+'tests/bootstrap/test_layout_repair_scope.py',
 }
 TYPED_CONFIRMED_REQUIREMENTS_PATHS={
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/confirmedRequirements.ts',
-    'apps/web/src/confirmedRequirements.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/reportDesignNormalization.ts',
-    'apps/web/src/reportDesignNormalization.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/confirmedRequirements.ts',
+'apps/web/src/confirmedRequirements.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/src/reportDesignNormalization.ts',
+'apps/web/src/reportDesignNormalization.test.ts',
 }
 TYPED_CONFIRMED_REQUIREMENTS_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-143-typed-confirmed-requirements.json',
-    'tests/bootstrap/test_typed_confirmed_requirements_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-143-typed-confirmed-requirements.json',
+'tests/bootstrap/test_typed_confirmed_requirements_scope.py',
 }
 AI_NATIVE_CLARIFICATION_PATHS={
-    'apps/web/src/clarification.ts',
-    'apps/web/src/clarification.test.ts',
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/confirmedRequirements.ts',
-    'apps/web/src/confirmedRequirements.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/tenant.ts',
+'apps/web/src/clarification.ts',
+'apps/web/src/clarification.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/confirmedRequirements.ts',
+'apps/web/src/confirmedRequirements.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/src/tenant.ts',
 }
 AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-144-ai-native-iterative-clarification.json',
-    'tests/bootstrap/test_ai_native_clarification_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-144-ai-native-iterative-clarification.json',
+'tests/bootstrap/test_ai_native_clarification_scope.py',
 }
 GENERIC_TIME_GRAIN_PATHS = {
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/reportDesignNormalization.ts',
-    'apps/web/src/reportDesignNormalization.test.ts',
-    'apps/web/src/genericPowerBI.ts',
-    'apps/web/src/genericPowerBI.test.ts',
-    'apps/web/src/tenant.ts',
+'apps/web/src/App.test.tsx',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/reportDesignNormalization.ts',
+'apps/web/src/reportDesignNormalization.test.ts',
+'apps/web/src/genericPowerBI.ts',
+'apps/web/src/genericPowerBI.test.ts',
+'apps/web/src/tenant.ts',
 }
 GENERIC_TIME_GRAIN_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-145-generic-time-grain-support.json',
-    'tests/bootstrap/test_generic_time_grain_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-145-generic-time-grain-support.json',
+'tests/bootstrap/test_generic_time_grain_scope.py',
 }
 POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-146-post-capstone-mvp-baseline-reconciliation.json',
-    'tests/bootstrap/test_post_capstone_mvp_baseline_scope.py',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-146-post-capstone-mvp-baseline-reconciliation.json',
+'tests/bootstrap/test_post_capstone_mvp_baseline_scope.py',
 }
 POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS = {
-    'AGENTS.md',
-    'docs/decisions/implementation-baseline.md',
-    'README.md',
-    'ARCHITECTURE.md',
-    'REQUIREMENTS.md',
-    'AI-RAG-SPEC.md',
-    'POWERBI-GENERATION-SPEC.md',
-    'MVP-ACCEPTANCE-CRITERIA.md',
-    'apps/web/README.md',
-    'docs/engineering/capstone-evidence.md',
-    'docs/engineering/codex-handoff.md',
+'AGENTS.md',
+'docs/decisions/implementation-baseline.md',
+'README.md',
+'ARCHITECTURE.md',
+'REQUIREMENTS.md',
+'AI-RAG-SPEC.md',
+'POWERBI-GENERATION-SPEC.md',
+'MVP-ACCEPTANCE-CRITERIA.md',
+'apps/web/README.md',
+'docs/engineering/capstone-evidence.md',
+'docs/engineering/codex-handoff.md',
 }
 POST_CAPSTONE_PRODUCT_RECONCILIATION_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-148-post-capstone-product-reconciliation.json',
-    'tests/bootstrap/test_post_capstone_product_reconciliation_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-148-post-capstone-product-reconciliation.json',
+'tests/bootstrap/test_post_capstone_product_reconciliation_scope.py',
+'docs/source-register.json',
 }
 DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS = {
-    'DATA-MODEL.md',
-    'docs/engineering/codex-handoff.md',
+'DATA-MODEL.md',
+'docs/engineering/codex-handoff.md',
 }
 DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-159-data-model-documentation-reconciliation.json',
-    'tests/bootstrap/test_data_model_documentation_reconciliation_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-159-data-model-documentation-reconciliation.json',
+'tests/bootstrap/test_data_model_documentation_reconciliation_scope.py',
+'docs/source-register.json',
 }
 CONFIRMATION_READINESS_INTEGRITY_PATHS = {
-    'apps/web/src/clarification.ts',
-    'apps/web/src/clarification.test.ts',
-    'apps/web/src/confirmedRequirements.ts',
-    'apps/web/src/confirmedRequirements.test.ts',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/README.md',
-    'docs/engineering/codex-handoff.md',
+'apps/web/src/clarification.ts',
+'apps/web/src/clarification.test.ts',
+'apps/web/src/confirmedRequirements.ts',
+'apps/web/src/confirmedRequirements.test.ts',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/README.md',
+'docs/engineering/codex-handoff.md',
 }
 CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS = {
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-147-confirmation-readiness-integrity.json',
-    'tests/bootstrap/test_confirmation_readiness_integrity_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-147-confirmation-readiness-integrity.json',
+'tests/bootstrap/test_confirmation_readiness_integrity_scope.py',
+'docs/source-register.json',
 }
 INVITED_PRIVATE_CASE_FOUNDATION_PATHS = {
-    'apps/api/.dockerignore',
-    'apps/api/.env.example',
-    'apps/api/Dockerfile',
-    'apps/api/README.md',
-    'apps/api/pyproject.toml',
-    'apps/api/uv.lock',
-    'apps/api/alembic.ini',
-    'apps/api/alembic/env.py',
-    'apps/api/alembic/script.py.mako',
-    'apps/api/alembic/versions/20260923_01_invited_private_case_foundation.py',
-    'apps/api/src/apbra_api/__init__.py',
-    'apps/api/src/apbra_api/config.py',
-    'apps/api/src/apbra_api/domain.py',
-    'apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/auth_boundary.py',
-    'apps/api/src/apbra_api/oidc_adapter.py',
-    'apps/api/src/apbra_api/authorization.py',
-    'apps/api/src/apbra_api/persistence.py',
-    'apps/api/src/apbra_api/bootstrap.py',
-    'apps/api/src/apbra_api/api.py',
-    'apps/api/src/apbra_api/main.py',
-    'apps/api/tests/conftest.py',
-    'apps/api/tests/test_authentication.py',
-    'apps/api/tests/test_authorization.py',
-    'apps/api/tests/test_invitations.py',
-    'apps/api/tests/test_cases.py',
-    'apps/api/tests/test_api.py',
-    'apps/api/tests/test_migrations.py',
-    'apps/api/tests/test_bootstrap.py',
-    'apps/web/.env.example',
-    'apps/web/README.md',
-    'apps/web/package.json',
-    'apps/web/package-lock.json',
-    'apps/web/vite.config.ts',
-    'apps/web/playwright.config.ts',
-    'apps/web/e2e/private-case.spec.ts',
-    'apps/web/src/api.ts',
-    'apps/web/src/api.test.ts',
-    'apps/web/src/privateCases.tsx',
-    'apps/web/src/privateCases.test.tsx',
-    'apps/web/src/EnterpriseApp.tsx',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/style.css',
-    'compose.yaml',
-    '.github/workflows/bootstrap.yml',
+'apps/api/.dockerignore',
+'apps/api/.env.example',
+'apps/api/Dockerfile',
+'apps/api/README.md',
+'apps/api/pyproject.toml',
+'apps/api/uv.lock',
+'apps/api/alembic.ini',
+'apps/api/alembic/env.py',
+'apps/api/alembic/script.py.mako',
+'apps/api/alembic/versions/20260923_01_invited_private_case_foundation.py',
+'apps/api/src/apbra_api/__init__.py',
+'apps/api/src/apbra_api/config.py',
+'apps/api/src/apbra_api/domain.py',
+'apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/auth_boundary.py',
+'apps/api/src/apbra_api/oidc_adapter.py',
+'apps/api/src/apbra_api/authorization.py',
+'apps/api/src/apbra_api/persistence.py',
+'apps/api/src/apbra_api/bootstrap.py',
+'apps/api/src/apbra_api/api.py',
+'apps/api/src/apbra_api/main.py',
+'apps/api/tests/conftest.py',
+'apps/api/tests/test_authentication.py',
+'apps/api/tests/test_authorization.py',
+'apps/api/tests/test_invitations.py',
+'apps/api/tests/test_cases.py',
+'apps/api/tests/test_api.py',
+'apps/api/tests/test_migrations.py',
+'apps/api/tests/test_bootstrap.py',
+'apps/web/.env.example',
+'apps/web/README.md',
+'apps/web/package.json',
+'apps/web/package-lock.json',
+'apps/web/vite.config.ts',
+'apps/web/playwright.config.ts',
+'apps/web/e2e/private-case.spec.ts',
+'apps/web/src/api.ts',
+'apps/web/src/api.test.ts',
+'apps/web/src/privateCases.tsx',
+'apps/web/src/privateCases.test.tsx',
+'apps/web/src/EnterpriseApp.tsx',
+'apps/web/src/App.test.tsx',
+'apps/web/src/style.css',
+'compose.yaml',
+  '.github/workflows/bootstrap.yml',
     'scripts/check_ci_policy.py',
     'tests/bootstrap/test_bootstrap.py',
     'README.md',
@@ -2287,6 +2288,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         fixture_staging, e = f['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        knowledge_lifecycle, e = k['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2860,6 +2863,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (owner_metadata, o['P']),
             (raw_ingress, u['P']),
             (fixture_staging, f['P']),
+            (knowledge_lifecycle, k['P']),
     )
         registered_tasks = {registered['task_id']: registered for registered, _ in
     legacy_authorities + bound_authorities if registered is not None}
@@ -2869,6 +2873,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
     task if active_branch in {
     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
     }
+                else knowledge_lifecycle if active_branch in {k['B'], k['R']}
                 else fixture_staging if active_branch in {f['B'], f['R']}
                 else raw_ingress if active_branch in {u['B'], u['R']}
                 else owner_metadata if active_branch in {o['B'], o['R']}
@@ -2909,6 +2914,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not o['stage'](active_task_id, active_branch, changed_paths) and
                     not u['stage'](active_task_id, active_branch, changed_paths) and
                     not f['stage'](active_task_id, active_branch, changed_paths) and
+                    not k['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
     active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
     changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -3019,6 +3025,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += o['errors'](active_task_id, active_branch, changed_paths)
             errors += u['errors'](active_task_id, active_branch, changed_paths)
             errors += f['errors'](active_task_id, active_branch, changed_paths)
+            errors += k['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3374,6 +3381,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      and name in o['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and u['stage'](active_task_id, active_branch, changed_paths)
                      and name in u['G'] and path_allowed(name, task, card)) or
+                    (active_task is not None and k['stage'](active_task_id, active_branch, changed_paths)
+                     and name in k['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and f['stage'](active_task_id, active_branch, changed_paths)
                      and name in f['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)
