@@ -1362,3 +1362,105 @@ def test_close_clear_failure_still_closes_resources_and_completes(flow: Any) -> 
     finally:
         exported.release()
         private.clear()
+
+
+@pytest.fixture
+def owned_nonseekable_tty(monkeypatch: pytest.MonkeyPatch) -> Any:
+    import builtins
+    import os
+    import pty
+    from contextlib import ExitStack
+
+    master, slave = pty.openpty()
+    original_open = builtins.open
+    opened = []
+
+    @contextmanager
+    def activate() -> Any:
+        # Patch inside the test call phase, after pytest's capture setup. All
+        # actual stream and open mode behavior still uses this owned PTY.
+        with ExitStack() as stack, monkeypatch.context() as patch:
+            for name, mode in (("stdin", "rb"), ("stdout", "wb"), ("stderr", "wb")):
+                stream = stack.enter_context(original_open(os.dup(slave), mode, buffering=0))
+                patch.setattr(module.sys, name, stream)
+            patch.setattr(module.os, "environ", {})
+            patch.setattr(module.sys, "platform", "darwin")
+
+            def ps(args: list[str], **kwargs: Any) -> Any:
+                assert args == ["/bin/ps", "-o", "ppid=,comm=", "-p", str(os.getpid())]
+                return SimpleNamespace(stdout="1 /Applications/Utilities/Terminal.app/Terminal")
+
+            patch.setattr(module.subprocess, "run", ps)
+
+            def own_open(file: Any, *args: Any, **kwargs: Any) -> Any:
+                assert file == "/dev/tty"
+                opened.append((args, kwargs))
+                return original_open(os.dup(slave), *args, **kwargs)
+
+            patch.setattr(builtins, "open", own_open)
+            yield
+
+    try:
+        yield SimpleNamespace(master=master, slave=slave, opened=opened, activate=activate)
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
+def test_private_terminal_real_nonseekable_pty_opens_writes_and_exact_confirmation(
+    owned_nonseekable_tty: Any,
+) -> None:
+    import os
+
+    fixture = owned_nonseekable_tty
+    with fixture.activate():
+        with module._qualification_terminal(module._PLAN) as terminal:
+            assert terminal.isatty() and not terminal.seekable()
+            os.write(fixture.master, b"CONFIRM SYNTHETIC\n")
+            module._confirm_private(
+                terminal, module._PLAN, "Synthetic private prompt", "CONFIRM SYNTHETIC"
+            )
+            assert module.select.select([fixture.master], [], [], 1)[0]
+            output = os.read(fixture.master, 4096)
+            assert b"Synthetic private prompt" in output and b"Type CONFIRM SYNTHETIC" in output
+    assert terminal.closed and os.isatty(fixture.slave)
+    assert fixture.opened == [(("r+b",), {"buffering": 0})]
+    with pytest.raises(ValueError):
+        terminal.write("closed")
+
+
+@pytest.mark.parametrize("reply", [b"NO\n", b"CONFIRM SYNTHETIC EXTRA\n", b"\x04"])
+def test_private_terminal_real_pty_cancel_extra_and_eof_reject_and_close(
+    owned_nonseekable_tty: Any, reply: bytes
+) -> None:
+    import os
+
+    with owned_nonseekable_tty.activate(), pytest.raises(ProviderConfigurationError):
+        with module._qualification_terminal(module._PLAN) as terminal:
+            os.write(owned_nonseekable_tty.master, reply)
+            module._confirm_private(terminal, module._PLAN, "Synthetic prompt", "CONFIRM SYNTHETIC")
+    assert terminal.closed
+
+
+def test_private_terminal_captured_context_rejects_before_opening_owned_pty(
+    owned_nonseekable_tty: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with owned_nonseekable_tty.activate():
+        with monkeypatch.context() as capture:
+            capture.setattr(module.os, "environ", {"CODEX_SESSION_ID": "synthetic-capture"})
+            with pytest.raises(ProviderConfigurationError):
+                with module._qualification_terminal(module._PLAN):
+                    pytest.fail("captured terminal accepted")
+    assert owned_nonseekable_tty.opened == []
+
+
+
+def test_private_terminal_unsupported_platform_rejects_before_opening_owned_pty(
+    owned_nonseekable_tty: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with owned_nonseekable_tty.activate(), monkeypatch.context() as platform:
+        platform.setattr(module.sys, "platform", "linux")
+        with pytest.raises(ProviderConfigurationError):
+            with module._qualification_terminal(module._PLAN):
+                pytest.fail("unsupported platform accepted")
+    assert owned_nonseekable_tty.opened == []
