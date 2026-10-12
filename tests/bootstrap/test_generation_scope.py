@@ -7,6 +7,8 @@ import shutil
 import tempfile
 import unittest
 
+from historical_fixture_staging import historical_names
+
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('bootstrap_generation', ROOT / 'scripts/check_bootstrap.py')
 c = importlib.util.module_from_spec(spec)
@@ -30,7 +32,7 @@ class GenerationScopeTests(unittest.TestCase):
         for mutation, expected_error in [('valid', None), *mutations, ('source-status', 'Proposed sources cannot authorize implementation'), ('symlink', 'File outside safe bootstrap scope: apps/web/src/powerbi.ts')]:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                names = {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)}
+                names = historical_names(ROOT)
                 names.update(c.CAPSTONE_GENERATION_PATHS | {task_path})
                 for name in names:
                     target = root / name

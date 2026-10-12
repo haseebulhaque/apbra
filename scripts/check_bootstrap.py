@@ -24,6 +24,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
+f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
 
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 
@@ -2284,6 +2285,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         raw_ingress, e = u['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        fixture_staging, e = f['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2856,6 +2859,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (ai_layout, a['P']),
             (owner_metadata, o['P']),
             (raw_ingress, u['P']),
+            (fixture_staging, f['P']),
     )
         registered_tasks = {registered['task_id']: registered for registered, _ in
     legacy_authorities + bound_authorities if registered is not None}
@@ -2865,6 +2869,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
     task if active_branch in {
     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
     }
+                else fixture_staging if active_branch in {f['B'], f['R']}
                 else raw_ingress if active_branch in {u['B'], u['R']}
                 else owner_metadata if active_branch in {o['B'], o['R']}
                 else ai_layout if active_branch in {a['B'], a['R']}
@@ -2878,14 +2883,14 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
     DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
     } else provider_retrieval_task if active_branch in {
     PROVIDER_RETRIEVAL_BRANCH, PROVIDER_RETRIEVAL_REGISTRATION_BRANCH,
-                } else foundry_schema_task
-            )
+    } else foundry_schema_task
+    )
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
-                private_content_storage_task if active_branch in {
-                    PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
-                } else hosted_web_release_task
-            )
+    private_content_storage_task if active_branch in {
+    PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
+    } else hosted_web_release_task
+    )
         if changed_paths is not None and changed_paths:
             active_task = registered_tasks.get(active_task_id or '')
             if active_task_id is None:
@@ -2903,50 +2908,51 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not a['stage'](active_task_id, active_branch, changed_paths) and
                     not o['stage'](active_task_id, active_branch, changed_paths) and
                     not u['stage'](active_task_id, active_branch, changed_paths) and
+                    not f['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
-                         active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
-                         changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
+    active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
+    changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-169' and
-                         active_branch == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH and
-                         changed_paths == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS) and
+    active_branch == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH and
+    changed_paths == BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-171' and
-                         active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH and
-                         changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
+    active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH and
+    changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-171' and
-                         active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH and
-                         changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
+    active_branch == BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH and
+    changed_paths == BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
-                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
+    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH and
+    changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
-                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS) and
+    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH and
+    changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS) and
                     not (active_task_id == 'APBRA-174' and
-                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS) and
+    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH and
+    changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-174' and
-                         active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
-                         changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS) and
+    active_branch == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH and
+    changed_paths == MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS) and
                     not (active_task_id == 'APBRA-175' and
-                         active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
-                         changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS) and
+    active_branch == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH and
+    changed_paths == DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-176' and
-                         active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
-                         changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS) and
+    active_branch == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH and
+    changed_paths == OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-172' and
-                         active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
-                         changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
+    active_branch == PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH and
+    changed_paths == PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-108' and
-                         active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
-                         changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
+    active_branch == CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH and
+    changed_paths == CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
-                         changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS) and
+    active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and
+    changed_paths == LOCAL_RECOVERY_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
-                         changed_paths == PROVIDER_RETRIEVAL_REGISTRATION_PATHS) and
+    active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
+    changed_paths == PROVIDER_RETRIEVAL_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
+    active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
                          changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
                          active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
@@ -3012,6 +3018,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += a['errors'](active_task_id, active_branch, changed_paths)
             errors += o['errors'](active_task_id, active_branch, changed_paths)
             errors += u['errors'](active_task_id, active_branch, changed_paths)
+            errors += f['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3367,6 +3374,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      and name in o['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and u['stage'](active_task_id, active_branch, changed_paths)
                      and name in u['G'] and path_allowed(name, task, card)) or
+                    (active_task is not None and f['stage'](active_task_id, active_branch, changed_paths)
+                     and name in f['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)
                      and name in g['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and r['stage'](active_task_id, active_branch, changed_paths)
