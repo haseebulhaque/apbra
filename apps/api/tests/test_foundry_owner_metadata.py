@@ -424,7 +424,7 @@ def test_keyboard_interrupt_cleans_memory(flow: Any, stage: str) -> None:
     cleanup(flow)
 
 
-@pytest.mark.parametrize("bad", ["uri", "code", "expired", "duplicate"])
+@pytest.mark.parametrize("bad", ["uri", "code", "expired", "duplicate", "nonfinite", "valid"])
 def test_private_challenge_is_bounded_and_naturally_expires(flow: Any, bad: str) -> None:
     class TTY(io.StringIO):
         def isatty(self) -> bool:
@@ -445,6 +445,13 @@ def test_private_challenge_is_bounded_and_naturally_expires(flow: Any, bad: str)
         uri = "https://evil.invalid" if bad == "uri" else "https://microsoft.com/devicelogin"
         code = "bad\ncode" if bad == "code" else "ABC-123"
         expiry = datetime.fromtimestamp(999 if bad == "expired" else 1600, UTC)
+        if bad == "nonfinite":
+
+            class InvalidExpiry(datetime):
+                def timestamp(self) -> float:
+                    return float("nan")
+
+            expiry = InvalidExpiry(2026, 1, 1, tzinfo=UTC)
         callback(uri, code, expiry)
         if bad == "duplicate":
             callback(uri, code, expiry)
@@ -452,9 +459,12 @@ def test_private_challenge_is_bounded_and_naturally_expires(flow: Any, bad: str)
 
     flow.sdk.authenticate = authenticate
     try:
-        with pytest.raises(ProviderConfigurationError):
-            run(flow)
-        assert not any(x.startswith("GET") for x in flow.events)
+        if bad == "valid":
+            assert run(flow)["status"] == "METADATA_OBSERVED_ONLY"
+        else:
+            with pytest.raises(ProviderConfigurationError):
+                run(flow)
+            assert not any(x.startswith("GET") for x in flow.events)
         cleanup(flow)
     finally:
         module._qualification_terminal = original_terminal
@@ -847,4 +857,32 @@ def test_sdk_close_interrupt_is_sanitized_and_state_released(flow: Any) -> None:
     flow.sdk.close = interrupted
     with pytest.raises(ProviderConfigurationError):
         run(flow)
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("error_type", [SystemExit, KeyboardInterrupt])
+def test_cli_sanitizes_sdk_process_interrupts(
+    error_type: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+
+    def failed() -> Any:
+        raise error_type(CANARY)
+
+    monkeypatch.setattr(module, "run_owner_metadata", failed)
+    with pytest.raises(SystemExit) as error:
+        module.main()
+    assert str(error.value) == "Foundry owner metadata is unavailable."
+    output = capsys.readouterr()
+    assert CANARY not in output.out + output.err
+
+
+def test_sdk_system_exit_is_fixed_error_and_cleans(flow: Any) -> None:
+    def stopped(**kwargs: Any) -> Any:
+        raise SystemExit(CANARY)
+
+    flow.sdk.authenticate = stopped
+    with pytest.raises(ProviderConfigurationError) as error:
+        run(flow)
+    assert CANARY not in str(error.value)
     cleanup(flow)

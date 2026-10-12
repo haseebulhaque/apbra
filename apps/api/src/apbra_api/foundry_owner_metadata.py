@@ -461,15 +461,17 @@ def run_owner_metadata(
                 def prompt(uri: str, code: str, expires: datetime) -> None:
                     assert memory is not None
                     memory.guard(confirmed=False)
+                    expiry = expires.timestamp()
                     if (
                         not terminal.isatty()
-                        or expires.timestamp() <= time.time()
+                        or not math.isfinite(expiry)
+                        or expiry <= time.time()
                         or uri != "https://microsoft.com/devicelogin"
                         or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code)
                         or memory._device_expiry is not None
                     ):
                         raise _qualification_error()
-                    memory._device_expiry = expires.timestamp()
+                    memory._device_expiry = expiry
                     terminal.write(f"Complete the approved sign-in at {uri} using code {code}.\n")
                     terminal.flush()
 
@@ -566,7 +568,7 @@ def run_owner_metadata(
                 memory.close()
                 if memory._cleanup_failed:
                     raise _qualification_error()
-    except Exception:
+    except (Exception, SystemExit):
         raise _qualification_error() from None
 
 
@@ -575,7 +577,7 @@ def main() -> None:
         raise SystemExit("Foundry owner metadata is unavailable.")
     try:
         print(json.dumps(run_owner_metadata(), sort_keys=True))
-    except (Exception, KeyboardInterrupt):
+    except BaseException:
         raise SystemExit("Foundry owner metadata is unavailable.") from None
 
 
