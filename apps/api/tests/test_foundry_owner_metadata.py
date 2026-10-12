@@ -1583,7 +1583,7 @@ def test_diagnostic_actual_boundaries_are_fixed_and_private(
     "mode,stage,category",
     [
         ("before", "AUTHENTICATION_BEFORE_CALLBACK", "AUTHENTICATION_FAILED"),
-        ("invalid", "CALLBACK_VALIDATION", "QUALIFICATION_REJECTED"),
+        ("invalid", "CALLBACK_URI", "QUALIFICATION_REJECTED"),
         ("write", "CALLBACK_OUTPUT", "TERMINAL_IO_FAILED"),
         ("after", "AUTHENTICATION_AFTER_CALLBACK", "AUTHENTICATION_FAILED"),
     ],
@@ -1855,3 +1855,267 @@ def test_cli_opaque_exception_class_hooks_never_execute_or_leak(
     assert hooks == []
     assert CANARY not in terminal_output.getvalue()
     cleanup(flow)
+
+
+@pytest.fixture
+def installed_device_code_request_token() -> Any:
+    """Exact installed 1.26 method/decorator, fake self only; no identity import."""
+    import functools
+    import hashlib
+    import importlib.metadata
+    import sysconfig
+    from datetime import datetime, timezone
+
+    from azure.core.exceptions import ClientAuthenticationError
+
+    assert importlib.metadata.version("azure-identity") == "1.26.0"
+    purelib = Path(sysconfig.get_path("purelib"))
+    source = purelib / "azure/identity/_credentials/device_code.py"
+    wrapper = purelib / "azure/identity/_internal/decorators.py"
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == (
+        "0d75bdf62e8588a27511e4dba8ca8b6d1656f33a47a4992ec9444749ee7a8bc1"
+    )
+    assert hashlib.sha256(wrapper.read_bytes()).hexdigest() == (
+        "b8cf9a3f816c5584f6691d415f8d6476f1c7b3cdd7c41f8ed2f63346add8530e"
+    )
+    decorator = next(
+        node
+        for node in ast.walk(ast.parse(wrapper.read_bytes()))
+        if isinstance(node, ast.FunctionDef) and node.name == "wrap_exceptions"
+    )
+    credential = next(
+        node
+        for node in ast.parse(source.read_bytes()).body
+        if isinstance(node, ast.ClassDef) and node.name == "DeviceCodeCredential"
+    )
+    method = next(
+        node
+        for node in credential.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_request_token"
+    )
+    namespace = {
+        "functools": functools,
+        "ClientAuthenticationError": ClientAuthenticationError,
+        "datetime": datetime,
+        "timezone": timezone,
+        "time": module.time,
+        "Dict": dict,
+        "Any": Any,
+    }
+    # Only SHA-pinned installed SDK AST bodies, never arbitrary input or credential startup.
+    exec(  # noqa: S102 - Execute only pinned trusted SDK AST, never input or startup.
+        compile(ast.Module(body=[decorator], type_ignores=[]), str(wrapper), "exec"),
+        namespace,
+    )
+    exec(  # noqa: S102 - Execute only pinned trusted SDK AST, never input or startup.
+        compile(ast.Module(body=[method], type_ignores=[]), str(source), "exec"),
+        namespace,
+    )
+    return namespace["_request_token"]
+
+
+@pytest.mark.parametrize(
+    "case,stage",
+    [
+        ("standard", "AUTHENTICATION_AFTER_CALLBACK"),
+        ("state", "CALLBACK_STATE"),
+        ("expiry-conversion", "CALLBACK_EXPIRY_CONVERSION"),
+        ("terminal", "CALLBACK_TERMINAL"),
+        ("expired", "CALLBACK_EXPIRY_VALUE"),
+        ("nonfinite", "CALLBACK_EXPIRY_VALUE"),
+        ("uri", "CALLBACK_URI"),
+        ("code", "CALLBACK_CODE"),
+        ("code-type", "CALLBACK_CODE"),
+        ("reentry", "CALLBACK_REENTRY"),
+        ("missing-uri", "AUTHENTICATION_BEFORE_CALLBACK"),
+        ("sdk-expiry-type", "AUTHENTICATION_BEFORE_CALLBACK"),
+    ],
+)
+def test_installed_sdk_ast_wrapper_preserves_guards_and_distinguishes_callback_checks(
+    flow: Any,
+    case: str,
+    stage: str,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    import socket
+    from datetime import UTC
+
+    denied: list[str] = []
+
+    def no_network(*args: Any, **kwargs: Any) -> Any:
+        denied.append("network")
+        raise AssertionError("Synthetic network denied")
+
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    monkeypatch.setattr(socket, "create_connection", no_network)
+
+    class PrivateTTY(io.StringIO):
+        def isatty(self) -> bool:
+            return case != "terminal"
+
+    private = PrivateTTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+    fake_flow = {
+        "verification_uri": "https://microsoft.com/devicelogin",
+        "user_code": "SYNTH1234",
+        "expires_at": 1200,
+        "expires_in": 200,
+    }
+    if case == "uri":
+        fake_flow["verification_uri"] = "https://microsoft.com/devicelogin/"
+    if case == "code":
+        fake_flow["user_code"] = CANARY + "_"
+    if case == "code-type":
+        fake_flow["user_code"] = 123
+    if case == "expired":
+        fake_flow["expires_at"] = 999
+    if case == "missing-uri":
+        del fake_flow["verification_uri"]
+    if case == "sdk-expiry-type":
+        fake_flow["expires_at"] = CANARY
+    calls: list[str] = []
+    sdk_shapes: list[tuple[type[Any], type[Any], bool]] = []
+
+    class Expiry:
+        def timestamp(self) -> float:
+            if case == "expiry-conversion":
+                print(CANARY)
+                raise ValueError(CANARY)
+            return float("nan")
+
+    class FakeMSAL:
+        def initiate_device_flow(self, scopes: list[str]) -> Any:
+            assert scopes == [module._SCOPE]
+            calls.append("flow")
+            return fake_flow
+
+        def acquire_token_by_device_flow(self, payload: Any, **kwargs: Any) -> Any:
+            assert payload is fake_flow
+            calls.append("poll")
+            raise ValueError(
+                CANARY
+            )  # Deliberate offline stop after the accepted challenge.
+
+    fake_msal = FakeMSAL()
+
+    def callback(uri: str, code: str, expires: Any) -> None:
+        sdk_shapes.append((type(uri), type(code), expires.tzinfo is UTC))
+        # Explicit fault injection AFTER proving the SDK's canonical datetime shape.
+        # These expiry faults do not assert the real SDK normally emits another type.
+        if case in {"expiry-conversion", "nonfinite"}:
+            expires = Expiry()
+        memory = flow.memories[0]
+        if case == "state":
+            memory._private_approved = False
+        if case == "reentry":
+            memory._device_expiry = 1200
+        flow.options["prompt_callback"](uri, code, expires)
+
+    fake_self = SimpleNamespace(
+        _get_app=lambda **kwargs: fake_msal, _prompt_callback=callback, _timeout=60
+    )
+
+    def auth(**kwargs: Any) -> Any:
+        return installed_device_code_request_token(fake_self, module._SCOPE)
+
+    flow.sdk.authenticate = auth
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == stage
+    assert result["category"] == (
+        "AUTHENTICATION_FAILED"
+        if case in {"standard", "missing-uri", "sdk-expiry-type"}
+        else "CALLBACK_REJECTED"
+    )
+    assert calls == (["flow", "poll"] if case == "standard" else ["flow"])
+    if case not in {"missing-uri", "sdk-expiry-type"}:
+        assert sdk_shapes[0][0] is str and sdk_shapes[0][2] is True
+    if case == "standard":
+        assert "SYNTH1234" in private.getvalue()
+    else:
+        assert private.getvalue() == ""
+    assert denied == []
+    cleanup(flow)
+    assert not any(
+        event.startswith("TOKEN:") or event.startswith("GET:") for event in flow.events
+    )
+
+
+def test_callback_guard_order_and_original_predicates_are_exactly_preserved() -> None:
+    old = ast.parse(
+        subprocess.check_output(
+            [  # noqa: S607 - Fixed immutable public source comparison; no arbitrary command.
+                "git",
+                "show",
+                "1b792aa5f7e28b1e341961758fd8f5bb53fef760:apps/api/src/apbra_api/foundry_owner_metadata.py",
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    current = ast.parse(Path(module.__file__).read_text())
+    original = next(
+        node
+        for node in ast.walk(old)
+        if isinstance(node, ast.FunctionDef) and node.name == "prompt"
+    )
+    updated = next(
+        node
+        for node in ast.walk(current)
+        if isinstance(node, ast.FunctionDef) and node.name == "prompt"
+    )
+    old_predicates = next(
+        node.test.values
+        for node in original.body
+        if isinstance(node, ast.If) and isinstance(node.test, ast.BoolOp)
+    )
+    checks = [node for node in updated.body if isinstance(node, ast.If)]
+    self_contained = [
+        value
+        for node in checks
+        for value in (
+            node.test.values if isinstance(node.test, ast.BoolOp) else [node.test]
+        )
+    ]
+    assert [ast.dump(value) for value in self_contained] == [
+        ast.dump(value) for value in old_predicates
+    ]
+    assert all(
+        ast.dump(ast.Module(body=node.body, type_ignores=[]))
+        == ast.dump(ast.Module(body=checks[0].body, type_ignores=[]))
+        for node in checks
+    )
+    # Restore the single original OR statement and original stage marker, then
+    # compare the entire callback AST, including conversion BEFORE terminal check.
+    updated.body = [
+        node
+        for node in updated.body
+        if not (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "mark"
+            and node.value.args[0].value
+            in {
+                "CALLBACK_STATE",
+                "CALLBACK_EXPIRY_CONVERSION",
+                "CALLBACK_TERMINAL",
+                "CALLBACK_EXPIRY_VALUE",
+                "CALLBACK_URI",
+                "CALLBACK_CODE",
+                "CALLBACK_REENTRY",
+            }
+        )
+    ]
+    first = next(i for i, node in enumerate(updated.body) if isinstance(node, ast.If))
+    updated.body[first : first + len(checks)] = [
+        next(node for node in original.body if isinstance(node, ast.If))
+    ]
+    updated.body.insert(0, original.body[0])
+    assert ast.dump(updated) == ast.dump(original)
