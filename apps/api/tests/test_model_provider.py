@@ -440,50 +440,55 @@ def test_invalid_wire_schema_is_rejected_before_any_provider_request(
     assert observed == []
 
 
-def test_report_design_schema_exposes_existing_compiler_visual_bounds() -> None:
+def test_report_design_schema_preserves_ai_authored_geometry_without_count_limits() -> None:
     schema = design_schema()
-    properties = schema["properties"]
-    visuals = properties["pages"]["items"]["properties"]["visuals"]
-    assert "maxItems" not in visuals
-    assert f"at most {COMPILER_MAX_VISUALS_PER_PAGE} visuals" in visuals["description"]
-    assert "six physical slots" in visuals["description"]
-    assert "card, bar, column, line, table, and slicer" in visuals["description"]
-    assert "model-chosen visual order and business bindings" in visuals["description"]
-    assert "card-only" not in visuals["description"]
-    assert visuals["items"]["properties"]["type"]["enum"] == [
-        "card", "bar", "column", "line", "table", "slicer"
+    assert schema["properties"]["schema_version"]["enum"] == [2]
+    page = schema["properties"]["pages"]["items"]["properties"]
+    assert page["width"]["type"] == ["number", "null"]
+    assert page["height"]["type"] == ["number", "null"]
+    assert page["displayOption"]["enum"] == [
+        "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
     ]
-    filters = properties["filters"]
-    assert "Exact Table.Column" in filters["description"]
-    assert "chosen by the model" in filters["description"]
-    assert "editable draft" in filters["description"]
-
-
-def test_provider_schemas_derive_capacity_and_grains_from_validated_capability() -> None:
-    requirement = requirement_analysis_schema(["DAY", "MONTH"])
-    requirement_grains = requirement["properties"]["interpretation"]["properties"][
-        "coverageRequirements"
-    ]["items"]["properties"]["timeGrain"]["enum"]
-    design = report_design_schema(
-        max_visuals_per_page=4, supported_trend_grains=["DAY", "MONTH"]
-    )
-    visual = design["properties"]["pages"]["items"]["properties"]["visuals"]
-    design_grains = visual["items"]["properties"]["timeGrain"]["enum"]
-    assert requirement_grains == ["NONE", "DAY", "MONTH"]
-    assert design_grains == ["NONE", "DAY", "MONTH"]
+    assert schema["properties"]["pages"]["items"]["required"] == [
+        "id", "name", "purpose", "displayOption", "width", "height", "visuals",
+    ]
+    visual = page["visuals"]
     assert "maxItems" not in visual
-    assert "at most 4 visuals" in visual["description"]
-    assert "six physical slots" in visual["description"]
-    assert "configured page limit" in visual["description"]
-    assert "WEEK" not in requirement_grains
-    assert "WEEK" not in design_grains
-    with pytest.raises(ValueError, match="exceed the active compiler"):
-        report_design_schema(
-            max_visuals_per_page=COMPILER_MAX_VISUALS_PER_PAGE + 1,
-            supported_trend_grains=COMPILER_SUPPORTED_TREND_GRAINS,
+    assert "fixed slots" in visual["description"]
+    position = visual["items"]["properties"]["position"]
+    assert set(position["required"]) == {"x", "y", "width", "height", "z", "tabOrder", "angle"}
+    for name in ("x", "y", "width", "height"):
+        assert position["properties"][name] == {"type": "number"}
+    for name in ("z", "tabOrder", "angle"):
+        assert position["properties"][name] == {"type": ["number", "null"]}
+
+
+def test_provider_schema_retains_grain_qualification_not_historical_capacity() -> None:
+    for historical_limit in (4, 7, 20, 100):
+        design = report_design_schema(
+            max_visuals_per_page=historical_limit, supported_trend_grains=["DAY", "MONTH"]
         )
+        visual = design["properties"]["pages"]["items"]["properties"]["visuals"]
+        assert visual["items"]["properties"]["timeGrain"]["enum"] == ["NONE", "DAY", "MONTH"]
+        assert "maxItems" not in visual
+        assert str(historical_limit) not in visual["description"]
     with pytest.raises(ValueError, match="exceed the active compiler"):
         requirement_analysis_schema(["WEEK"])
+
+
+@pytest.mark.parametrize("union", [["null", "number"], ["string", "null"],
+                                   ["number", "null", "string"], ["number"]])
+def test_strict_wire_rejects_unqualified_union_types(union: list[str]) -> None:
+    from apbra_api.model_provider import _validate_strict_wire_schema
+    schema = {"type": "object", "additionalProperties": False, "required": ["value"],
+              "properties": {"value": {"type": union}}}
+    with pytest.raises(ProviderCallError, match="MODEL_SCHEMA_UNSUPPORTED"):
+        _validate_strict_wire_schema(schema)
+
+
+def test_strict_wire_accepts_exact_nullable_geometry_schema() -> None:
+    from apbra_api.model_provider import _validate_strict_wire_schema
+    _validate_strict_wire_schema(design_schema())
 
 
 def foundry_profile(**overrides: object) -> ProviderProfile:
@@ -2934,3 +2939,61 @@ def test_qualification_oct11_rechecks_after_factory_without_sdk_auth(
     assert not any(event.startswith("token:") for event in state.events)
     assert state.receipts == []
     assert_qualification_cleanup(state)
+
+
+@pytest.mark.parametrize("where", ["page.width", "page.height", "x", "y", "width", "height",
+                                  "z", "tabOrder", "angle"])
+@pytest.mark.parametrize("token,accepted", [
+    ("9007199254740993", False), ("9007199254740993.0", False),
+    ("9.007199254740993e15", False), ("1.0000000000000001", False),
+    ("0.123456789012345678901", False),
+    ("1152921504606846976", True), ("-1152921504606846976", True),
+    ("0.1", True), ("-0.25", True), ("0", True),
+])
+def test_raw_model_geometry_precision_is_checked_before_float_decoding(
+    where: str, token: str, accepted: bool,
+) -> None:
+    from apbra_api.model_provider import _decode_structured_candidate
+    value = {"artifact_kind": "ReportDesign", "schema_version": 2,
+             "pages": [{"width": None, "height": None, "visuals": [{"position": {}}]}]}
+    target = value["pages"][0] if where.startswith("page.") else (
+        value["pages"][0]["visuals"][0]["position"])
+    target[where.split(".")[-1]] = "RAW_GEOMETRY_TOKEN"
+    text = json.dumps(value).replace('"RAW_GEOMETRY_TOKEN"', token)
+    if accepted:
+        decoded = _decode_structured_candidate(text)
+        result = decoded["pages"][0] if where.startswith("page.") else (
+            decoded["pages"][0]["visuals"][0]["position"])
+        assert result[where.split(".")[-1]] == json.loads(token)
+    else:
+        with pytest.raises(ProviderCallError, match="^REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE$"):
+            _decode_structured_candidate(text)
+
+
+def test_raw_precision_guard_does_not_rewrite_legacy_design_or_non_geometry_numbers() -> None:
+    from apbra_api.model_provider import _decode_structured_candidate
+    legacy = ('{"artifact_kind":"ReportDesign","schema_version":1,'
+              '"pages":[{"width":9007199254740993}]}')
+    assert _decode_structured_candidate(legacy) == json.loads(legacy)
+    other = '{"artifact_kind":"ReportDesign","schema_version":2,"unrelated":9007199254740993}'
+    assert _decode_structured_candidate(other) == json.loads(other)
+
+
+@pytest.mark.parametrize("version", ["2.0000000000000001", "1.9999999999999999"])
+@pytest.mark.parametrize("geometry", ["0.25", "9007199254740993.0"])
+def test_raw_version_alias_cannot_skip_precision_checks_or_gain_v2_execution(
+    version: str, geometry: str,
+) -> None:
+    from apbra_api.model_provider import (
+        _decode_structured_candidate,
+        validate_report_design_raw_ingress,
+    )
+    raw = ('{"artifact_kind":"ReportDesign","schema_version":' + version
+           + ',"pages":[{"visuals":[{"position":{"x":' + geometry + '}}]}]}')
+    assert json.loads(raw)["schema_version"] == 2
+    for validate in (
+        lambda: _decode_structured_candidate(raw),
+        lambda: validate_report_design_raw_ingress('{"report_design":' + raw + '}'),
+    ):
+        with pytest.raises(ProviderCallError, match="^REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE$"):
+            validate()
