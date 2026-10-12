@@ -171,6 +171,21 @@ def flow(monkeypatch: pytest.MonkeyPatch) -> Any:
         return httpx.Client(transport=httpx.MockTransport(handler), **kwargs)
 
     state.factory, state.client = factory, client
+
+    def inline_get(
+        url: str, token: str, timeout: float, cap: int, factory: Any, memory: Any, buffer: bytearray
+    ) -> None:
+        # These legacy semantic fakes are NOT process/deadline qualification.
+        started = module.time.monotonic()
+        raw = module._read_http_metadata(url, token, timeout, cap, factory)
+        try:
+            if module.time.monotonic() - started >= timeout:
+                raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_UNAVAILABLE")
+            memory.append_private(buffer, bytes(raw))
+        finally:
+            raw.clear()
+
+    monkeypatch.setattr(module, "_run_owned_get", inline_get)
     return state
 
 
@@ -886,3 +901,413 @@ def test_sdk_system_exit_is_fixed_error_and_cleans(flow: Any) -> None:
         run(flow)
     assert CANARY not in str(error.value)
     cleanup(flow)
+
+
+class SpawnFakeFactory:
+    """Only imported by synthetic child commands; never performs a socket request."""
+
+    def __init__(self, mode: str) -> None:
+        self.mode = mode
+
+    def __call__(self, **kwargs: Any) -> httpx.Client:
+        import time
+
+        assert sys.flags.isolated and sys.dont_write_bytecode
+        assert "apbra_api.main" not in sys.modules and "azure.identity" not in sys.modules
+        assert kwargs["trust_env"] is False and kwargs["follow_redirects"] is False
+        mode = self.mode
+
+        class Trickle(httpx.SyncByteStream):
+            def __iter__(self) -> Any:
+                for chunk in [b"{", b'"ok":', b"true", b"}"]:
+                    time.sleep(0.22)
+                    print(CANARY)
+                    print(CANARY, file=sys.stderr)
+                    logging.error(CANARY)
+                    yield chunk
+
+        def response(request: httpx.Request) -> httpx.Response:
+            print(CANARY)
+            print(CANARY, file=sys.stderr)
+            logging.error(CANARY)
+            assert (
+                request.method == "GET" and request.headers["Authorization"] == "Bearer " + CANARY
+            )
+            if mode == "block":
+                time.sleep(10)
+            if mode == "ignore-term":
+                import signal
+
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                time.sleep(10)
+            if mode == "trickle":
+                return httpx.Response(
+                    200, headers={"content-type": "application/json"}, stream=Trickle()
+                )
+            if mode == "failure":
+                return httpx.Response(403, text=CANARY)
+            if mode == "duplicate":
+                return httpx.Response(
+                    200, headers={"content-type": "application/json"}, content=b'{"x":1,"x":2}'
+                )
+            return httpx.Response(200, json={"synthetic": True})
+
+        return httpx.Client(transport=httpx.MockTransport(response), **kwargs)
+
+
+def spawn_test_setup(monkeypatch: pytest.MonkeyPatch, mode: str) -> tuple[Any, list[Any]]:
+    import time
+
+    def command() -> list[str]:
+        code = (
+            "import sys;sys.path.insert(0,sys.argv[1]);sys.path.insert(0,sys.argv[2]);"
+            "from test_foundry_owner_metadata import SpawnFakeFactory;"
+            "from apbra_api.foundry_owner_metadata import _metadata_worker;"
+            "_metadata_worker(SpawnFakeFactory(sys.argv[3]))"
+        )
+        return [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            code,
+            str(ROOT / "apps/api/src"),
+            str(Path(__file__).parent),
+            mode,
+        ]
+
+    monkeypatch.setattr(module, "_worker_command", command)
+    operations = []
+    original = module._GetOperation
+
+    class Operation(original):
+        def __init__(self, timeout: float) -> None:
+            super().__init__(timeout)
+            operations.append(self)
+
+    monkeypatch.setattr(module, "_GetOperation", Operation)
+    memory = module._OwnerMemory(module._PLAN)
+    memory._record = SimpleNamespace(
+        tenant_id=module._PLAN.tenant_id,
+        client_id=module._PLAN.client_id,
+        home_account_id="synthetic",
+    )
+    memory._account = (module._PLAN.tenant_id, module._PLAN.client_id, "synthetic")
+    memory._confirmed = True
+    memory._private_approved = True
+    memory._tokens[module._SCOPE] = (CANARY, time.time() + 60)
+    return memory, operations
+
+
+@pytest.mark.parametrize("mode", ["block", "ignore-term", "trickle"])
+def test_real_spawn_absolute_wall_deadline_kills_and_reaps(
+    mode: str, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    import time
+
+    memory, operations = spawn_test_setup(monkeypatch, mode)
+    buffer = bytearray()
+    memory.register_buffer(buffer)
+    url = module._PLAN.project_endpoint + "/agents/" + module._PLAN.agent_name + "?api-version=v1"
+    start = time.monotonic()
+    try:
+        with pytest.raises(ProviderConfigurationError):
+            module._run_owned_get(url, CANARY, 0.65, 4000000, None, memory, buffer)
+        assert time.monotonic() - start < 1.5
+        assert operations[0].death_verified and operations[0].process.poll() is not None
+        assert operations[0].process.returncode < 0
+    finally:
+        memory.close()
+    assert buffer == b"" and memory._cleanup_done.is_set()
+    assert CANARY not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("mode", ["success", "failure"])
+def test_real_spawn_success_or_safe_failure_no_raw_process_output(
+    mode: str, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    memory, operations = spawn_test_setup(monkeypatch, mode)
+    buffer = bytearray()
+    memory.register_buffer(buffer)
+    url = module._PLAN.project_endpoint + "/agents/" + module._PLAN.agent_name + "?api-version=v1"
+    try:
+        if mode == "success":
+            module._run_owned_get(url, CANARY, 3.0, 4000000, None, memory, buffer)
+            assert json.loads(buffer) == {"synthetic": True}
+        else:
+            with pytest.raises(ProviderConfigurationError):
+                module._run_owned_get(url, CANARY, 3.0, 4000000, None, memory, buffer)
+        assert operations[0].death_verified and operations[0].process.poll() is not None
+    finally:
+        memory.close()
+    capture = capsys.readouterr()
+    assert CANARY not in capture.out + capture.err
+
+
+def test_buffer_append_after_revocation_is_rejected_and_no_orphan(flow: Any) -> None:
+    memory = module._OwnerMemory(module._PLAN)
+    memory._private_approved = True
+    memory.install_sdk(flow.sdk)
+    memory.authenticate()
+    memory.confirm_account()
+    buffer = bytearray()
+    memory.register_buffer(buffer)
+    memory.append_private(buffer, b"private-before-close")
+    memory.close()
+    with pytest.raises(ProviderConfigurationError):
+        memory.append_private(buffer, CANARY.encode())
+    assert buffer == b"" and memory._buffers == [] and memory._cleanup_done.is_set()
+
+
+def test_overlapping_sdk_operation_close_is_serialized_without_stdout_leak(
+    flow: Any, capsys: Any
+) -> None:
+    from threading import Event, Thread
+
+    entered = Event()
+    release = Event()
+    closing = Event()
+    release_close = Event()
+    done = Event()
+    memory = module._OwnerMemory(module._PLAN)
+    memory._private_approved = True
+    memory.install_sdk(flow.sdk)
+    memory.authenticate()
+    memory.confirm_account()
+
+    def token(*scopes: str) -> Any:
+        entered.set()
+        assert release.wait(2)
+        return SimpleNamespace(token=CANARY, expires_on=1600)
+
+    def close() -> None:
+        closing.set()
+        assert release_close.wait(2)
+        print(CANARY)
+        print(CANARY, file=sys.stderr)
+        logging.log(100, CANARY)
+
+    flow.sdk.get_token = token
+    flow.sdk.close = close
+    failures = []
+
+    def acquire() -> None:
+        try:
+            memory.acquire(module._SCOPE)
+        except ProviderConfigurationError:
+            failures.append("revoked")
+
+    actor = Thread(target=acquire)
+    actor.start()
+    assert entered.wait(2)
+    closer = Thread(target=lambda: (memory.close(), done.set()))
+    closer.start()
+    assert not done.wait(0.02)
+    assert memory._closed and memory._cleanup_pending and memory._closing_resources
+    release.set()
+    assert closing.wait(2)
+    assert not done.is_set()
+    release_close.set()
+    actor.join(2)
+    closer.join(2)
+    assert not actor.is_alive() and not closer.is_alive() and done.is_set()
+    assert failures == ["revoked"] and memory._cleanup_done.is_set()
+    output = capsys.readouterr()
+    assert CANARY not in output.out + output.err
+
+
+def test_real_spawn_cancel_kills_worker_and_prevents_next_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+    from threading import Thread
+
+    memory, operations = spawn_test_setup(monkeypatch, "block")
+    failures = []
+    url = module._PLAN.project_endpoint + "/agents/" + module._PLAN.agent_name + "?api-version=v1"
+
+    def get() -> None:
+        try:
+            memory.get(url, module._SCOPE, None)
+        except Exception:
+            failures.append("cancelled")
+
+    actor = Thread(target=get)
+    actor.start()
+    until = time.monotonic() + 2
+    while (not operations or operations[0].process is None) and time.monotonic() < until:
+        time.sleep(0.005)
+    assert operations and operations[0].process is not None
+    memory.close()
+    actor.join(1)
+    assert not actor.is_alive() and failures == ["cancelled"]
+    assert operations[0].death_verified and operations[0].process.poll() is not None
+    with pytest.raises(ProviderConfigurationError):
+        memory.get(url + "/versions/6", module._SCOPE, None)
+    assert len(operations) == 1 and memory._cleanup_done.is_set()
+
+
+def test_real_spawn_natural_token_expiry_clips_wall_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    memory, operations = spawn_test_setup(monkeypatch, "block")
+    memory._tokens[module._SCOPE] = (CANARY, time.time() + 0.35)
+    url = module._PLAN.project_endpoint + "/agents/" + module._PLAN.agent_name + "?api-version=v1"
+    started = time.monotonic()
+    try:
+        with pytest.raises(ProviderConfigurationError):
+            memory.get(url, module._SCOPE, None)
+        assert time.monotonic() - started < 1.2
+        assert operations[0].death_verified and operations[0].process.poll() is not None
+    finally:
+        memory.close()
+
+
+def test_owned_worker_command_has_no_token_url_or_ambient_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = module._worker_command()
+    assert original[1:4] == ["-I", "-B", "-c"]
+    assert CANARY not in repr(original) and "https://" not in repr(original)
+    captured = {}
+
+    class Process:
+        stdin = None
+        stdout = None
+
+    def popen(args: list[str], **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        captured["args"] = args
+        raise OSError("synthetic")
+
+    monkeypatch.setattr(module.subprocess, "Popen", popen)
+    operation = module._GetOperation(1)
+    with pytest.raises(ProviderConfigurationError):
+        operation.start()
+    operation.cancel()
+    assert captured["env"] == {} and captured["cwd"] == "/" and captured["close_fds"] is True
+    assert captured["stderr"] == module.subprocess.DEVNULL
+
+
+def test_sdk_reentrant_callback_observes_closed_without_memory_lock_inversion(flow: Any) -> None:
+    from threading import Event, Thread
+
+    entered = Event()
+    release = Event()
+    memory = module._OwnerMemory(module._PLAN)
+    memory._private_approved = True
+    memory.install_sdk(flow.sdk)
+    memory.authenticate()
+    memory.confirm_account()
+
+    def token(*scopes: str) -> Any:
+        entered.set()
+        assert release.wait(2)
+        memory.guard()
+        return SimpleNamespace(token=CANARY, expires_on=1600)
+
+    flow.sdk.get_token = token
+    errors = []
+
+    def acquire() -> None:
+        try:
+            memory.acquire(module._SCOPE)
+        except ProviderConfigurationError:
+            errors.append("revoked")
+
+    caller = Thread(target=acquire)
+    caller.start()
+    assert entered.wait(2)
+    closer = Thread(target=memory.close)
+    closer.start()
+    assert not memory._cleanup_done.wait(0.02)
+    release.set()
+    caller.join(2)
+    closer.join(2)
+    assert not caller.is_alive() and not closer.is_alive() and errors == ["revoked"]
+    assert memory._cleanup_done.is_set() and memory._closing_resources == []
+
+
+def test_cleanup_failure_keeps_owned_resource_and_never_claims_verified(flow: Any) -> None:
+    flow.fail = "close"
+    with pytest.raises(ProviderConfigurationError):
+        run(flow)
+    memory = flow.memories[0]
+    assert memory._cleanup_done.is_set() and not memory._cleanup_verified
+    assert memory._cleanup_failed and flow.sdk in memory._closing_resources
+
+
+def test_real_get_failure_closes_before_any_next_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    memory, operations = spawn_test_setup(monkeypatch, "failure")
+    url = module._PLAN.project_endpoint + "/agents/" + module._PLAN.agent_name + "?api-version=v1"
+    with pytest.raises(ProviderConfigurationError):
+        memory.get(url, module._SCOPE, None)
+    assert memory._closed and memory._cleanup_verified and operations[0].death_verified
+    with pytest.raises(ProviderConfigurationError):
+        memory.get(url + "/versions/6", module._SCOPE, None)
+    assert len(operations) == 1
+
+
+def test_late_public_spawn_remains_owned_and_never_receives_private_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+    from threading import Event
+
+    entered = Event()
+    release = Event()
+    original = module.subprocess.Popen
+    processes = []
+
+    def delayed(*args: Any, **kwargs: Any) -> Any:
+        entered.set()
+        assert release.wait(3)
+        process = original(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(module.subprocess, "Popen", delayed)
+    operation = module._GetOperation(0.1)
+    started = time.monotonic()
+    try:
+        with pytest.raises(ProviderConfigurationError):
+            operation.start()
+        assert entered.is_set() and time.monotonic() - started < 0.5
+        with pytest.raises(ProviderConfigurationError):
+            operation.cancel()
+        assert not operation.death_verified and operation.process is None
+        release.set()
+        assert operation._startup_done.wait(2)
+        assert operation.death_verified and len(processes) == 1
+        assert processes[0].poll() is not None
+        assert processes[0].stdin.closed and processes[0].stdout.closed
+    finally:
+        release.set()
+        operation._startup_done.wait(2)
+        operation.cancel()
+
+
+def test_owned_process_failed_reap_is_fixed_and_never_claims_death() -> None:
+    class Process:
+        stdin = None
+        stdout = None
+        killed = False
+
+        def poll(self) -> Any:
+            return None
+
+        def kill(self) -> None:
+            self.killed = True
+
+        def wait(self, *, timeout: float) -> None:
+            assert timeout == 1.0
+            raise module.subprocess.TimeoutExpired("public-synthetic", timeout)
+
+    operation = module._GetOperation(0.1)
+    process = Process()
+    operation.process = process
+    with pytest.raises(ProviderConfigurationError):
+        operation.cancel()
+    assert process.killed and not operation.death_verified
