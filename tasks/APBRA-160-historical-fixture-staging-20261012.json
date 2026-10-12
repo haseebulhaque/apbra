@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261012-HISTORICAL-FIXTURE-STAGING",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Stage selected historical parity and legacy-deletion fixtures from the immutable released H3 pathname universe, preserving current full-tree enforcement and every original assertion/mutation/checker selection.",
+  "requirements": [
+    "Direct Haseeb existing-MVP outcome renewal2026-10-11T23:11:44Z/23:12:19Z under JiraAPBRA-16010757 and finite historical-fixture PLAN10770 authorizes this nine-path governance/test-staging correction until complete; no invented expiry. Current owner records are additive, never replacements for accepted-source hashes or historical cutoffs.",
+    "Exactly nine governance paths and five finite fixture-engineering paths on dedicated branches. Historical fixture source universe is immutable normal-released H3 3dfae4294334fa934223b8b1ab2654ffcc9c04f4; resolve verified git ls-tree pathname universe, copy current bytes plus each original explicit task/scope addition only for selected historical methods. No ad hoc future-file exclusion, caller inspection, monkeypatch, global filtering or runtime checker exception.",
+    "Selected methods are FoundryQualificationScopeTests.test_shared_checker_preserves_historical_registration_errors; FoundryQualificationRenewalScopeTests.test_old_registration_errors_are_preserved_on_actual_baseline_checker; FoundryQualificationOct11ScopeTests.test_old_renewal_error_parity_on_actual_base_checker and test_original_branch_errors_preserved_with_dated_task_present; GenerationScopeTests.test_admission_and_negative_authority. All other current fixtures and actual repo_files enumeration remain exhaustive.",
+    "Preserve every original assertion, mutation, baseline checker/task selection and checker invocation AST except explicit fixture-plumbing arguments/names. Original historical test Git blobs, sixfailures506tests287.912seconds at metadata3374c24, task/helper/source/workflow/cache/old checker AST/declarations/cutoffs remain immutable evidence. New registration hooks must strip back to entire old checker module AST.",
+    "Historical generation deletion uses exact frozen product-name universe to test its original independent legacy-coverage claim. Separate new real-full-tree tests inject current P4/P31 new files and unknown files: missing/malformed/changed new task, changed/missing old history, or unknown source still rejects; no historical fixture context rescues current invalid authorities.",
+    "Staging Git/object/universe resolution must fail explicitly on unavailable/mismatched/malformed data; current copied bytes remain subject to original secret, symlink, source/history/path/size and task/actor/branch protections. Explicit negative paths added to a fixture remain visible to old/current checkers.",
+    "No old historical checker/task/helper/source-register/workflow/security/dependency/product path edits; no test skip/waiver, generic app allowance, global repo_files filter or scanner omission. Retain check_bootstrap.py at or below inherited262076bytes through AST-identical continuation formatting only; unchanged actual262144-byte policy cap.",
+    "Only offline engineering/governance tests are authorized. No product implementation/runtime/auth/SDK/provider/private/env/DB/hosting/paid action. New exact-head focused/fullbootstrap/checker/policy/diff/sourceguard/scans/two genuinely independent reviews/hostedCI/normalmerge precede product-candidate base refresh; old P4/P31 source reviews are not a current full-suite/release PASS."
+  ],
+  "adrs": [
+    "Test-local historical staging separates immutable old authority from files introduced later; current authorization and full-tree enumeration are unchanged.",
+    "Four surgical historical fixture plumbing edits plus one new staging helper; preserve assertion/mutation/checker-selection AST and original Git bytes as evidence. No global patch or conditional runtime allowance.",
+    "Finite nine-path registration with seven additive checker hooks, raw52historical task bytes/raw84source rows/old helpers/cache/whole old checker AST after exact hook stripping, inherited262076 size budget and unchanged262144 policy limit."
+  ],
+  "architecture_refs": [
+    "Read-only diagnosis /tmp/apbra-historical-fixture-staging-diagnosis.md and actual retained /tmp/apbra-owner-metadata-3374c24-full-bootstrap-root.log identify six old-fixture failures. Immutable old checker cannot admit later P4/P31 paths; current runtime allowlist cannot repair that.",
+    "Frozen H3 3dfae4294334fa934223b8b1ab2654ffcc9c04f4 is the released governance-only506-test pathname universe. It retains all original legacy coverage used by generation deletion; source bytes are current so original scanner/path/size/mutation checks remain meaningful.",
+    "Jira outcome10757/PLAN10770 is additive finite existing-MVP engineering authority. Accepted source8519682v28/9404417v9 pins, raw84rows and52older tasks are preserved; old owner scopes and deadlines remain history."
+  ],
+  "allowed_paths": [
+    "tests/bootstrap/historical_fixture_staging.py",
+    "tests/bootstrap/test_foundry_qualification_renewal_20261011_scope.py",
+    "tests/bootstrap/test_foundry_qualification_renewal_scope.py",
+    "tests/bootstrap/test_foundry_qualification_scope.py",
+    "tests/bootstrap/test_generation_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    "docs/**",
+    ".github/**",
+    "contracts/**",
+    "agents/**",
+    "requirements-bootstrap.txt",
+    "compose.yaml",
+    "infrastructure/**",
+    "workers/**",
+    "packages/**",
+    ".env",
+    "**/.env",
+    "artifacts/**"
+  ],
+  "acceptance_criteria": [
+    "Exactly nine governance files changed; staging applied only to five named historical methods, other fixtures/root enumeration exhaustive.",
+    "Entire old checker module AST restored after exactly seven hook removals; old task/helper/source/workflow bytes preserved. Four old fixture module ASTs restore after only staging import/argument/name plumbing is removed; all assertions/mutations/checker selection unchanged.",
+    "Frozen H3 universe verified via immutable object/tree/pathname digest; unavailable/malformed Git data fails instead of silent filtering; explicit additions and current bytes preserved.",
+    "Original six-failure historical scenarios pass without new metadata/AI files contaminating old fixture universes; new real-current full-tree negatives reject P4/P31 when task/history invalid and unknownfiles always.",
+    "Full current governance checks/scans/mandatory tests remain; no product/runtime/auth/provider/paid qualification or skipped/timed-out PASS."
+  ],
+  "verification_required": [
+    "Exact base/tree/owner/outcome/PLAN/card/actor/source/whole-task/independent-section/P5/G9/stage bindings and negative recomputed task/path/actor/base/expiry/source/history/helper tests; all52prior task bytes/source84rows/helpers/cache/oldchecker fullAST after7hook stripping; inherited262076 size budget.",
+    "Staging helper fixed object/tree/universe, positive current-byte copy and explicit-negative visibility; unavailable/malformed/mismatched data failures. Original four module assertion/mutation/checker-selection AST parity after precise plumbing stripping.",
+    "New realfulltree P4/P31/newpath injection positives with exact registered authority and negatives missing/malformed/changed authority or oldhistory/unknownfile; six retained historical failures reproduced as regression on source clones without product edits.",
+    "Focused historical and newtests; sole fullbootstrap506plusnew/checker/policy/diff/scans/two fresh independent exact-head reviews/hostedCI/normalmerge. Product P4/P31 refresh onto actual newreleasedbase and their fresh broad checks/reviews remain separate."
+  ],
+  "out_of_scope": [
+    "Changing historical task/helper/source/checker/workflow bytes, assertions/mutations/checker selection, numeric/security/test/time limits, skipping/filtering actual repo files, unconditionally allowing apps or rescuing missing/invalid authority.",
+    "Product changes, private config/env/DB/auth/provider/SDK/runtime/hosting/paid/resource actions or promotion of previous focused reviews to current release PASS."
+  ],
+  "escalate_when": [
+    "Scope exceeds exact9/P5, fixture staging affects unselected methods/current enumeration, original assertions/mutations/checker selection cannot be retained, Git source universe unavailable or test/history/source guards weaken.",
+    "Need to exceed inherited262076byte budget, change actual262144 limit, policy/workflow/test gate, source task/helper pins or runtime authorization; report rather than silently relax.",
+    "New exact-head checks/fullsuite/scans/two independent reviews/hostedCI/normalmerge missing/failed; product/runtime/auth/paid action requested without separate gates."
+  ],
+  "dependencies": [
+    "Actual released H3 3dfae4294334fa934223b8b1ab2654ffcc9c04f4 is the frozen governance-only source universe; retain all52previous task bytes/raw84source rows and existing checker/helpers/cache/workflow.",
+    "Owner outcome10757 and recorded nine-path PLAN10770 authorize this routine bounded existing-MVP staging repair; no invented new owner permission or expiry.",
+    "Frozen P4 metadata3374c24 full506/sixFAIL and current P31 source review/focused receipts retained; fresh governance release then each product integration/broadchecks/reviews required."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "3dfae4294334fa934223b8b1ab2654ffcc9c04f4",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-historical-fixture-staging",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Bounded code/test governance under outcome10757/PLAN10770, actualH33dfae4294334fa934223b8b1ab2654ffcc9c04f4. New nine-path exact-head local/independent/hosted/normalmerge gates required before product refresh; no product/auth/runtime/provider/paid approval."
+}
