@@ -7,6 +7,7 @@ import hmac
 import io
 import json
 import logging
+import math
 import os
 import re
 import selectors
@@ -56,6 +57,7 @@ from .model_provider import (
     ProviderExecutionObservation,
     ProviderRequest,
     report_design_schema,
+    validate_report_design_raw_ingress,
 )
 from .tenant_settings import (
     TenantSettingsSnapshot,
@@ -74,6 +76,127 @@ def canonical_digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def _geometry_number_representable(value: object) -> bool:
+    """Preserve stored numeric values through JSON parsing into binary64 numbers.
+
+    This is an exact representation check, not a magnitude or safe-integer cap.
+    Python floats already use binary64; integers must survive its conversion.
+    """
+    if type(value) not in (int, float):
+        return False
+    try:
+        encoded = float(cast(int | float, value))
+    except OverflowError:
+        return False
+    return math.isfinite(encoded) and encoded == value
+
+
+def _assert_geometry_representable(design: object) -> None:
+    if not isinstance(design, dict) or design.get("schema_version") != 2:
+        return
+    pages = design.get("pages")
+    if not isinstance(pages, list):
+        return
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+        visuals = page.get("visuals")
+        if isinstance(visuals, list):
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+        for values, names in groups:
+            for name in names:
+                value = values.get(name)
+                if type(value) in (int, float) and not _geometry_number_representable(value):
+                    raise GeometryRepresentationUnsupported()
+
+
+def _geometry_wire_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    wire_payload = copy.deepcopy(payload)
+    design = wire_payload.get("reportDesign")
+    if isinstance(design, dict) and design.get("schema_version") == 2:
+        pages = design.get("pages")
+        if not isinstance(pages, list):
+            return wire_payload
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+            visuals = page.get("visuals")
+            if not isinstance(visuals, list):
+                continue
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+            for values, names in groups:
+                for name in names:
+                    value = values.get(name)
+                    if type(value) is float and value.is_integer():
+                        # Equivalent numeric wire spelling, not a geometry repair.
+                        # Python's shortest float decimal can spell a different integer.
+                        values[name] = int(value)
+    return wire_payload
+
+
+def _has_ai_geometry(design: dict[str, Any]) -> bool:
+    """Document-format geometry only; no layout or business quality judgement."""
+
+    pages = design.get("pages")
+    if type(design.get("schema_version")) is not int or design["schema_version"] != 2:
+        return False
+    if not isinstance(pages, list):
+        return False
+    for page in pages:
+        if not isinstance(page, dict) or page.get("displayOption") not in (
+            "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
+        ):
+            return False
+        if any(page.get(key) is not None and not _geometry_number_representable(page[key])
+               for key in ("width", "height")):
+            return False
+        if not isinstance(page.get("visuals"), list):
+            return False
+        for visual in page["visuals"]:
+            position = visual.get("position") if isinstance(visual, dict) else None
+            if not isinstance(position, dict) or set(position) - {
+                "x", "y", "width", "height", "z", "tabOrder", "angle",
+            }:
+                return False
+            if any(not _geometry_number_representable(position.get(key))
+                   for key in ("x", "y", "width", "height")):
+                return False
+            if any(position.get(key) is not None
+                   and not _geometry_number_representable(position[key])
+                   for key in ("z", "tabOrder", "angle")):
+                return False
+    return True
+
+
+class AIAuthoredGeometryRequired(GenerationUnavailable):
+    code = "AI_AUTHORED_GEOMETRY_REQUIRED"
+    public_message = (
+        "This saved plan predates AI-authored geometry. Request a fresh report proposal "
+        "before a new build; existing plans, build history and files remain available."
+    )
+
+
+class GeometryRepresentationUnsupported(GenerationFailed):
+    code = "REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE"
+    public_message = (
+        "This report plan contains geometry the renderer cannot preserve exactly. "
+        "Request a revised proposal with representable numeric geometry. "
+        "Saved plans, build history and existing files remain available."
+    )
 
 
 class GenerationBridge:
@@ -104,11 +227,13 @@ class GenerationBridge:
         self.pipeline_digest = hashlib.sha256(self.executable.read_bytes()).hexdigest()
 
     def _call(self, payload: dict[str, Any], *, validate_candidate: bool) -> dict[str, Any]:
+        _assert_geometry_representable(payload.get("reportDesign"))
         if not hmac.compare_digest(
             hashlib.sha256(self.executable.read_bytes()).hexdigest(), self.pipeline_digest
         ):
             raise GenerationFailed()
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        wire_payload = _geometry_wire_payload(payload)
+        encoded = json.dumps(wire_payload, sort_keys=True, separators=(",", ":")).encode()
         if len(encoded) > MAX_BRIDGE_BYTES:
             raise GenerationFailed()
         process: subprocess.Popen[bytes] | None = None
@@ -268,8 +393,8 @@ class GenerationBridge:
         if (
             not isinstance(capabilities, dict)
             or capabilities.get("source") != "ACTIVE_COMPILER"
-            or not isinstance(capabilities.get("slots"), list)
-            or not capabilities["slots"]
+            or capabilities.get("designVersion") != 2
+            or capabilities.get("geometryBinding") != "AI_AUTHORED_EXACT"
             or len(json.dumps(capabilities)) > 20_000
         ):
             raise GenerationFailed()
@@ -418,24 +543,9 @@ def _apply_provider_observation(attempt: Any, observation: ProviderExecutionObse
     attempt.candidate_digest = observation.candidate_digest
 
 
-def _automatic_design_retry_instruction(exc: Exception, *, max_visuals_per_page: int) -> str:
-    if (
-        isinstance(exc, GenerationBridgeFailure)
-        and exc.diagnostic_code == "REPORT_DESIGN_NORMALIZATION_FAILED"
-        and "LAYOUT_CAPACITY_EXCEEDED" in exc.diagnostic_message
-    ):
-        return (
-            "The prior AI-authored ReportDesign failed physical renderer capacity. "
-            "You own its correction: choose page membership, visual allocation and order "
-            "using the supplied rendererCapabilities and tenant limits. Preserve all full "
-            "requirements, source evidence, declared measures and useful visual content; "
-            "do not silently delete content or invent unsupported interactions. Return one "
-            "complete corrected design, disclose revisions and interaction limitations. "
-            "APBRA will not independently allocate pages or repair the layout. "
-            f"Respect the current tenant page limit of {max_visuals_per_page} visuals "
-            "as well as each type/index placement in the actual renderer capability data. "
-            f"Safe deterministic geometry evidence: {_safe_bridge_diagnostic_detail(exc)}"
-        )
+def _automatic_design_retry_instruction(
+    exc: Exception, *, max_visuals_per_page: int | None = None,
+) -> str:
     if (
         isinstance(exc, GenerationBridgeFailure)
         and exc.diagnostic_code == "REPORT_DESIGN_SEMANTICS_FAILED"
@@ -906,8 +1016,13 @@ class GenerationService:
             design = json.loads(row.design_json)
         except json.JSONDecodeError as exc:
             raise ReviewedDesignRequired() from exc
-        if not isinstance(design, dict) or not hmac.compare_digest(
-            row.content_digest, hashlib.sha256(row.design_json.encode()).hexdigest()
+        if (
+            not isinstance(design, dict)
+            or type(design.get("schema_version")) is not int
+            or design["schema_version"] not in (1, 2)
+            or not hmac.compare_digest(
+                row.content_digest, hashlib.sha256(row.design_json.encode()).hexdigest()
+            )
         ):
             raise ReviewedDesignRequired()
         return row, design
@@ -920,6 +1035,7 @@ class GenerationService:
         *,
         contract_id: UUID,
         report_design: dict[str, Any],
+        raw_body: str | None = None,
     ) -> dict[str, Any]:
         store = cast(ApplicationPersistence, db)
         reviewer = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
@@ -932,16 +1048,27 @@ class GenerationService:
         payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
             store, reviewer, case_id, contract_id, lock_access=True
         )
+        if raw_body is not None:
+            try:
+                validate_report_design_raw_ingress(raw_body)
+            except ProviderCallError as exc:
+                if exc.code == "REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE":
+                    raise GeometryRepresentationUnsupported() from None
+                raise ReviewedDesignRequired() from None
         try:
+            stored_design = _geometry_wire_payload({"reportDesign": report_design})["reportDesign"]
             design_json = json.dumps(
-                report_design, sort_keys=True, separators=(",", ":"), allow_nan=False
+                stored_design, sort_keys=True, separators=(",", ":"), allow_nan=False
             )
         except (TypeError, ValueError) as exc:
             raise ReviewedDesignRequired() from exc
+        if report_design.get("schema_version") == 1:
+            raise AIAuthoredGeometryRequired()
+        _assert_geometry_representable(report_design)
         if (
             report_design.get("artifact_kind") != "ReportDesign"
-            or report_design.get("schema_version") != 1
-            or not isinstance(report_design.get("pages"), list)
+            or report_design.get("schema_version") != 2
+            or not _has_ai_geometry(report_design)
             or len(design_json.encode()) > MAX_BRIDGE_BYTES
         ):
             raise ReviewedDesignRequired()
@@ -1053,11 +1180,9 @@ class GenerationService:
             governed_knowledge = design_context["knowledge"]
             renderer_capabilities = design_context["rendererCapabilities"]
             generation_capabilities = cast(dict[str, Any], generation_policy["generation"])
-            governance = cast(dict[str, Any], generation_policy["governance"])
             supported_trend_grains = cast(
                 list[str], generation_capabilities["supportedTrendGrains"]
             )
-            max_visuals_per_page = cast(int, governance["maxVisualsPerPage"])
             contract_payload = cast(dict[str, Any], payload["contract"])
             obligations = cast(list[dict[str, Any]], contract_payload.get("obligations", []))
             obligation_indexes = {
@@ -1172,9 +1297,14 @@ class GenerationService:
                         "on category charts with date fields, otherwise NONE. "
                         "You author every measure, visual choice, page, page membership "
                         "and visual array order. Use rendererCapabilities as factual execution "
-                        "constraints, not a suggested report design. Array indexes select its "
-                        "fixed slots; choose only placements supported for that visual type "
-                        "and respect the supplied tenant limits. APBRA will not reorder, "
+                        "format constraints, not a suggested report design. "
+                        "Author schema-version-2 "
+                        "page displayOption and optional dimensions, and every visual's exact "
+                        "position x/y/width/height, optional z/tabOrder/angle. "
+                        "Null optional geometry "
+                        "means omit the PBIR property. "
+                        "No fixed slots or visual-count limits apply. "
+                        "APBRA will not supply coordinates, resize, reorder, "
                         "split pages, invent measures or redesign incompatible output. "
                         "Choose a complete executable draft and disclose its limitations. "
                         "Tenant preferences and branding supplement the full request. "
@@ -1198,13 +1328,12 @@ class GenerationService:
                         "coverageChecklist": coverage_checklist,
                     },
                     output_schema=report_design_schema(
-                        max_visuals_per_page=max_visuals_per_page,
                         supported_trend_grains=supported_trend_grains,
                     ),
                     validator=validate_candidate,
                     grounding_validator=validate_candidate if provider_managed else None,
                     retry_instruction=lambda exc: _automatic_design_retry_instruction(
-                        exc, max_visuals_per_page=max_visuals_per_page
+                        exc
                     ),
                 )
             )
@@ -1450,6 +1579,22 @@ class GenerationService:
         )
         existing_command = store.generation_attempt_by_command(actor, case_id, command_key)
         if existing_command is not None:
+            # A replay of an immutable legacy artifact uses its original executable
+            # identity, while still comparing the current protected input and command.
+            if report_design.get("schema_version") == 1:
+                historical_provenance = json.loads(existing_command.provenance_json)
+                historical_pipeline = historical_provenance.get("pipelineExecutableDigest")
+                if not isinstance(historical_pipeline, str):
+                    raise IdempotencyConflict()
+                historical_input = canonical_digest({
+                    "semanticInputDigest": semantic_input_digest,
+                    "reviewedDesignId": str(reviewed.id),
+                    "pipelineExecutableDigest": historical_pipeline,
+                })
+                command_payload_digest = canonical_digest({
+                    "inputDigest": historical_input, "mode": mode,
+                    "sourceAttemptId": str(source_attempt_id) if source_attempt_id else None,
+                })
             if not hmac.compare_digest(
                 existing_command.command_payload_digest, command_payload_digest
             ):
@@ -1462,6 +1607,24 @@ class GenerationService:
         supersedes: UUID | None = None
         if mode == "BUILD" and prior is not None:
             return attempt_json(store, prior), False
+        if report_design.get("schema_version") == 1:
+            if mode == "BUILD":
+                for saved in history:
+                    historical = json.loads(saved.provenance_json)
+                    pipeline = historical.get("pipelineExecutableDigest")
+                    if not isinstance(pipeline, str):
+                        continue
+                    original_input = canonical_digest({
+                        "semanticInputDigest": semantic_input_digest,
+                        "reviewedDesignId": str(reviewed.id),
+                        "pipelineExecutableDigest": pipeline,
+                    })
+                    if hmac.compare_digest(saved.input_digest, original_input):
+                        return attempt_json(store, saved), False
+            raise AIAuthoredGeometryRequired()
+        _assert_geometry_representable(report_design)
+        if not _has_ai_geometry(report_design):
+            raise ReviewedDesignRequired()
         if mode == "RETRY":
             source = (
                 store.generation_attempt(case_id, source_attempt_id)

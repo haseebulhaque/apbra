@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from historical_fixture_staging import historical_names
+
 ROOT = Path(__file__).resolve().parents[2]
 BASE = '6b8c1df8371fd836f1940cdb5a34d48933aeda93'
 TASK = 'tasks/APBRA-160-foundry-qualification-renewal-20261011.json'
@@ -20,8 +22,8 @@ h = c.r['bind11'].__globals__
 
 
 class FoundryQualificationOct11ScopeTests(unittest.TestCase):
-    def copy(self, root):
-        for name in {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['N_PATHS']:
+    def copy(self, root, *, historical=False):
+        for name in (historical_names(ROOT, h['N_PATHS']) if historical else {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['N_PATHS']):
             if (ROOT / name).is_file():
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -151,7 +153,7 @@ class FoundryQualificationOct11ScopeTests(unittest.TestCase):
             roots = [outer / 'old', outer / 'new']
             for root in roots:
                 root.mkdir()
-                self.copy(root)
+                self.copy(root, historical=True)
             original = json.loads((ROOT / 'tasks/APBRA-160-foundry-qualification-renewal.json').read_text())
             for mutation in [None, 'paths', 'base', 'gate']:
                 changed = copy.deepcopy(original)
@@ -184,7 +186,7 @@ class FoundryQualificationOct11ScopeTests(unittest.TestCase):
             filename = 'tasks/APBRA-160-foundry-qualification.json'
             for root in roots:
                 root.mkdir()
-                self.copy(root)
+                self.copy(root, historical=True)
                 (root / 'tasks/APBRA-160-foundry-qualification-renewal.json').unlink()
             accepted = json.loads((ROOT / filename).read_text())
             for mutation in [None, 'scope', 'identity', 'gate', 'sources']:

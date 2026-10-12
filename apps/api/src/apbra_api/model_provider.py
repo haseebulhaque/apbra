@@ -14,14 +14,17 @@ import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from threading import RLock, Timer
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+# Historical callers may still carry this policy metadata. Version-2 schemas
+# never use it to bound or manufacture AI-authored geometry.
 COMPILER_MAX_VISUALS_PER_PAGE = 6
 COMPILER_SUPPORTED_TREND_GRAINS = ("DAY", "MONTH", "QUARTER", "YEAR")
 
@@ -36,10 +39,6 @@ def _validated_schema_capabilities(
         not grains
         or len(set(grains)) != len(grains)
         or any(item not in COMPILER_SUPPORTED_TREND_GRAINS for item in grains)
-        or (
-            max_visuals_per_page is not None
-            and not 1 <= max_visuals_per_page <= COMPILER_MAX_VISUALS_PER_PAGE
-        )
     ):
         raise ValueError("provider schema capabilities exceed the active compiler")
     return grains
@@ -69,6 +68,9 @@ def _validate_strict_wire_schema(schema: dict[str, Any]) -> None:
         if not isinstance(node, dict) or set(node) - allowed:
             raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
         kind = node.get("type")
+        # Only this exact nullable numeric union is qualified for geometry.
+        if kind == ["number", "null"]:
+            kind = "number"
         if not isinstance(kind, str):
             raise ProviderCallError("MODEL_SCHEMA_UNSUPPORTED")
         if kind == "object":
@@ -353,13 +355,11 @@ def requirement_analysis_schema(supported_trend_grains: Sequence[str]) -> dict[s
 
 
 def report_design_schema(
-    *, max_visuals_per_page: int, supported_trend_grains: Sequence[str]
+    *, supported_trend_grains: Sequence[str], max_visuals_per_page: int | None = None
 ) -> dict[str, Any]:
-    """Strict provider schema mirroring the canonical ReportDesign contract."""
+    """Strict version-2 wire contract; legacy count metadata does not constrain geometry."""
 
-    grains = _validated_schema_capabilities(
-        supported_trend_grains, max_visuals_per_page=max_visuals_per_page
-    )
+    grains = _validated_schema_capabilities(supported_trend_grains)
     relationship_fields = {
         "fromTable": {"type": "string"},
         "fromColumn": {"type": "string"},
@@ -399,6 +399,14 @@ def report_design_schema(
             "empty categoryField and measureIds."
         ),
         "altText": {"type": "string"},
+        "position": {
+            "type": "object", "additionalProperties": False,
+            "required": ["x", "y", "width", "height", "z", "tabOrder", "angle"],
+            "properties": {
+                **{name: {"type": "number"} for name in ("x", "y", "width", "height")},
+                **{name: {"type": ["number", "null"]} for name in ("z", "tabOrder", "angle")},
+            },
+        },
     }
     page_fields = {
         "id": {"type": "string"},
@@ -409,14 +417,16 @@ def report_design_schema(
             ),
         },
         "purpose": {"type": "string"},
+        "displayOption": {"type": "string", "enum": [
+            "DeprecatedDynamic", "FitToPage", "FitToWidth", "ActualSize", "ActualSizeTopLeft",
+        ]},
+        "width": {"type": ["number", "null"]},
+        "height": {"type": ["number", "null"]},
         "visuals": {
             "type": "array",
             "description": (
-                f"Compiler-ordered visual list. The validated runtime permits at most "
-                f"{max_visuals_per_page} visuals on this page. The active compiler has six "
-                "physical slots, each supporting card, bar, column, line, table, and slicer. "
-                "Preserve the model-chosen visual order and business bindings within "
-                "the configured page limit."
+                "AI-authored visual list. Preserve its exact order, geometry and bindings. "
+                "No fixed slots or visual-count limit is imposed on version-2 geometry."
             ),
             "items": {
                 "type": "object",
@@ -428,7 +438,7 @@ def report_design_schema(
     }
     properties = {
         "artifact_kind": {"type": "string", "enum": ["ReportDesign"]},
-        "schema_version": {"type": "integer", "enum": [1]},
+        "schema_version": {"type": "integer", "enum": [2]},
         "projectName": {"type": "string"},
         "overview": {"type": "string"},
         "audience": {"type": "string"},
@@ -651,6 +661,78 @@ class ModelProvider(Protocol):
     def structured(self, request: ProviderRequest) -> ProviderResult: ...
 
 
+def _validate_raw_geometry(raw: Any) -> None:
+    """Selected ReportDesign geometry only; never grants access or rewrites output."""
+    if not isinstance(raw, dict) or raw.get("artifact_kind") != "ReportDesign":
+        return
+    version = raw.get("schema_version")
+    if type(version) not in (int, float, Decimal):
+        return
+    try:
+        effective_version = float(cast(int | float | Decimal, version))
+    except (OverflowError, ValueError):
+        return
+    if effective_version != 2:
+        return
+    if version != 2:
+        # Do not let a raw unknown version round into the executable v2 contract.
+        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
+    pages = raw.get("pages")
+    if not isinstance(pages, list):
+        return
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        groups: list[tuple[dict[str, Any], tuple[str, ...]]] = [(page, ("width", "height"))]
+        visuals = page.get("visuals")
+        if isinstance(visuals, list):
+            for visual in visuals:
+                position = visual.get("position") if isinstance(visual, dict) else None
+                if isinstance(position, dict):
+                    groups.append((position, (
+                        "x", "y", "width", "height", "z", "tabOrder", "angle",
+                    )))
+        for values, names in groups:
+            for name in names:
+                original = values.get(name)
+                if type(original) not in (int, float, Decimal):
+                    continue
+                try:
+                    parsed = float(cast(int | float | Decimal, original))
+                    if not math.isfinite(parsed):
+                        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
+                    if isinstance(original, Decimal):
+                        same = (parsed == int(original) if original == original.to_integral_value()
+                                else Decimal(str(parsed)) == original)
+                    else:
+                        same = parsed == original
+                    if not same:
+                        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
+                except (OverflowError, ValueError):
+                    raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE") from None
+    return
+
+
+def _decode_structured_candidate(text: str) -> Any:
+    """Check raw geometry numerals before Python's float parser can lose precision."""
+    value = json.loads(text)
+    if isinstance(value, dict) and value.get("artifact_kind") == "ReportDesign" \
+            and value.get("schema_version") == 2:
+        _validate_raw_geometry(json.loads(text, parse_float=Decimal))
+    return value
+
+
+def validate_report_design_raw_ingress(raw_body: str) -> None:
+    """Pure selected-subtree check, called only after the intake's resource ACL."""
+    try:
+        envelope = json.loads(raw_body, parse_float=Decimal)
+    except (ValueError, ArithmeticError):
+        raise ProviderCallError("MODEL_OUTPUT_INVALID") from None
+    if not isinstance(envelope, dict):
+        raise ProviderCallError("MODEL_OUTPUT_INVALID")
+    _validate_raw_geometry(envelope.get("report_design"))
+
+
 def _candidate_digest(value: dict[str, Any]) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -771,7 +853,9 @@ class OpenAICompatibleProvider:
                         usage_totals[name] += amount
                         usage_seen.add(name)
                 content = payload["choices"][0]["message"]["content"]
-                value = json.loads(content) if isinstance(content, str) else content
+                value = (
+                    _decode_structured_candidate(content) if isinstance(content, str) else content
+                )
                 if not isinstance(value, dict):
                     raise ProviderCallError("MODEL_OUTPUT_INVALID", observation=observation())
                 candidate_digest = _candidate_digest(value)
@@ -1171,7 +1255,7 @@ class FoundryAgentResponsesProvider:
                     references.add(reference)
         if len(texts) != 1 or len(references) > 100:
             raise ProviderCallError("MODEL_OUTPUT_INVALID")
-        value = json.loads(texts[0])
+        value = _decode_structured_candidate(texts[0])
         if not isinstance(value, dict):
             raise ProviderCallError("MODEL_OUTPUT_INVALID")
         standards = value.get("standardsApplied", [])

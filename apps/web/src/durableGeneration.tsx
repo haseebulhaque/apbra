@@ -1,3 +1,4 @@
+import {assertGeometryJSONNumbers} from './aiGeometry';
 import React,{useEffect,useRef,useState} from 'react';
 import {ApiError,automaticDesignApi,generationApi,reviewedDesignApi,type AutomaticDesignAttempt,type DurableContract,type GenerationAttempt,type ReviewedDesign} from './api';
 
@@ -168,6 +169,11 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
     if(actorRole!=='EXPERT'||!canSubmit||!contract?.current||!expertDraft.trim())return;
     setReviewBusy(true);
     try{
+      try{assertGeometryJSONNumbers(expertDraft)}catch(error){
+        if(error instanceof Error&&error.message==='REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE')throw new Error('REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE: The geometry numbers cannot be represented exactly. Correct the submitted numbers and retry; your original draft remains here.');
+        if(error instanceof SyntaxError)throw new Error('The expert report plan must be valid JSON. Correct it and retry; your original draft remains here.');
+        throw error;
+      }
       const parsed:unknown=JSON.parse(expertDraft);
       if(typeof parsed!=='object'||parsed===null||Array.isArray(parsed))throw new Error('The expert report plan must be a JSON object.');
       await reviewedDesignApi.intake(caseId,contract.id,parsed as Record<string,unknown>,csrfToken);

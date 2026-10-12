@@ -1,3 +1,4 @@
+import {stringifyExactNumbers} from './aiGeometry';
 export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
 export type IdentityProviderOption={profile_id:string;display_label:string};
 export type IdentityProviders={items:IdentityProviderOption[];development_identities:string[]};
@@ -125,7 +126,7 @@ export const acceptanceApi={
 };
 export const reviewedDesignApi={
   list:(caseId:string,confirmedContractId:string)=>request<{items:ReviewedDesign[];can_build:boolean;can_submit:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),
-  intake:(caseId:string,confirmedContractId:string,reportDesign:Record<string,unknown>,csrfToken:string)=>request<{reviewed_design:ReviewedDesign}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({confirmed_contract_id:confirmedContractId,report_design:reportDesign})}).then(value=>value.reviewed_design),
+  intake:(caseId:string,confirmedContractId:string,reportDesign:Record<string,unknown>,csrfToken:string)=>request<{reviewed_design:ReviewedDesign}>(`/api/cases/${encodeURIComponent(caseId)}/reviewed-designs`,{method:'POST',headers:csrfHeaders(csrfToken),body:stringifyExactNumbers({confirmed_contract_id:confirmedContractId,report_design:reportDesign})}).then(value=>value.reviewed_design),
 };
 export const automaticDesignApi={
   list:(caseId:string,confirmedContractId:string)=>request<{items:AutomaticDesignAttempt[]}>(`/api/cases/${encodeURIComponent(caseId)}/automatic-designs?${new URLSearchParams({confirmed_contract_id:confirmedContractId})}`),

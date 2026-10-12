@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from historical_fixture_staging import historical_names
+
 ROOT = Path(__file__).resolve().parents[2]
 TASK = 'tasks/APBRA-160-foundry-qualification-renewal.json'
 ORIGINAL = 'tasks/APBRA-160-foundry-qualification.json'
@@ -30,8 +32,8 @@ class FoundryQualificationRenewalScopeTests(unittest.TestCase):
     def setUp(self):
         self.task = json.loads((ROOT / TASK).read_text())
 
-    def copy_repository(self, root):
-        names = {file.relative_to(ROOT).as_posix() for file in c.repo_files(ROOT)} | h['G']
+    def copy_repository(self, root, *, historical=False):
+        names = historical_names(ROOT, h['G']) if historical else {file.relative_to(ROOT).as_posix() for file in c.repo_files(ROOT)} | h['G']
         for name in names:
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -208,7 +210,7 @@ class FoundryQualificationRenewalScopeTests(unittest.TestCase):
             roots = [outer / 'old', outer / 'new']
             for root in roots:
                 root.mkdir()
-                self.copy_repository(root)
+                self.copy_repository(root, historical=True)
                 for name in h['G'] - {'scripts/check_bootstrap.py'}:
                     (root / name).unlink()
             (roots[0] / 'scripts/check_bootstrap.py').write_text(baseline)

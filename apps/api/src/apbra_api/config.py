@@ -21,7 +21,6 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .model_provider import (
-    COMPILER_MAX_VISUALS_PER_PAGE,
     ProviderConfigurationError,
     ProviderProfile,
 )
@@ -124,7 +123,7 @@ class GovernancePolicy(BaseModel):
     require_accessibility: bool = Field(alias="requireAccessibility")
     require_validation: bool = Field(alias="requireValidation")
     max_visuals_per_page: int = Field(
-        alias="maxVisualsPerPage", ge=1, le=COMPILER_MAX_VISUALS_PER_PAGE
+        alias="maxVisualsPerPage", ge=1
     )
     max_pages: int = Field(alias="maxPages", ge=1, le=100)
     human_review_at_visuals: int = Field(alias="humanReviewAtVisuals", ge=1, le=500)

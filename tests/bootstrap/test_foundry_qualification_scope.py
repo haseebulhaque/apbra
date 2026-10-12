@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from historical_fixture_staging import historical_names
+
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("bootstrap_foundry_qualification", ROOT / "scripts/check_bootstrap.py")
 c = importlib.util.module_from_spec(SPEC)
@@ -25,8 +27,8 @@ class FoundryQualificationScopeTests(unittest.TestCase):
         self.task = json.loads((ROOT / TASK).read_text())
         self.sources = json.loads((ROOT / "docs/source-register.json").read_text())
 
-    def copy_repository(self, root):
-        names = {f.relative_to(ROOT).as_posix() for f in c.repo_files(ROOT)}
+    def copy_repository(self, root, *, historical=False):
+        names = historical_names(ROOT) if historical else {f.relative_to(ROOT).as_posix() for f in c.repo_files(ROOT)}
         names.update(c.FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)
         for name in names:
             target = root / name
@@ -171,7 +173,7 @@ class FoundryQualificationScopeTests(unittest.TestCase):
             roots = [outer / "old", outer / "new"]
             for root in roots:
                 root.mkdir()
-                self.copy_repository(root)
+                self.copy_repository(root, historical=True)
                 (root / TASK).unlink()
                 (root / "tests/bootstrap/test_foundry_qualification_scope.py").unlink()
             (roots[0] / "scripts/check_bootstrap.py").write_text(baseline)
