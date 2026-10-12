@@ -547,3 +547,27 @@ test('a historical geometry-less plan offers the existing explicit fresh proposa
  await page.route('**/api/cases/recovery-b/automatic-designs',async route=>{if(route.request().method()!=='POST'){await route.fulfill({json:{items:[]}});return}proposals++;await route.fulfill({status:409,json:{error:{code:'AUTOMATIC_DESIGN_UNAVAILABLE',message:'Synthetic proposal stopped; no provider invoked.'}}})});
  await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');await page.getByRole('button',{name:'Build report',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Use Create another design');expect(builds).toBe(1);expect(proposals).toBe(0);await page.getByRole('button',{name:'Create another design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Synthetic proposal stopped');expect(builds).toBe(1);expect(proposals).toBe(1);
 });
+
+async function syntheticExpertIngress(page:Page){
+ await syntheticGenerationWorkspace(page);
+ await page.route('**/api/auth/session',route=>route.fulfill({json:{authenticated:true,identity:{id:'synthetic-identity',display_name:'Synthetic Expert'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-owner',company_id:'synthetic-company',display_name:'Synthetic Expert',role:'EXPERT'},csrf_token:'synthetic-only',membership_state:'ACTIVE'}}));
+ await page.route('**/api/cases/recovery-b/reviewed-designs**',route=>route.fulfill({json:{items:[],can_build:true,can_submit:true}}));
+ await page.reload();await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');await page.locator('.generation-panel').getByText('Details for experts',{exact:true}).click();await expect(page.getByLabel('Expert report design JSON')).toBeVisible();
+}
+for(const token of ['9007199254740993','9007199254740993.0','9.007199254740993e15'] as const)test(`expert raw geometry ${token} is not silently rounded or submitted`,async({page})=>{
+ await syntheticExpertIngress(page);let posts=0;
+ await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_POST',message:'A rounded body reached the synthetic boundary.'}}})});
+ const source=`{"schema_version":2,"pages":[{"displayOption":"ActualSize","visuals":[{"position":{"x":${token},"y":0,"width":0,"height":0}}]}]}`,draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE');expect(posts).toBe(0);await expect(draft).toHaveValue(source);await expect(page.getByRole('button',{name:'Submit expert-reviewed design',exact:true})).toBeEnabled();
+});
+test('expert exact large geometry retains original integer decimals through selected transport',async({page})=>{
+ await syntheticExpertIngress(page);let body='',posts=0;
+ await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;body=route.request().postData()??'';expect(route.request().headers()['x-csrf-token']).toBe('synthetic-only');return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_RETAINED',message:'Synthetic boundary retained the exact submission.'}}})});
+ const position=Object.fromEntries(['x','y','width','height','z','tabOrder','angle'].map(key=>[key,'1152921504606846976']));
+ const source=`{"schema_version":2,"pages":[{"displayOption":"ActualSize","width":1152921504606846976,"height":1152921504606846976,"visuals":[{"position":{${Object.entries(position).map(([key,value])=>`"${key}":${value}`).join(',')}}}]}]}`,draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Synthetic boundary retained the exact submission.');expect(posts).toBe(1);expect(body.match(/1152921504606846976/g)).toHaveLength(9);expect(body).not.toContain('1152921504606847000');expect(JSON.parse(body).confirmed_contract_id).toBe('contract-recovery-b');await expect(draft).toHaveValue(source);
+});
+
+test('expert raw geometry malformed JSON keeps the draft and exposes only a fixed correction',async({page})=>{
+ await syntheticExpertIngress(page);let posts=0;
+ await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_POST',message:'Malformed JSON reached the synthetic boundary.'}}})});
+ const source='{"schema_version":2,"private_fixture":"SYNTHETIC_PRIVATE_PARSE_CANARY",}',draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('The expert report plan must be valid JSON.');await expect(page.getByRole('alert')).not.toContainText('SYNTHETIC_PRIVATE_PARSE_CANARY');expect(posts).toBe(0);await expect(draft).toHaveValue(source);
+});

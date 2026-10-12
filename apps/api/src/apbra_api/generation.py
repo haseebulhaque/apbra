@@ -57,6 +57,7 @@ from .model_provider import (
     ProviderExecutionObservation,
     ProviderRequest,
     report_design_schema,
+    validate_report_design_raw_ingress,
 )
 from .tenant_settings import (
     TenantSettingsSnapshot,
@@ -1034,6 +1035,7 @@ class GenerationService:
         *,
         contract_id: UUID,
         report_design: dict[str, Any],
+        raw_body: str | None = None,
     ) -> dict[str, Any]:
         store = cast(ApplicationPersistence, db)
         reviewer = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
@@ -1046,9 +1048,17 @@ class GenerationService:
         payload, semantic_digest, evidence_digest, case, contract = self._current_payload(
             store, reviewer, case_id, contract_id, lock_access=True
         )
+        if raw_body is not None:
+            try:
+                validate_report_design_raw_ingress(raw_body)
+            except ProviderCallError as exc:
+                if exc.code == "REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE":
+                    raise GeometryRepresentationUnsupported() from None
+                raise ReviewedDesignRequired() from None
         try:
+            stored_design = _geometry_wire_payload({"reportDesign": report_design})["reportDesign"]
             design_json = json.dumps(
-                report_design, sort_keys=True, separators=(",", ":"), allow_nan=False
+                stored_design, sort_keys=True, separators=(",", ":"), allow_nan=False
             )
         except (TypeError, ValueError) as exc:
             raise ReviewedDesignRequired() from exc

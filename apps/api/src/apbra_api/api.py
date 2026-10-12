@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from .application import (
     AcceptanceService,
@@ -1406,26 +1407,34 @@ def create_app(
         )
 
     @app.post("/api/cases/{case_id}/reviewed-designs")
-    def intake_reviewed_design(
+    async def intake_reviewed_design(
         case_id: UUID,
         payload: ReviewedDesignCreate,
         response: Response,
+        request: Request,
         db: DB,
         session_token: SessionCookie = None,
         supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     ) -> dict[str, Any]:
         require_csrf(session_token, supplied_csrf)
-        actor = resolve_actor(db, session_token)
-        reviewed = local_generation_service(db, tenant_snapshot(db, actor)).intake_reviewed_design(
-            db,
-            actor,
-            case_id,
-            contract_id=payload.confirmed_contract_id,
-            report_design=payload.report_design,
-        )
-        db.commit()
-        response.status_code = 201
-        return {"reviewed_design": reviewed}
+        raw_bytes = await request.body()
+        raw_body = raw_bytes.decode(json.detect_encoding(raw_bytes), errors="surrogatepass")
+        def save_reviewed_design() -> dict[str, Any]:
+            actor = resolve_actor(db, session_token)
+            service = local_generation_service(db, tenant_snapshot(db, actor))
+            reviewed = service.intake_reviewed_design(
+                db,
+                actor,
+                case_id,
+                contract_id=payload.confirmed_contract_id,
+                report_design=payload.report_design,
+                raw_body=raw_body,
+            )
+            db.commit()
+            response.status_code = 201
+            return {"reviewed_design": reviewed}
+
+        return await run_in_threadpool(save_reviewed_design)
 
     @app.get("/api/cases/{case_id}/automatic-designs")
     def automatic_design_history(

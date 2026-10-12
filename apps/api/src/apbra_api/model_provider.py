@@ -661,16 +661,25 @@ class ModelProvider(Protocol):
     def structured(self, request: ProviderRequest) -> ProviderResult: ...
 
 
-def _decode_structured_candidate(text: str) -> Any:
-    """Check raw geometry numerals before Python's float parser can lose precision."""
-    value = json.loads(text)
-    if not isinstance(value, dict) or value.get("artifact_kind") != "ReportDesign" \
-            or value.get("schema_version") != 2:
-        return value
-    raw = json.loads(text, parse_float=Decimal)
+def _validate_raw_geometry(raw: Any) -> None:
+    """Selected ReportDesign geometry only; never grants access or rewrites output."""
+    if not isinstance(raw, dict) or raw.get("artifact_kind") != "ReportDesign":
+        return
+    version = raw.get("schema_version")
+    if type(version) not in (int, float, Decimal):
+        return
+    try:
+        effective_version = float(cast(int | float | Decimal, version))
+    except (OverflowError, ValueError):
+        return
+    if effective_version != 2:
+        return
+    if version != 2:
+        # Do not let a raw unknown version round into the executable v2 contract.
+        raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
     pages = raw.get("pages")
     if not isinstance(pages, list):
-        return value
+        return
     for page in pages:
         if not isinstance(page, dict):
             continue
@@ -701,7 +710,27 @@ def _decode_structured_candidate(text: str) -> Any:
                         raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE")
                 except (OverflowError, ValueError):
                     raise ProviderCallError("REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE") from None
+    return
+
+
+def _decode_structured_candidate(text: str) -> Any:
+    """Check raw geometry numerals before Python's float parser can lose precision."""
+    value = json.loads(text)
+    if isinstance(value, dict) and value.get("artifact_kind") == "ReportDesign" \
+            and value.get("schema_version") == 2:
+        _validate_raw_geometry(json.loads(text, parse_float=Decimal))
     return value
+
+
+def validate_report_design_raw_ingress(raw_body: str) -> None:
+    """Pure selected-subtree check, called only after the intake's resource ACL."""
+    try:
+        envelope = json.loads(raw_body, parse_float=Decimal)
+    except (ValueError, ArithmeticError):
+        raise ProviderCallError("MODEL_OUTPUT_INVALID") from None
+    if not isinstance(envelope, dict):
+        raise ProviderCallError("MODEL_OUTPUT_INVALID")
+    _validate_raw_geometry(envelope.get("report_design"))
 
 
 def _candidate_digest(value: dict[str, Any]) -> str:

@@ -2977,3 +2977,23 @@ def test_raw_precision_guard_does_not_rewrite_legacy_design_or_non_geometry_numb
     assert _decode_structured_candidate(legacy) == json.loads(legacy)
     other = '{"artifact_kind":"ReportDesign","schema_version":2,"unrelated":9007199254740993}'
     assert _decode_structured_candidate(other) == json.loads(other)
+
+
+@pytest.mark.parametrize("version", ["2.0000000000000001", "1.9999999999999999"])
+@pytest.mark.parametrize("geometry", ["0.25", "9007199254740993.0"])
+def test_raw_version_alias_cannot_skip_precision_checks_or_gain_v2_execution(
+    version: str, geometry: str,
+) -> None:
+    from apbra_api.model_provider import (
+        _decode_structured_candidate,
+        validate_report_design_raw_ingress,
+    )
+    raw = ('{"artifact_kind":"ReportDesign","schema_version":' + version
+           + ',"pages":[{"visuals":[{"position":{"x":' + geometry + '}}]}]}')
+    assert json.loads(raw)["schema_version"] == 2
+    for validate in (
+        lambda: _decode_structured_candidate(raw),
+        lambda: validate_report_design_raw_ingress('{"report_design":' + raw + '}'),
+    ):
+        with pytest.raises(ProviderCallError, match="^REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE$"):
+            validate()
