@@ -49,10 +49,10 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
             finally:
                 path.write_bytes(original)
 
-    def test_exact_two_product_four_governance_paths_and_withdrawal(self):
+    def test_exact_two_product_five_governance_paths_and_withdrawal(self):
         task = json.loads((ROOT / TASK).read_text())
         self.assertEqual(len(h['P']), 2)
-        self.assertEqual(len(h['G']), 4)
+        self.assertEqual(len(h['G']), 5)
         self.assertEqual(set(task['allowed_paths']), h['P'])
         self.assertEqual(len(task['allowed_paths']), 2)
         self.assertEqual(h['digest'](task), h['TASK_SHA'])
@@ -251,6 +251,60 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
                 self.assertEqual(before.lstrip(), after.lstrip())
                 self.assertGreater(len(before), len(after))
         self.assertEqual(len(original.encode()) - len(current.encode()), 670)
+
+
+    def test_historical_snapshot_plumbing_preserves_every_original_ast_node(self):
+        name = 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py'
+        old = ast.parse(subprocess.check_output(['git', 'show', h['BASE'] + ':' + name], cwd=ROOT, text=True))
+        new = ast.parse((ROOT / name).read_text())
+        names = {'HISTORICAL_CHECKER_COMMIT', 'HISTORICAL_CHECKER_TREE', 'HISTORICAL_CHECKER_DIGEST'}
+        removed = []
+        for node in new.body:
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in names:
+                removed.append(node)
+            elif isinstance(node, ast.FunctionDef) and node.name == 'historical_checker_snapshot':
+                removed.append(node)
+        self.assertEqual(len(removed), 4)
+        new.body = [node for node in new.body if node not in removed]
+        old_method = next(node for node in ast.walk(old) if isinstance(node, ast.FunctionDef) and node.name == 'test_whole_old_checker_ast_restored_after_exact_seven_hooks')
+        old_read = next(node.value for node in old_method.body if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id == 'current')
+        replacements = 0
+        for node in ast.walk(new):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == 'historical_checker_snapshot':
+                self.assertEqual(node.targets[0].id, 'current')
+                self.assertEqual(node.value.args, [])
+                self.assertEqual(node.value.keywords, [])
+                node.value = old_read
+                replacements += 1
+        self.assertEqual(replacements, 1)
+        self.assertEqual(ast.dump(old), ast.dump(new))
+
+    def test_pinned_historical_snapshot_good_missing_bad_tree_and_changed_bytes(self):
+        path = ROOT / 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py'
+        spec = importlib.util.spec_from_file_location('snapshot_negative_probe', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        raw = subprocess.check_output(['git', 'show', module.HISTORICAL_CHECKER_COMMIT + ':scripts/check_bootstrap.py'], cwd=ROOT)
+        self.assertEqual(module.historical_checker_snapshot(), raw.decode('utf-8'))
+        tree = module.HISTORICAL_CHECKER_TREE.encode() + b'\n'
+        failures = [
+            subprocess.CalledProcessError(128, ['git'], stderr=b'synthetic-private-error'),
+            OSError('synthetic-private-error'),
+            [b'0' * 40 + b'\n'],
+            [b'\xff'],
+            [tree, raw + b'\n'],
+            [tree, bytes([raw[0] ^ 1]) + raw[1:]],
+        ]
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__), patch.object(module.subprocess, 'check_output', side_effect=failure):
+                with self.assertRaisesRegex(ValueError, '^Historical checker snapshot unavailable$'):
+                    module.historical_checker_snapshot()
+        with patch.object(module.subprocess, 'check_output', side_effect=[tree, raw]) as get:
+            self.assertEqual(module.historical_checker_snapshot(), raw.decode('utf-8'))
+            self.assertEqual(get.call_count, 2)
+            for call in get.call_args_list:
+                self.assertEqual(call.kwargs['timeout'], 10)
+                self.assertIs(call.kwargs['stderr'], subprocess.PIPE)
 
 
 if __name__ == '__main__':

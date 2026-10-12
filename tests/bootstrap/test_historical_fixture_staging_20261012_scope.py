@@ -23,6 +23,31 @@ h = c.f['bind'].__globals__
 HOOK_ADDITIONS = ['f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))\n', "        fixture_staging, e = f['bind'](root, catalog, sources, bound_provider_registration)\n        errors += e\n", "            (fixture_staging, f['P']),\n", "                else fixture_staging if active_branch in {f['B'], f['R']}\n", "                    not f['stage'](active_task_id, active_branch, changed_paths) and\n", "            errors += f['errors'](active_task_id, active_branch, changed_paths)\n", " or\n                    (active_task is not None and f['stage'](active_task_id, active_branch, changed_paths)\n                     and name in f['G'] and path_allowed(name, task, card))"]
 FIXTURE_MODULES = ['test_foundry_qualification_scope.py', 'test_foundry_qualification_renewal_scope.py', 'test_foundry_qualification_renewal_20261011_scope.py', 'test_generation_scope.py']
 
+
+HISTORICAL_CHECKER_COMMIT = '480df505985b888989c6c7785cbb14a8f68094a8'
+HISTORICAL_CHECKER_TREE = '5781a3a45d192a1812959735348ca82fd6a702f9'
+HISTORICAL_CHECKER_DIGEST = '1ed71b26bf5fb4b6064c415f807313082c47812d0b2a52046648acdff2a26938'
+
+
+def historical_checker_snapshot(root=ROOT):
+    """Read the actual released H4 checker, never filter the current checker."""
+    try:
+        tree = subprocess.check_output(
+            ['git', '-C', str(root), 'rev-parse', HISTORICAL_CHECKER_COMMIT + '^{tree}'],
+            timeout=10, stderr=subprocess.PIPE,
+        ).decode('ascii').strip()
+        if tree != HISTORICAL_CHECKER_TREE:
+            raise ValueError('Historical checker snapshot unavailable')
+        raw = subprocess.check_output(
+            ['git', '-C', str(root), 'show', HISTORICAL_CHECKER_COMMIT + ':scripts/check_bootstrap.py'],
+            timeout=10, stderr=subprocess.PIPE,
+        )
+        if len(raw) != 262070 or hashlib.sha256(raw).hexdigest() != HISTORICAL_CHECKER_DIGEST:
+            raise ValueError('Historical checker snapshot unavailable')
+        return raw.decode('utf-8')
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        raise ValueError('Historical checker snapshot unavailable') from None
+
 class HistoricalFixtureStagingScopeTests(unittest.TestCase):
     def copy(self, root):
         for name in {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']:
@@ -245,7 +270,7 @@ class HistoricalFixtureStagingScopeTests(unittest.TestCase):
 
     def test_whole_old_checker_ast_restored_after_exact_seven_hooks(self):
         old = subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/check_bootstrap.py'], cwd=ROOT, text=True)
-        current = (ROOT / 'scripts/check_bootstrap.py').read_text()
+        current = historical_checker_snapshot()
         for addition in HOOK_ADDITIONS:
             self.assertEqual(current.count(addition), 1)
             current = current.replace(addition, '')
