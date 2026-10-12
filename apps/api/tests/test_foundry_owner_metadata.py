@@ -1311,3 +1311,54 @@ def test_owned_process_failed_reap_is_fixed_and_never_claims_death() -> None:
     with pytest.raises(ProviderConfigurationError):
         operation.cancel()
     assert process.killed and not operation.death_verified
+
+
+def test_ipc_write_revocation_never_exports_registered_bytearray(
+    flow: Any, monkeypatch: Any
+) -> None:
+    import os
+
+    memory = module._OwnerMemory(module._PLAN)
+    memory._record = flow.sdk.record
+    memory._account = (
+        module._PLAN.tenant_id, module._PLAN.client_id, flow.sdk.record.home_account_id
+    )
+    memory._confirmed = True
+    private = bytearray(b"synthetic-private-fixture")
+    memory.register_buffer(private)
+    read_fd, write_fd = os.pipe()
+    operation = module._GetOperation(2)
+
+    def concurrent_close(fd: int, copy: bytes) -> int:
+        assert type(copy) is bytes
+        memory.close()
+        assert private == b"" and memory._cleanup_done.is_set()
+        return len(copy)
+
+    monkeypatch.setattr(module.os, "write", concurrent_close)
+    try:
+        with pytest.raises(ProviderConfigurationError):
+            operation.transfer(write_fd, private, len(private), memory, bytearray())
+        assert memory._closed and not memory._cleanup_pending and memory._cleanup_verified
+        memory.close()
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+def test_close_clear_failure_still_closes_resources_and_completes(flow: Any) -> None:
+    memory = module._OwnerMemory(module._PLAN)
+    memory._sdk = flow.sdk
+    private = bytearray(b"synthetic-private-fixture")
+    memory._buffers.append(private)
+    exported = memoryview(private)
+    try:
+        memory.close()
+        assert memory._closed and memory._cleanup_done.is_set() and not memory._cleanup_pending
+        assert not memory._cleanup_verified and memory._cleanup_failed
+        assert memory._sdk is None and "SDK_CLOSE" in flow.events
+        assert len(memory._failed_buffers) == 1 and memory._failed_buffers[0] is private
+        memory.close()
+    finally:
+        exported.release()
+        private.clear()

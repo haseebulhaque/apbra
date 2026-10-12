@@ -411,13 +411,15 @@ class _GetOperation:
                 memory.guard()
                 try:
                     if value is not None:
-                        count = os.write(fd, memoryview(value)[offset : offset + 65536])
+                        count = os.write(fd, memory.private_slice(value, offset, 65536))
                     else:
                         chunk = os.read(fd, min(length - offset, 65536))
                         count = len(chunk)
                         memory.append_private(buffer, chunk)
                 except BlockingIOError:
                     continue
+                self.remaining()
+                memory.guard()
                 if count <= 0:
                     raise _qualification_error()
                 offset += count
@@ -544,6 +546,7 @@ class _OwnerMemory:
         self._confirmed = False
         self._private_approved = False
         self._cleanup_failed = False
+        self._failed_buffers: list[Any] = []
         self._cleanup_done = Event()
         self._cleanup_pending = False
         self._cleanup_verified = False
@@ -742,6 +745,15 @@ class _OwnerMemory:
                 raise _qualification_error()
             buffer.extend(chunk)
 
+    def private_slice(self, buffer: bytearray, offset: int, length: int) -> bytes:
+        # An immutable bounded copy may outlive revocation during the syscall;
+        # it never exports the registered mutable buffer or prevents its clearing.
+        with self._lock:
+            self.guard()
+            if not any(item is buffer for item in self._buffers):
+                raise _qualification_error()
+            return bytes(buffer[offset : offset + length])
+
     def register_operation(self, operation: _GetOperation) -> None:
         with self._lock:
             self.guard()
@@ -775,17 +787,22 @@ class _OwnerMemory:
                 self._confirmed = False
                 self._private_approved = False
                 self._device_expiry = None
-                for document in self._documents:
-                    document.clear()
-                self._documents.clear()
-                for buffer in self._buffers:
-                    buffer.clear()
-                self._buffers.clear()
                 resources = [self._operation, self._client, self._sdk]
                 self._closing_resources = resources
                 self._operation = None
                 self._client = None
                 self._sdk = None
+                # A clearing fault must not skip detachment/cancellation or leave
+                # the completion event forever unset. Retain failed ownership.
+                managed_values: list[Any] = [*self._documents, *self._buffers]
+                for value in managed_values:
+                    try:
+                        value.clear()
+                    except BaseException:
+                        self._cleanup_failed = True
+                        self._failed_buffers.append(value)
+                self._documents.clear()
+                self._buffers.clear()
         # Never wait on SDK serialization/process death with the memory lock held.
         if resources is None:
             if pending:
