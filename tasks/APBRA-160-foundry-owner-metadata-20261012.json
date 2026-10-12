@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261012-FOUNDRY-OWNER-METADATA",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register exactly four import-safe owner-manual metadata product paths; no operational authentication, runtime activation or cost qualification.",
+  "requirements": [
+    "Direct Haseeb outcome renewal2026-10-11T23:11:44Z/23:12:19Z under JiraAPBRA-16010757 and bounded owner-metadata PLAN10759 authorizes this existing-MVP code/governance preparation until complete; no invented future expiry. Current owner records Confluence4063307v34/8519682v49 supplement rather than rewrite historical accepted authority.",
+    "Extract only existing _public_identifier/_instruction_bytes/_agent_observation/_knowledge_observation into foundry_metadata_projection.py with exact original function-body/response/redaction/error parity; main.py aliases the same names. Binding annotations may use a narrow structural Protocol. Preserve ProviderConfigurationError identity and fixed _qualification_error semantics through side-effect-free model_provider import. All old finite qualification/auth/host/runtime guards, Settings/config/env handling and main import/startup behavior remain unchanged.",
+    "New foundry_owner_metadata.py imports the pure projector only, never main/config/api/Settings/.env or application/auth helpers. No app startup, provider factory, SDK import/construction or credential discovery at import. Small lazyDeviceCodeCredential/private SDK logging/fixed captured-session/privateTTY/provenance/confirmation helpers must be local and explicitly parity-tested; do not bypass or monkeypatch main startup as an operational workaround.",
+    "Fixed OwnerMetadataPlan copies exact nonsecret current PUBLIC FoundryQualificationBinding literals: tenant4825d1f6-89d8-4e38-9418-2827aa59a23c; existing Microsoft development client04b07795-8ddb-461a-bbee-02f9e1bf7b46; project https://s08-cloud-ai-agent-resource.services.ai.azure.com/api/projects/s08-cloud-ai-agent; agent s08-document-grounded-agent version6; KB s08-knowledge-base; agent APIv1 and Search API2025-11-01-preview. Prove literal provenance by source/AST tests without importing config or reading private config. No CLI/env/freeform target overrides, resource discovery, model selection or new identity.",
+    "Exactly three resource metadata GETs and two approved audiences: existing project agent properties and exact version6 GET with https://ai.azure.com/.default; then privately confirmed exact Search origin derived solely from stored approved MCP configuration and one existing KB-definition GET with https://search.azure.com/.default. Fixed canonical order PRIVATE TERMINAL -> auth -> ACCOUNT -> AI token/two GETs -> SEARCH -> Search token/one GET -> safe projection -> cleanup/exit. Metadata transport permits no fourth cost GET, management audience, POST/PUT/PATCH/DELETE, retry, redirect, pagination, MCP/tool/model/Responses/search/retrieve/query or response-directed URL dispatch. The approved manual SDK OAuth/device-code protocol is distinct from these three resource GETs; do not claim three total network requests or a full-chain paid-cost bound.",
+    "Authentication is owner-MANUAL only in an independently opened private OS terminal/privateTTY, never a tool-managed captured PTY. Require explicit private consent before lazy SDK construction/authentication, explicit approved tenant/client and private account confirmation before any GET, and exact private Search-origin confirmation before requesting/attaching the second-audience token. Stop on consent/grant/RBAC/permission prompt/denial rather than accepting new consent or changing permissions.",
+    "Tokens/account/raw metadata stay memory-only and follow natural SDK/device-code/OAuth/access-token expiry; no artificial deadline/sessionTTL inherited from expired packets or fabricated future cutoff. Recheck private approval, selected account and token expiry before/after every operation. Explicit renewed-scope executor safety bounds are request_timeout_seconds300 (finite>0 and at most existing300, clipped to actual token lifetime), max_metadata_response_bytes4000000, max_projection_items100 and max_projection_string_characters255. These reuse nonsecret retained DRAFT technical choices as current implementation limits under renewed owner scope, not evidence of historical live approval. SDK/network/auth operation timeouts are finite and distinct from owner authority/natural expiry; no retries. Cleanup/credential close/memory clearing execute on success/cancel/error/expiry, and executor exits without idle authenticated process, app serving or activation.",
+    "Emit only the existing bounded safe public metadata projection/status; no instructions/document content/account IDs/device code/token/raw record/raw response/arbitrary exception/logging/audit/artifact leakage. A minimal selected-account label may appear only inside the owner private terminal for confirmation and is never persisted. No identifier, private Search origin, raw instruction or raw response is logged; private Search confirmation text stays only in the independently opened private terminal. Safe metadata observation is not LIVE_METADATA_VERIFIED runtime attestation, renewable hosted credential, provider activation, billing headroom or paid full-chain qualification.",
+    "No new dependency/install/AzureCLI/browser/default-credential fallback, SDK/provider/model substitute, portal provisioning, resource/config/env/database/secret/permission mutation, runtime binding export or token/config persistence. Existing installed SDK provenance must be inspected separately after actual release; prior expired package/launcher evidence remains history.",
+    "Only code/governance and synthetic offline validation are authorized in this execution. Actual owner sign-in/secret processing/private metadata interaction/preview/provider/hosting/resource/account changes remain separate closed owner gates. October A$10 ceiling plus current-cost and full-chain-reserve qualification remain; missing values are unknown, never zero, and all paid model/search/retrieve/tool calls stay blocked.",
+    "Actual normal-released PR135 main 19451292d596e0f488887b88c2ce3d420a1b6b51/tree3ec10b797f7c2cb12243828095381b582a6ca1d0 is the frozen prerequisite base; merged2026-10-12T01:46:54Z after exact-head hosted38192165804SUCCESS and two independent reviews. This registration still requires its own final pins, focused/fullbootstrap/scans/two genuinely separate exact-head reviews/hostedCI and authorized normal merge. Only after verified registration main may product edits begin within exactly four literal paths, with separate fresh release gates. No prior package/source work grants actual authentication/runtime/paid approval."
+  ],
+  "adrs": [
+    "Import-safe projection is a pure shared semantics surface, not an operational import of main. Preserve old main app startup and all finite host/qualification guards; no environment/settings monkeypatch or silent bypass.",
+    "Outcome-bounded metadata preparation and later owner-private manual metadata interaction are distinct from runtime activation, paid-call qualification, billing access or access/consent administration.",
+    "Registration changes exactly four governance paths; product changes exactly four literal paths, separate exact branches/stages. No historical source/task/cutoff/helper/declaration/function/security/workflow or262144-byte-cap weakening."
+  ],
+  "architecture_refs": [
+    "Corrected architecture: foundry-integration-20261011/current-owner-handoff-preparation/import-safe-four-path-correction.md; three-path/import-main suggestion is superseded. Four projectors move with body/error parity and old main aliases; new owner executor imports neither main/config/api nor Settings/SDK at import.",
+    "Historical source bindings remain apbra-160-editable-first-draft-direction Confluence8519682v28 and apbra-160-editable-first-draft-delivery9404417v9; all84 raw source rows/bytes and all prior tasks/helpers/expired cutoffs remain unchanged.",
+    "Current outcome10757/PLAN10759 and owner-record references4063307v34/8519682v49 are additive current authority, not replacement accepted-source hashes or an invented expiry.",
+    "PUBLIC config.py FoundryQualificationBinding source literals and public main.py fixed metadata paths/audiences supply resource provenance. Do not read private config, import application startup, discover targets or reuse old expired package qualification.",
+    "Explicit new executor technical safety selections300seconds/4000000bytes/100projectionitems/255stringcharacters reuse nonsecret historical foundry-integration-20261009/qualification-binding-8d5d880-DRAFT.json lines13-16 under current renewed-scope direction. Historical choices remain DRAFT and are not currently approved-owner scalar evidence or prior live qualification. Public config.py permits finite timeout>0<=300 and positive byte/item/string bounds; current public tests use different synthetic fixtures. Preserve exact bound provenance and operation/naturalexpiry distinction; runtime attestation/token renewal/paid all-in reserve and cloud cost read path remain separately unavailable gates."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/foundry_metadata_projection.py",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/tests/test_foundry_owner_metadata.py"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/**",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "compose.yaml",
+    "infrastructure/**",
+    "terraform/**",
+    "workers/**",
+    "packages/**",
+    ".env",
+    "**/.env",
+    "artifacts/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Exactly four registration paths and four literal product paths; source84 raw bytes/history/tasks/helpers/old checker AST/definitions/constants and262144-cap unchanged. Actual released prerequisite does not waive separate registration/product readiness gates.",
+    "Pure module import closure triggers no main/config/api/Settings/.env/app/SDK/auth/network/DB. Four projector bodies, response/error identity and semantics match frozen actualmain originals apart from permitted binding annotations; old finite flow aliases preserve behavior and old guard/app functions stay unchanged.",
+    "Synthetic tests prove canonical privateTerminal/auth/account/AI twoGET/Search-confirmation/Search oneGET/cleanup order; exact targets/audiences/callcount; no retry/redirect/pagination/newconsent/permission/paid/runtime extras; wrong resources/account/provenance/TTY/expiry/cancel/oversize/unknown shapes fail safely.",
+    "Natural expiry and finite per-operation timeout remain distinct from fabricated sessionTTL. Cleanup/credential close/memory-only redaction on every path; no captured challenge/account/token/private record/rawexception outputs or persistence.",
+    "No actual auth/metadata/provider/model/query/host/config/env/secret/DB/SDK-install/resource/permission action performed or qualified by registration/offline tests; metadata is not real runtime/cost/MVP readiness."
+  ],
+  "verification_required": [
+    "Registration: actual released PR135 mainH/base/tree/history pins, task/card/actor/owner/outcome/source/fulltask/protectedsections/exactP4/G4/branch/stage/missingmalformed/helper/history/source/recomputed-pin/wildcard/duplicate/omission/resource/audience/callcount/privacy/expiry/paid/runtime negatives; preserve all previous AST/constants/tasks/source bytes/helper cutoffs and262144-cap; checker/CIpolicy/fullbootstrap/scans/two separate exact-head independent PASS/hostedCI before authorized normal merge and verifiedmain.",
+    "Product: synthetic import sentinels prevent main/config/api/Settings/env/app/SDK construction; AST/extracted-loader pure projector body/error/response parity with frozen originals and old aliases, broad invalid/private/oversize/resource cases; explicit canonical handshake and account-mutation/naturalexpiry/operationtimeout/capturedTTY/kwargs/logging/redaction/cleanup/cancel/strict transport guards; full API/Ruff/mypy/governance/scans/reviews/hostedCI without actual private auth/provider calls.",
+    "Handoff: separately freeze current import-safe package/source/RECORD/installed SDK provenance after release; a genuinely separate final review must find the executor usable before owner notification. No old expired launcher success or metadata-only result becomes runtime attestation, renewable hosted auth or paid full-chain cost proof."
+  ],
+  "out_of_scope": [
+    "Operational import-main/config/Settings/env workaround, app activation/serve/LIVE binding export/provider factory, token/account/config persistence, private output/log/audit/artifact leakage, new consent/RBAC/permissions/identity/ambient/browser/CLI fallback, retry/redirect/pagination/arbitrary URL discovery.",
+    "Dependency/SDK/model/provider/security/workflow/schema/database/migration/source/history change, AzureCLI/cloud provisioning/hosting/real-user or account/resource action, fourth GET/cost/management audience, paid Responses/model/tool/MCP/search/retrieve/query calls or assertion of runtime/cost/MVP completion.",
+    "Publication/readiness/product edits before actual released PR135 base and complete registration gates; auth/secret processing/preview/provider interaction within author/offline validation."
+  ],
+  "escalate_when": [
+    "Actual normal released PR135 mainH is missing or stale; exact scope/base/task/protected/source/history/role/actor/branch/stage checks, separate reviews, hostedCI, scans, authorized merge or verifiedmain are missing/failed. Withdraw additive authority and stop implementation on missing/failed prerequisites.",
+    "Import safety/pure projector error/body parity/old main finite guards cannot be preserved, a fifth path/dependency/config/SDK/security/permission/resource/paid/runtime operation is needed, or exact public target/audience/metadata association/finite bounds are unproved.",
+    "Owner privateTTY consent/account/Search confirmation/provenance/naturalexpiry/operationtimeout/memory cleanup/redaction cannot be maintained, consent or access changes are required, or current-cost plus full-chain reserve is unknown. Stop rather than fallback or qualify."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "19451292d596e0f488887b88c2ce3d420a1b6b51",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-owner-metadata",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Outcome-bound owner10757/PLAN10759 existing-MVP code authority bound to actual normally released PR135 main19451292d596e0f488887b88c2ce3d420a1b6b51/tree3ec10b797f7c2cb12243828095381b582a6ca1d0. This task registration requires its own exact-head gates and normal merge before product exactP4 edits. No operational auth/provider/secret/runtime/cost approval or qualification; actual owner interaction and runtime/paid gates remain separate.",
+  "dependencies": [
+    "Actual normal released PR135 main19451292d596e0f488887b88c2ce3d420a1b6b51/tree3ec10b797f7c2cb12243828095381b582a6ca1d0, parentsfbbd1b9c2cbde8b89bef8dfd55e29a0c6b1fedef+96cce7f27e3eed1a2d1c48b99032aa1f137c85b5, merged2026-10-12T01:46:54Z; exact-head hosted38192165804SUCCESS allmandatory484/686/425/63 with two independent reviews and root release gates. Historical sources/tasks/helper cutoffs remain byte-exact; no candidate hash is substituted for actual released main.",
+    "Owner outcome10757/PLAN10759 and Confluence4063307v34/8519682v49 authorize only bounded preparation here. Old finite qualification and host tasks/cutoffs remain historical and unchanged; no invented deadline or sessionTTL.",
+    "Existing SDK availability is prior metadata only. No installer/AzureCLI/auth/private-config/resource/cost/provider action occurs in registration; post-release package/handoff and actual manual interaction require separate completed gates."
+  ]
+}
