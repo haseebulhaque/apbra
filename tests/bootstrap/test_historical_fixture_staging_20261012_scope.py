@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
+from historical_fixture_staging import knowledge_registration_names
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK = 'tasks/APBRA-160-historical-fixture-staging-20261012.json'
@@ -50,7 +51,7 @@ def historical_checker_snapshot(root=ROOT):
 
 class HistoricalFixtureStagingScopeTests(unittest.TestCase):
     def copy(self, root):
-        for name in {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']:
+        for name in knowledge_registration_names(ROOT, h['G']):
             path = ROOT / name
             if path.is_file():
                 target = root / name

@@ -3,16 +3,16 @@ import hashlib
 import json
 
 P = {'apps/api/src/apbra_api/knowledge_lifecycle.py', 'apps/api/tests/test_knowledge_lifecycle.py'}
-G = {'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py', 'tasks/APBRA-160-knowledge-lifecycle-20261012.json', 'tests/bootstrap/test_knowledge_lifecycle_20261012_scope.py', 'scripts/check_knowledge_lifecycle_20261012.py', 'scripts/check_bootstrap.py'}
+G = {'tasks/APBRA-160-knowledge-lifecycle-20261012.json', 'tests/bootstrap/historical_fixture_staging.py', 'tests/bootstrap/test_ai_authored_layout_raw_ingress_20261012_scope.py', 'tests/bootstrap/test_foundry_owner_metadata_20261012_scope.py', 'tests/bootstrap/test_knowledge_lifecycle_20261012_scope.py', 'scripts/check_knowledge_lifecycle_20261012.py', 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py'}
 B = 'agent/APBRA-DEVOPS/APBRA-160-knowledge-lifecycle'
 R = 'agent/APBRA-DEVOPS/APBRA-160-knowledge-lifecycle-registration'
 BASE = 'a70edb88a7db589d5488932d82a180f18694fb8a'
 RELEASE_BOUND = True
 ACTOR = 'Codex via haseebulhaque authenticated GitHub and Atlassian tools'
 OWNER = 'Haseeb Ul Haque'
-AUTHORITY = 'Direct Haseeb accepted existing-MVP outcome10757 and parent-authorized finite offline knowledge-lifecycle component under Jira APBRA-160 PLAN10795/10796; no owner interaction, new provider capability or operational authority. Frozen semantic contract SHA25622ad544614284295b4c2da2f8b024fdc4a5441d4c2cc8764bd7319017e7ea4b5 is accepted by root; only registration geometry names are overridden by PLAN10795/10796.'
-TASK_SHA = 'ae151809eaa640572efef9587f66c6ca1176b4cdc826adf83a8c0b2dbe0d1b13'
-GATES = {'requirements': '9163b64e4eb875e651b7c6d873c69e7dc39186bd25545bffe46625bb723078f7', 'adrs': '8317d8d4505f1b8b3d2780bebf192e1690bea73a05cd57793cb550737c89c759', 'architecture_refs': '566f7a839633a2b9deb0480c94fa785db11e34449dd043e1c3ec81748fdd1fe7', 'restricted_paths': 'a88aeee7c4738fa1130d04fe93e14aa5201982957af1bfd85087e23abc236d2f', 'acceptance_criteria': '25941c2715ac0b9445beb2769fc05515c6577122a5ca7dec8b90a723ec2ecebf', 'verification_required': 'b8479cd944ae5f9cd1ce36b21d7c2e8773997946bbd371623d095fc3ab34e7a8', 'out_of_scope': '1fca77a952967b94c521bf92fe0c91945ee3f424ed1f4da01289d55116f1830b', 'escalate_when': '0fd6e29e9f5bc16d5d3d8b73d791c394b8d4c54188f1d0246b714cd0c354e2e9', 'dependencies': '2844e42b0d15c6a8b3735d5c4ee7b71b551e2791259931d736195371f161cb86', 'effective_release': '9760bb87338c540a9d243cc8ebe4d78ab2e597d625a2da2adbf9e6bf712c2a2f', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+AUTHORITY = 'Direct Haseeb accepted existing-MVP outcome10757 and parent-authorized finite offline knowledge-lifecycle component under Jira APBRA-160 PLAN10795/10796; no owner interaction, new provider capability or operational authority. Frozen semantic contract SHA25622ad544614284295b4c2da2f8b024fdc4a5441d4c2cc8764bd7319017e7ea4b5 is accepted by root; only registration geometry names are overridden by PLAN10795/10796. PLAN10801/10802 additionally authorizes exactly seven governance paths for pinned H9 test-local historical staging; original pure P2 semantics and historical authority/source pins stay unchanged.'
+TASK_SHA = 'e3c3e61fafe5c83ccec80d993ad22ba5656430bc0c4625cce88a4bf8145e8ec1'
+GATES = {'requirements': '1fdf36cb94ae73abacd4fff32c865012d74b0658c6837a275dacd27993002627', 'adrs': 'a1ff55d59f3490de236b545276137b23f288f21d6d303999b83a05ca3d95165b', 'architecture_refs': '65abe470f6c5106f658d85f1f8f29533e07b83d39c5741361b9595013fd6835b', 'restricted_paths': 'a88aeee7c4738fa1130d04fe93e14aa5201982957af1bfd85087e23abc236d2f', 'acceptance_criteria': '5274ef0c64a51288650ca8a821a866f340d986a7b7aeb115dcc11de49c6b7d9f', 'verification_required': '821f7434f43483e4cac4bfa67495dfdcb7149b15cf64598c9b75e66baf2aab3a', 'out_of_scope': '1fca77a952967b94c521bf92fe0c91945ee3f424ed1f4da01289d55116f1830b', 'escalate_when': '0fd6e29e9f5bc16d5d3d8b73d791c394b8d4c54188f1d0246b714cd0c354e2e9', 'dependencies': 'f1309aac5fab82891cad7dd8f45d22ca0221e7442b149575419074c18189afc8', 'effective_release': '69e9fc5ed880a36e031d40d311f2bbd88129677a80123bd71e3fda83721c23b3', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
 SOURCES = [('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'), ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9')]
 SOURCES_SHA = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 SOURCE_FILE_SHA = '086e26d0f83e76347ab709d8859dd013513240a4e86ee9861af2086f38bb0f3e'
@@ -54,7 +54,7 @@ def stage(task_id, branch, paths):
 
 def errors(task_id, branch, paths):
     if task_id == 'APBRA-160' and branch == R and paths != G:
-        return ['APBRA-160 knowledge lifecycle registration requires exactly five governance paths']
+        return ['APBRA-160 knowledge lifecycle registration requires exactly seven governance paths']
     if task_id == 'APBRA-160' and branch == B and (not paths or not paths <= P):
         return ['APBRA-160 knowledge lifecycle product requires exactly its two literal paths']
     return []

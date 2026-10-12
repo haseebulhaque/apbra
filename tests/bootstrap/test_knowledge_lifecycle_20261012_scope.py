@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from unittest.mock import patch
+import historical_fixture_staging as fixture_names
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK = 'tasks/APBRA-160-knowledge-lifecycle-20261012.json'
@@ -18,6 +19,22 @@ spec = importlib.util.spec_from_file_location('knowledge_lifecycle_bootstrap', R
 c = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(c)
 h = c.k['bind'].__globals__
+
+
+def restore_h9_fixture_selection(tree):
+    """Reverse only the exact new import and one copy-loop iterable."""
+    imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
+               and node.module == 'historical_fixture_staging'
+               and [(item.name, item.asname) for item in node.names] == [('knowledge_registration_names', None)]]
+    if len(imports) != 1:
+        raise AssertionError('Exact fixture import missing or duplicated')
+    tree.body.remove(imports[0])
+    method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == 'copy')
+    loops = [node for node in method.body if isinstance(node, ast.For)]
+    if len(loops) != 1 or ast.dump(loops[0].iter) != ast.dump(ast.parse("knowledge_registration_names(ROOT, h['G'])", mode='eval').body):
+        raise AssertionError('Exact fixture selector differs')
+    loops[0].iter = ast.parse("{p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']", mode='eval').body
+    return tree
 
 
 class KnowledgeLifecycleScopeTests(unittest.TestCase):
@@ -52,7 +69,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
     def test_exact_two_product_five_governance_paths_and_withdrawal(self):
         task = json.loads((ROOT / TASK).read_text())
         self.assertEqual(len(h['P']), 2)
-        self.assertEqual(len(h['G']), 5)
+        self.assertEqual(len(h['G']), 7)
         self.assertEqual(set(task['allowed_paths']), h['P'])
         self.assertEqual(len(task['allowed_paths']), 2)
         self.assertEqual(h['digest'](task), h['TASK_SHA'])
@@ -256,7 +273,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
     def test_historical_snapshot_plumbing_preserves_every_original_ast_node(self):
         name = 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py'
         old = ast.parse(subprocess.check_output(['git', 'show', h['BASE'] + ':' + name], cwd=ROOT, text=True))
-        new = ast.parse((ROOT / name).read_text())
+        new = restore_h9_fixture_selection(ast.parse((ROOT / name).read_text()))
         names = {'HISTORICAL_CHECKER_COMMIT', 'HISTORICAL_CHECKER_TREE', 'HISTORICAL_CHECKER_DIGEST'}
         removed = []
         for node in new.body:
@@ -305,6 +322,104 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
             for call in get.call_args_list:
                 self.assertEqual(call.kwargs['timeout'], 10)
                 self.assertIs(call.kwargs['stderr'], subprocess.PIPE)
+
+
+
+    def test_three_historical_copy_changes_restore_whole_h9_ast_and_old_h3_utility(self):
+        base = fixture_names.KNOWLEDGE_REGISTRATION_BASE
+        for name in ['test_ai_authored_layout_raw_ingress_20261012_scope.py',
+                     'test_foundry_owner_metadata_20261012_scope.py',
+                     'test_historical_fixture_staging_20261012_scope.py']:
+            with self.subTest(name=name):
+                path = 'tests/bootstrap/' + name
+                old = ast.parse(subprocess.check_output(['git', 'show', base + ':' + path], cwd=ROOT))
+                new = restore_h9_fixture_selection(ast.parse((ROOT / path).read_text()))
+                self.assertEqual(ast.dump(old), ast.dump(new))
+        path = 'tests/bootstrap/historical_fixture_staging.py'
+        old_bytes = subprocess.check_output(['git', 'show', base + ':' + path], cwd=ROOT)
+        current = (ROOT / path).read_bytes()
+        self.assertTrue(current.startswith(old_bytes))
+        old, new = ast.parse(old_bytes), ast.parse(current)
+        additions = {'KNOWLEDGE_REGISTRATION_BASE', 'KNOWLEDGE_REGISTRATION_TREE',
+                     'KNOWLEDGE_REGISTRATION_UNIVERSE_SHA'}
+        kept = []
+        removed = 0
+        for node in new.body:
+            if (isinstance(node, ast.Assign) and len(node.targets) == 1 and
+                    isinstance(node.targets[0], ast.Name) and node.targets[0].id in additions):
+                removed += 1
+            elif isinstance(node, ast.FunctionDef) and node.name == 'knowledge_registration_names':
+                removed += 1
+            else:
+                kept.append(node)
+        self.assertEqual(removed, 4)
+        new.body = kept
+        self.assertEqual(ast.dump(old), ast.dump(new))
+        self.assertEqual((ROOT / 'scripts/check_bootstrap.py').read_bytes(),
+                         subprocess.check_output(['git', 'show', base + ':scripts/check_bootstrap.py'], cwd=ROOT))
+        self.assertEqual(len((ROOT / 'scripts/check_bootstrap.py').read_bytes()), 262076)
+
+    def test_h9_universe_exact_pins_shape_and_git_failures_are_closed(self):
+        self.assertEqual(fixture_names.KNOWLEDGE_REGISTRATION_BASE, '287ceac2c67979d60f45d44d0d0da21798f96dcd')
+        self.assertEqual(fixture_names.KNOWLEDGE_REGISTRATION_TREE, '76903c07688d79c1b9ca4fdfd98965b23433d54d')
+        self.assertEqual(fixture_names.KNOWLEDGE_REGISTRATION_UNIVERSE_SHA, '3dad0a31dd8add81398efcfa0edaa37e92f662662c838ab652441210c97c49b8')
+        names = fixture_names.knowledge_registration_names(ROOT)
+        self.assertEqual(len(names), 334)
+        self.assertFalse(names & h['P'])
+        self.assertEqual(fixture_names.knowledge_registration_names(ROOT, h['G']), names | h['G'])
+        raw = subprocess.check_output(['git', 'ls-tree', '-rz', '--name-only', fixture_names.KNOWLEDGE_REGISTRATION_BASE], cwd=ROOT)
+        tree = fixture_names.KNOWLEDGE_REGISTRATION_TREE.encode() + b'\n'
+        for error in [OSError('synthetic-private-error'), subprocess.CalledProcessError(128, ['git'], stderr=b'synthetic-private-error'), [b'0' * 40 + b'\n'], [b'\xff'], [tree, raw + b'\0']]:
+            with self.subTest(error=type(error).__name__), patch.object(fixture_names.subprocess, 'check_output', side_effect=error):
+                with self.assertRaisesRegex(ValueError, '^Knowledge historical fixture snapshot unavailable$'):
+                    fixture_names.knowledge_registration_names(ROOT)
+        for raw_bad in [b'', b'a', b'\0', b'a\0a\0', b'../private\0', b'/absolute\0', b'a\\b\0', b'.git/config\0', b'\xff\0']:
+            with self.subTest(shape=hashlib.sha256(raw_bad).hexdigest()), patch.object(fixture_names, 'KNOWLEDGE_REGISTRATION_UNIVERSE_SHA', hashlib.sha256(raw_bad).hexdigest()), patch.object(fixture_names.subprocess, 'check_output', side_effect=[tree, raw_bad]):
+                with self.assertRaisesRegex(ValueError, '^Knowledge historical fixture snapshot unavailable$'):
+                    fixture_names.knowledge_registration_names(ROOT)
+        for bad in ['', '../private', '/absolute', 'a\\b', '.git/config', 'a\0b', None]:
+            with self.subTest(addition=type(bad).__name__):
+                with self.assertRaisesRegex(ValueError, '^Knowledge historical fixture snapshot unavailable$'):
+                    fixture_names.knowledge_registration_names(ROOT, [bad])
+
+    def test_three_historical_fixtures_exclude_future_p2_but_current_withdrawal_rejects_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'source'
+            subprocess.run(['git', 'clone', '--no-hardlinks', '--quiet', str(ROOT), str(source)], check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.copy(source)
+            for name in h['P']:
+                path = source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('# Synthetic future P2 fixture witness, never executable product.\n')
+            subprocess.run(['git', '-C', str(source), 'add', '--', *sorted(h['P'])], check=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            for index, (filename, classname) in enumerate([
+                ('test_ai_authored_layout_raw_ingress_20261012_scope.py', 'AILayoutRawIngressScopeTests'),
+                ('test_foundry_owner_metadata_20261012_scope.py', 'FoundryOwnerMetadataScopeTests'),
+                ('test_historical_fixture_staging_20261012_scope.py', 'HistoricalFixtureStagingScopeTests'),
+            ]):
+                with self.subTest(module=filename):
+                    spec = importlib.util.spec_from_file_location('fixture_probe_' + str(index), ROOT / 'tests/bootstrap' / filename)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    case = getattr(module, classname)()
+                    selected = Path(directory) / ('selected-' + str(index))
+                    with patch.object(module, 'ROOT', source):
+                        case.copy(selected)
+                    self.assertTrue(all(not (selected / name).exists() for name in h['P']))
+                    with case.prospective(selected):
+                        self.assertEqual(case.check(selected), [])
+                        self.assertEqual(case.check(selected, module.h['P'], module.h['B']), [])
+                    complete = Path(directory) / ('complete-' + str(index))
+                    with patch.dict(globals(), {'ROOT': source}):
+                        self.copy(complete)
+                    self.assertTrue(all((complete / name).is_file() for name in h['P']))
+                    self.assertEqual(self.check(complete, h['P'], h['B']), [])
+                    with case.prospective(complete):
+                        errors = case.check(complete)
+                        self.assertEqual(set(errors), {'File outside safe bootstrap scope: ' + name for name in h['P']})
+                    self.assertEqual(self.check(complete, h['P'], h['B']), [])
 
 
 if __name__ == '__main__':
