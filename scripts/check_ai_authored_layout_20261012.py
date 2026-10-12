@@ -1,6 +1,9 @@
 """Additive outcome-bounded AI geometry authority; all prior authorities stay historical."""
+from collections import OrderedDict
+import functools
 import hashlib
 import json
+import math
 
 P = {'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/generation.py', 'apps/api/src/apbra_api/model_provider.py', 'apps/api/src/apbra_api/tenant_settings.py', 'apps/api/tests/test_api.py', 'apps/api/tests/test_config.py', 'apps/api/tests/test_generation.py', 'apps/api/tests/test_model_provider.py', 'apps/api/tests/test_tenant_settings.py', 'apps/web/e2e/protected-generation.spec.ts', 'apps/web/e2e/tenant-settings.spec.ts', 'apps/web/knowledge/report-design-format-contract-v2.md', 'apps/web/scripts/generation-bridge.ts', 'apps/web/src/App.test.tsx', 'apps/web/src/EnterpriseApp.tsx', 'apps/web/src/aiGeometry.test.ts', 'apps/web/src/aiGeometry.ts', 'apps/web/src/foundry.test.ts', 'apps/web/src/foundry.ts', 'apps/web/src/genericPowerBI.test.ts', 'apps/web/src/genericPowerBI.ts', 'apps/web/src/guardrail.test.ts', 'apps/web/src/guardrail.ts', 'apps/web/src/rag.test.ts', 'apps/web/src/rag.ts', 'apps/web/src/reportDesignNormalization.test.ts', 'apps/web/src/reportDesignNormalization.ts', 'apps/web/src/tenant.ts'}
 G = {'scripts/check_ai_authored_layout_20261012.py', 'scripts/check_bootstrap.py', 'tasks/APBRA-160-ai-authored-layout-20261012.json', 'tests/bootstrap/test_ai_authored_layout_20261012_scope.py'}
@@ -10,8 +13,8 @@ BASE = 'fbbd1b9c2cbde8b89bef8dfd55e29a0c6b1fedef'
 ACTOR = 'Codex via haseebulhaque authenticated GitHub and Atlassian tools'
 OWNER = 'Haseeb Ul Haque'
 AUTHORITY = 'Haseeb directly renewed existing-MVP development at 2026-10-11T23:11:44Z and 2026-10-11T23:12:19Z until the bounded existing MVP correction is complete; this is outcome-bounded additive authority with no invented future expiry. Jira APBRA-160 comment10757 and current Confluence delivery records preserve all historical authorities and expired cutoffs as history.'
-TASK_SHA = '305d460360b4d5254fab1cd5dfc09314eaa83f843b59f0ca074ba1cf83bec784'
-GATES = {'requirements': '3954cda207340549ab355cce79cc389930cd59eeebfbb26776eb41141b6df5f5', 'adrs': '4625f007238a5b49d8f493f4efd3573f234ad869e2ebfbddd24e2ddbd45e2a55', 'architecture_refs': '680dad1c31639b13b5acf4fd882d4d9bc62538ef519e9540a9d3b92e28898d21', 'restricted_paths': '8efeef4ebffde9f48e8bf124c482f304063e3550acbbd2271354837fb1db0ae6', 'acceptance_criteria': 'f2d0e67d59baad05a4840d7eecbcf6a14df0c62782d6d8c83634717622ecd070', 'verification_required': '66f46a74714752f9479d94a2ed5348d4c5cc3ad1ed985604e2e310947b1b9004', 'out_of_scope': '737031ed5a3917596ba6361f9aa5813210d98d549f077d2a0b665b3dd912f01a', 'escalate_when': '4e826070a3ab7ee8da62a3bf2cee68715564570929d0e471e44b4596afafe67f', 'dependencies': '6ebf1c6c306793ac851999562e1a7be8d78b6e2bc121c2807e915b760527be2a', 'effective_release': '70d45f9f98d19e5d0efbe75768d5831e4963db9ca8b9f64d133198433fb4bec3', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+TASK_SHA = '3dc40d08e8e5e0e1fa1b7c35506059d1cd48f0af23433d938647dd577a303a10'
+GATES = {'requirements': '235ae211e31af4c4b07ee0e3aeb3e3ff5a5074009b803a9e4484e924bdb65d3e', 'adrs': 'f4ad3f39f21bea167c79c0dd1ea0cfee35dba888c0cbc435b692b61f14701373', 'architecture_refs': '4759a3264b351d2c926eab083ac5b06d884acc61908350acb2fd647ffc5cb944', 'restricted_paths': '8efeef4ebffde9f48e8bf124c482f304063e3550acbbd2271354837fb1db0ae6', 'acceptance_criteria': '48b01d2c007f7b29ce9d1b786e5f3cb31800197f6d9e839b807cead9d42d70b0', 'verification_required': 'c848b06f981c0aabb577390a5b6754895c4a80059a436d1d0dd05bea08e096b3', 'out_of_scope': 'e29ea3da1aace255e4d9d8aa4ec2c89e9e8f4f3ced3c589c7eb5a30f81de6ef0', 'escalate_when': '4e826070a3ab7ee8da62a3bf2cee68715564570929d0e471e44b4596afafe67f', 'dependencies': '6ebf1c6c306793ac851999562e1a7be8d78b6e2bc121c2807e915b760527be2a', 'effective_release': '70d45f9f98d19e5d0efbe75768d5831e4963db9ca8b9f64d133198433fb4bec3', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
 SOURCES = [('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'), ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9')]
 SOURCES_SHA = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 SOURCE_FILE_SHA = '086e26d0f83e76347ab709d8859dd013513240a4e86ee9861af2086f38bb0f3e'
@@ -57,3 +60,76 @@ def errors(task_id, branch, paths):
     if task_id == 'APBRA-160' and branch == B and (not paths or not paths <= P):
         return ['APBRA-160 AI layout product changes require only registered 28 literal paths']
     return []
+
+
+class ContentMemo:
+    def __init__(self, original, max_entries=128, max_key_bytes=131072, max_result_bytes=65536):
+        self.original=original
+        self.max_entries=max_entries
+        self.max_key_bytes=max_key_bytes
+        self.max_result_bytes=max_result_bytes
+        self.cache=OrderedDict()
+        self.hits=0;self.misses=0;self.fallbacks=0;self.evictions=0;self.original_calls=0
+        functools.update_wrapper(self, original)
+    def clear(self):self.cache.clear()
+    def plain(self,value,ancestors=None):
+        kind=type(value)
+        if kind in (type(None),bool,int,str):return True
+        if kind is float:return math.isfinite(value)
+        if kind not in (dict,list):return False
+        seen=set() if ancestors is None else ancestors
+        marker=id(value)
+        if marker in seen:return False
+        seen.add(marker)
+        try:
+            if kind is dict:
+                return all(type(k) is str and self.plain(v,seen) for k,v in value.items())
+            return all(self.plain(v,seen) for v in value)
+        finally:seen.remove(marker)
+    def raw(self,schema,value,*args,**kwargs):
+        self.original_calls+=1
+        return self.original(schema,value,*args,**kwargs)
+    def __call__(self,schema,value,*args,**kwargs):
+        # Current closure accepts two args only; unsupported future/path kwargs
+        # are passed untouched to original, never dropped or admitted by a cache.
+        try:
+            keyable = self.plain(schema) and self.plain(value)
+        except (TypeError, ValueError, OverflowError, RecursionError):
+            keyable = False
+        if args or kwargs or not keyable:
+            self.fallbacks+=1
+            return self.raw(schema,value,*args,**kwargs)
+        try:
+            # Preserve dictionary order: exact error-message/tie ordering can
+            # depend on representation. Key is complete content, not object ID,
+            # file path, schema identity, authority state, digest or admission.
+            key=json.dumps([schema,value],ensure_ascii=True,allow_nan=False,separators=(',',':'))
+            if len(key.encode())>self.max_key_bytes:
+                self.fallbacks+=1
+                return self.raw(schema,value)
+        except (TypeError,ValueError,OverflowError,RecursionError):
+            self.fallbacks+=1
+            return self.raw(schema,value)
+        if key in self.cache:
+            self.hits+=1
+            cached=self.cache.pop(key);self.cache[key]=cached
+            return list(cached)
+        self.misses+=1
+        errors=self.raw(schema,value)  # Exceptions are never cached.
+        if type(errors) is not list or any(type(error) is not str for error in errors):
+            return errors
+        try:
+            result_bytes = sum(len(error.encode()) for error in errors)
+        except UnicodeEncodeError:
+            return errors
+        if result_bytes>self.max_result_bytes:
+            return errors
+        self.cache[key]=tuple(errors)
+        if len(self.cache)>self.max_entries:
+            self.cache.popitem(last=False);self.evictions+=1
+        return list(errors)
+
+
+def memo_schema_errors(original):
+    """Memo only supplied JSON schema/value error content, never authority or I/O."""
+    return ContentMemo(original)

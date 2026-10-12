@@ -210,5 +210,199 @@ class AIAuthoredLayoutScopeTests(unittest.TestCase):
         self.assertIn('apps/web/knowledge/report-design-format-contract-v2.md', h['P'])
 
 
+class PureSchemaErrorMemoTests(unittest.TestCase):
+    def setUp(self):
+        self.original = c.schema_errors.__wrapped__
+        self.memo = c.a['ContentMemo'](self.original)
+
+    def parity(self, schema, value, **kwargs):
+        def outcome(fn):
+            try:
+                return ('result', fn(schema, value, **kwargs))
+            except Exception as exc:
+                return ('exception', type(exc), str(exc))
+        expected = outcome(self.original)
+        self.assertEqual(outcome(self.memo), expected)
+        self.assertEqual(outcome(self.memo), expected)
+        return expected
+
+    def test_01_valid_plain_json_cache_hit(self):
+        self.parity({'type': 'integer'}, 1)
+        self.assertEqual(self.memo.original_calls, 1)
+        self.assertEqual(self.memo.hits, 1)
+
+    def test_02_invalid_plain_json_errors_cache_hit(self):
+        self.parity({'type': 'integer'}, 'wrong')
+        self.assertEqual(self.memo.original_calls, 1)
+        self.assertEqual(self.memo.hits, 1)
+
+    def test_03_same_object_value_mutation_changes_full_key(self):
+        schema = {'type': 'object', 'required': ['count']}
+        value = {'count': 1}
+        self.parity(schema, value)
+        del value['count']
+        self.assertTrue(self.parity(schema, value)[1])
+        self.assertEqual(self.memo.misses, 2)
+
+    def test_04_same_schema_object_mutation_changes_full_key(self):
+        schema = {'type': 'number', 'minimum': 1}
+        self.assertTrue(self.parity(schema, 0)[1])
+        schema['minimum'] = 0
+        self.assertEqual(self.parity(schema, 0), ('result', []))
+        self.assertEqual(self.memo.misses, 2)
+
+    def test_05_returned_error_list_is_caller_owned(self):
+        expected = self.original({'type': 'integer'}, 'wrong')
+        errors = self.memo({'type': 'integer'}, 'wrong')
+        errors.clear()
+        self.assertEqual(self.memo({'type': 'integer'}, 'wrong'), expected)
+        errors = self.memo({'type': 'integer'}, 'wrong')
+        errors.append('caller tamper')
+        self.assertEqual(self.memo({'type': 'integer'}, 'wrong'), expected)
+
+    def test_06_invalid_schema_exception_not_cached(self):
+        self.assertEqual(self.parity({'type': 'unsupported-type'}, 1)[0], 'exception')
+        self.assertEqual(self.memo.original_calls, 2)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_07_external_reference_exception_not_cached(self):
+        result = self.parity({'$ref': 'https://invalid.example/schema'}, 1)
+        self.assertEqual(result[0], 'exception')
+        self.assertEqual(result[1], ValueError)
+        self.assertEqual(self.memo.original_calls, 2)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_08_error_order_and_full_dict_representation_preserved(self):
+        self.parity({'required': ['second', 'first']}, {})
+        schema = {'enum': [None]}
+        self.parity(schema, {'b': 2, 'a': 1})
+        self.parity(schema, {'a': 1, 'b': 2})
+        self.assertEqual(self.memo.misses, 3)
+
+    def test_09_keyword_schema_and_value_unchanged(self):
+        schema = {'type': 'integer'}
+        expected = self.original(schema=schema, value='wrong')
+        self.assertEqual(self.memo(schema=schema, value='wrong'), expected)
+        self.assertEqual(self.memo(schema, 'wrong'), expected)
+        self.assertEqual(self.memo.hits, 1)
+
+    def test_10_unsupported_path_kwargs_fall_back_unchanged(self):
+        self.assertEqual(self.parity({}, 1, path='synthetic')[0], 'exception')
+        self.assertEqual(self.memo.fallbacks, 2)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_11_nan_falls_back_without_caching(self):
+        self.parity({'type': 'number'}, float('nan'))
+        self.assertEqual(self.memo.fallbacks, 2)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_12_positive_and_negative_infinity_fall_back(self):
+        for value in [float('inf'), float('-inf')]:
+            self.parity({'type': 'number'}, value)
+        self.assertEqual(self.memo.fallbacks, 4)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_13_non_json_tuple_and_set_fall_back(self):
+        for value in [(1, 2), {1, 2}]:
+            self.parity({'type': 'array'}, value)
+        self.assertEqual(self.memo.fallbacks, 4)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_14_custom_object_and_container_subclass_fall_back(self):
+        class CustomDict(dict):
+            pass
+        for value in [object(), CustomDict({'count': 1})]:
+            self.parity({}, value)
+        self.assertEqual(self.memo.fallbacks, 4)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_15_non_string_dictionary_key_falls_back(self):
+        self.parity({}, {1: 'synthetic'})
+        self.assertEqual(self.memo.fallbacks, 2)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_16_cyclic_and_deep_value_fall_back_original_behavior(self):
+        cyclic = []
+        cyclic.append(cyclic)
+        self.parity({}, cyclic)
+        deep = 1
+        for _ in range(1200):
+            deep = [deep]
+        self.parity({}, deep)
+        self.assertEqual(self.memo.fallbacks, 4)
+        self.assertEqual(len(self.memo.cache), 0)
+
+    def test_17_entry_bound_and_eviction_preserve_errors(self):
+        memo = c.a['ContentMemo'](self.original, max_entries=2)
+        for value in ['first', 'second', 'third', 'first']:
+            self.assertEqual(memo({'type': 'integer'}, value), self.original({'type': 'integer'}, value))
+        self.assertEqual(len(memo.cache), 2)
+        self.assertEqual(memo.evictions, 2)
+
+    def test_18_large_key_falls_back_without_validation_limit(self):
+        memo = c.a['ContentMemo'](self.original, max_key_bytes=32)
+        value = 'synthetic' * 50
+        self.assertEqual(memo({}, value), self.original({}, value))
+        self.assertEqual(memo.fallbacks, 1)
+        self.assertEqual(len(memo.cache), 0)
+
+    def test_19_large_error_result_is_returned_without_caching(self):
+        memo = c.a['ContentMemo'](self.original, max_result_bytes=1)
+        expected = self.original({'type': 'integer'}, 'wrong')
+        self.assertEqual(memo({'type': 'integer'}, 'wrong'), expected)
+        self.assertEqual(memo({'type': 'integer'}, 'wrong'), expected)
+        self.assertEqual(memo.original_calls, 2)
+        self.assertEqual(len(memo.cache), 0)
+
+    def test_20_supplied_documents_not_mutated(self):
+        schema = {'type': 'object', 'properties': {'count': {'type': 'integer'}}, 'required': ['count']}
+        value = {'count': 'wrong'}
+        before = copy.deepcopy((schema, value))
+        self.parity(schema, value)
+        self.assertEqual((schema, value), before)
+
+    def compare_check(self, root, branch, paths):
+        with patch.object(c, 'schema_errors', self.original):
+            expected = c.check(root, active_task_id='APBRA-160', active_branch=branch, changed_paths=paths)[0]
+        with patch.object(c, 'schema_errors', self.memo):
+            actual = c.check(root, active_task_id='APBRA-160', active_branch=branch, changed_paths=paths)[0]
+        self.assertEqual(actual, expected)
+        return actual
+
+    def test_21_old_and_new_branch_admission_errors_match_without_memo(self):
+        for branch, paths in [(c.g['R'], c.g['G']), (c.g['B'], c.g['P']),
+                              (h['R'], h['G']), (h['B'], h['P']),
+                              (c.g['B'], h['P']), (h['R'], h['G'] | {'.env'})]:
+            with self.subTest(branch=branch, paths=paths):
+                self.compare_check(ROOT, branch, paths)
+
+    def test_22_reloaded_copied_root_and_task_mutations_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            AIAuthoredLayoutScopeTests().copy(root)
+            self.assertEqual(self.compare_check(root, h['R'], h['G']), [])
+            path = root / TASK
+            task = json.loads(path.read_text())
+            for field, value in [('allowed_paths', task['allowed_paths'] + ['apps/api/**']),
+                                 ('actual_authenticated_actor', 'Invented actor')]:
+                path.write_text(json.dumps({**task, field: value}))
+                self.assertTrue(self.compare_check(root, h['R'], h['G']))
+
+    def test_23_raw_history_and_source_byte_changes_remain_fresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            AIAuthoredLayoutScopeTests().copy(root)
+            self.assertEqual(self.compare_check(root, h['R'], h['G']), [])
+            for name in ['tasks/APBRA-160-renderer-geometry-20261011.json', 'docs/source-register.json']:
+                path = root / name
+                original = path.read_bytes()
+                hits = self.memo.hits
+                path.write_bytes(original + b'\n')
+                self.assertTrue(self.compare_check(root, h['R'], h['G']))
+                self.assertGreater(self.memo.hits, hits)
+                path.write_bytes(original)
+                self.assertEqual(self.compare_check(root, h['R'], h['G']), [])
+
+
 if __name__ == '__main__':
     unittest.main()

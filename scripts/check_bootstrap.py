@@ -1140,6 +1140,9 @@ def schema_errors(schema: dict, value: object) -> list[str]:
     sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
 
 
+# Keep the historical validator body intact; only pure content errors are memoized.
+schema_errors = a['memo_schema_errors'](schema_errors)
+
 def catalog_errors(catalog: dict) -> list[str]:
     errors = []
     ids = [c['agent_id'] for c in catalog['cards']]
