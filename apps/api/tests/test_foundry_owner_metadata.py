@@ -1454,7 +1454,6 @@ def test_private_terminal_captured_context_rejects_before_opening_owned_pty(
     assert owned_nonseekable_tty.opened == []
 
 
-
 def test_private_terminal_unsupported_platform_rejects_before_opening_owned_pty(
     owned_nonseekable_tty: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1464,3 +1463,395 @@ def test_private_terminal_unsupported_platform_rejects_before_opening_owned_pty(
             with module._qualification_terminal(module._PLAN):
                 pytest.fail("unsupported platform accepted")
     assert owned_nonseekable_tty.opened == []
+
+
+def diagnostic_cli(flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> dict[str, str]:
+    original = module.run_owner_metadata
+    monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+    monkeypatch.setattr(
+        module,
+        "run_owner_metadata",
+        lambda: original(credential_factory=flow.factory, client_factory=flow.client),
+    )
+    with pytest.raises(SystemExit, match="Foundry owner metadata is unavailable"):
+        module.main()
+    output = capsys.readouterr()
+    assert output.out == "" and CANARY not in output.err
+    result = json.loads(output.err)
+    assert set(result) == {"status", "stage", "category"}
+    assert result["status"] == "METADATA_UNAVAILABLE"
+    assert type(result["stage"]) is str and result["stage"] in module._FAILURE_STAGES
+    assert type(result["category"]) is str and result["category"] in module._FAILURE_CATEGORIES
+    return result
+
+
+@pytest.mark.parametrize(
+    "operation,stage",
+    [
+        ("private", "PRIVATE_CONFIRMATION"),
+        ("construct", "SDK_CONSTRUCTION"),
+        ("import", "SDK_CONSTRUCTION"),
+        ("install", "SDK_INSTALLATION"),
+        ("auth", "AUTHENTICATION_BEFORE_CALLBACK"),
+        ("account", "ACCOUNT_VALIDATION"),
+        ("account-confirm", "ACCOUNT_CONFIRMATION"),
+        ("ai-token", "AI_TOKEN"),
+        ("properties", "AGENT_PROPERTIES_GET"),
+        ("version", "AGENT_VERSION_GET"),
+        ("agent-project", "AGENT_PROJECTION"),
+        ("search-confirm", "SEARCH_CONFIRMATION"),
+        ("search-bind", "SEARCH_BINDING"),
+        ("search-token", "SEARCH_TOKEN"),
+        ("knowledge", "KNOWLEDGE_GET"),
+        ("knowledge-project", "KNOWLEDGE_PROJECTION"),
+    ],
+)
+def test_diagnostic_actual_boundaries_are_fixed_and_private(
+    flow: Any, operation: str, stage: str, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    def private_failure(*args: Any, **kwargs: Any) -> Any:
+        print(CANARY)
+        logging.error(CANARY)
+        raise ValueError(CANARY)
+
+    # SDK output is discarded by the existing quiet boundary. Non-SDK helpers
+    # throw a private exception only; they never normally emit raw public output.
+    def failure(*args: Any, **kwargs: Any) -> Any:
+        raise ValueError(CANARY)
+
+    if operation == "private":
+        flow.denied = "CONFIRM PRIVATE TERMINAL"
+    elif operation == "construct":
+        flow.factory = private_failure
+    elif operation == "import":
+
+        def missing(**kwargs: Any) -> Any:
+            raise ImportError(CANARY)
+
+        flow.factory = missing
+    elif operation == "install":
+        monkeypatch.setattr(module._OwnerMemory, "install_sdk", failure)
+    elif operation == "auth":
+        flow.sdk.authenticate = private_failure
+    elif operation == "account":
+        flow.sdk.record.tenant_id = CANARY
+    elif operation == "account-confirm":
+        flow.denied = "CONFIRM ACCOUNT"
+    elif operation in {"ai-token", "search-token"}:
+        original = flow.sdk.get_token
+        scope = module._SCOPE if operation == "ai-token" else module._SEARCH_SCOPE
+
+        def token(*scopes: str) -> Any:
+            if scopes == (scope,):
+                return private_failure()
+            return original(*scopes)
+
+        flow.sdk.get_token = token
+    elif operation in {"properties", "version", "knowledge"}:
+        original_get = module._OwnerMemory.get
+
+        def get(self: Any, url: str, scope: str, factory: Any) -> Any:
+            matched = (
+                "knowledgebases" in url
+                if operation == "knowledge"
+                else "/versions/" in url
+                if operation == "version"
+                else "/versions/" not in url and "knowledgebases" not in url
+            )
+            if matched:
+                return failure()
+            return original_get(self, url, scope, factory)
+
+        monkeypatch.setattr(module._OwnerMemory, "get", get)
+    elif operation == "agent-project":
+        monkeypatch.setattr(module, "_agent_observation", failure)
+    elif operation == "search-confirm":
+        flow.denied = "CONFIRM SEARCH"
+    elif operation == "search-bind":
+        monkeypatch.setattr(module._OwnerMemory, "confirm_search", failure)
+    elif operation == "knowledge-project":
+        monkeypatch.setattr(module, "_knowledge_observation", failure)
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == stage
+    if operation == "import":
+        assert result["category"] == "SDK_IMPORT_FAILED"
+    cleanup(flow)
+    assert len([e for e in flow.events if e.startswith("GET:")]) <= 3
+
+
+@pytest.mark.parametrize(
+    "mode,stage,category",
+    [
+        ("before", "AUTHENTICATION_BEFORE_CALLBACK", "AUTHENTICATION_FAILED"),
+        ("invalid", "CALLBACK_VALIDATION", "QUALIFICATION_REJECTED"),
+        ("write", "CALLBACK_OUTPUT", "TERMINAL_IO_FAILED"),
+        ("after", "AUTHENTICATION_AFTER_CALLBACK", "AUTHENTICATION_FAILED"),
+    ],
+)
+def test_auth_callback_diagnostics_report_actual_entry_validation_and_completion(
+    flow: Any,
+    mode: str,
+    stage: str,
+    category: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    from datetime import UTC, datetime
+
+    class PrivateTTY(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+        def write(self, value: str) -> int:
+            if mode == "write":
+                raise ValueError(CANARY)
+            return super().write(value)
+
+    private = PrivateTTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+
+    def auth(**kwargs: Any) -> Any:
+        if mode != "before":
+            flow.options["prompt_callback"](
+                CANARY if mode == "invalid" else "https://microsoft.com/devicelogin",
+                "SYNTHETIC-CODE",
+                datetime.fromtimestamp(1200, UTC),
+            )
+        raise ValueError(CANARY)
+
+    flow.sdk.authenticate = auth
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert (result["stage"], result["category"]) == (stage, category)
+    cleanup(flow)
+    assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
+
+
+@pytest.mark.parametrize("mode", ["exception", "unverified", "flag"])
+def test_cleanup_failure_overrides_primary_without_private_output(
+    flow: Any,
+    mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    flow.fail = "auth"
+    original = module._OwnerMemory.close
+
+    def close(self: Any) -> None:
+        original(self)
+        if mode == "exception":
+            raise ValueError(CANARY)
+        if mode == "unverified":
+            self._cleanup_verified = False
+        if mode == "flag":
+            self._cleanup_failed = True
+
+    monkeypatch.setattr(module._OwnerMemory, "close", close)
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == "CLEANUP" and result["category"] == "CLEANUP_FAILED"
+    cleanup(flow)
+
+
+@pytest.mark.parametrize(
+    "error,category",
+    [
+        (KeyboardInterrupt(CANARY), "CANCELLED"),
+        (SystemExit(CANARY), "OPERATION_STOPPED"),
+        (TimeoutError(CANARY), "TIMEOUT"),
+    ],
+)
+def test_diagnostic_interrupt_timeout_exit_are_safe_and_cleanup(
+    flow: Any,
+    error: BaseException,
+    category: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    def failed(**kwargs: Any) -> Any:
+        raise error
+
+    flow.sdk.authenticate = failed
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == "AUTHENTICATION_BEFORE_CALLBACK" and result["category"] == category
+    cleanup(flow)
+
+
+def test_forged_sdk_failure_cannot_supply_stage_facts(
+    flow: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    def failed(**kwargs: Any) -> Any:
+        raise module._SafeMetadataFailure("KNOWLEDGE_GET", "METADATA_GET_FAILED")
+
+    flow.sdk.authenticate = failed
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == "AUTHENTICATION_BEFORE_CALLBACK"
+    assert result["category"] == "QUALIFICATION_REJECTED"
+    cleanup(flow)
+
+
+@pytest.mark.parametrize(
+    "stage,category",
+    [
+        (CANARY, "UNAVAILABLE"),
+        ("SDK_CONSTRUCTION", CANARY),
+        (None, "UNAVAILABLE"),
+        ("UNKNOWN", None),
+    ],
+)
+def test_unknown_failure_labels_fail_closed(stage: Any, category: Any) -> None:
+    failure = module._SafeMetadataFailure(stage, category)
+    assert module._failure_output(failure) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "UNKNOWN",
+        "category": "UNAVAILABLE",
+    }
+
+
+def test_string_subclass_failure_fields_never_execute_private_hooks() -> None:
+    class PrivateString(str):
+        def __hash__(self) -> int:
+            raise RuntimeError(CANARY)
+
+        def __eq__(self, value: object) -> bool:
+            raise RuntimeError(CANARY)
+
+    failure = module._SafeMetadataFailure("UNKNOWN", "UNAVAILABLE")
+    failure.stage = PrivateString("SDK_CONSTRUCTION")
+    failure.category = PrivateString("SDK_IMPORT_FAILED")
+    assert module._failure_output(failure)["stage"] == "UNKNOWN"
+    assert module._failure_output(failure)["category"] == "UNAVAILABLE"
+
+
+
+@pytest.mark.parametrize("boundary", ["binding", "terminal"])
+def test_preconsent_guard_diagnostics_stop_before_sdk_and_do_not_disclose(
+    flow: Any, boundary: str, monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    if boundary == "binding":
+        from dataclasses import replace
+        monkeypatch.setattr(module, "_PLAN", replace(module._PLAN, client_id=CANARY))
+    else:
+        @contextmanager
+        def rejected(binding: Any) -> Any:
+            raise ValueError(CANARY)
+            yield
+        monkeypatch.setattr(module, "_qualification_terminal", rejected)
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == ("BINDING" if boundary == "binding" else "TERMINAL_OPEN")
+    assert "SDK" not in flow.events and not flow.memories
+
+
+def test_opaque_sdk_exception_never_stringified_or_represented(
+    flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    class PrivateError(Exception):
+        def __str__(self) -> str: raise RuntimeError(CANARY)
+        def __repr__(self) -> str: raise RuntimeError(CANARY)
+    def failed(**kwargs: Any) -> Any: raise PrivateError(CANARY)
+    flow.factory = failed
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == "SDK_CONSTRUCTION" and result["category"] == "SDK_CONSTRUCTION_FAILED"
+    cleanup(flow)
+
+
+
+def test_cleanup_keyboard_interrupt_preserves_subtype_and_only_fixed_failure_codes(
+    flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    original = module._OwnerMemory.close
+    def interrupted(self: Any) -> None:
+        original(self)
+        raise KeyboardInterrupt(CANARY)
+    monkeypatch.setattr(module._OwnerMemory, "close", interrupted)
+    with pytest.raises(KeyboardInterrupt) as error:
+        run(flow)
+    assert str(error.value) == "FOUNDRY_QUALIFICATION_UNAVAILABLE"
+    assert module._failure_output(error.value) == {
+        "status": "METADATA_UNAVAILABLE", "stage": "CLEANUP", "category": "CLEANUP_FAILED"
+    }
+    output = capsys.readouterr()
+    assert CANARY not in output.out + output.err
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("boundary", ["construct", "cleanup", "output"])
+def test_cli_opaque_exception_class_hooks_never_execute_or_leak(
+    flow: Any, boundary: str, monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    hooks: list[str] = []
+    terminal_output = io.StringIO()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield terminal_output
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+
+    class PrivateMeta(type):
+        def __hash__(cls) -> int:
+            hooks.append("hash")
+            print(CANARY)
+            return 0
+
+        def __eq__(cls, other: object) -> bool:
+            hooks.append("eq")
+            print(CANARY)
+            return False
+
+    class PrivateError(Exception, metaclass=PrivateMeta):
+        @property
+        def __class__(self) -> type[Exception]:
+            hooks.append("class")
+            print(CANARY)
+            return Exception
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    def failed(*args: Any, **kwargs: Any) -> Any:
+        raise PrivateError(CANARY)
+
+    if boundary == "construct":
+        flow.factory = failed
+    elif boundary == "cleanup":
+        original = module._OwnerMemory.close
+
+        def close(self: Any) -> None:
+            original(self)
+            failed()
+
+        monkeypatch.setattr(module._OwnerMemory, "close", close)
+    else:
+        monkeypatch.setattr(module, "run_owner_metadata", failed)
+        monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+        with pytest.raises(SystemExit, match="Foundry owner metadata is unavailable"):
+            module.main()
+        output = capsys.readouterr()
+        assert output.out == "" and CANARY not in output.err
+        assert json.loads(output.err) == {
+            "status": "METADATA_UNAVAILABLE", "stage": "UNKNOWN", "category": "UNAVAILABLE"
+        }
+        assert hooks == []
+        return
+
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == ("SDK_CONSTRUCTION" if boundary == "construct" else "CLEANUP")
+    assert result["category"] == (
+        "SDK_CONSTRUCTION_FAILED" if boundary == "construct" else "CLEANUP_FAILED"
+    )
+    assert hooks == []
+    assert CANARY not in terminal_output.getvalue()
+    cleanup(flow)

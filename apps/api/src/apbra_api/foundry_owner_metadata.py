@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from threading import Event, RLock, Thread, Timer
-from typing import Any, Protocol, TextIO
+from typing import Any, Protocol, TextIO, cast
 
 import httpx
 
@@ -119,6 +119,109 @@ def _private_sdk_logging() -> Iterator[None]:
 
 def _qualification_error() -> ProviderConfigurationError:
     return ProviderConfigurationError("FOUNDRY_QUALIFICATION_UNAVAILABLE")
+
+
+_FAILURE_STAGES = frozenset(
+    {
+        "UNKNOWN",
+        "BINDING",
+        "TERMINAL_OPEN",
+        "PRIVATE_CONFIRMATION",
+        "SDK_CONSTRUCTION",
+        "SDK_INSTALLATION",
+        "AUTHENTICATION_BEFORE_CALLBACK",
+        "CALLBACK_VALIDATION",
+        "CALLBACK_OUTPUT",
+        "AUTHENTICATION_AFTER_CALLBACK",
+        "ACCOUNT_VALIDATION",
+        "ACCOUNT_CONFIRMATION",
+        "AI_TOKEN",
+        "AGENT_PROPERTIES_GET",
+        "AGENT_VERSION_GET",
+        "AGENT_PROJECTION",
+        "SEARCH_CONFIRMATION",
+        "SEARCH_BINDING",
+        "SEARCH_TOKEN",
+        "KNOWLEDGE_GET",
+        "KNOWLEDGE_PROJECTION",
+        "FINAL_GUARD",
+        "CLEANUP",
+    }
+)
+_FAILURE_CATEGORIES = frozenset(
+    {
+        "UNAVAILABLE",
+        "QUALIFICATION_REJECTED",
+        "SDK_IMPORT_FAILED",
+        "SDK_CONSTRUCTION_FAILED",
+        "SDK_INSTALLATION_FAILED",
+        "AUTHENTICATION_FAILED",
+        "CALLBACK_REJECTED",
+        "TERMINAL_IO_FAILED",
+        "CONFIRMATION_FAILED",
+        "ACCOUNT_VALIDATION_FAILED",
+        "TOKEN_FAILED",
+        "METADATA_GET_FAILED",
+        "PROJECTION_FAILED",
+        "CLEANUP_FAILED",
+        "CANCELLED",
+        "TIMEOUT",
+        "OPERATION_STOPPED",
+    }
+)
+
+
+def _failure_codes(stage: object, category: object) -> tuple[str, str]:
+    if (
+        type(stage) is str and type(category) is str
+        and stage in _FAILURE_STAGES and category in _FAILURE_CATEGORIES
+    ):
+        return stage, category
+    return "UNKNOWN", "UNAVAILABLE"
+
+
+class _SafeMetadataFailure(ProviderConfigurationError):
+    """Only finite public labels; never serialize a private exception or its text."""
+
+    def __init__(self, stage: str, category: str) -> None:
+        super().__init__("FOUNDRY_QUALIFICATION_UNAVAILABLE")
+        self.stage, self.category = _failure_codes(stage, category)
+
+
+class _SafeMetadataInterrupt(KeyboardInterrupt):
+    """Keep interrupt semantics while providing finite final failure labels."""
+
+    def __init__(self, stage: str, category: str) -> None:
+        super().__init__("FOUNDRY_QUALIFICATION_UNAVAILABLE")
+        self.stage, self.category = _failure_codes(stage, category)
+
+
+def _safe_failure(
+    stage: str, category: str, error: BaseException
+) -> _SafeMetadataFailure | _SafeMetadataInterrupt:
+    # Never use SDK-provided safe-failure attributes as tracker facts.
+    error_type = type(error)
+    if issubclass(error_type, KeyboardInterrupt):
+        return _SafeMetadataInterrupt(stage, "CANCELLED")
+    if issubclass(error_type, SystemExit):
+        category = "OPERATION_STOPPED"
+    elif issubclass(error_type, (TimeoutError, httpx.TimeoutException, subprocess.TimeoutExpired)):
+        category = "TIMEOUT"
+    elif stage == "SDK_CONSTRUCTION" and issubclass(error_type, ImportError):
+        category = "SDK_IMPORT_FAILED"
+    elif issubclass(error_type, ProviderConfigurationError):
+        category = "QUALIFICATION_REJECTED"
+    return _SafeMetadataFailure(stage, category)
+
+
+def _failure_output(error: BaseException) -> dict[str, str]:
+    error_type = type(error)
+    if error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt:
+        safe_error = cast(_SafeMetadataFailure | _SafeMetadataInterrupt, error)
+        stage, category = _failure_codes(safe_error.stage, safe_error.category)
+    else:
+        stage, category = "UNKNOWN", "UNAVAILABLE"
+    return {"status": "METADATA_UNAVAILABLE", "stage": stage, "category": category}
 
 
 def _owner_terminal_provenance(binding: OwnerMetadataPlan) -> None:
@@ -589,12 +692,14 @@ class _OwnerMemory:
             self._sdk = sdk
         self.guard(confirmed=False)
 
-    def authenticate(self) -> str:
+    def authenticate(self, on_validation: Callable[[], None] | None = None) -> str:
         self.guard(confirmed=False)
         if self._record is not None:
             raise _qualification_error()
         assert self._sdk is not None
         record = _quiet_call(self._sdk.authenticate, scopes=[_SCOPE])
+        if on_validation is not None:
+            on_validation()
         with self._lock:
             self.guard(confirmed=False)
             if (
@@ -842,10 +947,18 @@ def run_owner_metadata(
     confirmation; confirmation gates resource GETs, not OAuth protocol traffic.
     """
     memory: _OwnerMemory | None = None
+    stage, category = "BINDING", "QUALIFICATION_REJECTED"
+    captured: _SafeMetadataFailure | _SafeMetadataInterrupt | None = None
+
+    def mark(next_stage: str, next_category: str) -> None:
+        nonlocal stage, category
+        stage, category = next_stage, next_category
+
     try:
         binding = _PLAN
         if binding != OwnerMetadataPlan():
             raise _qualification_error()
+        mark("TERMINAL_OPEN", "TERMINAL_IO_FAILED")
         with _private_sdk_logging(), _qualification_terminal(binding) as terminal:
             memory = _OwnerMemory(binding)
             try:
@@ -855,6 +968,7 @@ def run_owner_metadata(
                     raise _qualification_error()
 
                 def prompt(uri: str, code: str, expires: datetime) -> None:
+                    mark("CALLBACK_VALIDATION", "CALLBACK_REJECTED")
                     assert memory is not None
                     memory.guard(confirmed=False)
                     expiry = expires.timestamp()
@@ -868,9 +982,12 @@ def run_owner_metadata(
                     ):
                         raise _qualification_error()
                     memory._device_expiry = expiry
+                    mark("CALLBACK_OUTPUT", "TERMINAL_IO_FAILED")
                     terminal.write(f"Complete the approved sign-in at {uri} using code {code}.\n")
                     terminal.flush()
+                    mark("AUTHENTICATION_AFTER_CALLBACK", "AUTHENTICATION_FAILED")
 
+                mark("PRIVATE_CONFIRMATION", "CONFIRMATION_FAILED")
                 _confirm_private(
                     terminal,
                     binding,
@@ -885,25 +1002,31 @@ def run_owner_metadata(
                 if remaining < 1:
                     raise _qualification_error()
                 network_timeout = min(remaining, binding.request_timeout_seconds)
-                memory.install_sdk(
-                    _quiet_call(
-                        credential_factory or _device_credential,
-                        tenant_id=binding.tenant_id,
-                        client_id=binding.client_id,
-                        authority="login.microsoftonline.com",
-                        additionally_allowed_tenants=[],
-                        disable_automatic_authentication=True,
-                        cache_persistence_options=None,
-                        enable_support_logging=False,
-                        logging_enable=False,
-                        prompt_callback=prompt,
-                        timeout=remaining,
-                        connection_timeout=network_timeout,
-                        read_timeout=network_timeout,
-                        retry_total=0,
-                    )
+                mark("SDK_CONSTRUCTION", "SDK_CONSTRUCTION_FAILED")
+                sdk = _quiet_call(
+                    credential_factory or _device_credential,
+                    tenant_id=binding.tenant_id,
+                    client_id=binding.client_id,
+                    authority="login.microsoftonline.com",
+                    additionally_allowed_tenants=[],
+                    disable_automatic_authentication=True,
+                    cache_persistence_options=None,
+                    enable_support_logging=False,
+                    logging_enable=False,
+                    prompt_callback=prompt,
+                    timeout=remaining,
+                    connection_timeout=network_timeout,
+                    read_timeout=network_timeout,
+                    retry_total=0,
                 )
-                label = memory.authenticate()
+                mark("SDK_INSTALLATION", "SDK_INSTALLATION_FAILED")
+                memory.install_sdk(sdk)
+                del sdk
+                mark("AUTHENTICATION_BEFORE_CALLBACK", "AUTHENTICATION_FAILED")
+                label = memory.authenticate(
+                    lambda: mark("ACCOUNT_VALIDATION", "ACCOUNT_VALIDATION_FAILED")
+                )
+                mark("ACCOUNT_CONFIRMATION", "CONFIRMATION_FAILED")
                 _confirm_private(
                     terminal,
                     binding,
@@ -913,12 +1036,15 @@ def run_owner_metadata(
                 del label
                 memory._device_expiry = None
                 memory.confirm_account()
+                mark("AI_TOKEN", "TOKEN_FAILED")
                 memory.acquire(_SCOPE)
                 factory = client_factory
                 base = binding.project_endpoint + "/agents/" + binding.agent_name
+                mark("AGENT_PROPERTIES_GET", "METADATA_GET_FAILED")
                 properties = memory.get(
                     base + "?api-version=" + binding.agent_api_version, _SCOPE, factory
                 )
+                mark("AGENT_VERSION_GET", "METADATA_GET_FAILED")
                 version = memory.get(
                     base
                     + "/versions/"
@@ -928,8 +1054,10 @@ def run_owner_metadata(
                     _SCOPE,
                     factory,
                 )
+                mark("AGENT_PROJECTION", "PROJECTION_FAILED")
                 observation, search_origin = _agent_observation(properties, version, binding)
                 memory.guard()
+                mark("SEARCH_CONFIRMATION", "CONFIRMATION_FAILED")
                 _confirm_private(
                     terminal,
                     binding,
@@ -937,8 +1065,11 @@ def run_owner_metadata(
                     "CONFIRM SEARCH",
                 )
                 memory.guard()
+                mark("SEARCH_BINDING", "QUALIFICATION_REJECTED")
                 memory.confirm_search(search_origin)
+                mark("SEARCH_TOKEN", "TOKEN_FAILED")
                 memory.acquire(_SEARCH_SCOPE)
+                mark("KNOWLEDGE_GET", "METADATA_GET_FAILED")
                 knowledge = memory.get(
                     search_origin
                     + "/knowledgebases('"
@@ -948,6 +1079,7 @@ def run_owner_metadata(
                     _SEARCH_SCOPE,
                     factory,
                 )
+                mark("KNOWLEDGE_PROJECTION", "PROJECTION_FAILED")
                 result = {
                     "status": "METADATA_OBSERVED_ONLY",
                     "project": "s08-cloud-ai-agent",
@@ -958,14 +1090,28 @@ def run_owner_metadata(
                     "tenantIsolationVerified": False,
                     "runtimeActivated": False,
                 }
+                mark("FINAL_GUARD", "QUALIFICATION_REJECTED")
                 memory.guard()
                 return result
+            except BaseException as error:
+                captured = _safe_failure(stage, category, error)
+                raise captured from None
             finally:
-                memory.close()
-                if memory._cleanup_failed:
-                    raise _qualification_error()
-    except (Exception, SystemExit):
-        raise _qualification_error() from None
+                try:
+                    memory.close()
+                    if memory._cleanup_failed or not memory._cleanup_verified:
+                        raise _qualification_error()
+                except BaseException as error:
+                    captured = (
+                        _SafeMetadataInterrupt("CLEANUP", "CLEANUP_FAILED")
+                        if issubclass(type(error), KeyboardInterrupt)
+                        else _SafeMetadataFailure("CLEANUP", "CLEANUP_FAILED")
+                    )
+                    raise captured from None
+    except BaseException as error:
+        if captured is not None and error is captured:
+            raise captured from None
+        raise _safe_failure(stage, category, error) from None
 
 
 def main() -> None:
@@ -973,7 +1119,8 @@ def main() -> None:
         raise SystemExit("Foundry owner metadata is unavailable.")
     try:
         print(json.dumps(run_owner_metadata(), sort_keys=True))
-    except BaseException:
+    except BaseException as error:
+        print(json.dumps(_failure_output(error), sort_keys=True), file=sys.stderr)
         raise SystemExit("Foundry owner metadata is unavailable.") from None
 
 
