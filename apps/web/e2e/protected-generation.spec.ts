@@ -571,3 +571,14 @@ test('expert raw geometry malformed JSON keeps the draft and exposes only a fixe
  await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_POST',message:'Malformed JSON reached the synthetic boundary.'}}})});
  const source='{"schema_version":2,"private_fixture":"SYNTHETIC_PRIVATE_PARSE_CANARY",}',draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('The expert report plan must be valid JSON.');await expect(page.getByRole('alert')).not.toContainText('SYNTHETIC_PRIVATE_PARSE_CANARY');expect(posts).toBe(0);await expect(draft).toHaveValue(source);
 });
+
+test('expert raw geometry schema version alias keeps the original draft without intake',async({page})=>{
+ await syntheticExpertIngress(page);let posts=0;
+ await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_POST',message:'A rounded version reached the synthetic boundary.'}}})});
+ const source='{"schema_version":2.000000000000000000000001,"pages":[]}',draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE');expect(posts).toBe(0);await expect(draft).toHaveValue(source);
+});
+for(const version of ['2.0','2e0'] as const)test(`expert raw geometry exact schema version ${version} reaches selected intake unchanged in value`,async({page})=>{
+ await syntheticExpertIngress(page);let posts=0,body='';
+ await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;body=route.request().postData()??'';return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_EQUIVALENT',message:'Synthetic equivalent version reached intake.'}}})});
+ const source=`{"schema_version":${version},"pages":[]}`,draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Synthetic equivalent version reached intake.');expect(posts).toBe(1);expect(JSON.parse(body).report_design.schema_version).toBe(2);await expect(draft).toHaveValue(source);
+});

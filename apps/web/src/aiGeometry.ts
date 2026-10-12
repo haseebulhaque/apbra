@@ -25,7 +25,7 @@ export function assertAuthoredGeometry(value:unknown):void{
  for(const p of design.pages){const page=object(p);pageGeometry(page);if(!Array.isArray(page.visuals))throw new Error('REPORT_DESIGN_GEOMETRY_INVALID');for(const item of page.visuals){const visual=object(item);if(Object.keys(visual).some(key=>!['id','type','title','categoryField','timeGrain','measureIds','fields','altText','position'].includes(key)))throw new Error('REPORT_DESIGN_GEOMETRY_INVALID');visualPosition(visual.position)}}
 }
 
-// Preserve numeric source identity before JSON.parse can round geometry tokens.
+// Preserve source identity before JSON.parse can round geometry or design versions.
 // Large exactly representable integers remain valid; this is not a magnitude cap.
 function decimal(value:string){
  const [mantissa,exponentText]=value.toLowerCase().split('e'),negative=mantissa.startsWith('-'),unsigned=negative?mantissa.slice(1):mantissa;
@@ -55,6 +55,7 @@ export function assertGeometryJSONNumbers(raw:string):void{
  const whitespace=()=>{while(/\s/.test(raw[cursor]??'')&&cursor<raw.length)cursor++};
  const string=()=>{const start=cursor++;while(cursor<raw.length){const char=raw[cursor++];if(char==='\\'){cursor++;continue}if(char==='"')break}return JSON.parse(raw.slice(start,cursor)) as string};
  const isGeometry=(path:Array<string|number>)=>{const last=path.at(-1);return path.at(-2)==='position'&&path.at(-4)==='visuals'&&path.at(-6)==='pages'&&['x','y','width','height','z','tabOrder','angle'].includes(String(last))||path.at(-3)==='pages'&&['width','height'].includes(String(last))};
+ const isDesignVersion=(path:Array<string|number>)=>path.at(-1)==='schema_version'&&(path.length===1||path.length===2&&['reportDesign','report_design'].includes(String(path[0])));
  const walk=(path:Array<string|number>):void=>{
   whitespace();const char=raw[cursor];
   if(char==='{'){cursor++;whitespace();if(raw[cursor]==='}'){cursor++;return}while(cursor<raw.length){whitespace();const key=string();whitespace();cursor++;walk([...path,key]);whitespace();if(raw[cursor++]==='}')return}return}
@@ -62,7 +63,7 @@ export function assertGeometryJSONNumbers(raw:string):void{
   if(char==='"'){string();return}
   const token=raw.slice(cursor).match(/^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/)?.[0];
   if(!token)throw new Error('REPORT_DESIGN_GEOMETRY_INVALID');cursor+=token.length;
-  if(isGeometry(path)&&token!=='null'&&token!=='true'&&token!=='false'&&!geometryNumberPreserved(token))throw new Error('REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE');
+  if((isGeometry(path)||isDesignVersion(path))&&token!=='null'&&token!=='true'&&token!=='false'&&!geometryNumberPreserved(token))throw new Error('REPORT_DESIGN_GEOMETRY_UNREPRESENTABLE');
  };
  walk([]);
 }
