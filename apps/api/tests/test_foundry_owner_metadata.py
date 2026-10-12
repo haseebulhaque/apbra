@@ -1778,3 +1778,80 @@ def test_cleanup_keyboard_interrupt_preserves_subtype_and_only_fixed_failure_cod
     output = capsys.readouterr()
     assert CANARY not in output.out + output.err
     cleanup(flow)
+
+
+@pytest.mark.parametrize("boundary", ["construct", "cleanup", "output"])
+def test_cli_opaque_exception_class_hooks_never_execute_or_leak(
+    flow: Any, boundary: str, monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    hooks: list[str] = []
+    terminal_output = io.StringIO()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield terminal_output
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+
+    class PrivateMeta(type):
+        def __hash__(cls) -> int:
+            hooks.append("hash")
+            print(CANARY)
+            return 0
+
+        def __eq__(cls, other: object) -> bool:
+            hooks.append("eq")
+            print(CANARY)
+            return False
+
+    class PrivateError(Exception, metaclass=PrivateMeta):
+        @property
+        def __class__(self) -> type[Exception]:
+            hooks.append("class")
+            print(CANARY)
+            return Exception
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    def failed(*args: Any, **kwargs: Any) -> Any:
+        raise PrivateError(CANARY)
+
+    if boundary == "construct":
+        flow.factory = failed
+    elif boundary == "cleanup":
+        original = module._OwnerMemory.close
+
+        def close(self: Any) -> None:
+            original(self)
+            failed()
+
+        monkeypatch.setattr(module._OwnerMemory, "close", close)
+    else:
+        monkeypatch.setattr(module, "run_owner_metadata", failed)
+        monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+        with pytest.raises(SystemExit, match="Foundry owner metadata is unavailable"):
+            module.main()
+        output = capsys.readouterr()
+        assert output.out == "" and CANARY not in output.err
+        assert json.loads(output.err) == {
+            "status": "METADATA_UNAVAILABLE", "stage": "UNKNOWN", "category": "UNAVAILABLE"
+        }
+        assert hooks == []
+        return
+
+    result = diagnostic_cli(flow, monkeypatch, capsys)
+    assert result["stage"] == ("SDK_CONSTRUCTION" if boundary == "construct" else "CLEANUP")
+    assert result["category"] == (
+        "SDK_CONSTRUCTION_FAILED" if boundary == "construct" else "CLEANUP_FAILED"
+    )
+    assert hooks == []
+    assert CANARY not in terminal_output.getvalue()
+    cleanup(flow)

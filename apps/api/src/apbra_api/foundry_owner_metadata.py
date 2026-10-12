@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from threading import Event, RLock, Thread, Timer
-from typing import Any, Protocol, TextIO
+from typing import Any, Protocol, TextIO, cast
 
 import httpx
 
@@ -200,24 +200,25 @@ def _safe_failure(
     stage: str, category: str, error: BaseException
 ) -> _SafeMetadataFailure | _SafeMetadataInterrupt:
     # Never use SDK-provided safe-failure attributes as tracker facts.
-    if isinstance(error, KeyboardInterrupt):
+    error_type = type(error)
+    if issubclass(error_type, KeyboardInterrupt):
         return _SafeMetadataInterrupt(stage, "CANCELLED")
-    if isinstance(error, SystemExit):
+    if issubclass(error_type, SystemExit):
         category = "OPERATION_STOPPED"
-    elif isinstance(error, (TimeoutError, httpx.TimeoutException, subprocess.TimeoutExpired)):
+    elif issubclass(error_type, (TimeoutError, httpx.TimeoutException, subprocess.TimeoutExpired)):
         category = "TIMEOUT"
-    elif stage == "SDK_CONSTRUCTION" and isinstance(error, ImportError):
+    elif stage == "SDK_CONSTRUCTION" and issubclass(error_type, ImportError):
         category = "SDK_IMPORT_FAILED"
-    elif isinstance(error, ProviderConfigurationError):
+    elif issubclass(error_type, ProviderConfigurationError):
         category = "QUALIFICATION_REJECTED"
     return _SafeMetadataFailure(stage, category)
 
 
 def _failure_output(error: BaseException) -> dict[str, str]:
-    if isinstance(error, (_SafeMetadataFailure, _SafeMetadataInterrupt)) and type(error) in {
-        _SafeMetadataFailure, _SafeMetadataInterrupt
-    }:
-        stage, category = _failure_codes(error.stage, error.category)
+    error_type = type(error)
+    if error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt:
+        safe_error = cast(_SafeMetadataFailure | _SafeMetadataInterrupt, error)
+        stage, category = _failure_codes(safe_error.stage, safe_error.category)
     else:
         stage, category = "UNKNOWN", "UNAVAILABLE"
     return {"status": "METADATA_UNAVAILABLE", "stage": stage, "category": category}
@@ -1103,7 +1104,7 @@ def run_owner_metadata(
                 except BaseException as error:
                     captured = (
                         _SafeMetadataInterrupt("CLEANUP", "CLEANUP_FAILED")
-                        if isinstance(error, KeyboardInterrupt)
+                        if issubclass(type(error), KeyboardInterrupt)
                         else _SafeMetadataFailure("CLEANUP", "CLEANUP_FAILED")
                     )
                     raise captured from None
