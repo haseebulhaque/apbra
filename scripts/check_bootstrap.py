@@ -23,6 +23,7 @@ r=runpy.run_path(str(Path(__file__).with_name("check_foundry_qualification_renew
 g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.py")))
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
+u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
 
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 
@@ -2281,6 +2282,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         owner_metadata, e = o['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        raw_ingress, e = u['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2683,13 +2686,13 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                             row, sort_keys=True, separators=(',', ':'),
     ).encode()).hexdigest()) != (source_id, expected_sha)
     for row, (source_id, _content_id, _version, expected_sha)
-                    in zip(later_rows, CURRENT_DEMO_SOURCES)
-                )):
+    in zip(later_rows, CURRENT_DEMO_SOURCES)
+    )):
                         extension_errors.append('APBRA-173B registration added unrelated source rows')
                 for section, expected in HOSTED_WEB_RELEASE_GATE_SHA256.items():
                     actual = hashlib.sha256(json.dumps(
                         hosted_web_release_task[section], sort_keys=True, separators=(',', ':'),
-                ).encode()).hexdigest()
+    ).encode()).hexdigest()
                     if actual != expected:
                         extension_errors.append('APBRA-173B safety/review gate differs: ' + section)
                 for source_id, content_id, version, expected_sha in HOSTED_WEB_RELEASE_SOURCES:
@@ -2700,11 +2703,11 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                         row = matching[0]
                         if hashlib.sha256(json.dumps(
                             row, sort_keys=True, separators=(',', ':'),
-                    ).encode()).hexdigest() != expected_sha:
+    ).encode()).hexdigest() != expected_sha:
                             extension_errors.append('APBRA-173B source differs from provenance: ' + source_id)
                         if (row.get('content_id'), row.get('version'), row.get('status')) != (
                             content_id, version, 'ACCEPTED',
-                    ):
+    ):
                             extension_errors.append('APBRA-173B source binding differs: ' + source_id)
             errors += extension_errors
             if extension_errors:
@@ -2759,15 +2762,15 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('APBRA-151 contract differs from accepted authority')
                 for field, expected_sha in COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256.items():
                     if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
-                           for item in company_lifecycle_task[field]):
+    for item in company_lifecycle_task[field]):
                         extension_errors.append('APBRA-151 initial Tenant Settings gate missing or weakened: ' + field)
                 for field, expected_sha in COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256.items():
                     if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
-                           for item in company_lifecycle_task[field]):
+    for item in company_lifecycle_task[field]):
                         extension_errors.append('APBRA-151 Vite amendment merge gate missing or weakened: ' + field)
                 for field, expected_sha in COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256.items():
                     if not any(hashlib.sha256(item.encode()).hexdigest() == expected_sha
-                              for item in company_lifecycle_task[field]):
+    for item in company_lifecycle_task[field]):
                         extension_errors.append('APBRA-151 invitation-test amendment merge gate missing or weakened: ' + field)
                 if (company_lifecycle_task['task_id'], company_lifecycle_task['assigned_agent'],
                         company_lifecycle_task['agent_card_version']) != ('APBRA-151', 'APBRA-DEVOPS', '0.1'):
@@ -2801,78 +2804,80 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         # Keep established overlapping Capstone coverage while preventing a
         # newer hash-bound registration from rescuing its historical files.
         legacy_authorities = (
-            (shell_task, CAPSTONE_SHELL_PATHS),
-            (requirements_task, CAPSTONE_REQUIREMENTS_PATHS),
-            (knowledge_task, CAPSTONE_KNOWLEDGE_PATHS),
-            (design_task, CAPSTONE_DESIGN_PATHS),
-            (generation_task, CAPSTONE_GENERATION_PATHS),
-            (validation_task, CAPSTONE_VALIDATION_PATHS),
-            (governance_task, CAPSTONE_GOVERNANCE_PATHS),
-            (orchestration_task, CAPSTONE_ORCHESTRATION_PATHS),
-            (evaluation_task, CAPSTONE_EVALUATION_PATHS),
-            (deployment_guide_task, DEPLOYMENT_GUIDE_PATHS),
-            (ux_task, CAPSTONE_UX_PATHS),
-            (measure_resolution_task, MEASURE_RESOLUTION_PATHS),
-            (report_design_normalization_task, REPORT_DESIGN_NORMALIZATION_PATHS),
-            (capstone_documentation_task, CAPSTONE_DOCUMENTATION_PATHS),
-            (measure_contract_pipeline_task, MEASURE_CONTRACT_PIPELINE_PATHS),
-            (layout_repair_task, LAYOUT_REPAIR_PATHS),
-            (typed_confirmed_requirements_task, TYPED_CONFIRMED_REQUIREMENTS_PATHS),
-            (ai_native_clarification_task, AI_NATIVE_CLARIFICATION_PATHS),
-            (generic_time_grain_task, GENERIC_TIME_GRAIN_PATHS),
-            (post_capstone_mvp_baseline_task, POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS),
-            (post_capstone_product_reconciliation_task, POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS),
-            (data_model_documentation_reconciliation_task, DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS),
-            (confirmation_readiness_integrity_task, CONFIRMATION_READINESS_INTEGRITY_PATHS),
-        )
+    (shell_task, CAPSTONE_SHELL_PATHS),
+    (requirements_task, CAPSTONE_REQUIREMENTS_PATHS),
+    (knowledge_task, CAPSTONE_KNOWLEDGE_PATHS),
+    (design_task, CAPSTONE_DESIGN_PATHS),
+    (generation_task, CAPSTONE_GENERATION_PATHS),
+    (validation_task, CAPSTONE_VALIDATION_PATHS),
+    (governance_task, CAPSTONE_GOVERNANCE_PATHS),
+    (orchestration_task, CAPSTONE_ORCHESTRATION_PATHS),
+    (evaluation_task, CAPSTONE_EVALUATION_PATHS),
+    (deployment_guide_task, DEPLOYMENT_GUIDE_PATHS),
+    (ux_task, CAPSTONE_UX_PATHS),
+    (measure_resolution_task, MEASURE_RESOLUTION_PATHS),
+    (report_design_normalization_task, REPORT_DESIGN_NORMALIZATION_PATHS),
+    (capstone_documentation_task, CAPSTONE_DOCUMENTATION_PATHS),
+    (measure_contract_pipeline_task, MEASURE_CONTRACT_PIPELINE_PATHS),
+    (layout_repair_task, LAYOUT_REPAIR_PATHS),
+    (typed_confirmed_requirements_task, TYPED_CONFIRMED_REQUIREMENTS_PATHS),
+    (ai_native_clarification_task, AI_NATIVE_CLARIFICATION_PATHS),
+    (generic_time_grain_task, GENERIC_TIME_GRAIN_PATHS),
+    (post_capstone_mvp_baseline_task, POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS),
+    (post_capstone_product_reconciliation_task, POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS),
+    (data_model_documentation_reconciliation_task, DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS),
+    (confirmation_readiness_integrity_task, CONFIRMATION_READINESS_INTEGRITY_PATHS),
+    )
         bound_authorities = (
-            (invited_private_case_foundation_task, INVITED_PRIVATE_CASE_FOUNDATION_PATHS),
-            (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
-            (protected_generation_output_history_task, PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS),
-            (business_friendly_ux_application_shell_task, BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS),
-            (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
-            (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
-            (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
-            (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
-            (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
-            (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
-            (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
-            (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
-            (local_rekey_task, LOCAL_RECOVERY_PATHS),
-            (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
-            (demo_ux_task, DEMO_UX_PATHS),
-            (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
-            (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
-            (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
-            (provider_retrieval_task, PROVIDER_RETRIEVAL_PATHS),
-            (foundry_host_task, FOUNDRY_HOST_PATHS),
-            (foundry_qualification_task, FOUNDRY_QUALIFICATION_PATHS),
+    (invited_private_case_foundation_task, INVITED_PRIVATE_CASE_FOUNDATION_PATHS),
+    (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
+    (protected_generation_output_history_task, PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS),
+    (business_friendly_ux_application_shell_task, BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS),
+    (professional_saas_experience_visual_system_task, PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS),
+    (business_user_intelligent_generation_task, BUSINESS_USER_INTELLIGENT_GENERATION_PATHS),
+    (model_led_flexible_delivery_task, MODEL_LED_FLEXIBLE_DELIVERY_PATHS),
+    (deployment_portability_entitlement_docs_task, DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS),
+    (owner_onboarding_identity_docs_task, OWNER_ONBOARDING_IDENTITY_DOCS_PATHS),
+    (provider_neutral_sso_task, PROVIDER_NEUTRAL_SSO_PATHS),
+    (company_lifecycle_task, COMPANY_LIFECYCLE_PATHS),
+    (candidate_source_safety_task, CANDIDATE_SOURCE_SAFETY_PATHS),
+    (local_rekey_task, LOCAL_RECOVERY_PATHS),
+    (foundry_schema_task, FOUNDRY_SCHEMA_PATHS),
+    (demo_ux_task, DEMO_UX_PATHS),
+    (private_content_storage_task, PRIVATE_CONTENT_STORAGE_PATHS),
+    (current_state_docs_task, CURRENT_STATE_DOCS_PATHS),
+    (hosted_web_release_task, HOSTED_WEB_RELEASE_PATHS),
+    (provider_retrieval_task, PROVIDER_RETRIEVAL_PATHS),
+    (foundry_host_task, FOUNDRY_HOST_PATHS),
+    (foundry_qualification_task, FOUNDRY_QUALIFICATION_PATHS),
             (renewal, r['P']),
             (renewal11, r['N_PATHS']),
             (geometry, g['P']),
             (ai_layout, a['P']),
             (owner_metadata, o['P']),
-        )
+            (raw_ingress, u['P']),
+    )
         registered_tasks = {registered['task_id']: registered for registered, _ in
-                            legacy_authorities + bound_authorities if registered is not None}
+    legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
         if active_task_id == 'APBRA-160':
             registered_tasks['APBRA-160'] = (
-                task if active_branch in {
-                    CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
-                }
+    task if active_branch in {
+    CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
+    }
+                else raw_ingress if active_branch in {u['B'], u['R']}
                 else owner_metadata if active_branch in {o['B'], o['R']}
                 else ai_layout if active_branch in {a['B'], a['R']}
                 else geometry if active_branch in {g['B'], g['R']}
                 else renewal11 if active_branch == r['N_BRANCH']
                 else renewal if active_branch in {r['B'], r['R']}
-                else foundry_qualification_task if active_branch in {FOUNDRY_QUALIFICATION_BRANCH, FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH}
-                else foundry_host_task if active_branch in {FOUNDRY_HOST_BRANCH, FOUNDRY_HOST_REGISTRATION_BRANCH}
-                else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
-                else demo_ux_task if active_branch in {
-                    DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
-                } else provider_retrieval_task if active_branch in {
-                    PROVIDER_RETRIEVAL_BRANCH, PROVIDER_RETRIEVAL_REGISTRATION_BRANCH,
+    else foundry_qualification_task if active_branch in {FOUNDRY_QUALIFICATION_BRANCH, FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH}
+    else foundry_host_task if active_branch in {FOUNDRY_HOST_BRANCH, FOUNDRY_HOST_REGISTRATION_BRANCH}
+    else local_rekey_task if active_branch in {LOCAL_RECOVERY_BRANCH, LOCAL_RECOVERY_REGISTRATION_BRANCH}
+    else demo_ux_task if active_branch in {
+    DEMO_UX_BRANCH, DEMO_UX_REGISTRATION_BRANCH,
+    } else provider_retrieval_task if active_branch in {
+    PROVIDER_RETRIEVAL_BRANCH, PROVIDER_RETRIEVAL_REGISTRATION_BRANCH,
                 } else foundry_schema_task
             )
         if active_task_id == 'APBRA-173':
@@ -2897,6 +2902,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not g['stage'](active_task_id, active_branch, changed_paths) and
                     not a['stage'](active_task_id, active_branch, changed_paths) and
                     not o['stage'](active_task_id, active_branch, changed_paths) and
+                    not u['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
                          active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
                          changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -3005,6 +3011,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += g['errors'](active_task_id, active_branch, changed_paths)
             errors += a['errors'](active_task_id, active_branch, changed_paths)
             errors += o['errors'](active_task_id, active_branch, changed_paths)
+            errors += u['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3358,6 +3365,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      and name in a['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and o['stage'](active_task_id, active_branch, changed_paths)
                      and name in o['G'] and path_allowed(name, task, card)) or
+                    (active_task is not None and u['stage'](active_task_id, active_branch, changed_paths)
+                     and name in u['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)
                      and name in g['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and r['stage'](active_task_id, active_branch, changed_paths)
