@@ -159,10 +159,13 @@ def _qualification_terminal(binding: OwnerMetadataPlan) -> Iterator[TextIO]:
     _owner_terminal_provenance(binding)
     if not all(stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr)):
         raise _qualification_error()
-    with open("/dev/tty", "r+", encoding="utf-8") as terminal:
-        if not terminal.isatty():
-            raise _qualification_error()
-        yield terminal
+    # TTYs are nonseekable. BufferedRandom from text r+ requires seeking;
+    # keep the owned descriptor unbuffered and wrap only text writes.
+    with open("/dev/tty", "r+b", buffering=0) as raw:
+        with io.TextIOWrapper(raw, encoding="utf-8", write_through=True) as terminal:
+            if not terminal.isatty():
+                raise _qualification_error()
+            yield terminal
 
 
 def _confirm_private(
