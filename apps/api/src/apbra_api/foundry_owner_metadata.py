@@ -241,14 +241,24 @@ def _safe_failure(
     return _SafeMetadataFailure(stage, category)
 
 
-def _failure_output(error: BaseException) -> dict[str, str]:
+def _failure_output(error: BaseException) -> dict[str, Any]:
     error_type = type(error)
     if error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt:
         safe_error = cast(_SafeMetadataFailure | _SafeMetadataInterrupt, error)
         stage, category = _failure_codes(safe_error.stage, safe_error.category)
     else:
         stage, category = "UNKNOWN", "UNAVAILABLE"
-    return {"status": "METADATA_UNAVAILABLE", "stage": stage, "category": category}
+    result: dict[str, Any] = {
+        "status": "METADATA_UNAVAILABLE", "stage": stage, "category": category
+    }
+    if (
+        (error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt)
+        and stage.startswith("CALLBACK_URI")
+    ):
+        facts = getattr(error, "uri_facts", None)
+        if facts is not None:
+            result["uri_facts"] = _uri_facts_projection(facts)
+    return result
 
 
 def _uri_rejection_stage(uri: object) -> str:
@@ -307,6 +317,199 @@ def _uri_rejection_stage(uri: object) -> str:
         return "CALLBACK_URI_PUBLIC_SPELLING"
     except Exception:
         return "CALLBACK_URI"
+
+
+_URI_FACT_SCHEMA = {
+    "inspection": (
+        "COMPLETE",
+        "TYPE_STOP",
+        "CONTROL_STOP",
+        "PARSER_UNAVAILABLE",
+        "PARSE_FAILED",
+        "FAULT",
+    ),
+    "input": ("BUILTIN_STR", "OTHER", "UNASSESSED"),
+    "controls": ("ABSENT", "PRESENT", "UNASSESSED"),
+    "parse": ("AVAILABLE", "UNAVAILABLE", "FAILED", "UNASSESSED"),
+    "scheme": ("HTTPS", "OTHER", "ABSENT", "UNASSESSED"),
+    "host_role": (
+        "ABSENT",
+        "VERIFICATION_HOST_ONLY",
+        "SHORTLINK_HOST_ONLY",
+        "AUTHORITY_HOST_ONLY",
+        "DISCOVERY_ALIAS_HOST_ONLY",
+        "UNCLASSIFIED",
+        "UNASSESSED",
+    ),
+    "documented_literal": ("CANONICAL", "WWW", "SHORTLINK", "NONE", "UNASSESSED"),
+    "userinfo": ("PRESENT", "ABSENT", "UNASSESSED"),
+    "port": ("ABSENT", "EMPTY", "NUMBER_443", "OTHER_NUMERIC", "INVALID", "UNASSESSED"),
+    "path": (
+        "DEVICELOGIN_EXACT",
+        "DEVICELOGIN_CASE",
+        "DEVICELOGIN_SLASH",
+        "OTHER",
+        "UNASSESSED",
+    ),
+    "query": ("ABSENT", "EMPTY", "NONEMPTY", "UNASSESSED"),
+    "fragment": ("ABSENT", "EMPTY", "NONEMPTY", "UNASSESSED"),
+    "authority": ("EXACT_CANONICAL", "EXACT_WWW", "ABSENT", "OTHER", "UNASSESSED"),
+    "admission_literal": ("MATCHED", "NOT_MATCHED", "UNASSESSED"),
+    "trust": ("NOT_ESTABLISHED",),
+}
+
+
+def _uri_facts_baseline() -> dict[str, str]:
+    return {
+        k: "NOT_ESTABLISHED"
+        if k == "trust"
+        else "UNASSESSED"
+        if k == "input"
+        else "FAULT"
+        if k == "inspection"
+        else "UNASSESSED"
+        for k in _URI_FACT_SCHEMA
+    }
+
+
+def _uri_rejection_facts(uri: object) -> dict[str, str]:
+    """Closed shape facts after rejection, never URI admission or trust.
+
+    Only an uncached local parse; no raw components or private type names escape.
+    Unknown faults discard partial facts without asserting an input type.
+    """
+    f = _uri_facts_baseline()
+    if type(uri) is not str:
+        f["inspection"] = "TYPE_STOP"
+        f["input"] = "OTHER"
+        return f
+    f["input"] = "BUILTIN_STR"
+    try:
+        if any(ord(c) <= 32 or ord(c) == 127 for c in uri):
+            f["inspection"] = "CONTROL_STOP"
+            f["controls"] = "PRESENT"
+            return f
+        f["controls"] = "ABSENT"
+        parser = getattr(_uri_urlsplit, "__wrapped__", None)
+        if parser is None:
+            f["inspection"] = "PARSER_UNAVAILABLE"
+            f["parse"] = "UNAVAILABLE"
+            return f
+        try:
+            p = parser(uri)
+            h = p.hostname
+        except ValueError:
+            f["inspection"] = "PARSE_FAILED"
+            f["parse"] = "FAILED"
+            return f
+        f["parse"] = "AVAILABLE"
+        f["scheme"] = (
+            "HTTPS" if p.scheme == "https" else "ABSENT" if p.scheme == "" else "OTHER"
+        )
+        f["host_role"] = (
+            "ABSENT"
+            if h is None
+            else "VERIFICATION_HOST_ONLY"
+            if h in ("microsoft.com", "www.microsoft.com")
+            else "SHORTLINK_HOST_ONLY"
+            if h == "aka.ms"
+            else "AUTHORITY_HOST_ONLY"
+            if h == "login.microsoftonline.com"
+            else "DISCOVERY_ALIAS_HOST_ONLY"
+            if h == "login.microsoft.com"
+            else "UNCLASSIFIED"
+        )
+        f["documented_literal"] = (
+            "CANONICAL"
+            if uri == "https://microsoft.com/devicelogin"
+            else "WWW"
+            if uri == "https://www.microsoft.com/devicelogin"
+            else "SHORTLINK"
+            if uri == "https://aka.ms/devicelogin"
+            else "NONE"
+        )
+        f["admission_literal"] = (
+            "MATCHED"
+            if uri
+            in (
+                "https://microsoft.com/devicelogin",
+                "https://www.microsoft.com/devicelogin",
+            )
+            else "NOT_MATCHED"
+        )
+        f["userinfo"] = "PRESENT" if "@" in p.netloc else "ABSENT"
+        authority = p.netloc.rsplit("@", 1)[-1]
+        if authority.startswith("["):
+            tail = authority.partition("]")[2]
+            port_text = tail[1:] if tail.startswith(":") else None
+        else:
+            port_text = authority.rsplit(":", 1)[1] if ":" in authority else None
+        try:
+            port = p.port
+            f["port"] = (
+                "ABSENT"
+                if port_text is None
+                else "EMPTY"
+                if port_text == ""
+                else "NUMBER_443"
+                if port == 443
+                else "OTHER_NUMERIC"
+            )
+        except ValueError:
+            f["port"] = "INVALID"
+        f["path"] = (
+            "DEVICELOGIN_EXACT"
+            if p.path == "/devicelogin"
+            else "DEVICELOGIN_SLASH"
+            if p.path == "/devicelogin/"
+            else "DEVICELOGIN_CASE"
+            if p.path.lower() == "/devicelogin"
+            else "OTHER"
+        )
+        f["query"] = (
+            "NONEMPTY"
+            if p.query
+            else "EMPTY"
+            if "?" in uri.partition("#")[0]
+            else "ABSENT"
+        )
+        f["fragment"] = (
+            "NONEMPTY" if p.fragment else "EMPTY" if "#" in uri else "ABSENT"
+        )
+        f["authority"] = (
+            "EXACT_CANONICAL"
+            if p.netloc == "microsoft.com"
+            else "EXACT_WWW"
+            if p.netloc == "www.microsoft.com"
+            else "ABSENT"
+            if p.netloc == ""
+            else "OTHER"
+        )
+        f["inspection"] = "COMPLETE"
+        return f
+    except Exception:
+        return _uri_facts_baseline()
+
+
+def _uri_facts_projection(value: object) -> dict[str, str]:
+    if type(value) is not dict:
+        value = _uri_facts_baseline()
+    else:
+        keys = tuple(value)
+        if (
+            len(keys) != len(_URI_FACT_SCHEMA)
+            or any(type(k) is not str for k in keys)
+            or set(keys) != set(_URI_FACT_SCHEMA)
+        ):
+            value = _uri_facts_baseline()
+        elif any(
+            (
+                type(value[k]) is not str or value[k] not in allowed
+                for k, allowed in _URI_FACT_SCHEMA.items()
+            )
+        ):
+            value = _uri_facts_baseline()
+    return dict(cast(dict[str, str], value))
 
 
 def _owner_terminal_provenance(binding: OwnerMetadataPlan) -> None:
@@ -1034,6 +1237,7 @@ def run_owner_metadata(
     memory: _OwnerMemory | None = None
     stage, category = "BINDING", "QUALIFICATION_REJECTED"
     captured: _SafeMetadataFailure | _SafeMetadataInterrupt | None = None
+    uri_facts: dict[str, str] | None = None
 
     def mark(next_stage: str, next_category: str) -> None:
         nonlocal stage, category
@@ -1053,6 +1257,7 @@ def run_owner_metadata(
                     raise _qualification_error()
 
                 def prompt(uri: str, code: str, expires: datetime) -> None:
+                    nonlocal uri_facts
                     mark("CALLBACK_STATE", "CALLBACK_REJECTED")
                     assert memory is not None
                     memory.guard(confirmed=False)
@@ -1070,6 +1275,7 @@ def run_owner_metadata(
                         "https://www.microsoft.com/devicelogin",
                     ):
                         mark(_uri_rejection_stage(uri), "CALLBACK_REJECTED")
+                        uri_facts = _uri_rejection_facts(uri)
                         raise _qualification_error()
                     mark("CALLBACK_CODE", "CALLBACK_REJECTED")
                     if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code):
@@ -1191,6 +1397,10 @@ def run_owner_metadata(
                 return result
             except BaseException as error:
                 captured = _safe_failure(stage, category, error)
+                if uri_facts is not None and stage.startswith("CALLBACK_URI"):
+                    setattr(  # noqa: B010 - Optional facts only on locally created exact safe exceptions.
+                        captured, "uri_facts", _uri_facts_projection(uri_facts)
+                    )
                 raise captured from None
             finally:
                 try:
