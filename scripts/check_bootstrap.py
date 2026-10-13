@@ -21,6 +21,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
+rr=runpy.run_path(Path(__file__).parent/'check_rr.py')
 x=runpy.run_path(Path(__file__).parent/'check_mh.py')
 q=runpy.run_path(Path(__file__).parent/'check_br.py')
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
@@ -1031,7 +1032,7 @@ REQUIRED = (
     'docs/engineering/repository-controls.md','docs/engineering/codex-handoff.md',
     'docs/decisions/implementation-baseline.md','tests/bootstrap/test_bootstrap.py',
 )
-ROLE_IDS = {'APBRA-' + s for s in (
+ROLE_IDS={'APBRA-'+s for s in(
     'PLANNER','ARCH','DEV-BE','DEV-FE','AI','RAG','PBI',
     'QA','SEC','REVIEW','DEVOPS','DOCS')}
 ACTION_PINS = {"actions/setup-node":"249970729cb0ef3589644e2896645e5dc5ba9c38","actions/checkout":"d23441a48e516b6c34aea4fa41551a30e30af803","actions/setup-python":"ece7cb06caefa5fff74198d8649806c4678c61a1","actions/upload-artifact":"ea165f8d65b6e75b540449e92b4886f43607fa02"}
@@ -1046,9 +1047,9 @@ def load_json(path: Path) -> object:
     return json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=unique)
 def valid_path(path: str) -> bool:
     return bool(path) and not any(c in path for c in '\\:\x00\n\r') and (
-        not path.startswith('/') and all(p not in ('', '.', '..') for p in path.split('/'))
+        not path.startswith('/')and all(p not in('','.','..')for p in path.split('/'))
 )
-def matches(path: str, pattern: str) -> bool:
+def matches(path:str,pattern:str)->bool:
     if not valid_path(path) or not valid_path(pattern):
         return False
     if pattern == '*':
@@ -1058,7 +1059,7 @@ def matches(path: str, pattern: str) -> bool:
     if '/' not in pattern and '/' in path:
         return False
     return fnmatch.fnmatchcase(path, pattern)
-def path_allowed(path: str, task: dict, card: dict) -> bool:
+def path_allowed(path:str,task:dict,card:dict)->bool:
     restricted = any(matches(path, p) for p in task['restricted_paths'])
     exact_mvp_ci_policy_test = (
         task.get('task_id') in {'APBRA-163', 'APBRA-164'} and
@@ -1070,8 +1071,8 @@ def path_allowed(path: str, task: dict, card: dict) -> bool:
         any(matches(path, p) for p in card['allowed_paths'])
 )
 def whole_tree_safe(path: str, bootstrap_task: dict,
- legacy_authorities: tuple[tuple[dict | None, set[str]], ...],
- bound_authorities: tuple[tuple[dict | None, set[str]], ...],
+ legacy_authorities:tuple[tuple[dict|None,set[str]],...],
+ bound_authorities:tuple[tuple[dict|None,set[str]],...],
  card: dict) -> bool:
     """Preserve legacy coverage; admit newer files through their first bound scope.
 
@@ -1091,7 +1092,7 @@ def whole_tree_safe(path: str, bootstrap_task: dict,
         if any(matches(path, pattern) for pattern in expected_scope):
             return registered is not None and path_allowed(path, registered, card)
     return False
-def schema_errors(schema: dict, value: object) -> list[str]:
+def schema_errors(schema:dict,value:object)->list[str]:
     Draft202012Validator.check_schema(schema)
     def inspect(node):
         if isinstance(node, dict):
@@ -1104,13 +1105,13 @@ def schema_errors(schema: dict, value: object) -> list[str]:
             for item in node:
                 inspect(item)
     inspect(schema)
-    return [str(e.json_path) + ': ' + e.message for e in
+    return[str(e.json_path)+': '+e.message for e in
  sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
 schema_errors = a['memo_schema_errors'](schema_errors)
 def catalog_errors(catalog: dict) -> list[str]:
     errors = []
     ids = [c['agent_id'] for c in catalog['cards']]
-    if len(set(ids)) != len(ids) or set(ids) != ROLE_IDS:
+    if len(set(ids))!=len(ids)or set(ids)!=ROLE_IDS:
         errors.append('Catalog must contain the exact twelve unique logical roles')
     for card in catalog['cards']:
         if any(not valid_path(p) for p in card['allowed_paths']):
@@ -1118,7 +1119,7 @@ def catalog_errors(catalog: dict) -> list[str]:
         if any(r not in ROLE_IDS | {'HUMAN_OWNER'} for r in card['required_reviews']):
             errors.append('Unknown reviewer role')
     return errors
-def task_errors(task: dict, catalog: dict, sources: dict) -> list[str]:
+def task_errors(task:dict,catalog:dict,sources:dict)->list[str]:
     errors = []
     cards = {c['agent_id']: c for c in catalog['cards']}
     card = cards.get(task['assigned_agent'])
@@ -1128,7 +1129,7 @@ def task_errors(task: dict, catalog: dict, sources: dict) -> list[str]:
         errors.append('Stale agent card version')
     if any(not valid_path(p) for p in task['allowed_paths'] + task['restricted_paths']):
         errors.append('Unsafe task scope')
-    if not task['branch'].startswith('agent/' + task['assigned_agent'] + '/' + task['task_id'] + '-'):
+    if not task['branch'].startswith('agent/'+task['assigned_agent']+'/'+task['task_id']+'-'):
         errors.append('Branch must match the agent and Jira task')
     source_map = {s['id']: s for s in sources['sources']}
     if any(s not in source_map for s in task['source_ids']):
@@ -1140,7 +1141,7 @@ def task_errors(task: dict, catalog: dict, sources: dict) -> list[str]:
             errors.append('Implementation acceptance is not recorded')
         if card['max_autonomy'] != 'A3':
             errors.append('Role cannot perform implementation')
-        if any(source_map[s].get('status') not in {'ACCEPTED', 'BASELINED'} for s in task['source_ids'] if s in source_map):
+        if any(source_map[s].get('status')not in{'ACCEPTED','BASELINED'}for s in task['source_ids']if s in source_map):
             errors.append('Proposed sources cannot authorize implementation' if any(source_map[s].get('status') == 'PROPOSED' for s in task['source_ids'] if s in source_map) else 'Unaccepted sources cannot authorize implementation')
     if task['task_mode'] == 'SPECIFICATION' and task['readiness'] == 'READY_FOR_SPECIFICATION':
         if task['owner_acceptance'] not in ('BOOTSTRAP_ONLY', 'RECORDED'):
@@ -1155,7 +1156,7 @@ def workflow_errors(text: str) -> list[str]:
     if not isinstance(doc, dict):
         return ['Workflow must be a mapping']
     events = doc.get('on', {})
-    if not isinstance(events, dict) or set(events) != {'pull_request', 'workflow_dispatch'}:
+    if not isinstance(events,dict)or set(events)!={'pull_request','workflow_dispatch'}:
         errors.append('Bootstrap requires only pull_request and workflow_dispatch events')
     if doc.get('permissions') != {'contents': 'read'}:
         errors.append('Workflow token must be contents-read only')
@@ -1169,7 +1170,7 @@ def workflow_errors(text: str) -> list[str]:
             errors.append('Job permission override prohibited')
         for step in job.get('steps', []):
             if 'uses' in step:
-                expected = {n + '@' + sha for n, sha in ACTION_PINS.items()}
+                expected={n+'@'+sha for n,sha in ACTION_PINS.items()}
                 if step['uses'] not in expected:
                     errors.append('Action is not in the exact verified pin allow-list')
                 if step['uses'].startswith('actions/checkout@') and step.get('with', {}).get('persist-credentials') != 'false':
@@ -1179,20 +1180,20 @@ def workflow_errors(text: str) -> list[str]:
     return errors
 def repo_files(root: Path) -> list[Path]:
     if (root / '.git').exists():
-        result = subprocess.run(['git', '-C', str(root), 'ls-files', '-z'], check=True,
+        result=subprocess.run(['git','-C',str(root),'ls-files','-z'],check=True,
  capture_output=True, timeout=10)
         return [root / p for p in result.stdout.decode().split('\x00') if p]
-    ignored = {'.git', '.venv', '__pycache__', 'artifacts'}
+    ignored={'.git','.venv','__pycache__','artifacts'}
     return sorted(p for p in root.rglob('*') if (p.is_file() or p.is_symlink()) and not ignored.intersection(p.relative_to(root).parts))
-def bound_provider_registration(root, catalog, sources, *, filename, label, branch,
+def bound_provider_registration(root,catalog,sources,*,filename,label,branch,
  base, paths, task_sha, gates, source_bindings,
  sources_sha, count_label):
     """Equivalent finite provider/host registrations; retain their exact errors."""
-    path = root / 'tasks' / filename
+    path=root/'tasks'/filename
     if not path.exists():
         return None, []
     registered = load_json(path)
-    failures = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), registered)
+    failures=schema_errors(load_json(root/'contracts/engineering/task-contract.schema.json'),registered)
     if not failures:
         failures += task_errors(registered, catalog, sources)
         def digest(value):
@@ -1201,10 +1202,10 @@ def bound_provider_registration(root, catalog, sources, *, filename, label, bran
         if digest(registered) != task_sha:
             failures.append(prefix + ' task binding differs')
         if (registered['task_id'], registered['assigned_agent'], registered['agent_card_version'],
-                registered['branch'], registered['base_commit']) != ('APBRA-160', 'APBRA-DEVOPS', '0.1', branch, base):
+                registered['branch'],registered['base_commit'])!=('APBRA-160','APBRA-DEVOPS','0.1',branch,base):
             failures.append(prefix + ' identity/base/branch differs')
         if set(registered['allowed_paths']) != paths or len(registered['allowed_paths']) != len(paths):
-            failures.append(prefix + ' requires exact ' + count_label + ' literal paths')
+            failures.append(prefix+' requires exact '+count_label+' literal paths')
         if registered['source_ids'] != [row[0] for row in source_bindings]:
             failures.append(prefix + ' requires exact accepted sources')
         for section, expected in gates.items():
@@ -1213,23 +1214,23 @@ def bound_provider_registration(root, catalog, sources, *, filename, label, bran
         if digest(sources) != sources_sha:
             failures.append(prefix + ' historical source register changed')
         for source_id, content_id, version, expected in source_bindings:
-            rows = [row for row in sources['sources'] if row.get('id') == source_id]
-            if (len(rows) != 1 or (rows[0].get('content_id'), rows[0].get('version'),
-                    rows[0].get('status')) != (content_id, version, 'ACCEPTED') or digest(rows[0]) != expected):
+            rows=[row for row in sources['sources']if row.get('id')==source_id]
+            if(len(rows)!=1 or(rows[0].get('content_id'),rows[0].get('version'),
+                    rows[0].get('status'))!=(content_id,version,'ACCEPTED')or digest(rows[0])!=expected):
                 failures.append(prefix + ' source binding differs: ' + source_id)
     return (None if failures else registered), failures
-def check(root: Path = ROOT, *, active_task_id: str | None = None,
- active_branch: str | None = None,
- changed_paths: set[str] | None = None) -> tuple[list[str], dict]:
-    errors = [f'Missing required file: {name}' for name in REQUIRED if not (root / name).is_file()]
+def check(root:Path=ROOT,*,active_task_id:str|None=None,
+ active_branch:str|None=None,
+ changed_paths:set[str]|None=None)->tuple[list[str],dict]:
+    errors=[f'Missing required file: {name}' for name in REQUIRED if not(root/name).is_file()]
     if errors:
         return errors, {}
     try:
         catalog = load_json(root / 'agents/catalog.json')
         task = load_json(root / 'tasks/APBRA-85-bootstrap.json')
         sources = load_json(root / 'docs/source-register.json')
-        errors += schema_errors(load_json(root / 'contracts/engineering/agent-catalog.schema.json'), catalog)
-        errors += schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), task)
+        errors+=schema_errors(load_json(root/'contracts/engineering/agent-catalog.schema.json'),catalog)
+        errors+=schema_errors(load_json(root/'contracts/engineering/task-contract.schema.json'),task)
         if errors:
             return errors, {}
         errors += catalog_errors(catalog)
@@ -1251,7 +1252,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                 errors.append('APBRA-160 current-demo source missing or duplicated: ' + source_id)
                 continue
             row = matches[0]
-            if (row.get('content_id'), row.get('version'), row.get('status')) != (
+            if(row.get('content_id'),row.get('version'),row.get('status'))!=(
                 content_id, version, 'ACCEPTED',
  ):
                 errors.append('APBRA-160 current-demo source binding differs: ' + source_id)
@@ -1273,19 +1274,19 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         if historical_capacity_fixture:
             workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
         errors += workflow_errors(workflow_text)
-        card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
+        card=next(c for c in catalog['cards']if c['agent_id']==task['assigned_agent'])
         shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
         shell_task = None
         if shell_path.exists():
             shell_task = load_json(shell_path)
-            extension_errors = schema_errors(load_json(root / 'contracts/engineering/task-contract.schema.json'), shell_task)
+            extension_errors=schema_errors(load_json(root/'contracts/engineering/task-contract.schema.json'),shell_task)
             if not extension_errors:
                 extension_errors += task_errors(shell_task, catalog, sources)
                 if shell_task['task_id'] != 'APBRA-129' or shell_task['assigned_agent'] != 'APBRA-DEVOPS':
                     extension_errors.append('Unexpected Capstone task identity')
                 if set(shell_task['allowed_paths']) != CAPSTONE_SHELL_PATHS:
                     extension_errors.append('Unexpected Capstone shell scope')
-                if (shell_task['task_mode'], shell_task['readiness'], shell_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(shell_task['task_mode'],shell_task['readiness'],shell_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone shell requires issued implementation acceptance')
                 if shell_task['source_ids'] != ['capstone-web-shell']:
                     extension_errors.append('Capstone shell requires its specific accepted source')
@@ -1303,7 +1304,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone task identity')
                 if set(requirements_task['allowed_paths']) != CAPSTONE_REQUIREMENTS_PATHS:
                     extension_errors.append('Unexpected Capstone requirements scope')
-                if (requirements_task['task_mode'], requirements_task['readiness'], requirements_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(requirements_task['task_mode'],requirements_task['readiness'],requirements_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone requirements requires issued implementation acceptance')
                 if requirements_task['source_ids'] != ['capstone-requirements-snapshot']:
                     extension_errors.append('Capstone requirements requires its specific accepted source')
@@ -1321,7 +1322,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone knowledge identity')
                 if set(knowledge_task['allowed_paths']) != CAPSTONE_KNOWLEDGE_PATHS:
                     extension_errors.append('Unexpected Capstone knowledge scope')
-                if (knowledge_task['task_mode'], knowledge_task['readiness'], knowledge_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(knowledge_task['task_mode'],knowledge_task['readiness'],knowledge_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone knowledge requires issued implementation acceptance')
                 if knowledge_task['source_ids'] != ['capstone-curated-knowledge']:
                     extension_errors.append('Capstone knowledge requires its specific accepted source')
@@ -1339,7 +1340,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone design identity')
                 if set(design_task['allowed_paths']) != CAPSTONE_DESIGN_PATHS:
                     extension_errors.append('Unexpected Capstone design scope')
-                if (design_task['task_mode'], design_task['readiness'], design_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(design_task['task_mode'],design_task['readiness'],design_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone design requires issued implementation acceptance')
                 if design_task['source_ids'] != ['capstone-design-plan']:
                     extension_errors.append('Capstone design requires its specific accepted source')
@@ -1357,7 +1358,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone generation identity')
                 if set(generation_task['allowed_paths']) != CAPSTONE_GENERATION_PATHS:
                     extension_errors.append('Unexpected Capstone generation scope')
-                if (generation_task['task_mode'], generation_task['readiness'], generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(generation_task['task_mode'],generation_task['readiness'],generation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone generation requires issued implementation acceptance')
                 if generation_task['source_ids'] != ['capstone-powerbi-project']:
                     extension_errors.append('Capstone generation requires its specific accepted source')
@@ -1375,7 +1376,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone validation identity')
                 if set(validation_task['allowed_paths']) != CAPSTONE_VALIDATION_PATHS:
                     extension_errors.append('Unexpected Capstone validation scope')
-                if (validation_task['task_mode'], validation_task['readiness'], validation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(validation_task['task_mode'],validation_task['readiness'],validation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone validation requires issued implementation acceptance')
                 if validation_task['source_ids'] != ['capstone-validation']:
                     extension_errors.append('Capstone validation requires its specific accepted source')
@@ -1393,7 +1394,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone governance identity')
                 if set(governance_task['allowed_paths']) != CAPSTONE_GOVERNANCE_PATHS:
                     extension_errors.append('Unexpected Capstone governance scope')
-                if (governance_task['task_mode'], governance_task['readiness'], governance_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(governance_task['task_mode'],governance_task['readiness'],governance_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone governance requires issued implementation acceptance')
                 if governance_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Capstone governance requires its specific accepted source')
@@ -1411,7 +1412,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone orchestration identity')
                 if set(orchestration_task['allowed_paths']) != CAPSTONE_ORCHESTRATION_PATHS:
                     extension_errors.append('Unexpected Capstone orchestration scope')
-                if (orchestration_task['task_mode'], orchestration_task['readiness'], orchestration_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(orchestration_task['task_mode'],orchestration_task['readiness'],orchestration_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone orchestration requires issued implementation acceptance')
                 if orchestration_task['source_ids'] != ['capstone-orchestration']:
                     extension_errors.append('Capstone orchestration requires its specific accepted source')
@@ -1429,7 +1430,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone evaluation identity')
                 if set(evaluation_task['allowed_paths']) != CAPSTONE_EVALUATION_PATHS:
                     extension_errors.append('Unexpected Capstone evaluation scope')
-                if (evaluation_task['task_mode'], evaluation_task['readiness'], evaluation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(evaluation_task['task_mode'],evaluation_task['readiness'],evaluation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone evaluation requires issued implementation acceptance')
                 if evaluation_task['source_ids'] != ['capstone-evaluation']:
                     extension_errors.append('Capstone evaluation requires its specific accepted source')
@@ -1447,7 +1448,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected deployment guide identity')
                 if set(deployment_guide_task['allowed_paths']) != DEPLOYMENT_GUIDE_PATHS:
                     extension_errors.append('Unexpected deployment guide scope')
-                if (deployment_guide_task['task_mode'], deployment_guide_task['readiness'], deployment_guide_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(deployment_guide_task['task_mode'],deployment_guide_task['readiness'],deployment_guide_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Deployment guide requires issued implementation acceptance')
                 if deployment_guide_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Deployment guide requires its specific accepted source')
@@ -1465,7 +1466,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone UX identity')
                 if set(ux_task['allowed_paths']) != CAPSTONE_UX_PATHS:
                     extension_errors.append('Unexpected Capstone UX scope')
-                if (ux_task['task_mode'], ux_task['readiness'], ux_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(ux_task['task_mode'],ux_task['readiness'],ux_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone UX requires issued implementation acceptance')
                 if ux_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Capstone UX requires its specific accepted source')
@@ -1483,7 +1484,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected measure resolution identity')
                 if set(measure_resolution_task['allowed_paths']) != MEASURE_RESOLUTION_PATHS:
                     extension_errors.append('Unexpected measure resolution scope')
-                if (measure_resolution_task['task_mode'], measure_resolution_task['readiness'], measure_resolution_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(measure_resolution_task['task_mode'],measure_resolution_task['readiness'],measure_resolution_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Measure resolution requires issued implementation acceptance')
                 if measure_resolution_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Measure resolution requires its specific accepted source')
@@ -1501,7 +1502,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected report design normalization identity')
                 if set(report_design_normalization_task['allowed_paths']) != REPORT_DESIGN_NORMALIZATION_PATHS:
                     extension_errors.append('Unexpected report design normalization scope')
-                if (report_design_normalization_task['task_mode'], report_design_normalization_task['readiness'], report_design_normalization_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(report_design_normalization_task['task_mode'],report_design_normalization_task['readiness'],report_design_normalization_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Report design normalization requires issued implementation acceptance')
                 if report_design_normalization_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Report design normalization requires its specific accepted source')
@@ -1519,7 +1520,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Unexpected Capstone documentation identity')
                 if set(capstone_documentation_task['allowed_paths']) != CAPSTONE_DOCUMENTATION_PATHS:
                     extension_errors.append('Unexpected Capstone documentation scope')
-                if (capstone_documentation_task['task_mode'], capstone_documentation_task['readiness'], capstone_documentation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(capstone_documentation_task['task_mode'],capstone_documentation_task['readiness'],capstone_documentation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Capstone documentation requires issued implementation acceptance')
                 if capstone_documentation_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Capstone documentation requires its specific accepted source')
@@ -1541,7 +1542,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale measure contract pipeline base')
                 if set(measure_contract_pipeline_task['allowed_paths']) != MEASURE_CONTRACT_PIPELINE_PATHS:
                     extension_errors.append('Unexpected measure contract pipeline scope')
-                if (measure_contract_pipeline_task['task_mode'], measure_contract_pipeline_task['readiness'], measure_contract_pipeline_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(measure_contract_pipeline_task['task_mode'],measure_contract_pipeline_task['readiness'],measure_contract_pipeline_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Measure contract pipeline requires issued implementation acceptance')
                 if measure_contract_pipeline_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Measure contract pipeline requires its specific accepted source')
@@ -1563,7 +1564,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale layout repair base')
                 if set(layout_repair_task['allowed_paths']) != LAYOUT_REPAIR_PATHS:
                     extension_errors.append('Unexpected layout repair scope')
-                if (layout_repair_task['task_mode'], layout_repair_task['readiness'], layout_repair_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(layout_repair_task['task_mode'],layout_repair_task['readiness'],layout_repair_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Layout repair requires issued implementation acceptance')
                 if layout_repair_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Layout repair requires its specific accepted source')
@@ -1585,7 +1586,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale typed confirmed requirements base')
                 if set(typed_confirmed_requirements_task['allowed_paths']) != TYPED_CONFIRMED_REQUIREMENTS_PATHS:
                     extension_errors.append('Unexpected typed confirmed requirements scope')
-                if (typed_confirmed_requirements_task['task_mode'], typed_confirmed_requirements_task['readiness'], typed_confirmed_requirements_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(typed_confirmed_requirements_task['task_mode'],typed_confirmed_requirements_task['readiness'],typed_confirmed_requirements_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Typed confirmed requirements requires issued implementation acceptance')
                 if typed_confirmed_requirements_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Typed confirmed requirements requires its specific accepted source')
@@ -1607,7 +1608,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale AI-native clarification base')
                 if set(ai_native_clarification_task['allowed_paths']) != AI_NATIVE_CLARIFICATION_PATHS:
                     extension_errors.append('Unexpected AI-native clarification scope')
-                if (ai_native_clarification_task['task_mode'], ai_native_clarification_task['readiness'], ai_native_clarification_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(ai_native_clarification_task['task_mode'],ai_native_clarification_task['readiness'],ai_native_clarification_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('AI-native clarification requires issued implementation acceptance')
                 if ai_native_clarification_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('AI-native clarification requires its specific accepted source')
@@ -1629,7 +1630,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale generic time-grain base')
                 if set(generic_time_grain_task['allowed_paths']) != GENERIC_TIME_GRAIN_PATHS:
                     extension_errors.append('Unexpected generic time-grain scope')
-                if (generic_time_grain_task['task_mode'], generic_time_grain_task['readiness'], generic_time_grain_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(generic_time_grain_task['task_mode'],generic_time_grain_task['readiness'],generic_time_grain_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Generic time-grain support requires issued implementation acceptance')
                 if generic_time_grain_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Generic time-grain support requires its specific accepted source')
@@ -1651,7 +1652,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale post-Capstone MVP baseline base')
                 if set(post_capstone_mvp_baseline_task['allowed_paths']) != CAPSTONE_DOCUMENTATION_PATHS:
                     extension_errors.append('Unexpected post-Capstone MVP baseline scope')
-                if (post_capstone_mvp_baseline_task['task_mode'], post_capstone_mvp_baseline_task['readiness'], post_capstone_mvp_baseline_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(post_capstone_mvp_baseline_task['task_mode'],post_capstone_mvp_baseline_task['readiness'],post_capstone_mvp_baseline_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Post-Capstone MVP baseline requires issued implementation acceptance')
                 if post_capstone_mvp_baseline_task['source_ids'] != ['capstone-governance']:
                     extension_errors.append('Post-Capstone MVP baseline requires its specific accepted source')
@@ -1673,7 +1674,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale post-Capstone product reconciliation base')
                 if set(post_capstone_product_reconciliation_task['allowed_paths']) != POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS:
                     extension_errors.append('Unexpected post-Capstone product reconciliation scope')
-                if (post_capstone_product_reconciliation_task['task_mode'], post_capstone_product_reconciliation_task['readiness'], post_capstone_product_reconciliation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(post_capstone_product_reconciliation_task['task_mode'],post_capstone_product_reconciliation_task['readiness'],post_capstone_product_reconciliation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Post-Capstone product reconciliation requires issued implementation acceptance')
                 if post_capstone_product_reconciliation_task['source_ids'] != ['post-capstone-product-reconciliation']:
                     extension_errors.append('Post-Capstone product reconciliation requires its specific accepted source')
@@ -1695,7 +1696,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale data-model documentation reconciliation base')
                 if set(data_model_documentation_reconciliation_task['allowed_paths']) != DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS:
                     extension_errors.append('Unexpected data-model documentation reconciliation scope')
-                if (data_model_documentation_reconciliation_task['task_mode'], data_model_documentation_reconciliation_task['readiness'], data_model_documentation_reconciliation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(data_model_documentation_reconciliation_task['task_mode'],data_model_documentation_reconciliation_task['readiness'],data_model_documentation_reconciliation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Data-model documentation reconciliation requires issued implementation acceptance')
                 if data_model_documentation_reconciliation_task['source_ids'] != ['post-capstone-data-model-reconciliation']:
                     extension_errors.append('Data-model documentation reconciliation requires its specific accepted source')
@@ -1717,7 +1718,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale confirmation readiness integrity base')
                 if set(confirmation_readiness_integrity_task['allowed_paths']) != CONFIRMATION_READINESS_INTEGRITY_PATHS:
                     extension_errors.append('Unexpected confirmation readiness integrity scope')
-                if (confirmation_readiness_integrity_task['task_mode'], confirmation_readiness_integrity_task['readiness'], confirmation_readiness_integrity_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(confirmation_readiness_integrity_task['task_mode'],confirmation_readiness_integrity_task['readiness'],confirmation_readiness_integrity_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Confirmation readiness integrity requires issued implementation acceptance')
                 if confirmation_readiness_integrity_task['source_ids'] != ['post-capstone-confirmation-readiness-integrity']:
                     extension_errors.append('Confirmation readiness integrity requires its specific accepted source')
@@ -1744,7 +1745,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale invited private-case foundation base')
                 if set(invited_private_case_foundation_task['allowed_paths']) != INVITED_PRIVATE_CASE_FOUNDATION_PATHS:
                     extension_errors.append('Unexpected invited private-case foundation scope')
-                if (invited_private_case_foundation_task['task_mode'], invited_private_case_foundation_task['readiness'], invited_private_case_foundation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(invited_private_case_foundation_task['task_mode'],invited_private_case_foundation_task['readiness'],invited_private_case_foundation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Invited private-case foundation requires issued implementation acceptance')
                 if invited_private_case_foundation_task['source_ids'] != [
                         'mvp1-invited-private-case-foundation',
@@ -1788,7 +1789,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale durable conversation evidence acceptance base')
                 if set(durable_conversation_evidence_acceptance_task['allowed_paths']) != DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS:
                     extension_errors.append('Unexpected durable conversation evidence acceptance scope')
-                if (durable_conversation_evidence_acceptance_task['task_mode'], durable_conversation_evidence_acceptance_task['readiness'], durable_conversation_evidence_acceptance_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(durable_conversation_evidence_acceptance_task['task_mode'],durable_conversation_evidence_acceptance_task['readiness'],durable_conversation_evidence_acceptance_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Durable conversation evidence acceptance requires issued implementation acceptance')
                 if durable_conversation_evidence_acceptance_task['source_ids'] != [
                         'mvp1-durable-conversation-evidence-acceptance',
@@ -1840,7 +1841,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale protected generation output history base')
                 if set(protected_generation_output_history_task['allowed_paths']) != PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS:
                     extension_errors.append('Unexpected protected generation output history scope')
-                if (protected_generation_output_history_task['task_mode'], protected_generation_output_history_task['readiness'], protected_generation_output_history_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(protected_generation_output_history_task['task_mode'],protected_generation_output_history_task['readiness'],protected_generation_output_history_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Protected generation output history requires issued implementation acceptance')
                 if protected_generation_output_history_task['source_ids'] != ['mvp1-protected-generation-output-history', PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Protected generation output history requires its specific accepted source')
@@ -1882,7 +1883,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale business-friendly UX application shell base')
                 if set(business_friendly_ux_application_shell_task['allowed_paths']) != BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS:
                     extension_errors.append('Unexpected business-friendly UX application shell scope')
-                if (business_friendly_ux_application_shell_task['task_mode'], business_friendly_ux_application_shell_task['readiness'], business_friendly_ux_application_shell_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(business_friendly_ux_application_shell_task['task_mode'],business_friendly_ux_application_shell_task['readiness'],business_friendly_ux_application_shell_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Business-friendly UX application shell requires issued implementation acceptance')
                 if business_friendly_ux_application_shell_task['source_ids'] != ['mvp1-business-friendly-ux-application-shell', BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID]:
                     extension_errors.append('Business-friendly UX application shell requires its specific accepted source')
@@ -1924,7 +1925,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale professional SaaS experience visual-system base')
                 if set(professional_saas_experience_visual_system_task['allowed_paths']) != PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS:
                     extension_errors.append('Unexpected professional SaaS experience visual-system scope')
-                if (professional_saas_experience_visual_system_task['task_mode'], professional_saas_experience_visual_system_task['readiness'], professional_saas_experience_visual_system_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(professional_saas_experience_visual_system_task['task_mode'],professional_saas_experience_visual_system_task['readiness'],professional_saas_experience_visual_system_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Professional SaaS experience visual-system requires issued implementation acceptance')
                 if professional_saas_experience_visual_system_task['source_ids'] != [PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID]:
                     extension_errors.append('Professional SaaS experience visual-system requires its specific accepted source')
@@ -1959,7 +1960,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     extension_errors.append('Stale business-user intelligent-generation base')
                 if set(business_user_intelligent_generation_task['allowed_paths']) != BUSINESS_USER_INTELLIGENT_GENERATION_PATHS:
                     extension_errors.append('Unexpected business-user intelligent-generation scope')
-                if (business_user_intelligent_generation_task['task_mode'], business_user_intelligent_generation_task['readiness'], business_user_intelligent_generation_task['owner_acceptance']) != ('IMPLEMENTATION', 'READY_FOR_IMPLEMENTATION', 'RECORDED'):
+                if(business_user_intelligent_generation_task['task_mode'],business_user_intelligent_generation_task['readiness'],business_user_intelligent_generation_task['owner_acceptance'])!=('IMPLEMENTATION','READY_FOR_IMPLEMENTATION','RECORDED'):
                     extension_errors.append('Business-user intelligent generation requires issued implementation acceptance')
                 if business_user_intelligent_generation_task['source_ids'] != [
  BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID,
@@ -2077,7 +2078,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     (DEPLOYMENT_PORTABILITY_SOURCE_ID, '9568258', DEPLOYMENT_PORTABILITY_SOURCE_SHA256),
                     (ENTITLEMENT_ARCHITECTURE_SOURCE_ID, '9535525', ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256),
  ):
-                    package_source = next((source for source in sources['sources'] if source['id'] == source_id), None)
+                    package_source=next((source for source in sources['sources']if source['id']==source_id),None)
                     if package_source is None:
                         extension_errors.append('APBRA-175 accepted source is missing: ' + source_id)
                     else:
@@ -2232,6 +2233,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         metadata_observations, e = zz['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        rt,er=rr['bind'](root,catalog,sources,bound_provider_registration);errors+=er
         w,e=x['bind'](root,catalog,sources,bound_provider_registration);errors+=e
         v,e=q['bind'](root,catalog,sources,bound_provider_registration);errors+=e
         owner_metadata, e = o['bind'](root, catalog, sources, bound_provider_registration)
@@ -2817,6 +2819,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (owner_metadata, o['P']),
             (agent_details, n['P']),
             (metadata_observations, zz['P']),
+(rt,rr['P']),
 (w,x['P']),
 (v,q['P']),
             (raw_ingress, u['P']),
@@ -2834,6 +2837,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
  }
                 else agent_details if active_branch == n['B']
                 else metadata_observations if active_branch == zz['B']
+                else rt if active_branch==rr['B']
                 else w if active_branch==x['B']
                 else v if active_branch==q['B']
                 else document_drafts if active_branch in {d['B'], d['R']}
@@ -3147,7 +3151,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3161,7 +3165,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
