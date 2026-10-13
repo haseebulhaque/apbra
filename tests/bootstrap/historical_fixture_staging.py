@@ -81,3 +81,72 @@ def knowledge_registration_names(source_root: Path, additions=()) -> set[str]:
         return selected
     except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
         raise ValueError('Knowledge historical fixture snapshot unavailable') from None
+
+
+# New local document-draft registration isolates the released H12 journal evidence.
+TENANT_DOCUMENT_DRAFTS_HISTORICAL_BASE = 'dfe9f65fd68ba6573d8fe0be11c1efd7974432fc'
+TENANT_DOCUMENT_DRAFTS_HISTORICAL_TREE = '1f2aaba3ed82e89cd2cd1b71cf35e2b3876fb1e2'
+TENANT_DOCUMENT_DRAFTS_HISTORICAL_UNIVERSE_SHA = '37fdb4858cd94fa339e7f013d28b399286f9fcbb0a9dfaf3bf1f00bd8fd09103'
+TENANT_DOCUMENT_DRAFTS_HISTORICAL_SNAPSHOTS = {
+    'scripts/check_bootstrap.py': (262076, '4cbaa8969739953dbe13bc47fae7a584fd7d562822e14fb834ba7b36a5c85674'),
+    'tests/bootstrap/historical_fixture_staging.py': (4202, 'efe2b7b495e6d3e1f08043b7a4a4c5e14e887b5fa1a0fc1441cf224428013243'),
+}
+
+
+def document_drafts_registration_names(source_root: Path, additions=()) -> set[str]:
+    """Current bytes for fixed H12 names plus explicit historical test additions.
+
+    This is test-local staging only; current checker enumeration is unchanged.
+    """
+    try:
+        tree = subprocess.check_output(
+            ['git', '-C', str(source_root), 'rev-parse', TENANT_DOCUMENT_DRAFTS_HISTORICAL_BASE + '^{tree}'],
+            timeout=10, stderr=subprocess.PIPE,
+        ).decode('ascii').strip()
+        if tree != TENANT_DOCUMENT_DRAFTS_HISTORICAL_TREE:
+            raise ValueError('Historical tree differs')
+        raw = subprocess.check_output(
+            ['git', '-C', str(source_root), 'ls-tree', '-rz', '--name-only', TENANT_DOCUMENT_DRAFTS_HISTORICAL_BASE],
+            timeout=10, stderr=subprocess.PIPE,
+        )
+        if hashlib.sha256(raw).hexdigest() != TENANT_DOCUMENT_DRAFTS_HISTORICAL_UNIVERSE_SHA:
+            raise ValueError('Historical universe differs')
+        names = raw.decode('utf-8').split('\0')
+        if not names or names[-1] != '':
+            raise ValueError('Historical universe malformed')
+        names.pop()
+        if not names or len(set(names)) != len(names):
+            raise ValueError('Historical universe malformed')
+        selected = set(names)
+        for name in [*names, *additions]:
+            if (type(name) is not str or not name or '\\' in name or '\0' in name or
+                    PurePosixPath(name).is_absolute() or
+                    any(part in ('', '.', '..', '.git') for part in name.split('/'))):
+                raise ValueError('Historical path unsafe')
+            selected.add(name)
+        return selected
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        raise ValueError('Document draft historical fixture universe unavailable') from None
+
+
+def knowledge_registration_snapshot(source_root: Path, path: str) -> bytes:
+    """Verified released H12 bytes for the two old journal registration assertions."""
+    try:
+        if type(path) is not str or path not in TENANT_DOCUMENT_DRAFTS_HISTORICAL_SNAPSHOTS:
+            raise ValueError('Historical snapshot path differs')
+        size, expected = TENANT_DOCUMENT_DRAFTS_HISTORICAL_SNAPSHOTS[path]
+        tree = subprocess.check_output(
+            ['git', '-C', str(source_root), 'rev-parse', TENANT_DOCUMENT_DRAFTS_HISTORICAL_BASE + '^{tree}'],
+            timeout=10, stderr=subprocess.PIPE,
+        ).decode('ascii').strip()
+        if tree != TENANT_DOCUMENT_DRAFTS_HISTORICAL_TREE:
+            raise ValueError('Historical snapshot tree differs')
+        raw = subprocess.check_output(
+            ['git', '-C', str(source_root), 'show', TENANT_DOCUMENT_DRAFTS_HISTORICAL_BASE + ':' + path],
+            timeout=10, stderr=subprocess.PIPE,
+        )
+        if len(raw) != size or hashlib.sha256(raw).hexdigest() != expected:
+            raise ValueError('Historical snapshot bytes differ')
+        return raw
+    except (OSError, subprocess.SubprocessError, UnicodeError, ValueError):
+        raise ValueError('Knowledge registration historical snapshot unavailable') from None
