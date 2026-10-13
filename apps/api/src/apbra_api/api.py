@@ -56,7 +56,7 @@ from .domain import (
     Role,
 )
 from .evidence import LocalEvidenceStore
-from .foundry_agent_details import agent_details
+from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
 from .knowledge_documents import (
@@ -268,6 +268,7 @@ def create_app(
     reference_objects: EvidenceObjectStore | None = None,
     artifact_objects: ArtifactObjectStore | None = None,
     foundry_credentials: FoundryCredentialProvider | None = None,
+    foundry_metadata_credentials: AgentMetadataCredentialProvider | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
@@ -687,7 +688,11 @@ def create_app(
         version_id = snapshot.id
         profile = snapshot.settings.provider_profile
         db.rollback()
-        details = agent_details(company_id, profile, foundry_credentials)
+        details = agent_details(
+            company_id, profile,
+            foundry_metadata_credentials if foundry_metadata_credentials is not None
+            else foundry_credentials,
+        )
         fresh_actor = resolve_actor(db, session_token)
         fresh = admin_settings(db, fresh_actor)
         if (fresh_actor.company_id != company_id or fresh_actor.membership_id != membership_id

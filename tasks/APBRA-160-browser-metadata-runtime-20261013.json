@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-BROWSER-METADATA-RUNTIME-20261013",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Reusable explicit owner-private browser connection bound to saved Tenant Settings, separate metadata access and existing strict runtime attestation; invocation gated off until trusted owner/budget handoff.",
+  "requirements": [
+    "Owner ongoing MVP direction, practical runtime delegation and JiraPLAN10855/SCOPE10856 authorize this source-only twelve-path increment, not actual sign-in/paid/preview/security actions.",
+    "An explicit owner-private browser CLI receives selected company and Azure identity IDs/lease deadline explicitly. Saved current Tenant Settings alone drive agent endpoint/version/limits. No default version/provider, no identity inference or fabricated knowledge qualification.",
+    "Reuse reviewed private terminal/account confirmation/owned callback cleanup; memory token lease only, no SDK/cache/refresh while serving; close before server and clear on expiry/revocation/changed settings/exit.",
+    "Separate read-only metadata access always serves only authenticated admin GETs. Optional reusable generation runtime requires existing strict currentFoundryHostBinding, exact knownaccount/tenant/client/company/deadline and savedprofile match, LIVE_METADATA_VERIFIED knowledge attestation, and a separately authorized trustedhost invocation/budget gate defaultfalse. No CLI/clientbool can grant paid capability; metadata observation cannot fabricate runtimequalification. Preserve all main/config/model/owner/settings bytes and existingtenantpermissions/budgets/reportlogic.",
+    "Exact twelve-path scope, fake auth/transport/server and adversarial tests, source-preservation scope checks, full checks/independent review/strict CI before normal authorized merge. No live private config/DB access, auth, paid/report tests, activation or hosting."
+  ],
+  "adrs": [
+    "One browser memory lease reuses existing strict FoundryTokenCredentialProvider for separately attested invocation, defaultdisabled, alongside separate unqualified metadata access. Saved Tenant Settings remain endpoint/version/limit authority. No duplicate discovery/provisioning/transport stack."
+  ],
+  "architecture_refs": [
+    "Current main cceac17 has only legacy device-code serving; browser owner metadata closes its token. Existing selected-company endpoint uses saved settings. Provider-managed report logic remains untouched."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/foundry_browser_metadata.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/foundry_agent_details.py",
+    "apps/api/tests/test_foundry_browser_metadata.py",
+    "apps/api/tests/test_foundry_agent_details.py",
+    "tasks/APBRA-160-browser-metadata-runtime-20261013.json",
+    "scripts/check_br.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_browser_metadata_runtime_scope.py",
+    "tests/bootstrap/test_metadata_observations_scope.py",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/tenant_settings.py"
+  ],
+  "acceptance_criteria": [
+    "No Azure login/default credential discovery on import/startup. Explicit private manual entrypoint only.",
+    "Reusable browser runtime injects existing provider only under exact private attestation plus savedprofile equality; readyfalse bydefault until trusted owner/budget callback. Metadata never fabricates qualification or grants invocation.",
+    "Selected company/profile/current settings bind every read. Expiry/settings drift/account mismatch/cleanup errors unavailable, no raw secret/error logging.",
+    "Fake browser/session tests prove cleanup and tenant isolation; historical main/owner/model/settings unchanged.",
+    "PostSDKconstruction authority drift forbids authenticate; postaccountconfirmation account drift forbids token acquisition. Exact negative call-sequence regressions required."
+  ],
+  "verification_required": [
+    "Meaningful fake browser/credential/server + admin metadata capability tests and negatives.",
+    "Full applicable checks, Gitleaks, fresh exact-head independent review, hosted strict CI, normal merge; live proof remains separate.",
+    "Exact added bootstrap hooks inverse, source byte pins, missing/duplicate/unrelated hook mutation negatives."
+  ],
+  "out_of_scope": [
+    "Real owner sign-in by tools, private container/database inspection, token transport/export, preview activation/migration, paid calls, report policy, hosting173B, legacy PR125/126, permission changes or bypass."
+  ],
+  "escalate_when": [
+    "A required action is denied, source identity/privacy/isolation checks fail, new costs/consent/access are required, or required exact-head checks/review are absent. Stop the denied action."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "cceac17498ee2e0118a5c7726163b6ad62a0ccaa",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-browser-metadata-runtime",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Exact twelve-path source increment; registration adds no live security/paid/preview authority.",
+  "dependencies": [
+    "Merged PR155/156 metadata/settings details; preserved preview replacement proposal remains separate awaiting specific owner approval."
+  ]
+}

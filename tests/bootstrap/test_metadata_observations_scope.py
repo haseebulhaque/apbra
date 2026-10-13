@@ -39,7 +39,7 @@ class MetadataObservationsScope(unittest.TestCase):
     def test_exact_additive_inverse_preserves_entire_previous_checker(self):
         import ast
         import subprocess
-        current = (ROOT / 'scripts/check_bootstrap.py').read_text()
+        current = runpy.run_path(str(ROOT / 'scripts/check_br.py'))['strip_current_hooks']((ROOT / 'scripts/check_bootstrap.py').read_text())
         old = subprocess.check_output(['git', 'show', HELPER['BASE'] + ':scripts/check_bootstrap.py'],
                                       cwd=ROOT, text=True)
         inverse = HELPER['strip_current_hooks'](current)

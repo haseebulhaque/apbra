@@ -5,7 +5,9 @@ import json
 import math
 import re
 import time
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -13,6 +15,22 @@ import httpx
 
 from .foundry_owner_metadata import _quiet_call
 from .model_provider import FoundryBearer, FoundryCredentialProvider, ProviderProfile
+
+
+@dataclass(frozen=True)
+class AgentMetadataAccess:
+    """Read-only metadata lease; no knowledge or report qualification claim."""
+
+    company_id: UUID
+    profile_id: str
+    configuration_id: str
+    credential: Callable[[], FoundryBearer] = field(repr=False)
+    agent_version: str | None
+
+
+class AgentMetadataCredentialProvider(Protocol):
+    def ready(self, company_id: UUID, profile: ProviderProfile) -> bool: ...
+    def resolve(self, company_id: UUID, profile: ProviderProfile) -> AgentMetadataAccess: ...
 
 
 def _identifier(value: object) -> str | None:
@@ -33,7 +51,7 @@ def _json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def agent_details(
     company_id: UUID,
     profile: ProviderProfile | None,
-    credentials: FoundryCredentialProvider | None,
+    credentials: FoundryCredentialProvider | AgentMetadataCredentialProvider | None,
     *,
     transport: httpx.BaseTransport | None = None,
 ) -> dict[str, Any]:
