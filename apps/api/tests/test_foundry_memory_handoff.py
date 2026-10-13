@@ -342,6 +342,7 @@ def test_docker_server_uses_explicit_internal_listener(monkeypatch: Any) -> None
 
 def test_runtime_drift_clears_lease_without_metadata_request(monkeypatch: Any) -> None:
     from pydantic import SecretStr
+
     from apbra_api.config import FoundryHostBinding
 
     c = setup(monkeypatch)
