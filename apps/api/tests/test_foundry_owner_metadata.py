@@ -317,8 +317,15 @@ def test_resource_mismatch_stops(flow: Any, target: str) -> None:
         flow.version["definition"]["tools"][0]["server_url"] = "https://evil.invalid/mcp"
     if target == "kb":
         flow.knowledge["name"] = "other"
-    with pytest.raises(ProviderConfigurationError):
-        run(flow)
+    if target == "tool":
+        result=run(flow)
+        assert result["status"] == "METADATA_OBSERVED_ONLY"
+        assert result["knowledgeMetadataWarnings"] == ["KNOWLEDGE_NOT_OBSERVED"]
+        assert "CONFIRM SEARCH" not in flow.events
+        assert sum(x.startswith("GET") for x in flow.events) == 2
+    else:
+        with pytest.raises(ProviderConfigurationError):
+            run(flow)
     cleanup(flow)
 
 
@@ -3433,6 +3440,8 @@ def test_browser_permission_or_consent_failure_is_unavailable_without_retry(
 def _restore_projection_reason_extension(tree: ast.Module) -> ast.Module:
     """Remove only exact, counted additions; preserve every other source node."""
 
+    tree = _restore_owner_observation_extension(tree)
+
     def parsed(source: str) -> ast.stmt:
         return ast.parse(source).body[0]
 
@@ -3734,11 +3743,20 @@ def test_projection_closed_reasons_keep_every_binding_and_bound_failclosed(
         definition["instructions"] = 123
     elif mutation == "response":
         definition["text"] = {"value": "\ud800"}
-    with pytest.raises(projection.ProjectionError) as error:
-        projection._owner_agent_observation(properties, version, module._PLAN)
-    assert type(error.value) is projection.ProjectionError
-    assert vars(error.value) == {"reason": reason}
-    assert error.value.args == ("FOUNDRY_QUALIFICATION_UNAVAILABLE",)
+    if mutation == "identity":
+        with pytest.raises(projection.ProjectionError) as error:
+            projection._owner_agent_observation(properties, version, module._PLAN)
+        assert vars(error.value) == {"reason": "IDENTITY"}
+    else:
+        observed, origin = projection._owner_agent_observation(properties, version, module._PLAN)
+        if mutation not in {"tools", "readonly-null", "allowed-missing", "allowed-null",
+                            "names-missing", "names-empty"}:
+            assert reason in observed["metadataWarnings"]
+        assert CANARY not in json.dumps(observed)
+        if mutation in {"url", "bad-port", "duplicate-source", "tools", "definition", "tool-type"}:
+            assert origin is None
+        else:
+            assert origin == "https://synthetic.search.windows.net"
     flow.properties.clear()
     flow.properties.update(properties)
     flow.version.clear()
@@ -3760,25 +3778,31 @@ def test_projection_closed_reasons_keep_every_binding_and_bound_failclosed(
         lambda: original(credential_factory=flow.factory, client_factory=flow.client),
     )
     monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
-    with pytest.raises(SystemExit):
+    if mutation in {"identity", "response"}:
+        with pytest.raises(SystemExit):
+            module.main()
+    else:
         module.main()
     output = capsys.readouterr()
-    assert output.out == "" and CANARY not in output.err
+    assert CANARY not in output.out + output.err
     if mutation == "response":
-        # Strict transport encoding rejects this malformed scalar before the
-        # projector. Preserve the real earlier phase; pure reason checked above.
         assert json.loads(output.err) == {
             "status": "METADATA_UNAVAILABLE", "stage": "AGENT_PROPERTIES_GET",
             "category": "QUALIFICATION_REJECTED",
         }
-        assert len([e for e in flow.events if e.startswith("GET:")]) == 1
+    elif mutation == "identity":
+        assert json.loads(output.err)["projection_reason"] == "IDENTITY"
     else:
-        assert json.loads(output.err) == {
-            "status": "METADATA_UNAVAILABLE", "stage": "AGENT_PROJECTION",
-            "category": "QUALIFICATION_REJECTED", "projection_reason": reason,
-        }
-        assert len([e for e in flow.events if e.startswith("GET:")]) == 2
-    assert "CONFIRM SEARCH" not in flow.events
+        assert output.err == ""
+        result = json.loads(output.out)
+        assert result["status"] == "METADATA_OBSERVED_ONLY"
+        assert result["runtimeActivated"] is False
+        expected_gets = 2 if origin is None else 3
+        assert len([e for e in flow.events if e.startswith("GET:")]) == expected_gets
+        if origin is None:
+            assert "CONFIRM SEARCH" not in flow.events
+            assert not any(e.startswith("TOKEN:") and "search" in e for e in flow.events)
+            assert result["knowledgeMetadataWarnings"] == ["KNOWLEDGE_NOT_OBSERVED"]
     cleanup(flow)
 
 
@@ -3946,9 +3970,14 @@ def test_projection_existing_item_and_identifier_bounds_are_retained(
     else:
         tool["allowed_tools"] = ["knowledge_base_retrieve"] * 2
         expected = "MCP_ALLOWED_TOOLS"
-    with pytest.raises(projection.ProjectionError) as error:
-        projection._owner_agent_observation(properties, version, module._PLAN)
-    assert error.value.reason == expected
+    observed, _ = projection._owner_agent_observation(properties, version, module._PLAN)
+    assert expected in observed["metadataWarnings"]
+    if where == "model-length":
+        assert observed["modelDeployment"] is None
+    elif where == "tool-count":
+        assert observed["tools"] is None
+    else:
+        assert observed["tools"][0]["allowedTools"] is None
 
 
 def test_projection_cycles_and_hostile_dictionary_keys_fail_without_stringification(
@@ -4092,4 +4121,201 @@ def test_optional_selector_warning_paths_preserve_bounds_without_connection_veto
     assert run(flow)["metadataWarnings"] == [reason]
     assert len([event for event in flow.events if event.startswith("GET:")]) == 3
     assert capsys.readouterr().out == ""
+    cleanup(flow)
+
+
+def _restore_owner_observation_extension(tree: ast.Module) -> ast.Module:
+    """Reverse only the exact new owner alias and conditional Search branch."""
+    expected = ast.parse("from .foundry_metadata_projection import "
+                         "_owner_knowledge_observation as _knowledge_observation").body[0]
+    imports = [n for n in tree.body if isinstance(n, ast.ImportFrom)
+               and n.module == "foundry_metadata_projection"]
+    matches = [n for n in imports if ast.dump(n) == ast.dump(expected)]
+    assert len(matches) == 1
+    tree.body.remove(matches[0])
+    target = [n for n in imports if any(a.name == "ProjectionError" for a in n.names)]
+    assert len(target) == 1
+    target[0].names.insert(1, ast.alias(name="_knowledge_observation"))
+    run = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+               and n.name == "run_owner_metadata")
+    baseline = subprocess.check_output([
+        "/usr/bin/git", "show", "998cd35:apps/api/src/apbra_api/foundry_owner_metadata.py"
+    ], cwd=ROOT, text=True)  # noqa: S603 - fixed public source
+    before = ast.parse(baseline)
+    old_run = next(n for n in before.body if isinstance(n, ast.FunctionDef)
+                   and n.name == "run_owner_metadata")
+    # Fetch the exact old Search statements by local stage and result boundaries.
+    old_statements: list[ast.stmt] = []
+    for node in ast.walk(old_run):
+        if isinstance(node, ast.Try):
+            starts = [i for i,n in enumerate(node.body)
+                      if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)
+                      and isinstance(n.value.func, ast.Name) and n.value.func.id == "mark"
+                      and n.value.args and isinstance(n.value.args[0], ast.Constant)
+                      and n.value.args[0].value == "SEARCH_CONFIRMATION"]
+            if starts:
+                start=starts[0]
+                end=next(i for i in range(start,len(node.body))
+                         if isinstance(node.body[i],ast.Assign)
+                         and any(isinstance(t,ast.Name) and t.id == "result"
+                                 for t in node.body[i].targets))
+                old_statements=node.body[start:end]
+    assert old_statements
+    condition=ast.dump(ast.parse("search_origin is not None",mode="eval").body)
+    initializer=ast.dump(ast.parse("knowledge: dict[str, Any] | None = None").body[0])
+    counts=[0,0]
+    class Reverse(ast.NodeTransformer):
+        def visit_AnnAssign(self,node: ast.AnnAssign) -> Any:
+            if ast.dump(node)==initializer:
+                counts[0]+=1
+                return None
+            return self.generic_visit(node)
+        def visit_If(self,node: ast.If) -> Any:
+            if ast.dump(node.test)==condition:
+                assert not node.orelse
+                assert [ast.dump(n) for n in node.body]==[ast.dump(n) for n in old_statements]
+                counts[1]+=1
+                return node.body
+            return self.generic_visit(node)
+    Reverse().visit(run)
+    assert counts==[1,1]
+    return tree
+
+
+@pytest.mark.parametrize("allowed", [None, [], ["knowledge_base_retrieve"],
+    {}, {"read_only": True}, {"read_only": False}, {"read_only": None},
+    {"tool_names": None}, {"tool_names": []},
+    {"tool_names": ["knowledge_base_retrieve"]},
+    {"read_only": True, "tool_names": ["knowledge_base_retrieve"]},
+    ["another_public_tool"], {"tool_names": ["another_public_tool"]}, "future-filter", 42])
+def test_all_documented_mcp_filter_variants_and_unknowns_are_observations(
+    flow: Any, allowed: Any
+) -> None:
+    flow.version["definition"]["tools"][0]["allowed_tools"] = allowed
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["runtimeActivated"] is False
+    assert len([e for e in flow.events if e.startswith("GET:")]) == 3
+    assert result["tools"][0]["allowedTools"] == (
+        allowed if type(allowed) is list and allowed in ([],["knowledge_base_retrieve"])
+        else allowed.get("tool_names") if type(allowed) is dict
+             and allowed.get("tool_names") in ([],["knowledge_base_retrieve"])
+        else None)
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("field", ["definition", "kind", "model", "tools", "instructions",
+                                  "response_format", "text", "server_label", "allowed_tools"])
+def test_missing_optional_agent_fields_complete_metadata_path(flow: Any, field: str) -> None:
+    if field == "definition":
+        flow.version.pop(field)
+    elif field in {"server_label", "allowed_tools"}:
+        flow.version["definition"]["tools"][0].pop(field,None)
+    else:
+        flow.version["definition"].pop(field,None)
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["runtimeActivated"] is False
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("field", ["outputMode", "models", "knowledgeSources",
+    "retrievalReasoningEffort", "retrieveDefaults", "retrievalInstructions", "answerInstructions"])
+@pytest.mark.parametrize("value", [None, [], {}, 42, "unfamiliar-synthetic", True])
+def test_all_optional_knowledge_fields_unknown_shapes_do_not_veto(
+    flow: Any, field: str, value: Any
+) -> None:
+    flow.knowledge[field]=value
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert result["runtimeActivated"] is False
+    cleanup(flow)
+
+
+def test_empty_and_missing_knowledge_collections_are_distinct(flow: Any) -> None:
+    empty=projection._owner_knowledge_observation({"name":module._PLAN.knowledge_base,
+                                                 "models":[],"knowledgeSources":[]},module._PLAN)
+    missing=projection._owner_knowledge_observation({"name":module._PLAN.knowledge_base},module._PLAN)
+    assert empty["models"] == [] and empty["knowledgeSourceCount"] == 0
+    assert missing["models"] is None and missing["knowledgeSourceCount"] is None
+    for document in ({}, {"name":"wrong"}):
+        with pytest.raises(projection.ProjectionError, match="FOUNDRY_QUALIFICATION_UNAVAILABLE"):
+            projection._owner_knowledge_observation(document,module._PLAN)
+
+
+@pytest.mark.parametrize("kind", ["minimal","low","medium","auto","future-kind"])
+def test_documented_knowledge_reasoning_and_future_unknown(flow: Any, kind: str) -> None:
+    flow.knowledge["retrievalReasoningEffort"]={"kind":kind}
+    result=run(flow)
+    assert result["retrievalReasoningEffort"] == (None if kind == "future-kind" else kind)
+    cleanup(flow)
+
+
+def test_owner_observation_inverse_preserves_entire_released_helper() -> None:
+    before=subprocess.check_output(["/usr/bin/git","show",
+          "998cd35:apps/api/src/apbra_api/foundry_owner_metadata.py"],cwd=ROOT,text=True)  # noqa: S603
+    after=_restore_owner_observation_extension(ast.parse(Path(module.__file__).read_text()))
+    assert ast.dump(after)==ast.dump(ast.parse(before))
+
+
+@pytest.mark.parametrize("field", ["outputMode", "models", "knowledgeSources",
+    "retrievalReasoningEffort", "retrieveDefaults", "retrievalInstructions", "answerInstructions"])
+def test_all_optional_knowledge_omissions_are_unknown(flow: Any, field: str) -> None:
+    flow.knowledge.pop(field, None)
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["allInCostBound"] == "UNKNOWN"
+    assert result["runtimeActivated"] is False
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan"), -(10**400), 10**400,
+                                   True, 0, -1, "private-synthetic", {}, []])
+def test_knowledge_optional_numeric_defaults_are_not_cost_authority(value: Any) -> None:
+    result=projection._owner_knowledge_observation({"name":module._PLAN.knowledge_base,
+        "retrieveDefaults":{"maxRuntimeInSeconds":value}},module._PLAN)
+    assert result["numericCaps"] is None and result["allInCostBound"] == "UNKNOWN"
+    assert result["knowledgeMetadataWarnings"] == ["KNOWLEDGE_DEFAULTS"]
+
+
+@pytest.mark.parametrize("suffix", ["\n", "\t", "\r", " ", "#fragment", "&key=private-synthetic"])
+def test_malformed_search_location_skips_every_search_boundary(flow: Any, suffix: str) -> None:
+    flow.version["definition"]["tools"][0]["server_url"] += suffix
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert "CONFIRM SEARCH" not in flow.events
+    assert not any("search.azure.com" in event for event in flow.events)
+    assert sum(event.startswith("GET:") for event in flow.events)==2
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("require_approval", [None,"always","never",{},
+    {"always":{"tool_names":["knowledge_base_retrieve"]}}])
+def test_observed_tool_approval_setting_does_not_grant_any_execution(
+    flow: Any, require_approval: Any
+) -> None:
+    tool=flow.version["definition"]["tools"][0]
+    tool["require_approval"]=require_approval
+    tool["allowed_tools"]={"read_only":True}
+    result=run(flow)
+    assert result["tools"][0]["allowedTools"] is None
+    assert result["tools"][0]["readOnly"] is True
+    assert result["runtimeActivated"] is False and result["routingVerified"] is False
+    assert len([event for event in flow.events if event.startswith("GET:")])==3
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("field", ["connector_id", "tunnel_id", "project_connection_id"])
+def test_unresolved_documented_mcp_connection_variants_are_never_destinations(
+    flow: Any, field: str
+) -> None:
+    tool=flow.version["definition"]["tools"][0]
+    tool.pop("server_url")
+    tool[field]=CANARY
+    result=run(flow)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert "CONFIRM SEARCH" not in flow.events
+    assert not any("search.azure.com" in event for event in flow.events)
+    assert CANARY not in json.dumps(result)
     cleanup(flow)

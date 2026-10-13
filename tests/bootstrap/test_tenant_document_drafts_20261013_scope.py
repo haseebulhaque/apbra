@@ -243,7 +243,7 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
 
     def test_entire_old_checker_ast_after_only_exact_seven_hooks(self):
         old = subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/check_bootstrap.py'], cwd=ROOT, text=True)
-        current = (ROOT / 'scripts/check_bootstrap.py').read_text()
+        current = c.zz['strip_current_hooks']((ROOT / 'scripts/check_bootstrap.py').read_text())
         # Strip only exact current hooks; the entire historical guard still compares.
         current = c.n['strip_current_hooks'](current)
         self.assertEqual(len(HOOK_ADDITIONS), 7)

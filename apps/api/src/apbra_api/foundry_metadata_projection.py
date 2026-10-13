@@ -181,6 +181,12 @@ _PROJECTION_REASONS = frozenset(
         "INSTRUCTIONS_SHAPE",
         "RESPONSE_CONFIGURATION",
         "POST_PROJECTION_GUARD",
+        "KNOWLEDGE_MODELS",
+        "KNOWLEDGE_OUTPUT_MODE",
+        "KNOWLEDGE_REASONING",
+        "KNOWLEDGE_SOURCES",
+        "KNOWLEDGE_SOURCE_CAP",
+        "KNOWLEDGE_DEFAULTS",
     }
 )
 
@@ -244,7 +250,7 @@ def _owner_agent_observation(
     properties: dict[str, Any],
     version: dict[str, Any],
     binding: MetadataProjectionBinding,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str | None]:
     if not _projection_json_shape(properties) or not _projection_json_shape(version):
         raise ProjectionError("METADATA_SHAPE")
     if (
@@ -308,107 +314,88 @@ def _owner_agent_observation(
         observed_rules = None
         metadata_warnings.append(_projection_reason(error.reason))
     definition = version.get("definition")
-    if (
-        type(definition) is not dict
-        or type(definition.get("kind")) is not str
-        or definition.get("kind") != "prompt"
-    ):
-        raise ProjectionError("DEFINITION_KIND")
-    model = _projection_identifier(definition.get("model"), binding, "MODEL_IDENTIFIER")
+    if type(definition) is not dict or definition.get("kind") != "prompt":
+        metadata_warnings.append("DEFINITION_KIND")
+        definition = {}
+
+    def optional_identifier(value: object, reason: str) -> str | None:
+        try:
+            return _projection_identifier(value, binding, reason)
+        except ProjectionError:
+            metadata_warnings.append(reason)
+            return None
+
+    model = optional_identifier(definition.get("model"), "MODEL_IDENTIFIER")
     tools = definition.get("tools")
-    if type(tools) is not list or not 1 <= len(tools) <= binding.max_projection_items:
-        raise ProjectionError("TOOLS_BINDING")
-    safe_tools: list[dict[str, Any]] = []
+    safe_tools: list[dict[str, Any]] | None = None
     search_origins: list[str] = []
-    for tool in tools:
-        if type(tool) is not dict:
-            raise ProjectionError("TOOL_TYPE")
-        kind = _projection_identifier(tool.get("type"), binding, "TOOL_TYPE")
-        safe: dict[str, Any] = {"type": kind}
-        if kind == "mcp":
-            server = tool.get("server_url")
-            if type(server) is not str:
-                raise ProjectionError("MCP_LOCATION")
-            try:
-                parsed = urlparse(server)
-                invalid = (
-                    parsed.scheme != "https"
-                    or parsed.hostname is None
-                    or not re.fullmatch(
-                        r"[a-z0-9][a-z0-9-]*\.search\.windows\.net", parsed.hostname
-                    )
-                    or parsed.port not in {None, 443}
-                    or parsed.username is not None
-                    or parsed.password is not None
-                    or parsed.fragment
-                    or parsed.path
-                    not in {
-                        f"/knowledgebases/{binding.knowledge_base}/mcp",
-                        f"/knowledgebases('{binding.knowledge_base}')/mcp",
-                    }
-                    or (
-                        parsed.query
-                        and re.fullmatch(r"api-version=[A-Za-z0-9-]+", parsed.query)
-                        is None
-                    )
-                )
-            except ValueError:
-                raise ProjectionError("MCP_LOCATION") from None
-            if invalid:
-                raise ProjectionError("MCP_LOCATION")
-            origin = "https://" + cast(str, parsed.hostname)
-            search_origins.append(origin)
-            safe["serverLabel"] = _projection_identifier(
-                tool.get("server_label"), binding, "MCP_LABEL"
-            )
-            allowed = tool.get("allowed_tools")
-            if type(allowed) is dict:
-                if "read_only" in allowed:
-                    if type(allowed["read_only"]) is not bool:
-                        raise ProjectionError("MCP_FILTER_READ_ONLY")
-                    safe["readOnly"] = allowed["read_only"]
+    invalid_search_location = False
+    if type(tools) is not list or len(tools) > binding.max_projection_items:
+        metadata_warnings.append("TOOLS_BINDING")
+    else:
+        safe_tools = []
+        for tool in tools:
+            if type(tool) is not dict:
+                metadata_warnings.append("TOOL_TYPE")
+                safe_tools.append({"type": None})
+                continue
+            kind = optional_identifier(tool.get("type"), "TOOL_TYPE")
+            safe: dict[str, Any] = {"type": kind}
+            if kind == "mcp":
+                # This location alone can authorize the separately confirmed
+                # read. Optional labels/filters never qualify tool execution.
+                origin = _owner_search_origin(tool.get("server_url"), binding)
+                if origin is None:
+                    invalid_search_location = True
+                    metadata_warnings.append("MCP_LOCATION")
                 else:
-                    safe["readOnly"] = None
-                allowed = allowed.get("tool_names")
-            if (
-                type(allowed) is not list
-                or not 1 <= len(allowed) <= binding.max_projection_items
-                or any(
-                    type(value) is not str or value != "knowledge_base_retrieve"
-                    for value in allowed
+                    search_origins.append(origin)
+                safe["serverLabel"] = optional_identifier(
+                    tool.get("server_label"), "MCP_LABEL"
                 )
-                or len(set(allowed)) != len(allowed)
-            ):
-                raise ProjectionError("MCP_ALLOWED_TOOLS")
-            safe["allowedTools"] = ["knowledge_base_retrieve"]
-        safe_tools.append(safe)
-    if len(search_origins) != 1:
-        raise ProjectionError("MCP_SOURCE_COUNT")
+                allowed = tool.get("allowed_tools")
+                names = allowed
+                if type(allowed) is dict:
+                    read_only = allowed.get("read_only")
+                    safe["readOnly"] = read_only if type(read_only) is bool else None
+                    if read_only is not None and type(read_only) is not bool:
+                        metadata_warnings.append("MCP_FILTER_READ_ONLY")
+                    names = allowed.get("tool_names")
+                if names is None:
+                    safe["allowedTools"] = None
+                elif (type(names) is list and len(names) <= binding.max_projection_items
+                      and all(type(value) is str and value == "knowledge_base_retrieve"
+                              for value in names) and len(set(names)) == len(names)):
+                    safe["allowedTools"] = names[:]
+                else:
+                    safe["allowedTools"] = None
+                    metadata_warnings.append("MCP_ALLOWED_TOOLS")
+            safe_tools.append(safe)
+    search_origin = (
+        search_origins[0]
+        if len(search_origins) == 1 and not invalid_search_location
+        else None
+    )
+    if search_origin is None:
+        metadata_warnings.append("MCP_SOURCE_COUNT")
     instructions = definition.get("instructions")
-    if instructions is not None and type(instructions) is not str:
-        raise ProjectionError("INSTRUCTIONS_SHAPE")
+    instruction_bytes: int | None = None
     try:
+        if instructions is not None and type(instructions) is not str:
+            raise ValueError
         instruction_bytes = _instruction_bytes(instructions)
-    except UnicodeError:
-        raise ProjectionError("INSTRUCTIONS_SHAPE") from None
-    if any(
-        key in definition and not _projection_json_shape(definition[key])
-        for key in ("response_format", "text")
-    ):
-        raise ProjectionError("RESPONSE_CONFIGURATION")
-    try:
-        response_bytes = {
-            key: len(
-                json.dumps(definition[key], ensure_ascii=False, allow_nan=False).encode(
-                    "utf-8"
-                )
-            )
-            if key in definition
-            else None
-            for key in ("response_format", "text")
-        }
-    except (ValueError, TypeError, UnicodeError):
-        raise ProjectionError("RESPONSE_CONFIGURATION") from None
+    except (ValueError, UnicodeError):
+        metadata_warnings.append("INSTRUCTIONS_SHAPE")
+    response_bytes: dict[str, int | None] = {}
+    for key in ("response_format", "text"):
+        response_bytes[key] = None
+        if key in definition and definition[key] is not None:
+            try:
+                response_bytes[key] = len(json.dumps(
+                    definition[key], ensure_ascii=False, allow_nan=False
+                ).encode("utf-8"))
+            except (ValueError, TypeError, UnicodeError):
+                metadata_warnings.append("RESPONSE_CONFIGURATION")
     return {
         "agent": binding.agent_name,
         "observedVersion": binding.agent_version,
@@ -416,10 +403,129 @@ def _owner_agent_observation(
         "storedInstructionUtf8Bytes": instruction_bytes,
         "responseConfigurationUtf8Bytes": response_bytes,
         "observedEndpointSelector": observed_rules,
-        **({"metadataWarnings": metadata_warnings} if metadata_warnings else {}),
+        **({"metadataWarnings": sorted(set(metadata_warnings))} if metadata_warnings else {}),
         "tools": safe_tools,
-        "searchOrigin": search_origins[0],
-    }, search_origins[0]
+        "searchOrigin": search_origin,
+    }, search_origin
+
+
+def _owner_search_origin(value: object, binding: MetadataProjectionBinding) -> str | None:
+    """Safe destination for one fixed KB read, never generic MCP execution."""
+    if type(value) is not str or any(ord(char) <= 32 or ord(char) == 127 for char in value):
+        return None
+    try:
+        parsed = urlparse(value)
+        if (parsed.scheme != "https" or parsed.hostname is None
+                or not re.fullmatch(r"[a-z0-9][a-z0-9-]*\.search\.windows\.net", parsed.hostname)
+                or parsed.port not in {None, 443} or parsed.username is not None
+                or parsed.password is not None or parsed.fragment
+                or parsed.path not in {
+                    f"/knowledgebases/{binding.knowledge_base}/mcp",
+                    f"/knowledgebases('{binding.knowledge_base}')/mcp",
+                }
+                or (parsed.query and re.fullmatch(r"api-version=[A-Za-z0-9-]+", parsed.query)
+                    is None)):
+            return None
+        return "https://" + parsed.hostname
+    except ValueError:
+        return None
+
+
+def _owner_knowledge_observation(
+    knowledge: dict[str, Any] | None, binding: MetadataProjectionBinding
+) -> dict[str, Any]:
+    """Display observations only; no retrieval/model or cost qualification."""
+    result: dict[str, Any] = {
+        "knowledgeBase": binding.knowledge_base,
+        "retrievalInstructionUtf8Bytes": None, "answerInstructionUtf8Bytes": None,
+        "outputMode": None, "retrievalReasoningEffort": None, "models": None,
+        "knowledgeSourceCount": None, "knowledgeSourceMaxSubQueries": None,
+        "retrieveDefaults": None, "numericCaps": None, "allInCostBound": "UNKNOWN",
+    }
+    warnings: list[str] = []
+    if knowledge is None:
+        result["knowledgeMetadataWarnings"] = ["KNOWLEDGE_NOT_OBSERVED"]
+        return result
+    if not _projection_json_shape(knowledge) or type(knowledge) is not dict:
+        raise ProjectionError("METADATA_SHAPE")
+    if type(knowledge.get("name")) is not str or knowledge.get("name") != binding.knowledge_base:
+        raise ProjectionError("IDENTITY")
+    for source, target in (("retrievalInstructions", "retrievalInstructionUtf8Bytes"),
+                           ("answerInstructions", "answerInstructionUtf8Bytes")):
+        try:
+            result[target] = _instruction_bytes(knowledge.get(source))
+        except (ProviderConfigurationError, UnicodeError):
+            warnings.append("INSTRUCTIONS_SHAPE")
+    output = knowledge.get("outputMode")
+    if type(output) is str and output in {"extractiveData", "answerSynthesis"}:
+        result["outputMode"] = output
+    elif output is not None:
+        warnings.append("KNOWLEDGE_OUTPUT_MODE")
+    reasoning = knowledge.get("retrievalReasoningEffort")
+    effort = reasoning.get("kind") if type(reasoning) is dict else None
+    if type(effort) is str and effort in {"minimal", "low", "medium", "auto"}:
+        result["retrievalReasoningEffort"] = effort
+    elif reasoning is not None:
+        warnings.append("KNOWLEDGE_REASONING")
+    models = knowledge.get("models")
+    if type(models) is list and len(models) <= binding.max_projection_items:
+        observed_models: list[dict[str, str]] = []
+        try:
+            for model in models:
+                parameters = model.get("azureOpenAIParameters") if type(model) is dict else None
+                if type(parameters) is not dict or model.get("kind") != "azureOpenAI":
+                    raise ProjectionError("KNOWLEDGE_MODELS")
+                observed_models.append({
+                    "kind": "azureOpenAI",
+                    "modelName": _projection_identifier(parameters.get("modelName"), binding,
+                                                        "KNOWLEDGE_MODELS"),
+                    "deploymentId": _projection_identifier(parameters.get("deploymentId"), binding,
+                                                           "KNOWLEDGE_MODELS"),
+                })
+            result["models"] = observed_models
+        except ProjectionError:
+            warnings.append("KNOWLEDGE_MODELS")
+    elif models is not None:
+        warnings.append("KNOWLEDGE_MODELS")
+    sources = knowledge.get("knowledgeSources")
+    if type(sources) is list and len(sources) <= binding.max_projection_items:
+        caps: list[int | None] = []
+        valid = True
+        for source in sources:
+            if type(source) is not dict:
+                valid = False
+                break
+            cap = source.get("maxSubQueries")
+            if cap is not None and (type(cap) is not int or cap < 0):
+                warnings.append("KNOWLEDGE_SOURCE_CAP")
+                cap = None
+            caps.append(cap)
+        if valid:
+            result.update(knowledgeSourceCount=len(sources), knowledgeSourceMaxSubQueries=caps)
+        else:
+            warnings.append("KNOWLEDGE_SOURCES")
+    elif sources is not None:
+        warnings.append("KNOWLEDGE_SOURCES")
+    defaults = knowledge.get("retrieveDefaults")
+    if type(defaults) is dict:
+        safe_defaults: dict[str, int | float] = {}
+        for key in ("maxRuntimeInSeconds", "maxOutputSize", "maxOutputTokens"):
+            value = defaults.get(key)
+            if value is not None:
+                try:
+                    valid = type(value) in {int, float} and math.isfinite(value) and value > 0
+                except OverflowError:
+                    valid = False
+                if valid:
+                    safe_defaults[key] = value
+                else:
+                    warnings.append("KNOWLEDGE_DEFAULTS")
+        result.update(retrieveDefaults=safe_defaults, numericCaps=safe_defaults or None)
+    elif defaults is not None:
+        warnings.append("KNOWLEDGE_DEFAULTS")
+    if warnings:
+        result["knowledgeMetadataWarnings"] = sorted(set(warnings))
+    return result
 
 
 def _knowledge_observation(
