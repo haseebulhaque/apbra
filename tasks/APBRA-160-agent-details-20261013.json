@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-AGENT-DETAILS-20261013",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Correct optional selector observations and show bounded non-secret Azure agent details from effective Tenant Settings in Tenant Administration.",
+  "requirements": [
+    "Authenticated owner delegation on 13 October 2026 authorizes this single existing APBRA-160 correction and settings integration through MVP completion. Jira PLAN10849. Preserve accepted historical source bindings; current owner instruction supplements them.",
+    "Optional selector, model, tools and instruction metadata is informational. Unsafe or unknown observations emit finite safe warnings, never raw values or a connection veto. Preserve strict resource identity, tenant routing, Entra authentication and secret boundaries.",
+    "Agent details use the effective selected-company Tenant Settings provider profile and explicit optional configured agent_version. No fixed version6, provider substitution, inferred latest or selector-driven routing. Missing version remains unknown; retrieve only the configured agent and explicitly configured version.",
+    "Provide an explicit admin-only read-only metadata action through existing backend/UI. No startup/background sign-in, browser credential collection, paid model/Search/retrieve/report calls or runtime activation. The owner performs authentication; existing scoped host capability is required.",
+    "Use existing configured call/time/size limits; no new commercial or numerical default. A$10 total October cap, unknown current spending and full-chain reserves remain closed paid-call gates. Preserve report reasoning/layout/instructions/RAG with Foundry agent.",
+    "Register this exact combined finite increment; historical registrations/source/task files remain unchanged. Fresh independent exact-head review, full checks, required CI and authorized normal merge precede release."
+  ],
+  "adrs": [
+    "Use existing Tenant Settings, injected Entra capability, and admin UI; no parallel implementation or private container inspection. Metadata observation remains separate from runtime/report qualification."
+  ],
+  "architecture_refs": [
+    "Released PR153 fc5315557422ba9c3a71494a8b1c01352ddeb121 and PR154 c2b0ed29f1d03be52498464b2a2d768b08770b8f; owner selector rejection is formatting only, not identity mismatch."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/foundry_metadata_projection.py",
+    "apps/api/tests/test_foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/foundry_agent_details.py",
+    "apps/api/tests/test_foundry_agent_details.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/tests/test_tenant_settings.py",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/api.ts",
+    "apps/web/src/api.test.ts",
+    "tasks/APBRA-160-agent-details-20261013.json",
+    "scripts/check_agent_details_20261013.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "apps/web/e2e/tenant-settings.spec.ts"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Malformed informational selectors return unknown with finite warnings; strict identity/security checks and frozen historical projectors remain intact.",
+    "Admin metadata action uses selected-company saved profile and optional configured version; no GET target from response selector, caller supplied tenant/endpoint or fabricated version.",
+    "No raw metadata, instructions, tokens, private Search origins or exception values enter responses/logs. Optional metadata unknowns do not block connection.",
+    "Role/session/company isolation, context changes, no-store responses, bounded response/time/call limits and no redirects/retries are tested. UI displays actual observations and unknown/warning states separately from configured settings and auth readiness."
+  ],
+  "verification_required": [
+    "Focused offline synthetic regressions, profile/API/UI tests, strict mypy/Ruff/TypeScript/build, bootstrap/CI policy, tracked/history secret scans, full applicable regression suites, fresh independent exact-head review and required hosted CI.",
+    "No live Azure/report success claimed from offline evidence; no tool sign-in, owner terminal or secret configuration inspection."
+  ],
+  "out_of_scope": [
+    "Paid calls, cloud auth by tools, credential-bearing container inspection, token handoff, preview activation, hosting/173B, old PR125/126, report business policy changes, permission changes, force push or approval bypass."
+  ],
+  "escalate_when": [
+    "A required action is denied, source identity/privacy/isolation checks fail, new costs/consent/access are required, or required exact-head checks/review are absent. Stop the denied action."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "c2b0ed29f1d03be52498464b2a2d768b08770b8f",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-selector-settings",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Exact combined sixteen-path registration and product correction under direct owner delegation and PLAN10849; no historical authority rewrite. Independent exact-head review/full checks/required CI/authorized normal merge before release; no live activation.",
+  "dependencies": [
+    "Current main c2b0ed29f1d03be52498464b2a2d768b08770b8f; preserved WIP and preview inspected without overwrite. Owner authentication/runtime and reconciled costs remain separate pending gates."
+  ]
+}

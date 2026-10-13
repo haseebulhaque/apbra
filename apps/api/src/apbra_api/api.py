@@ -56,6 +56,7 @@ from .domain import (
     Role,
 )
 from .evidence import LocalEvidenceStore
+from .foundry_agent_details import agent_details
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
 from .knowledge_documents import (
@@ -673,6 +674,27 @@ def create_app(
     def get_tenant_settings(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return settings_response(db, admin_settings(db, actor))
+
+    @app.get("/api/tenant-settings/agent-details")
+    def get_agent_details(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        snapshot = admin_settings(db, actor)
+        if request.query_params:
+            raise RequestValidationError([])
+        company_id, membership_id = actor.company_id, actor.membership_id
+        version_id = snapshot.id
+        profile = snapshot.settings.provider_profile
+        db.rollback()
+        details = agent_details(company_id, profile, foundry_credentials)
+        fresh_actor = resolve_actor(db, session_token)
+        fresh = admin_settings(db, fresh_actor)
+        if (fresh_actor.company_id != company_id or fresh_actor.membership_id != membership_id
+                or fresh.id != version_id):
+            raise ConfigurationUnavailable()
+        response.headers["Cache-Control"] = "no-store"
+        return {**details, "settings_version": snapshot.version}
 
     @app.get("/api/tenant-settings/history")
     def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:

@@ -105,3 +105,11 @@ describe('Local tenant document wire',()=>{
   await expect(knowledgeDocumentsApi.list('m')).rejects.toMatchObject({status:409,code:'KNOWLEDGE_CONTEXT_CHANGED'});
  });
 });
+
+it('reads agent metadata only through the selected tenant settings endpoint',async()=>{
+ const fetch=vi.fn(async()=>response({status:'METADATA_UNAVAILABLE',settings_version:1,warnings:['ENTRA_AUTHENTICATION_UNAVAILABLE']}));vi.stubGlobal('fetch',fetch);
+ await tenantSettingsApi.agentDetails();
+ const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+ expect(calls[0][0]).toBe('/api/tenant-settings/agent-details');
+ expect(calls[0][1].credentials).toBe('same-origin');expect(calls[0][1].body).toBeUndefined();
+});

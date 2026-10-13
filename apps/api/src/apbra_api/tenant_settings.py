@@ -207,6 +207,7 @@ _QUALIFIED_IDENTITY_FIELDS = (
     "endpoint",
     "model_or_deployment",
     "api_version",
+    "agent_version",
     "region",
     "prompt_version",
     "configuration_id",
