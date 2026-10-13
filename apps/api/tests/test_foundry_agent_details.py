@@ -155,3 +155,56 @@ def test_optional_definition_metadata_stays_unknown_without_rejecting(definition
     assert result["status"] == "METADATA_OBSERVED_ONLY"
     assert result["modelDeployment"] is None and result["storedInstructionUtf8Bytes"] is None
     assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize("version", [".", ".."])
+def test_configured_version_cannot_be_a_dot_segment(version: str) -> None:
+    with pytest.raises(ValidationError):
+        profile(agent_version=version)
+
+
+@pytest.mark.parametrize("audience,lifetime", [("https://search.azure.com", 60),
+    ("https://ai.azure.com", 1)])
+def test_wrong_audience_or_insufficient_token_lifetime_stops_before_get(
+    audience: str, lifetime: int,
+) -> None:
+    configured = profile(agent_version="configured-version")
+    credential = Credentials(configured)
+    credential.access = replace(credential.access,
+        credential=lambda: FoundryBearer(CANARY, time.time() + lifetime, audience=audience))
+
+    def forbidden(request: httpx.Request) -> httpx.Response:
+        pytest.fail("Unqualified bearer must never reach HTTP")
+
+    result = agent_details(COMPANY, configured, credential,
+                           transport=httpx.MockTransport(forbidden))
+    assert result["status"] == "METADATA_UNAVAILABLE"
+    assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize("changed", ["deadline", "capability"])
+def test_credential_acquisition_cannot_outlive_metadata_authority(
+    monkeypatch: pytest.MonkeyPatch, changed: str,
+) -> None:
+    import apbra_api.foundry_agent_details as module
+
+    configured = profile(agent_version="configured-version")
+    credential = Credentials(configured)
+    clock = [0.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+
+    def acquire() -> FoundryBearer:
+        if changed == "deadline":
+            clock[0] = 11.0
+        else:
+            credential.enabled = False
+        return FoundryBearer(CANARY, time.time() + 60)
+
+    credential.access = replace(credential.access, credential=acquire)
+
+    def forbidden(request: httpx.Request) -> httpx.Response:
+        pytest.fail("Expired authority must never reach HTTP")
+
+    result = agent_details(COMPANY, configured, credential,
+                           transport=httpx.MockTransport(forbidden))
+    assert result["status"] == "METADATA_UNAVAILABLE"

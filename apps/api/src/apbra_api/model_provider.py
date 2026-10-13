@@ -596,6 +596,8 @@ class ProviderProfile(BaseModel):
     @model_validator(mode="after")
     def validate_endpoint(self) -> ProviderProfile:
         parsed = urlparse(self.endpoint)
+        if self.agent_version in {".", ".."}:
+            raise ValueError("agent version cannot be a dot path segment")
         if self.agent_version is not None and self.protocol != "FOUNDRY_AGENT_RESPONSES":
             raise ValueError("agent version requires an agent profile")
         if (

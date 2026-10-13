@@ -12,7 +12,7 @@ from uuid import UUID
 import httpx
 
 from .foundry_owner_metadata import _quiet_call
-from .model_provider import FoundryCredentialProvider, ProviderProfile
+from .model_provider import FoundryBearer, FoundryCredentialProvider, ProviderProfile
 
 
 def _identifier(value: object) -> str | None:
@@ -54,6 +54,7 @@ def agent_details(
     if credentials is None:
         result["warnings"] = ["ENTRA_AUTHENTICATION_UNAVAILABLE"]
         return result
+    deadline = time.monotonic() + profile.time_budget_seconds
     try:
         if credentials.ready(company_id, profile) is not True:
             raise ValueError("Capability unavailable")
@@ -70,15 +71,22 @@ def agent_details(
         if len(urls) > profile.max_calls_per_operation:
             result["warnings"] = ["METADATA_CALL_BUDGET_UNAVAILABLE"]
             return result
-        deadline = time.monotonic() + profile.time_budget_seconds
 
         def read(url: str) -> dict[str, Any]:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or credentials.ready(company_id, profile) is not True:
                 raise ValueError("Expired capability")
             bearer = _quiet_call(access.credential)
-            if (type(bearer.token) is not str or not bearer.token
-                    or not math.isfinite(bearer.expires_at) or bearer.expires_at <= time.time()):
+            if credentials.ready(company_id, profile) is not True:
+                raise ValueError("Capability changed during acquisition")
+            remaining = deadline - time.monotonic()
+            if (remaining <= 0 or type(bearer) is not FoundryBearer
+                    or type(bearer.token) is not str or not bearer.token
+                    or type(bearer.audience) is not str
+                    or bearer.audience != "https://ai.azure.com"
+                    or type(bearer.expires_at) not in {int, float}
+                    or not math.isfinite(bearer.expires_at)
+                    or bearer.expires_at <= time.time() + remaining):
                 raise ValueError("Expired bearer")
             raw = bytearray()
             try:
