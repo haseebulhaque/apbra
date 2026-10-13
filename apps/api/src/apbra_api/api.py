@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy import select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -57,6 +58,29 @@ from .domain import (
 from .evidence import LocalEvidenceStore
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
+from .knowledge_documents import (
+    DraftContext,
+    Kind,
+    KnowledgeDocumentsService,
+)
+from .knowledge_documents import (
+    authorize as authorize_documents,
+)
+from .knowledge_documents import (
+    canonical_uuid as document_uuid,
+)
+from .knowledge_documents import (
+    invalid as invalid_document_request,
+)
+from .knowledge_documents import (
+    parse_payload as parse_document_payload,
+)
+from .knowledge_documents import (
+    too_large as document_request_too_large,
+)
+from .knowledge_documents import (
+    unavailable as documents_unavailable,
+)
 from .model_provider import (
     FoundryAgentResponsesProvider,
     FoundryCredentialProvider,
@@ -414,6 +438,151 @@ def create_app(
         response.headers["Referrer-Policy"] = "no-referrer"
         response.delete_cookie(AUTH_BINDING_COOKIE, path="/api/auth/callback")
         return response
+
+    document_service = KnowledgeDocumentsService()
+    document_base = "/api/tenant-settings/knowledge-documents"
+
+    def document_read(
+        request: Request,
+        session_token: str | None,
+        operation: str,
+        document_id: str | None = None,
+        revision_id: str | None = None,
+        command_key: str | None = None,
+    ) -> Response:
+        try:
+            with database.session() as db:
+                context = authorize_documents(
+                    db,
+                    session_token,
+                    request.headers.get("X-Expected-Membership-Id"),
+                    capabilities=operation == "capabilities",
+                )
+                if request.query_params:
+                    raise invalid_document_request()
+                if operation == "capabilities":
+                    result = document_service.capabilities(context)
+                elif operation == "list":
+                    result = document_service.list(db, context)
+                elif operation == "reconcile":
+                    result = document_service.reconcile(db, context, document_uuid(command_key))
+                elif operation == "history":
+                    result = document_service.history(db, context, document_uuid(document_id))
+                elif operation == "original":
+                    result = document_service.original(
+                        db, context, document_uuid(document_id), document_uuid(revision_id)
+                    )
+                else:
+                    result = document_service.detail(db, context, document_uuid(document_id))
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    async def document_write(
+        request: Request,
+        session_token: str | None,
+        supplied_csrf: str | None,
+        kind: Kind,
+        document_id: str | None = None,
+    ) -> Response:
+        require_csrf(session_token, supplied_csrf)
+        expected = request.headers.get("X-Expected-Membership-Id")
+
+        def preflight() -> DraftContext:
+            with database.session() as db:
+                return authorize_documents(db, session_token, expected)
+
+        try:
+            initial = await run_in_threadpool(preflight)
+            if request.query_params:
+                raise invalid_document_request()
+            key = document_uuid(request.headers.get("Idempotency-Key"))
+            identifier = None if kind == "CREATE" else document_uuid(document_id)
+            content_type = request.headers.get("Content-Type", "").lower().replace(" ", "")
+            if content_type not in {"application/json", "application/json;charset=utf-8"}:
+                raise invalid_document_request()
+            raw = bytearray()
+            async for chunk in request.stream():
+                if len(raw) + len(chunk) > initial.maximum_request_bytes:
+                    raise document_request_too_large()
+                raw.extend(chunk)
+            payload = parse_document_payload(bytes(raw), kind)
+
+            def save() -> dict[str, Any]:
+                with database.session() as db:
+                    context = authorize_documents(db, session_token, expected, initial=initial)
+                    if len(raw) > context.maximum_request_bytes:
+                        raise document_request_too_large()
+                    return document_service.apply(db, context, kind, key, identifier, payload)
+
+            result = await run_in_threadpool(save)
+            return JSONResponse(
+                result,
+                status_code=201 if result["disposition"] == "APPLIED" else 200,
+                headers={"Cache-Control": "no-store"},
+            )
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    @app.get(document_base + "/capabilities")
+    def knowledge_capabilities(request: Request, session_token: SessionCookie = None) -> Response:
+        return document_read(request, session_token, "capabilities")
+
+    @app.get(document_base)
+    def knowledge_documents(request: Request, session_token: SessionCookie = None) -> Response:
+        return document_read(request, session_token, "list")
+
+    @app.post(document_base)
+    async def knowledge_create(
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await document_write(request, session_token, supplied_csrf, "CREATE")
+
+    @app.get(document_base + "/commands/{command_key}")
+    def knowledge_reconcile(
+        command_key: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        return document_read(request, session_token, "reconcile", command_key=command_key)
+
+    @app.get(document_base + "/{document_id}")
+    def knowledge_detail(
+        document_id: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        return document_read(request, session_token, "detail", document_id=document_id)
+
+    @app.post(document_base + "/{document_id}/revisions")
+    async def knowledge_revision(
+        document_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await document_write(request, session_token, supplied_csrf, "REVISION", document_id)
+
+    @app.post(document_base + "/{document_id}/archive")
+    async def knowledge_archive(
+        document_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await document_write(request, session_token, supplied_csrf, "ARCHIVE", document_id)
+
+    @app.get(document_base + "/{document_id}/history")
+    def knowledge_history(
+        document_id: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        return document_read(request, session_token, "history", document_id=document_id)
+
+    @app.get(document_base + "/{document_id}/revisions/{revision_id}/original")
+    def knowledge_original(
+        document_id: str, revision_id: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        return document_read(
+            request, session_token, "original", document_id=document_id, revision_id=revision_id
+        )
 
     @app.exception_handler(ApplicationError)
     async def handle_application_error(request: Request, exc: ApplicationError) -> Response:

@@ -79,6 +79,27 @@ export const tenantSettingsApi={
   restore:(sourceVersion:number,expectedVersion:number,csrfToken:string)=>request<TenantSettingsVersion>('/api/tenant-settings/restore',{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({source_version:sourceVersion,expected_version:expectedVersion,confirm_consequences:true})}),
   replaceCredential:(newCredential:string,expectedVersion:number,csrfToken:string)=>request<TenantSettingsVersion>('/api/tenant-settings/credential',{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({new_credential:newCredential,expected_version:expectedVersion,confirm_disruption:true})}),
 };
+export type KnowledgeOriginalDraft={title:string;source_version:string;text:string};
+export type KnowledgeCapabilities={company_id:string;membership_id:string;maximum_request_bytes:number;storage:'LOCAL_DRAFT_DATABASE';provider_write_outcome:'NOT_SENT';indexed:false;used_by_ai:false};
+export type KnowledgeRevision={revision_id:string;predecessor_revision_id:string|null;title:string;source_version:string;text_sha256:string;text_byte_count:number;created_at:string;local_state:'LOCAL_DRAFT'|'LOCAL_ARCHIVAL_REQUESTED';provider_write_outcome:'NOT_SENT';used_by_ai:false};
+export type KnowledgeDocument={company_id:string;document_id:string;current_revision_id:string|null;current_operation_id:string|null;current_revision:KnowledgeRevision|null;local_state:'LOCAL_DRAFT'|'LOCAL_ARCHIVAL_REQUESTED';provider_write_outcome:'NOT_SENT';used_by_ai:false};
+export type KnowledgeCommand={command_key:string;operation_id:string;document_id:string;kind:'CREATE'|'REVISION'|'ARCHIVE';target_revision_id:string;expected_current_revision_id:string|null;created_at:string;provider_write_outcome:'NOT_SENT'};
+export type KnowledgeCommandEnvelope={company_id:string;disposition:'APPLIED'|'REPLAY';command:KnowledgeCommand;document:KnowledgeDocument};
+export type KnowledgeReconciliation={company_id:string;reconciliation:'COMMITTED'|'NOT_OBSERVED';command:KnowledgeCommand|null;document:KnowledgeDocument|null};
+export type KnowledgeHistory={company_id:string;document:KnowledgeDocument;revisions:KnowledgeRevision[];operations:KnowledgeCommand[]};
+export type KnowledgeOriginal=KnowledgeOriginalDraft&{company_id:string;document_id:string;revision_id:string;text_sha256:string;text_byte_count:number;created_at:string};
+const knowledgePath='/api/tenant-settings/knowledge-documents';
+const knowledgeHeaders=(membershipId:string)=>({'X-Expected-Membership-Id':membershipId});
+export const knowledgeDocumentsApi={
+  capabilities:()=>request<KnowledgeCapabilities>(`${knowledgePath}/capabilities`),
+  list:(membershipId:string)=>request<{company_id:string;items:KnowledgeDocument[]}>(knowledgePath,{headers:knowledgeHeaders(membershipId)}),
+  context:(id:string,membershipId:string)=>request<KnowledgeDocument>(`${knowledgePath}/${encodeURIComponent(id)}`,{headers:knowledgeHeaders(membershipId)}),
+  history:(id:string,membershipId:string)=>request<KnowledgeHistory>(`${knowledgePath}/${encodeURIComponent(id)}/history`,{headers:knowledgeHeaders(membershipId)}),
+  original:(id:string,revisionId:string,membershipId:string)=>request<KnowledgeOriginal>(`${knowledgePath}/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revisionId)}/original`,{headers:knowledgeHeaders(membershipId)}),
+  reconcile:(key:string,membershipId:string)=>request<KnowledgeReconciliation>(`${knowledgePath}/commands/${encodeURIComponent(key)}`,{headers:knowledgeHeaders(membershipId)}),
+  // The caller freezes this selected request JSON once per intent; retry uses the exact same body/key.
+  submit:(kind:KnowledgeCommand['kind'],id:string|null,body:string,key:string,membershipId:string,csrfToken:string)=>request<KnowledgeCommandEnvelope>(kind==='CREATE'?knowledgePath:`${knowledgePath}/${encodeURIComponent(id!)}/${kind==='REVISION'?'revisions':'archive'}`,{method:'POST',headers:{...knowledgeHeaders(membershipId),...csrfHeaders(csrfToken),'Idempotency-Key':key},body}),
+};
 export const casesApi={
   list:()=>request<{items:CaseSummary[]}>('/api/cases'),
   get:(caseId:string)=>request<{case:CaseRecord}>(`/api/cases/${encodeURIComponent(caseId)}`).then(value=>value.case),

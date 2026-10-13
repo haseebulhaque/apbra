@@ -24,6 +24,18 @@ from apbra_api.persistence import (
 )
 
 
+@pytest.fixture(autouse=True)
+def historical_migration_checkpoint(
+    request: pytest.FixtureRequest, settings: Settings, database: Database
+) -> None:
+    # Original migration assertions remain at their reviewed08 checkpoint.
+    # New09 tests separately prove the current full schema and retained drafts.
+    if (
+        request.node.name != "test_clean_upgrade_head_and_recovery"
+        and not request.node.name.startswith("test_knowledge_drafts_")
+    ):
+        command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
+
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
     inspector = inspect(database.engine)
     assert {
@@ -48,7 +60,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
@@ -73,7 +85,7 @@ def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
     assert "company_creation_commands" not in inspect(database.engine).get_table_names()
     with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261002_07"
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261003_08")
     with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
         for table, query in count_queries.items():
@@ -177,7 +189,7 @@ def test_provider_binding_migration_preserves_legacy_identity_and_round_trips(
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "20261001_06")
     assert "authentication_events" not in inspect(database.engine).get_table_names()
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261003_08")
     with database.session() as db:
         assert (
             db.scalar(
@@ -393,7 +405,7 @@ def test_package_c_to_reviewed_design_upgrade_is_isolated(
         assert historical.status == "SUCCEEDED"
         assert str(historical.artifact_id) == original["artifact"]["id"]
         assert historical.reviewed_design_id is None
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261003_08")
     with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261003_08"
     # The deliberate downgrade removed the new tenant-settings tables. Re-seed
@@ -412,7 +424,7 @@ def test_first_migration_downgrades_and_reapplies_explicit_schema(
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "base")
     assert "reporting_cases" not in inspect(database.engine).get_table_names()
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261003_08")
     assert "reporting_cases" in inspect(database.engine).get_table_names()
 
 
@@ -563,3 +575,112 @@ def test_composite_foreign_key_rejects_cross_company_private_access(
             )
             == 0
         )
+
+
+def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
+    settings: Settings, database: Database
+) -> None:
+    config = disposable_alembic_config(settings.database_url)
+    with database.session() as db:
+        queries = {
+            "companies": text("SELECT count(*) FROM companies"),
+            "memberships": text("SELECT count(*) FROM memberships"),
+            "external_identities": text("SELECT count(*) FROM external_identities"),
+            "tenant_settings_versions": text("SELECT count(*) FROM tenant_settings_versions"),
+            "application_sessions": text("SELECT count(*) FROM application_sessions"),
+        }
+        before = {table: db.scalar(query) for table, query in queries.items()}
+    command.downgrade(config, "20261003_08")
+    assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
+    command.upgrade(config, "head")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
+        assert {table: db.scalar(query) for table, query in queries.items()} == before
+
+
+def test_knowledge_drafts_populated_downgrade_preserves_original_history(
+    settings: Settings, database: Database
+) -> None:
+    client = TestClient(create_app(settings=settings, database=database))
+    session = sign_in(client)
+    caps = client.get("/api/tenant-settings/knowledge-documents/capabilities").json()
+    headers = {
+        **csrf(session),
+        "X-Expected-Membership-Id": caps["membership_id"],
+        "Idempotency-Key": str(uuid4()),
+    }
+    result = client.post(
+        "/api/tenant-settings/knowledge-documents",
+        headers=headers,
+        json={"title": "\x00", "source_version": "opaque\x00", "text": "\ufefforiginal\r\n\x00"},
+    )
+    assert result.status_code == 201, result.text
+    with database.session() as db:
+        before = db.execute(
+            text(
+                "SELECT id,title_original,source_version_original,text_original "
+                "FROM tenant_knowledge_revisions"
+            )
+        ).all()
+    with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
+        command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
+        assert (
+            db.execute(
+                text(
+                    "SELECT id,title_original,source_version_original,text_original "
+                "FROM tenant_knowledge_revisions"
+                )
+            ).all()
+            == before
+        )
+        assert db.scalar(text("SELECT count(*) FROM tenant_knowledge_commands")) == 1
+    assert {
+        "tenant_knowledge_documents",
+        "tenant_knowledge_revisions",
+        "tenant_knowledge_commands",
+    }.issubset(inspect(database.engine).get_table_names())
+
+
+
+@pytest.mark.parametrize(
+    "populated",
+    ["tenant_knowledge_documents", "tenant_knowledge_revisions", "tenant_knowledge_commands"],
+)
+def test_knowledge_drafts_guard_checks_every_table_before_ddl(
+    monkeypatch: pytest.MonkeyPatch, populated: str
+) -> None:
+    import importlib.util
+    from pathlib import Path
+
+    path = Path("alembic/versions/20261013_09_tenant_knowledge_drafts.py")
+    spec = importlib.util.spec_from_file_location("knowledge_drafts_migration_guard_probe", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    queries = []
+
+    class Result:
+        def __init__(self, exists):
+            self.exists = exists
+
+        def first(self):
+            return (1,) if self.exists else None
+
+    class Connection:
+        def execute(self, query):
+            sql = str(query)
+            queries.append(sql)
+            return Result(sql.startswith("SELECT") and populated in sql)
+
+    monkeypatch.setattr(module.op, "get_bind", lambda: Connection())
+
+    def ddl_forbidden(*args, **kwargs):
+        raise AssertionError("DDL_BEFORE_POPULATED_GUARD")
+
+    for action in ("drop_constraint", "drop_table", "execute"):
+        monkeypatch.setattr(module.op, action, ddl_forbidden)
+    with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
+        module.downgrade()
+    assert any(populated in query and query.startswith("SELECT") for query in queries)
