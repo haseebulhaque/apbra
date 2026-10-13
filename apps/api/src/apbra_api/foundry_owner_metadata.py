@@ -106,6 +106,55 @@ def _device_credential(**kwargs: Any) -> _DeviceCredential:
     return DeviceCodeCredential(**kwargs)
 
 
+def _browser_credential(**kwargs: Any) -> _DeviceCredential:
+    """Explicit browser route; memory cache and owned temporary callback servers.
+
+    SDK 1.26 can fail before its redirect wait closes the listener. Track only
+    servers created by this credential and close them even on pre-wait errors.
+    The existing SDK owns PKCE/state/redirect validation, never this adapter.
+    """
+    from azure.identity import InteractiveBrowserCredential
+    from azure.identity._internal.auth_code_redirect_handler import AuthCodeRedirectServer
+
+    kwargs.pop("prompt_callback", None)  # Device-code-only callback; no fallback.
+    servers: list[AuthCodeRedirectServer] = []
+
+    class OwnedRedirectServer(AuthCodeRedirectServer):
+        def __init__(self, hostname: str, port: int, timeout: int) -> None:
+            super().__init__(hostname, port, timeout)
+            servers.append(self)
+
+    sdk = InteractiveBrowserCredential(_server_class=OwnedRedirectServer, **kwargs)
+
+    def close_servers() -> None:
+        # Quiet SDK calls serialize authentication and credential cleanup.
+        # Keep ownership until every close succeeds; failures remain unavailable.
+        for server in servers:
+            server.server_close()
+        servers.clear()
+
+    class BrowserCredential:
+        def authenticate(self, *, scopes: list[str]) -> _AuthenticationRecord:
+            try:
+                return sdk.authenticate(scopes=scopes)
+            finally:
+                close_servers()
+
+        def get_token(self, *scopes: str) -> FoundryAccessToken:
+            try:
+                return sdk.get_token(*scopes)
+            finally:
+                close_servers()
+
+        def close(self) -> None:
+            try:
+                close_servers()
+            finally:
+                sdk.close()
+
+    return BrowserCredential()
+
+
 @contextmanager
 def _private_sdk_logging() -> Iterator[None]:
     # The explicit CLI has not started an application or server yet. SDK warning
@@ -1306,7 +1355,7 @@ def run_owner_metadata(
                 network_timeout = min(remaining, binding.request_timeout_seconds)
                 mark("SDK_CONSTRUCTION", "SDK_CONSTRUCTION_FAILED")
                 sdk = _quiet_call(
-                    credential_factory or _device_credential,
+                    credential_factory or _browser_credential,
                     tenant_id=binding.tenant_id,
                     client_id=binding.client_id,
                     authority="login.microsoftonline.com",
