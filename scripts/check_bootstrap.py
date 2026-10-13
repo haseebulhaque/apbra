@@ -20,6 +20,7 @@ r=runpy.run_path(str(Path(__file__).with_name("check_foundry_qualification_renew
 g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.py")))
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
+zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
 f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
@@ -964,8 +965,6 @@ DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
 DEMO_UX_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux-registration'
 DEMO_UX_VITE_ORIGINAL_SHA256 = 'dac004933ad7814f66e4ebaa2116867e151b396f60ef5d80d0a88bd786a8a320'
 DEMO_UX_VITE_PROXY_SHA256 = '9f0ec6501192d146afdea639aa0482cb836b6f2a6daf4dc333392dab606b319f'
-# A separate, source-only APBRA-160 amendment. Historical APBRA-173B rows
-# remain bound to their original packaging authority.
 CURRENT_DEMO_SOURCE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-current-source-alignment'
 CURRENT_DEMO_SOURCE_PATHS = {
     'docs/source-register.json',
@@ -1092,7 +1091,6 @@ def whole_tree_safe(path: str, bootstrap_task: dict,
     return False
 def schema_errors(schema: dict, value: object) -> list[str]:
     Draft202012Validator.check_schema(schema)
-# All current engineering schemas are self-contained: no remote resolution.
     def inspect(node):
         if isinstance(node, dict):
             for keyword in ('$ref', '$dynamicRef'):
@@ -1106,7 +1104,6 @@ def schema_errors(schema: dict, value: object) -> list[str]:
     inspect(schema)
     return [str(e.json_path) + ': ' + e.message for e in
  sorted(Draft202012Validator(schema, registry=Registry()).iter_errors(value), key=lambda e: e.json_path)]
-# Keep the historical validator body intact; only pure content errors are memoized.
 schema_errors = a['memo_schema_errors'](schema_errors)
 def catalog_errors(catalog: dict) -> list[str]:
     errors = []
@@ -1175,8 +1172,6 @@ def workflow_errors(text: str) -> list[str]:
                     errors.append('Action is not in the exact verified pin allow-list')
                 if step['uses'].startswith('actions/checkout@') and step.get('with', {}).get('persist-credentials') != 'false':
                     errors.append('Checkout credentials must not persist')
-# Match the secrets context as a token, including bracket notation. The old
-# substring test incorrectly rejected a harmless path such as scan_secrets.sh.
     if re.search(r'\bsecrets\s*(?:\.|\[)', text) or 'pull_request_target' in text:
         errors.append('Privileged trigger/secret reference prohibited')
     return errors
@@ -1274,11 +1269,9 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
  )
         workflow_text = workflow_bytes.decode('utf-8')
         if historical_capacity_fixture:
-# Validate digest-bound history with only the historical timeout normalized.
             workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
         errors += workflow_errors(workflow_text)
         card = next(c for c in catalog['cards'] if c['agent_id'] == task['assigned_agent'])
-# Explicitly bounded Capstone extensions, not arbitrary task discovery.
         shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
         shell_task = None
         if shell_path.exists():
@@ -2235,6 +2228,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         agent_details, e = n['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        metadata_observations, e = zz['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         owner_metadata, e = o['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
         raw_ingress, e = u['bind'](root, catalog, sources, bound_provider_registration)
@@ -2817,6 +2812,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (ai_layout, a['P']),
             (owner_metadata, o['P']),
             (agent_details, n['P']),
+            (metadata_observations, zz['P']),
             (raw_ingress, u['P']),
             (fixture_staging, f['P']),
             (knowledge_lifecycle, k['P']),
@@ -2831,6 +2827,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
  CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
  }
                 else agent_details if active_branch == n['B']
+                else metadata_observations if active_branch == zz['B']
                 else document_drafts if active_branch in {d['B'], d['R']}
                 else knowledge_lifecycle if active_branch in {k['B'], k['R']}
                 else fixture_staging if active_branch in {f['B'], f['R']}
@@ -3141,7 +3138,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(FOUNDRY_SCHEMA_PATHS) and
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
-                    not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P'])):
+                    not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P'])):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3154,7 +3152,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             if (active_task_id == 'APBRA-160' and
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
-                    not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P'])):
+                    not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P'])):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and

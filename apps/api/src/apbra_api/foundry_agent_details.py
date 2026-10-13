@@ -147,6 +147,11 @@ def agent_details(
                 if type(tools) is list:
                     result["toolTypes"] = sorted({kind for tool in tools if type(tool) is dict
                                                   if (kind := _identifier(tool.get("type")))})
+            if type(definition) is not dict or type(definition.get("tools")) is not list:
+                warnings.append("TOOL_METADATA_UNKNOWN")
+            elif any(type(tool) is not dict or _identifier(tool.get("type")) is None
+                     for tool in definition["tools"]):
+                warnings.append("TOOL_METADATA_UNKNOWN")
             if result["modelDeployment"] is None:
                 warnings.append("MODEL_METADATA_UNKNOWN")
             if result["storedInstructionUtf8Bytes"] is None:

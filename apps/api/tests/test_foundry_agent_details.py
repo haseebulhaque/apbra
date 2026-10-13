@@ -208,3 +208,22 @@ def test_credential_acquisition_cannot_outlive_metadata_authority(
     result = agent_details(COMPANY, configured, credential,
                            transport=httpx.MockTransport(forbidden))
     assert result["status"] == "METADATA_UNAVAILABLE"
+
+
+@pytest.mark.parametrize("tools", [None, "unknown", 42, {}, [None], [{}],
+                                 [{"type": CANARY + "\n"}]])
+def test_unknown_tool_metadata_warns_and_uses_only_saved_settings(tools: Any) -> None:
+    configured=profile(agent_version="configured-version")
+    responses=records()
+    responses[1]["definition"]["tools"]=tools
+    seen: list[str]=[]
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200,json=responses[len(seen)-1])
+    result=agent_details(COMPANY,configured,Credentials(configured),
+                         transport=httpx.MockTransport(handler))
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert result["toolTypes"] == []
+    assert "TOOL_METADATA_UNKNOWN" in result["warnings"]
+    assert CANARY not in json.dumps(result)
+    assert len(seen)==2

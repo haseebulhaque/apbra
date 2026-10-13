@@ -27,11 +27,13 @@ import httpx
 
 from .foundry_metadata_projection import (
     ProjectionError,
-    _knowledge_observation,
     _projection_reason,
 )
 from .foundry_metadata_projection import (
     _owner_agent_observation as _agent_observation,
+)
+from .foundry_metadata_projection import (
+    _owner_knowledge_observation as _knowledge_observation,
 )
 from .model_provider import FoundryAccessToken, ProviderConfigurationError
 
@@ -1430,29 +1432,31 @@ def run_owner_metadata(
                 projection_reason = "POST_PROJECTION_GUARD"
                 memory.guard()
                 projection_reason = None
-                mark("SEARCH_CONFIRMATION", "CONFIRMATION_FAILED")
-                _confirm_private(
-                    terminal,
-                    binding,
-                    "Confirm the exact existing Search origin: " + search_origin,
-                    "CONFIRM SEARCH",
-                )
-                memory.guard()
-                mark("SEARCH_BINDING", "QUALIFICATION_REJECTED")
-                memory.confirm_search(search_origin)
-                mark("SEARCH_TOKEN", "TOKEN_FAILED")
-                memory.acquire(_SEARCH_SCOPE)
-                mark("KNOWLEDGE_GET", "METADATA_GET_FAILED")
-                knowledge = memory.get(
-                    search_origin
-                    + "/knowledgebases('"
-                    + binding.knowledge_base
-                    + "')?api-version="
-                    + binding.search_api_version,
-                    _SEARCH_SCOPE,
-                    factory,
-                )
-                mark("KNOWLEDGE_PROJECTION", "PROJECTION_FAILED")
+                knowledge: dict[str, Any] | None = None
+                if search_origin is not None:
+                    mark("SEARCH_CONFIRMATION", "CONFIRMATION_FAILED")
+                    _confirm_private(
+                        terminal,
+                        binding,
+                        "Confirm the exact existing Search origin: " + search_origin,
+                        "CONFIRM SEARCH",
+                    )
+                    memory.guard()
+                    mark("SEARCH_BINDING", "QUALIFICATION_REJECTED")
+                    memory.confirm_search(search_origin)
+                    mark("SEARCH_TOKEN", "TOKEN_FAILED")
+                    memory.acquire(_SEARCH_SCOPE)
+                    mark("KNOWLEDGE_GET", "METADATA_GET_FAILED")
+                    knowledge = memory.get(
+                        search_origin
+                        + "/knowledgebases('"
+                        + binding.knowledge_base
+                        + "')?api-version="
+                        + binding.search_api_version,
+                        _SEARCH_SCOPE,
+                        factory,
+                    )
+                    mark("KNOWLEDGE_PROJECTION", "PROJECTION_FAILED")
                 result = {
                     "status": "METADATA_OBSERVED_ONLY",
                     "project": "s08-cloud-ai-agent",

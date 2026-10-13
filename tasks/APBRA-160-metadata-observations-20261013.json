@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-METADATA-OBSERVATIONS-20261013",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Comprehensive informational owner metadata observation correction after MCP_ALLOWED_TOOLS, preserving invocation authority and Tenant Settings.",
+  "requirements": [
+    "Direct authenticated owner delegation13October2026 and JiraPLAN10851 authorize the sameAPBRA160 comprehensive metadata correction through acceptedMVP completion. Preserve historical task/source authority.",
+    "All optional agent/knowledge metadata variants, omissions and unfamiliar shapes return bounded observations/nulls/finite warnings. Documented MCP allowed_tools list/filter/null and optionaltool_names/read_only never qualify execution permissions.",
+    "Required resource identity, JSON-native/transport/byte/time/account/audience/tenant/secret/cleanup controls remain. Unknown or ambiguous Search destinations produce agent-only metadata and no Search confirmation/token/GET. No arbitrary response destination inference.",
+    "Preserve the four historical runtime qualification projector bodies and main.py byte-for-byte. Add owner-specific tolerant knowledge extraction; exact AST inverse tests preserve all other owner helper code.",
+    "Existing Tenant Administration continues from saved selected-company Tenant Settings; unknown tools warnings distinct from actual emptylists. No selector-driven routing, fabricateddefault/version/provider, startupauth, paidcalls or report decisions.",
+    "Exact eleven-path registration, synthetic documented provider-shaped and adversarial fixtures, independent review/fullchecks/strictCI and normal authorized merge before released-package review. A$10October cap currentusage/reservesunknown; previewactivation/configinspection/auth/paidremainoutofscope."
+  ],
+  "adrs": [
+    "Use existing Tenant Settings, injected Entra capability, and admin UI; no parallel implementation or private container inspection. Metadata observation remains separate from runtime/report qualification."
+  ],
+  "architecture_refs": [
+    "Owner retry998cd35 returned MCP_ALLOWED_TOOLS atAGENT_PROJECTION; source proves narrow required tool_names shape. No live value inferred. Official Microsoft MCPTool/MCPToolFilter and KnowledgeBases Get schemas read13October2026."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/foundry_metadata_projection.py",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/foundry_agent_details.py",
+    "apps/api/tests/test_foundry_owner_metadata.py",
+    "apps/api/tests/test_foundry_agent_details.py",
+    "tasks/APBRA-160-metadata-observations-20261013.json",
+    "scripts/check_metadata_observations_20261013.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_metadata_observations_scope.py",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Agent optional metadata never rejects solely for unfamiliar shape; no partial unsafe values or rawmetadata/secrets output.",
+    "Knowledge optional metadata unknowns never block identity-verified observation; missing knowledge is explicitunknown.",
+    "KnownsafeSearchdestination alone may be privately confirmed; absent/multiple/unsafe destination skipsSearchentirely; MCPfilter never grants permissions.",
+    "Every old informationalreason regression plus documentedvariants/missingfields and identity/securitynegatives tested; fourlegacybodies and allotherownerASTpreserved."
+  ],
+  "verification_required": [
+    "Synthetic offline comprehensive metadata-path tests; full applicable bootstrap/API/web/browser suites, Ruff/mypy/TypeScript/build, exacttree/history scans.",
+    "Fresh independent exactheadreview/requiredhostedCI/normalmerge; no liveauthpaidclaims.",
+    "Exact current hook inverse preserves entire previous checker AST; missing/duplicate/unrelatedmutation negatives."
+  ],
+  "out_of_scope": [
+    "Paid calls, cloud auth by tools, credential-bearing container inspection, token handoff, preview activation, hosting/173B, old PR125/126, report business policy changes, permission changes, force push or approval bypass."
+  ],
+  "escalate_when": [
+    "A required action is denied, source identity/privacy/isolation checks fail, new costs/consent/access are required, or required exact-head checks/review are absent. Stop the denied action."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "998cd35d4971edd81776927704a2a5a6f07fc13b",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-metadata-observations",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Exact eleven-path bounded increment under owner delegation/PLAN10851. No historical tasks/register/providerqualification authority rewrite.",
+  "dependencies": [
+    "ReleasedPR155998cd35. Prior owner packet/preview and runtime preparation retained. No authpaidactivation."
+  ]
+}
