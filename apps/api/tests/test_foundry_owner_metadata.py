@@ -3431,81 +3431,90 @@ def test_browser_permission_or_consent_failure_is_unavailable_without_retry(
 
 
 def _restore_projection_reason_extension(tree: ast.Module) -> ast.Module:
-    """Reverse only explicit helper diagnostic instrumentation, not field predicates."""
-    before = ast.parse(
-        subprocess.check_output(  # noqa: S603 - Fixed public source only.
-            [
-                "/usr/bin/git",
-                "show",
-                "b305ec75c70c2da8503a9b6ce2d0641502be5b8c"
-                ":apps/api/src/apbra_api/foundry_owner_metadata.py",
-            ],
-            cwd=ROOT,
-            text=True,
-        )
-    )
-    old_output = next(
-        n
-        for n in before.body
-        if isinstance(n, ast.FunctionDef) and n.name == "_failure_output"
-    )
-    old_import = next(
-        n
-        for n in before.body
-        if isinstance(n, ast.ImportFrom) and n.module == "foundry_metadata_projection"
-    )
-    imports = [index for index, node in enumerate(tree.body)
-               if isinstance(node, ast.ImportFrom) and node.module == "foundry_metadata_projection"]
+    """Remove only exact, counted additions; preserve every other source node."""
+
+    def parsed(source: str) -> ast.stmt:
+        return ast.parse(source).body[0]
+
+    expected_imports = ast.parse(
+        "from .foundry_metadata_projection import "
+        "ProjectionError, _knowledge_observation, _projection_reason\n"
+        "from .foundry_metadata_projection import _owner_agent_observation as _agent_observation"
+    ).body
+    imports = [
+        index
+        for index, node in enumerate(tree.body)
+        if isinstance(node, ast.ImportFrom) and node.module == "foundry_metadata_projection"
+    ]
     assert len(imports) == 2
-    tree.body[imports[0]] = old_import
+    assert [ast.dump(tree.body[index]) for index in imports] == [
+        ast.dump(node) for node in expected_imports
+    ]
+    tree.body[imports[0]] = parsed(
+        "from .foundry_metadata_projection import _agent_observation, _knowledge_observation"
+    )
     del tree.body[imports[1]]
-    for index, node in enumerate(tree.body):
-        if isinstance(node, ast.FunctionDef) and node.name == "_failure_output":
-            tree.body[index] = old_output
+    output_addition = parsed(
+        'if (error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt)'
+        ' and stage == "AGENT_PROJECTION":\n'
+        ' reason = getattr(error, "projection_reason", None)\n'
+        " if reason is not None:\n"
+        '  result["projection_reason"] = _projection_reason(reason)'
+    )
+    output = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_failure_output"
+    )
+    matches = [
+        index
+        for index, node in enumerate(output.body)
+        if ast.dump(node) == ast.dump(output_addition)
+    ]
+    assert len(matches) == 1
+    del output.body[matches[0]]
+    expected_try = parsed(
+        "try:\n"
+        " observation, search_origin = _agent_observation(properties, version, binding)\n"
+        "except BaseException as error:\n"
+        " if type(error) is ProjectionError:\n"
+        "  projection_reason = _projection_reason(error.reason)\n"
+        " raise"
+    )
+    additions = [
+        parsed("projection_reason: str | None = None"),
+        parsed('projection_reason = "POST_PROJECTION_GUARD"'),
+        parsed("projection_reason = None"),
+        parsed(
+            'if projection_reason is not None and stage == "AGENT_PROJECTION":'
+            ' setattr(captured, "projection_reason", _projection_reason(projection_reason))'
+        ),
+    ]
+    addition_dumps = [ast.dump(node) for node in additions]
+    counts = [0] * len(additions)
+    try_count = 0
 
     class Reverse(ast.NodeTransformer):
-        def visit_AnnAssign(self, node: ast.AnnAssign) -> Any:
-            if (
-                isinstance(node.target, ast.Name)
-                and node.target.id == "projection_reason"
-            ):
+        def visit(self, node: ast.AST) -> Any:
+            nonlocal try_count
+            dumped = ast.dump(node)
+            if dumped == ast.dump(expected_try):
+                try_count += 1
+                return expected_try.body[0]  # type: ignore[attr-defined]
+            if dumped in addition_dumps:
+                counts[addition_dumps.index(dumped)] += 1
                 return None
-            return self.generic_visit(node)
+            return super().visit(node)
 
-        def visit_Assign(self, node: ast.Assign) -> Any:
-            if (
-                len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and node.targets[0].id == "projection_reason"
-            ):
-                assert isinstance(node.value, ast.Constant) and node.value.value in {
-                    None,
-                    "POST_PROJECTION_GUARD",
-                }
-                return None
-            return self.generic_visit(node)
-
-        def visit_Try(self, node: ast.Try) -> Any:
-            expected = ast.parse(
-                "observation, search_origin = _agent_observation(properties, version, binding)"
-            ).body[0]
-            if len(node.body) == 1 and ast.dump(node.body[0]) == ast.dump(expected):
-                assert (
-                    len(node.handlers) == 1 and not node.finalbody and not node.orelse
-                )
-                return expected
-            return self.generic_visit(node)
-
-        def visit_If(self, node: ast.If) -> Any:
-            expected = ast.parse(
-                'if projection_reason is not None and stage == "AGENT_PROJECTION":'
-                ' setattr(captured, "projection_reason", _projection_reason(projection_reason))'
-            ).body[0]
-            if ast.dump(node) == ast.dump(expected):
-                return None
-            return self.generic_visit(node)
-
-    return Reverse().visit(tree)
+    run = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "run_owner_metadata"
+    )
+    Reverse().visit(run)
+    assert counts == [1, 1, 1, 1]
+    assert try_count == 1
+    return tree
 
 
 def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> None:
@@ -3519,9 +3528,7 @@ def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> No
         cwd=ROOT,
     )
     assert ast.dump(
-        _restore_projection_reason_extension(
-            ast.parse(Path(module.__file__).read_text())
-        )
+        _restore_projection_reason_extension(ast.parse(Path(module.__file__).read_text()))
     ) == ast.dump(ast.parse(before))
     before_main = subprocess.check_output(  # noqa: S603 - Fixed public source only.
         [
@@ -3532,6 +3539,48 @@ def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> No
         cwd=ROOT,
     )
     assert before_main == (ROOT / "apps/api/src/apbra_api/main.py").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        (
+            "    return result\n\n\ndef _uri_rejection_stage(uri: object) -> str:",
+            '    print("SYNTHETIC_PRIVATE_OUTPUT")\n    return result\n\n\n'
+            'def _uri_rejection_stage(uri: object) -> str:',
+        ),
+        ('"status": "METADATA_UNAVAILABLE"', '"status": "CHANGED_STATUS"'),
+        ('"category": category', '"category": "CHANGED_CATEGORY"'),
+        ('and stage == "AGENT_PROJECTION"\n    ):', "and True\n    ):"),
+        ("if type(error) is ProjectionError:", "if isinstance(error, ProjectionError):"),
+        (
+            "projection_reason = _projection_reason(error.reason)\n                    raise",
+            'projection_reason = _projection_reason(error.reason)\n'
+            '                    print("SYNTHETIC_PRIVATE_OUTPUT")\n                    raise',
+        ),
+        ("    ProjectionError,\n", "    ProjectionError,\n    extra_import,\n"),
+        ("projection_reason: str | None = None", "projection_reason: object = None"),
+    ],
+)
+def test_projection_preservation_inverse_rejects_unexpected_source_mutations(
+    original: str, replacement: str
+) -> None:
+    source = Path(module.__file__).read_text()
+    assert source.count(original) == 1
+    mutated = ast.parse(source.replace(original, replacement, 1))
+    before = subprocess.check_output(  # noqa: S603 - Fixed public source only.
+        [
+            "/usr/bin/git",
+            "show",
+            "b305ec75c70c2da8503a9b6ce2d0641502be5b8c:apps/api/src/apbra_api/foundry_owner_metadata.py",
+        ],
+        cwd=ROOT,
+    )
+    try:
+        restored = _restore_projection_reason_extension(mutated)
+    except AssertionError:
+        return
+    assert ast.dump(restored) != ast.dump(ast.parse(before))
 
 
 def schema_projection_records(flow: Any) -> tuple[dict[str, Any], dict[str, Any]]:
