@@ -1918,6 +1918,7 @@ def installed_device_code_request_token() -> Any:
     "case,stage",
     [
         ("standard", "AUTHENTICATION_AFTER_CALLBACK"),
+        ("www", "AUTHENTICATION_AFTER_CALLBACK"),
         ("state", "CALLBACK_STATE"),
         ("expiry-conversion", "CALLBACK_EXPIRY_CONVERSION"),
         ("terminal", "CALLBACK_TERMINAL"),
@@ -1970,6 +1971,8 @@ def test_installed_sdk_ast_wrapper_preserves_guards_and_distinguishes_callback_c
     }
     if case == "uri":
         fake_flow["verification_uri"] = "https://microsoft.com/devicelogin/"
+    if case == "www":
+        fake_flow["verification_uri"] = "https://www.microsoft.com/devicelogin"
     if case == "code":
         fake_flow["user_code"] = CANARY + "_"
     if case == "code-type":
@@ -2030,14 +2033,15 @@ def test_installed_sdk_ast_wrapper_preserves_guards_and_distinguishes_callback_c
     assert result["stage"] == stage
     assert result["category"] == (
         "AUTHENTICATION_FAILED"
-        if case in {"standard", "missing-uri", "sdk-expiry-type"}
+        if case in {"standard", "www", "missing-uri", "sdk-expiry-type"}
         else "CALLBACK_REJECTED"
     )
-    assert calls == (["flow", "poll"] if case == "standard" else ["flow"])
+    assert calls == (["flow", "poll"] if case in {"standard", "www"} else ["flow"])
     if case not in {"missing-uri", "sdk-expiry-type"}:
         assert sdk_shapes[0][0] is str and sdk_shapes[0][2] is True
-    if case == "standard":
+    if case in {"standard", "www"}:
         assert "SYNTH1234" in private.getvalue()
+        assert str(fake_flow["verification_uri"]) in private.getvalue()
     else:
         assert private.getvalue() == ""
     assert denied == []
@@ -2076,6 +2080,16 @@ def test_callback_guard_order_and_original_predicates_are_exactly_preserved() ->
         if isinstance(node, ast.If) and isinstance(node.test, ast.BoolOp)
     )
     checks = [node for node in updated.body if isinstance(node, ast.If)]
+    # PLAN10817 changes only this predicate: two exact Microsoft HTTPS literals,
+    # builtin str first, no normalization or subclass equality/hash hooks.
+    expected_uri = ast.parse(
+        'type(uri) is not str or uri not in ('
+        '"https://microsoft.com/devicelogin", "https://www.microsoft.com/devicelogin")',
+        mode="eval",
+    ).body
+    uri_check = checks[2]
+    assert ast.dump(uri_check.test) == ast.dump(expected_uri)
+    uri_check.test = old_predicates[3]
     self_contained = [
         value
         for node in checks
@@ -2119,3 +2133,132 @@ def test_callback_guard_order_and_original_predicates_are_exactly_preserved() ->
     ]
     updated.body.insert(0, original.body[0])
     assert ast.dump(updated) == ast.dump(original)
+
+
+@pytest.mark.parametrize("uri", [
+    "http://microsoft.com/devicelogin", "http://www.microsoft.com/devicelogin",
+    "https://microsoft.com/devicelogin/", "https://www.microsoft.com/devicelogin/",
+    "https://microsoft.com/link", "https://www.microsoft.com/link",
+    "https://microsoft.com:443/devicelogin", "https://www.microsoft.com:443/devicelogin",
+    "https://microsoft.com/devicelogin?code=synthetic", "https://www.microsoft.com/devicelogin#code",
+    "https://owner@microsoft.com/devicelogin", "https://www.microsoft.com@evil.invalid/devicelogin",
+    "https://microsoft.com.evil.invalid/devicelogin", "https://evil.microsoft.com/devicelogin",
+    "https://www.microsoft.com.evil.invalid/devicelogin", "https://www.microsoft.com/DeviceLogin",
+    "https://WWW.microsoft.com/devicelogin", "HTTPS://www.microsoft.com/devicelogin",
+    " https://www.microsoft.com/devicelogin", "https://www.microsoft.com/devicelogin ",
+    "https://www.microsoft.com/devicelogin\n", "https://www.microsoft.com/devicelogin\r",
+    "https://www.microsoft.com/\tdevicelogin", "https://www.microsoft.com/devicelogin\x00",
+    "https://www.microsoft.com/%64evicelogin", "https://www.microsoft.com/devicelogin;param",
+    "https://www.microsoft.com\\devicelogin", "https://www.microsoft.com/other",
+    None, 123, b"https://www.microsoft.com/devicelogin",
+])
+def test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
+    flow: Any, uri: Any, installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    calls: list[str] = []
+
+    class TTY(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    private = TTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+
+    class FakeMSAL:
+        def initiate_device_flow(self, scopes: list[str]) -> dict[str, Any]:
+            calls.append("flow")
+            return {"verification_uri": uri, "user_code": "SYNTH1234",
+                    "expires_at": 1200, "expires_in": 200}
+
+        def acquire_token_by_device_flow(self, *args: Any, **kwargs: Any) -> Any:
+            calls.append("poll")
+            raise AssertionError("Rejected URI reached synthetic polling")
+
+    fake = SimpleNamespace(_get_app=lambda **kwargs: FakeMSAL(),
+                           _prompt_callback=lambda *args: flow.options["prompt_callback"](*args),
+                           _timeout=60)
+
+    def auth(**kwargs: Any) -> Any:
+        return installed_device_code_request_token(fake, module._SCOPE)
+
+    flow.sdk.authenticate = auth
+    assert diagnostic_cli(flow, monkeypatch, capsys) == {
+        "status": "METADATA_UNAVAILABLE", "stage": "CALLBACK_URI", "category": "CALLBACK_REJECTED"
+    }
+    assert calls == ["flow"] and private.getvalue() == ""
+    cleanup(flow)
+    assert not any(event.startswith("TOKEN:") or event.startswith("GET:") for event in flow.events)
+
+
+@pytest.mark.parametrize("kind", ["str-subclass-canonical", "str-subclass-www", "opaque"])
+def test_uri_exact_type_guard_never_executes_private_instance_or_metaclass_hooks(
+    flow: Any, kind: str, installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch, capsys: Any,
+) -> None:
+    hooks: list[str] = []
+
+    class PrivateMeta(type):
+        def __hash__(cls) -> int:
+            hooks.append("metaclass-hash")
+            print(CANARY)
+            return 0
+
+        def __eq__(cls, other: object) -> bool:
+            hooks.append("metaclass-equality")
+            print(CANARY)
+            return True
+
+    class Hooks:
+        @property
+        def __class__(self) -> type[object]:
+            hooks.append("class")
+            print(CANARY)
+            return str
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+        def __eq__(self, other: object) -> bool:
+            hooks.append("equality")
+            print(CANARY)
+            return True
+
+        def __ne__(self, other: object) -> bool:
+            hooks.append("inequality")
+            print(CANARY)
+            return False
+
+        def __hash__(self) -> int:
+            hooks.append("hash")
+            print(CANARY)
+            return 0
+
+    class PrivateString(Hooks, str, metaclass=PrivateMeta):
+        pass
+
+    class Opaque(Hooks, metaclass=PrivateMeta):
+        pass
+
+    uri = Opaque() if kind == "opaque" else PrivateString(
+        "https://microsoft.com/devicelogin" if kind == "str-subclass-canonical"
+        else "https://www.microsoft.com/devicelogin"
+    )
+    # Reuse the exact SDK-adapter rejection path and assert real, nonthrowing
+    # hooks never ran (an assertion inside a swallowed SDK hook is insufficient).
+    test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
+        flow, uri, installed_device_code_request_token, monkeypatch, capsys
+    )
+    assert hooks == []
