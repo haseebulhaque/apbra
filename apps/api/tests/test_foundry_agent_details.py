@@ -227,3 +227,26 @@ def test_unknown_tool_metadata_warns_and_uses_only_saved_settings(tools: Any) ->
     assert "TOOL_METADATA_UNKNOWN" in result["warnings"]
     assert CANARY not in json.dumps(result)
     assert len(seen)==2
+
+
+def test_distinct_metadata_access_has_no_report_qualification_and_uses_saved_targets() -> None:
+    from apbra_api.foundry_agent_details import AgentMetadataAccess
+
+    configured = profile(agent_version='configured-version')
+    credential = Credentials(configured)
+    credential.access = AgentMetadataAccess(  # type: ignore[assignment]
+        COMPANY, configured.profile_id, configured.configuration_id,
+        lambda: FoundryBearer(CANARY, time.time()+60), configured.agent_version)
+    seen: list[str] = []
+    values = records()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == 'GET'
+        seen.append(str(request.url))
+        return httpx.Response(200, json=values[len(seen)-1])
+
+    result = agent_details(COMPANY, configured, credential, transport=httpx.MockTransport(handler))
+    assert result['status'] == 'METADATA_OBSERVED_ONLY' and len(seen) == 2
+    assert not hasattr(credential.access, 'knowledge_binding')
+    assert not hasattr(credential.access, 'qualification')
+    assert CANARY not in repr(credential.access)
