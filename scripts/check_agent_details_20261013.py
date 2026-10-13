@@ -19,4 +19,3 @@ def strip_current_hooks(source):
             raise ValueError("Current registration hook differs")
         source = source.replace(hook, "")
     return source
-
