@@ -131,6 +131,13 @@ _FAILURE_STAGES = frozenset(
         "SDK_INSTALLATION",
         "AUTHENTICATION_BEFORE_CALLBACK",
         "CALLBACK_VALIDATION",
+        "CALLBACK_STATE",
+        "CALLBACK_EXPIRY_CONVERSION",
+        "CALLBACK_TERMINAL",
+        "CALLBACK_EXPIRY_VALUE",
+        "CALLBACK_URI",
+        "CALLBACK_CODE",
+        "CALLBACK_REENTRY",
         "CALLBACK_OUTPUT",
         "AUTHENTICATION_AFTER_CALLBACK",
         "ACCOUNT_VALIDATION",
@@ -968,18 +975,25 @@ def run_owner_metadata(
                     raise _qualification_error()
 
                 def prompt(uri: str, code: str, expires: datetime) -> None:
-                    mark("CALLBACK_VALIDATION", "CALLBACK_REJECTED")
+                    mark("CALLBACK_STATE", "CALLBACK_REJECTED")
                     assert memory is not None
                     memory.guard(confirmed=False)
+                    mark("CALLBACK_EXPIRY_CONVERSION", "CALLBACK_REJECTED")
                     expiry = expires.timestamp()
-                    if (
-                        not terminal.isatty()
-                        or not math.isfinite(expiry)
-                        or expiry <= time.time()
-                        or uri != "https://microsoft.com/devicelogin"
-                        or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code)
-                        or memory._device_expiry is not None
-                    ):
+                    mark("CALLBACK_TERMINAL", "CALLBACK_REJECTED")
+                    if not terminal.isatty():
+                        raise _qualification_error()
+                    mark("CALLBACK_EXPIRY_VALUE", "CALLBACK_REJECTED")
+                    if not math.isfinite(expiry) or expiry <= time.time():
+                        raise _qualification_error()
+                    mark("CALLBACK_URI", "CALLBACK_REJECTED")
+                    if uri != "https://microsoft.com/devicelogin":
+                        raise _qualification_error()
+                    mark("CALLBACK_CODE", "CALLBACK_REJECTED")
+                    if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code):
+                        raise _qualification_error()
+                    mark("CALLBACK_REENTRY", "CALLBACK_REJECTED")
+                    if memory._device_expiry is not None:
                         raise _qualification_error()
                     memory._device_expiry = expiry
                     mark("CALLBACK_OUTPUT", "TERMINAL_IO_FAILED")
