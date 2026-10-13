@@ -987,7 +987,10 @@ def run_owner_metadata(
                     if not math.isfinite(expiry) or expiry <= time.time():
                         raise _qualification_error()
                     mark("CALLBACK_URI", "CALLBACK_REJECTED")
-                    if uri != "https://microsoft.com/devicelogin":
+                    if type(uri) is not str or uri not in (
+                        "https://microsoft.com/devicelogin",
+                        "https://www.microsoft.com/devicelogin",
+                    ):
                         raise _qualification_error()
                     mark("CALLBACK_CODE", "CALLBACK_REJECTED")
                     if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code):
