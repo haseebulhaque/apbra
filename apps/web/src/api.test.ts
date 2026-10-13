@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi} from './api';
+import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi,knowledgeDocumentsApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -83,4 +83,25 @@ describe('APBRA API client',()=>{
   it('encodes protected generation history and artifact routes',async()=>{const fetch=vi.fn(async()=>response({items:[]}));vi.stubGlobal('fetch',fetch);await generationApi.list('case/1');const calls=fetch.mock.calls as unknown as Array<[RequestInfo|URL,RequestInit|undefined]>;expect(calls[0][0]).toBe('/api/cases/case%2F1/generation');expect(generationApi.artifactUrl('case/1','attempt/1')).toBe('/api/cases/case%2F1/generation/attempt%2F1/artifact')});
   it('fetches protected artifact bytes and reports unavailable downloads without leaking server text',async()=>{const fetch=vi.fn(async()=>new Response(new Blob(['PK candidate']),{status:200}));vi.stubGlobal('fetch',fetch);await expect(generationApi.download('case/1','attempt/1')).resolves.toBeInstanceOf(Blob);expect(fetch).toHaveBeenCalledWith('/api/cases/case%2F1/generation/attempt%2F1/artifact',expect.objectContaining({credentials:'same-origin'}));fetch.mockImplementationOnce(async()=>response({error:{code:'ARTIFACT_NOT_FOUND',message:'sensitive internal detail'}},404));await expect(generationApi.download('case/1','attempt/1')).rejects.toMatchObject({status:404,code:'ARTIFACT_NOT_FOUND',message:'This report file is unavailable or you no longer have access. Reload the case or ask for help.'})});
   it('normalizes safe API errors without echoing response bodies',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>response({error:{code:'CASE_NOT_FOUND',message:'Not found'}},404)));await expect(casesApi.get('hidden')).rejects.toEqual(expect.any(ApiError));await expect(casesApi.get('hidden')).rejects.toMatchObject({status:404,code:'CASE_NOT_FOUND',message:'Not found'})});
+});
+
+describe('Local tenant document wire',()=>{
+ it('preserves original JSON and exact key on explicit same-intent retry',async()=>{
+  const fetch=vi.fn(async()=>response({}));vi.stubGlobal('fetch',fetch);
+  const body=JSON.stringify({title:'',source_version:'\ufeffopaque\u0000',text:'\ufeffline\r\n\u0000<script>synthetic</script>'});
+  for(let i=0;i<2;i++)await knowledgeDocumentsApi.submit('CREATE',null,body,'synthetic-command','membership','csrf');
+  for(const [path,init] of fetch.mock.calls as unknown as Array<[string,RequestInit]>){expect(path).toBe('/api/tenant-settings/knowledge-documents');expect(init.credentials).toBe('same-origin');expect(init.method).toBe('POST');expect(init.body).toBe(body);expect(init.headers).toEqual(expect.objectContaining({'Idempotency-Key':'synthetic-command','X-Expected-Membership-Id':'membership','X-CSRF-Token':'csrf'}));}
+  expect(JSON.parse(body).text).toBe('\ufeffline\r\n\u0000<script>synthetic</script>');
+ });
+ it('uses only fixed protected read routes with readonly membership echo',async()=>{
+  const fetch=vi.fn(async()=>response({}));vi.stubGlobal('fetch',fetch);
+  await knowledgeDocumentsApi.capabilities();await knowledgeDocumentsApi.list('m');await knowledgeDocumentsApi.context('d','m');await knowledgeDocumentsApi.history('d','m');await knowledgeDocumentsApi.original('d','r','m');await knowledgeDocumentsApi.reconcile('k','m');
+  const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+  expect(calls.map(call=>call[0])).toEqual(['/api/tenant-settings/knowledge-documents/capabilities','/api/tenant-settings/knowledge-documents','/api/tenant-settings/knowledge-documents/d','/api/tenant-settings/knowledge-documents/d/history','/api/tenant-settings/knowledge-documents/d/revisions/r/original','/api/tenant-settings/knowledge-documents/commands/k']);
+  expect(calls[0][1].headers).not.toHaveProperty('X-Expected-Membership-Id');for(const [,init] of calls.slice(1)){expect(init.headers).toHaveProperty('X-Expected-Membership-Id','m');expect(init.headers).not.toHaveProperty('X-CSRF-Token');expect(init.body).toBeUndefined();}
+ });
+ it('propagates context conflicts without claiming saved data',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>response({error:{code:'KNOWLEDGE_CONTEXT_CHANGED',message:'Context changed.'}},409)));
+  await expect(knowledgeDocumentsApi.list('m')).rejects.toMatchObject({status:409,code:'KNOWLEDGE_CONTEXT_CHANGED'});
+ });
 });

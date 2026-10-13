@@ -1065,6 +1065,142 @@ class SessionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class KnowledgeDocumentRow(Base):
+    __tablename__ = "tenant_knowledge_documents"
+    __table_args__ = (
+        UniqueConstraint("id", "company_id", name="uq_knowledge_document_company"),
+        ForeignKeyConstraint(
+            ["current_revision_id", "id", "company_id"],
+            [
+                "tenant_knowledge_revisions.id",
+                "tenant_knowledge_revisions.document_id",
+                "tenant_knowledge_revisions.company_id",
+            ],
+            name="fk_knowledge_document_current_revision",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        ForeignKeyConstraint(
+            ["current_operation_id", "id", "company_id"],
+            [
+                "tenant_knowledge_commands.id",
+                "tenant_knowledge_commands.document_id",
+                "tenant_knowledge_commands.company_id",
+            ],
+            name="fk_knowledge_document_current_operation",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    current_revision_id: Mapped[UUID | None] = mapped_column()
+    current_operation_id: Mapped[UUID | None] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class KnowledgeRevisionRow(Base):
+    __tablename__ = "tenant_knowledge_revisions"
+    __table_args__ = (
+        UniqueConstraint("id", "document_id", "company_id", name="uq_knowledge_revision_scope"),
+        ForeignKeyConstraint(
+            ["document_id", "company_id"],
+            ["tenant_knowledge_documents.id", "tenant_knowledge_documents.company_id"],
+            name="fk_knowledge_revision_document",
+        ),
+        ForeignKeyConstraint(
+            ["predecessor_revision_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_revisions.id",
+                "tenant_knowledge_revisions.document_id",
+                "tenant_knowledge_revisions.company_id",
+            ],
+            name="fk_knowledge_revision_predecessor",
+        ),
+        ForeignKeyConstraint(
+            ["creator_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_knowledge_revision_creator",
+        ),
+        CheckConstraint("text_byte_count >= 0", name="ck_knowledge_revision_size"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    document_id: Mapped[UUID] = mapped_column(nullable=False)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    predecessor_revision_id: Mapped[UUID | None] = mapped_column()
+    creator_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    creator_identity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("external_identities.id"), nullable=False
+    )
+    title_original: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    source_version_original: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    text_original: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    text_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    text_byte_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class KnowledgeCommandRow(Base):
+    __tablename__ = "tenant_knowledge_commands"
+    __table_args__ = (
+        UniqueConstraint("id", "document_id", "company_id", name="uq_knowledge_command_scope"),
+        UniqueConstraint(
+            "company_id",
+            "initiator_identity_id",
+            "command_key",
+            name="uq_knowledge_command_identity_key",
+        ),
+        UniqueConstraint(
+            "company_id", "document_id", "sequence", name="uq_knowledge_command_sequence"
+        ),
+        ForeignKeyConstraint(
+            ["document_id", "company_id"],
+            ["tenant_knowledge_documents.id", "tenant_knowledge_documents.company_id"],
+            name="fk_knowledge_command_document",
+        ),
+        ForeignKeyConstraint(
+            ["target_revision_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_revisions.id",
+                "tenant_knowledge_revisions.document_id",
+                "tenant_knowledge_revisions.company_id",
+            ],
+            name="fk_knowledge_command_target",
+        ),
+        ForeignKeyConstraint(
+            ["expected_current_revision_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_revisions.id",
+                "tenant_knowledge_revisions.document_id",
+                "tenant_knowledge_revisions.company_id",
+            ],
+            name="fk_knowledge_command_expected",
+        ),
+        ForeignKeyConstraint(
+            ["initiator_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_knowledge_command_initiator",
+        ),
+        CheckConstraint(
+            "kind IN ('CREATE','REVISION','ARCHIVE')", name="ck_knowledge_command_kind"
+        ),
+        CheckConstraint("sequence > 0", name="ck_knowledge_command_sequence"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    document_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_key: Mapped[UUID] = mapped_column(nullable=False)
+    initiator_identity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("external_identities.id"), nullable=False
+    )
+    initiator_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    expected_current_revision_id: Mapped[UUID | None] = mapped_column()
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
 class AuthenticationEventRow(Base):
     __tablename__ = "authentication_events"
     __table_args__ = (Index("ix_auth_event_identity_time", "identity_id", "created_at"),)
@@ -2321,7 +2457,7 @@ def canonical_payload(payload: dict[str, Any]) -> str:
 
 class Database:
     def __init__(self, url: str) -> None:
-        self.engine = create_engine(url, pool_pre_ping=True)
+        self.engine = create_engine(url, pool_pre_ping=True, hide_parameters=True)
         self.session_factory = sessionmaker(
             self.engine, expire_on_commit=False, class_=ApplicationSession
         )
