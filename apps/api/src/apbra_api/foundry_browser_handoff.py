@@ -17,6 +17,7 @@ from typing import Any, TextIO
 from uuid import UUID
 
 from .foundry_memory_handoff import (
+    CONTAINER_LISTEN,
     ERROR,
     HELLO,
     MAX_FRAME,
@@ -53,6 +54,9 @@ class DockerAttach:
         container_id: str,
         image_id: str,
         runtime: bool = False,
+        listen_host: str,
+        listen_port: int,
+        published_port: int,
     ) -> None:
         require(
             re.fullmatch(r"[a-f0-9]{64}", container_id)
@@ -73,6 +77,14 @@ class DockerAttach:
         self.container_id = container_id
         self.image_id = image_id
         self.plan = plan
+        require(
+            listen_host == CONTAINER_LISTEN
+            and type(listen_port) is int
+            and 1 <= listen_port <= 65535
+        )
+        require(type(published_port) is int and 1 <= published_port <= 65535)
+        self.listener = (listen_host, listen_port)
+        self.published_port = published_port
         self.runtime = runtime
         self.process: subprocess.Popen[bytes] | None = None
         self.identity: dict[str, Any] | None = None
@@ -122,6 +134,7 @@ class DockerAttach:
             '"running":{{json .State.Running}},"pid":{{json .State.Pid}},'
             '"started":{{json .State.StartedAt}},"restarts":{{json .RestartCount}},'
             '"tty":{{json .Config.Tty}},"stdin":{{json .Config.OpenStdin}},'
+            '"stdin_once":{{json .Config.StdinOnce}},"ports":{{json .HostConfig.PortBindings}},'
             '"path":{{json .Path}},"args":{{json .Args}}}'
         )
         value = json.loads(
@@ -140,6 +153,14 @@ class DockerAttach:
             "--authorization-deadline",
             str(self.plan.authorization_deadline),
         ]
+        args += [
+            "--listen-host",
+            self.listener[0],
+            "--listen-port",
+            str(self.listener[1]),
+            "--published-port",
+            str(self.published_port),
+        ]
         if self.runtime:
             args.append("--runtime")
         require(
@@ -150,6 +171,13 @@ class DockerAttach:
             and value["pid"] > 0
             and value["tty"] is False
             and value["stdin"] is True
+            and value["stdin_once"] is True
+            and value["ports"]
+            == {
+                str(self.listener[1]) + "/tcp": [
+                    {"HostIp": "127.0.0.1", "HostPort": str(self.published_port)}
+                ]
+            }
             and value["path"] == "/app/.venv/bin/python"
             and value["args"] == args
         )
@@ -409,6 +437,9 @@ def main() -> None:
     parser.add_argument("--docker-binary", required=True, type=Path)
     parser.add_argument("--container-id", required=True)
     parser.add_argument("--image-id", required=True)
+    parser.add_argument("--listen-host", required=True, choices=[CONTAINER_LISTEN])
+    parser.add_argument("--listen-port", required=True, type=int)
+    parser.add_argument("--published-port", required=True, type=int)
     parser.add_argument("--runtime", action="store_true")
     args = vars(parser.parse_args())
     plan = HandoffPlan(

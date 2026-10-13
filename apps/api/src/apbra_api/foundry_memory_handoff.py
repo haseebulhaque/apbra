@@ -35,6 +35,7 @@ class HandoffError(ValueError):
 
 MAX_FRAME = 65536
 MODULE = "apbra_api.foundry_memory_handoff"
+CONTAINER_LISTEN = "0.0.0.0"  # noqa: S104 -- existing container interface; publication loopback only
 HELLO = b"APBRA_MEMORY_HANDOFF_1\n"
 
 
@@ -210,12 +211,10 @@ def receive(channel: Channel, plan: HandoffPlan, nonce: str) -> tuple[MemoryAcce
             value.clear()
 
 
-def _serve(app: Any, settings: Settings, stopped: threading.Event) -> None:
+def _serve(app: Any, listener: tuple[str, int], stopped: threading.Event) -> None:
     import uvicorn
 
-    from .foundry_browser_metadata import _local_address
-
-    host, port = _local_address(settings)
+    host, port = listener
     server = uvicorn.Server(
         uvicorn.Config(app, host=host, port=port, workers=1, access_log=False, log_config=None)
     )
@@ -241,6 +240,8 @@ def run_receiver(
     runtime: bool = False,
     invocation_gate: Callable[[], bool] | None = None,
     nonce_factory: Callable[[], str] | None = None,
+    listener: tuple[str, int] | None = None,
+    published_port: int | None = None,
 ) -> None:
     """Trusted host entrypoint. CLI cannot enable invocation or manufacture attestation."""
     from .config import get_settings
@@ -260,7 +261,16 @@ def run_receiver(
             require(type(runtime) is bool)
             settings = settings or get_settings()
             settings.validate_security_profile()
-            _local_address(settings)
+            _, public = _local_address(settings)
+            if serve is None:
+                require(
+                    listener is not None
+                    and listener[0] == CONTAINER_LISTEN
+                    and type(listener[1]) is int
+                    and 1 <= listener[1] <= 65535
+                    and type(published_port) is int
+                    and public == published_port
+                )
             binding = settings.foundry_host_binding() if runtime else None
             if binding is None:
                 require(settings.foundry_host_enabled is False and invocation_gate is None)
@@ -391,12 +401,7 @@ def run_receiver(
             def monitor() -> None:
                 try:
                     while not stopped.is_set():
-                        if (
-                            not channel.connected(0.1)
-                            or token is None
-                            or not token.ready()
-                            or not unchanged()
-                        ):
+                        if not channel.connected(0.1) or token is None or not token.ready():
                             break
                 except BaseException:
                     stopped.set()
@@ -409,24 +414,31 @@ def run_receiver(
             watcher.start()
             require(not stopped.is_set() and credentials.ready(plan.company_id, profile))
             channel.write(b"HANDOFF_READY_INVOCATION_GATED\n")
-            (serve or _serve)(app, settings, stopped)
+            if serve is not None:
+                serve(app, settings, stopped)
+            else:
+                assert listener is not None
+                _serve(app, listener, stopped)
     except BaseException:
         failed = True
     finally:
         stopped.set()
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
-            for close in (
-                token.close if token is not None else None,
-                channel.close,
-                database.engine.dispose if database is not None else None,
-            ):
+            for close in (token.close if token is not None else None, channel.close):
                 if close is not None:
                     try:
                         close()
                     except BaseException:
                         failed = True
+            # Monitor performs only bounded stdin/lease checks, never a DB read.
+            # Keep suppression and DB ownership until that worker actually ends.
             if watcher is not None:
-                watcher.join(timeout=1)
+                watcher.join()
+            if database is not None:
+                try:
+                    database.engine.dispose()
+                except BaseException:
+                    failed = True
     if failed:
         raise HandoffError(ERROR) from None
 
@@ -437,11 +449,22 @@ def main() -> None:
     parser.add_argument("--tenant-id", required=True, type=UUID)
     parser.add_argument("--client-id", required=True, type=UUID)
     parser.add_argument("--authorization-deadline", required=True, type=float)
+    parser.add_argument("--listen-host", required=True, choices=[CONTAINER_LISTEN])
+    parser.add_argument("--listen-port", required=True, type=int)
+    parser.add_argument("--published-port", required=True, type=int)
     parser.add_argument("--runtime", action="store_true")
     args = vars(parser.parse_args())
     runtime = args.pop("runtime")
+    listener = (args.pop("listen_host"), args.pop("listen_port"))
+    published = args.pop("published_port")
     try:
-        run_receiver(HandoffPlan(**args), StdioChannel(), runtime=runtime)
+        run_receiver(
+            HandoffPlan(**args),
+            StdioChannel(),
+            runtime=runtime,
+            listener=listener,
+            published_port=published,
+        )
     except BaseException:
         raise SystemExit(ERROR) from None
 

@@ -198,6 +198,8 @@ def test_synthetic_parent_receiver_selected_settings_integration(monkeypatch: An
         dict(pid=True),
         dict(tty=True),
         dict(stdin=False),
+        dict(stdin_once=False),
+        dict(ports={}),
         dict(path="/bin/sh"),
         dict(args=[]),
         dict(restarts=1),
@@ -222,6 +224,8 @@ def test_exact_container_process_qualification_refuses_drift(
     peer.container_id = "a" * 64
     peer.image_id = "sha256:" + "a" * 64
     peer.plan = c.plan
+    peer.listener = (receiver.CONTAINER_LISTEN, 8000)
+    peer.published_port = 8001
     peer.runtime = False
     peer.engine = None
     peer.process = None
@@ -234,6 +238,8 @@ def test_exact_container_process_qualification_refuses_drift(
         "restarts": 0,
         "tty": False,
         "stdin": True,
+        "stdin_once": True,
+        "ports": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8001"}]},
         "path": "/app/.venv/bin/python",
         "args": [
             "-m",
@@ -246,6 +252,12 @@ def test_exact_container_process_qualification_refuses_drift(
             str(c.plan.client_id),
             "--authorization-deadline",
             str(c.plan.authorization_deadline),
+            "--listen-host",
+            receiver.CONTAINER_LISTEN,
+            "--listen-port",
+            "8000",
+            "--published-port",
+            "8001",
         ],
     }
     peer.identity = expected.copy()

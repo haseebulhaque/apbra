@@ -127,6 +127,7 @@ def test_receiver_lease_current_settings_and_company(monkeypatch: Any, capsys: A
         assert not credential.ready(uuid4(), c.profile)
         assert credential.resolve(c.plan.company_id, c.profile).credential().token == CANARY
         c.snapshot = replace(c.snapshot, id=uuid4())
+        assert not credential.ready(c.plan.company_id, c.profile)
         assert stopped.wait(1)
         assert not credential.ready(c.plan.company_id, c.profile)
 
@@ -267,3 +268,73 @@ def test_existing_runtime_attestation_and_trusted_gate_only(monkeypatch: Any, ga
         invocation_gate=gate,
     )
     assert p.closed
+
+
+def test_monitor_never_reads_settings_and_cannot_outlive_suppression(
+    monkeypatch: Any, capsys: Any
+) -> None:
+    c = setup(monkeypatch)
+    monkeypatch.setattr(m, "create_app", lambda **kw: kw)
+    owner = threading.get_ident()
+    seen = []
+    entered = threading.Event()
+    released = threading.Event()
+    finished = threading.Event()
+    p = Pipe(m.HELLO + account_frame(c.plan) + frame(c.plan))
+
+    def load() -> Any:
+        seen.append(threading.get_ident())
+        assert threading.get_ident() == owner
+        return c.snapshot
+
+    def connected(timeout: float) -> bool:
+        entered.set()
+        assert released.wait(1)
+        print(CANARY)
+        finished.set()
+        return False
+
+    def close() -> None:
+        p.closed = True
+        released.set()
+
+    p.connected = connected
+    p.close = close
+
+    def serve(*args: Any) -> None:
+        assert entered.wait(1)
+
+    m.run_receiver(
+        c.plan,
+        p,
+        settings=c.settings,
+        snapshot_loader=load,
+        serve=serve,
+        nonce_factory=lambda: NONCE,
+    )
+    assert p.closed and finished.is_set() and seen and set(seen) == {owner}
+    assert CANARY not in capsys.readouterr().out
+
+
+def test_docker_server_uses_explicit_internal_listener(monkeypatch: Any) -> None:
+    import uvicorn
+
+    captured = {}
+
+    class Server:
+        def __init__(self, config: Any) -> None:
+            self.should_exit = False
+
+        def run(self) -> None:
+            pass
+
+    def config(app: Any, **kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(uvicorn, "Config", config)
+    monkeypatch.setattr(uvicorn, "Server", Server)
+    stop = threading.Event()
+    m._serve(object(), (m.CONTAINER_LISTEN, 8000), stop)
+    assert captured["host"] == m.CONTAINER_LISTEN and captured["port"] == 8000
+    assert captured["access_log"] is False and stop.is_set()

@@ -6,7 +6,7 @@ from functools import cache
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path,PurePosixPath
 import platform
 import re
 import runpy
@@ -722,28 +722,28 @@ COMPANY_LIFECYCLE_SOURCES=(
 )
 COMPANY_LIFECYCLE_BRANCH='agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
 COMPANY_LIFECYCLE_REGISTRATION_BRANCH=COMPANY_LIFECYCLE_BRANCH + '-registration'
-COMPANY_LIFECYCLE_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
-COMPANY_LIFECYCLE_AMENDMENT_PATHS = {
+COMPANY_LIFECYCLE_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
+COMPANY_LIFECYCLE_AMENDMENT_PATHS={
     'tasks/APBRA-151-company-lifecycle.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_company_lifecycle_scope.py',
 }
-COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment'
-COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS = COMPANY_LIFECYCLE_AMENDMENT_PATHS
-CANDIDATE_SOURCE_SAFETY_PATHS = {'apps/web/src/genericPowerBI.test.ts','apps/web/src/genericPowerBI.ts','apps/api/tests/test_generation.py'}
-CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS = {
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment'
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS=COMPANY_LIFECYCLE_AMENDMENT_PATHS
+CANDIDATE_SOURCE_SAFETY_PATHS={'apps/web/src/genericPowerBI.test.ts','apps/web/src/genericPowerBI.ts','apps/api/tests/test_generation.py'}
+CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS={
     'docs/source-register.json',
     'tasks/APBRA-108-candidate-source-safety.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_candidate_source_safety_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
-CANDIDATE_SOURCE_SAFETY_TASK_SHA256 = 'e4b2bf150019db34f848a9e94105ac9497a71ee67694348dffe8f3ad0ce17b46'
-CANDIDATE_SOURCE_SAFETY_SOURCES = (('apbra-108-pbip-pbir-structure','3965362',3,'3dfd8a68066547944885370e7091c0605b6db155c171b74bedbe0b181f78b2d2'),('apbra-108-connections-source-boundary','4063608',3,'c517844c225c801e8a6653a02fa334ce0e925a0915bfdee47ce5036f4034f9d5'),('apbra-108-candidate-validation','4063628',4,'ec89a4c144e52de5bf0ee122cf630005a3a57c51de71b14a893b97cfb57c1efe'))
-CANDIDATE_SOURCE_SAFETY_GATE_SHA256 = {"requirements":"4f5ddef9ea03936295604fe8eff1d49a5464315ad3296bda0ecc6db6a09da8c0","acceptance_criteria":"1b9e5046c9f168a5edb8dcedbc5b611503346ecfe054155ca3905ac01b0092af","verification_required":"5c81450d1198062a55a8a7a93273b4c7f70274af3add4bcd0ad4f168dba11623","dependencies":"19890e30139c836c46452801cb7af7b3947a095d34700476886eb143d2cb3feb"}
-CANDIDATE_SOURCE_SAFETY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety'
-CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH = CANDIDATE_SOURCE_SAFETY_BRANCH + '-registration'
-PRIVATE_CONTENT_STORAGE_PATHS = {
+CANDIDATE_SOURCE_SAFETY_TASK_SHA256='e4b2bf150019db34f848a9e94105ac9497a71ee67694348dffe8f3ad0ce17b46'
+CANDIDATE_SOURCE_SAFETY_SOURCES=(('apbra-108-pbip-pbir-structure','3965362',3,'3dfd8a68066547944885370e7091c0605b6db155c171b74bedbe0b181f78b2d2'),('apbra-108-connections-source-boundary','4063608',3,'c517844c225c801e8a6653a02fa334ce0e925a0915bfdee47ce5036f4034f9d5'),('apbra-108-candidate-validation','4063628',4,'ec89a4c144e52de5bf0ee122cf630005a3a57c51de71b14a893b97cfb57c1efe'))
+CANDIDATE_SOURCE_SAFETY_GATE_SHA256={"requirements":"4f5ddef9ea03936295604fe8eff1d49a5464315ad3296bda0ecc6db6a09da8c0","acceptance_criteria":"1b9e5046c9f168a5edb8dcedbc5b611503346ecfe054155ca3905ac01b0092af","verification_required":"5c81450d1198062a55a8a7a93273b4c7f70274af3add4bcd0ad4f168dba11623","dependencies":"19890e30139c836c46452801cb7af7b3947a095d34700476886eb143d2cb3feb"}
+CANDIDATE_SOURCE_SAFETY_BRANCH='agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety'
+CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH=CANDIDATE_SOURCE_SAFETY_BRANCH + '-registration'
+PRIVATE_CONTENT_STORAGE_PATHS={
     'apps/api/README.md',
     'apps/api/src/apbra_api/content_storage.py',
     'apps/api/src/apbra_api/evidence.py',
@@ -758,7 +758,7 @@ PRIVATE_CONTENT_STORAGE_PATHS = {
     'apps/api/tests/test_reference_material.py',
     'apps/api/tests/test_generation.py',
 }
-PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS = {
+PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS={
     'docs/source-register.json',
     'tasks/APBRA-173-private-content-storage.json',
     'scripts/check_bootstrap.py',
@@ -769,11 +769,11 @@ PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_provider_neutral_sso_scope.py',
 }
-PRIVATE_CONTENT_STORAGE_TASK_SHA256 = '7f42a825c59e29f6e29bd4c3f1b24115dd27fd80b670433be45f3751a8c15d72'
-PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256 = {"tests/bootstrap/test_company_lifecycle_scope.py":"96d16ce98256a66cacc35d830731fe4598d493d74a4a75352e1b69053b265b6e","tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py":"258b837f7de4c124bc9de90eafbaac9f61f76cfb943649765d3cd1ea0205aab4","tests/bootstrap/test_owner_onboarding_identity_docs_scope.py":"816a6c530f73918663b48b4a361f007c245b02d22034ade11421f9432d7ec6a1","tests/bootstrap/test_provider_neutral_sso_scope.py":"05551d3e13ef3358249c9c7b7d5a995878d15db9fedd513f6d510364e2e1d2ea"}
-PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT = 53
-PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCES_SHA256 = '09ff501f7956cc6945dc285d0eaface788b530312212447b690f3482118ec8be'
-PRIVATE_CONTENT_STORAGE_SOURCES = (
+PRIVATE_CONTENT_STORAGE_TASK_SHA256='7f42a825c59e29f6e29bd4c3f1b24115dd27fd80b670433be45f3751a8c15d72'
+PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256={"tests/bootstrap/test_company_lifecycle_scope.py":"96d16ce98256a66cacc35d830731fe4598d493d74a4a75352e1b69053b265b6e","tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py":"258b837f7de4c124bc9de90eafbaac9f61f76cfb943649765d3cd1ea0205aab4","tests/bootstrap/test_owner_onboarding_identity_docs_scope.py":"816a6c530f73918663b48b4a361f007c245b02d22034ade11421f9432d7ec6a1","tests/bootstrap/test_provider_neutral_sso_scope.py":"05551d3e13ef3358249c9c7b7d5a995878d15db9fedd513f6d510364e2e1d2ea"}
+PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT=53
+PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCES_SHA256='09ff501f7956cc6945dc285d0eaface788b530312212447b690f3482118ec8be'
+PRIVATE_CONTENT_STORAGE_SOURCES=(
     ('apbra-173a-self-service-hosted-preview','8519682',18,'f27aff74da373a75991b0cc3745f5d38a692aa00323d6e3cfecfbd1ebd9f6153'),
     ('apbra-173a-deployment-portability','9568258',2,'35af4064b38c2aea645cba33b5533cb76a18601b5858c0115f223a5bcd11acc6'),
     ('apbra-173a-entitlement-separation','9535525',2,'b441ac7175311d0a83c18bdc57b7f0869dd0c94d85f5e405955e5c029daddefd'),
@@ -781,10 +781,10 @@ PRIVATE_CONTENT_STORAGE_SOURCES = (
     ('apbra-173a-mvp-scope','4063307',9,'d39334d670c024feb8f4e608dc008a2d89a69288e53f831fc02c59055618245b'),
     ('apbra-173a-owner-reference-decision','APBRA-173','Jira owner comment 10471, 2026-10-04','fdc426f778358c07814273c432f689e6de691a754e75997a11a38eaf335c9db8'),
 )
-PRIVATE_CONTENT_STORAGE_GATE_SHA256 = {"adrs":"9a14402c969227774c249adb8b6a1830f5a000fff43a6a1b6e7cb2f2a46c3d33","architecture_refs":"d6bd87b5bbe2a6ff878ec4ecbd4b7a91423085570d8ac8eee88ce2112a04540a","restricted_paths":"f9167fc397a38b89184daf286743ae3ef45ec4dad8b95e7e0ca09bd3ab064f30","requirements":"eae5c7c141786020c6b894bba2b5290031dcfe9887341d541ab8e7f78ff808e6","acceptance_criteria":"52b418c47b6d23163ba9be33a8fc57875f0c10e1b3e291779daa35c18592f0f7","verification_required":"aa1cd0dbf831302043388db6524133de163954dbae72ec6c859f0ecd019ce524","dependencies":"b016d9a7b52e9b552da33a3b96437d8062b66722e62ea6a35c81be7bf0f00a4a","out_of_scope":"1bf6bd8ea3af84cef1f5e7fe3434f0492f43c07e6083f3d796223866ed9f4f91","escalate_when":"3fc83a16b22286990df413c25806f046e85cba8e8110704cbc7904d6ea4c3df2"}
-PRIVATE_CONTENT_STORAGE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-private-content-storage'
-PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-private-content-storage-registration'
-CURRENT_STATE_DOCS_PATHS = {
+PRIVATE_CONTENT_STORAGE_GATE_SHA256={"adrs":"9a14402c969227774c249adb8b6a1830f5a000fff43a6a1b6e7cb2f2a46c3d33","architecture_refs":"d6bd87b5bbe2a6ff878ec4ecbd4b7a91423085570d8ac8eee88ce2112a04540a","restricted_paths":"f9167fc397a38b89184daf286743ae3ef45ec4dad8b95e7e0ca09bd3ab064f30","requirements":"eae5c7c141786020c6b894bba2b5290031dcfe9887341d541ab8e7f78ff808e6","acceptance_criteria":"52b418c47b6d23163ba9be33a8fc57875f0c10e1b3e291779daa35c18592f0f7","verification_required":"aa1cd0dbf831302043388db6524133de163954dbae72ec6c859f0ecd019ce524","dependencies":"b016d9a7b52e9b552da33a3b96437d8062b66722e62ea6a35c81be7bf0f00a4a","out_of_scope":"1bf6bd8ea3af84cef1f5e7fe3434f0492f43c07e6083f3d796223866ed9f4f91","escalate_when":"3fc83a16b22286990df413c25806f046e85cba8e8110704cbc7904d6ea4c3df2"}
+PRIVATE_CONTENT_STORAGE_BRANCH='agent/APBRA-DEVOPS/APBRA-173-private-content-storage'
+PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH='agent/APBRA-DEVOPS/APBRA-173-private-content-storage-registration'
+CURRENT_STATE_DOCS_PATHS={
     'ARCHITECTURE.md',
     'DATA-MODEL.md',
     'MVP-ACCEPTANCE-CRITERIA.md',
@@ -795,17 +795,17 @@ CURRENT_STATE_DOCS_PATHS = {
     'docs/decisions/implementation-baseline.md',
     'docs/engineering/codex-handoff.md',
 }
-CURRENT_STATE_DOCS_REGISTRATION_PATHS = {
+CURRENT_STATE_DOCS_REGISTRATION_PATHS={
     'docs/source-register.json',
     'scripts/check_bootstrap.py',
     'tasks/APBRA-177-current-state-docs.json',
     'tests/bootstrap/test_current_state_docs_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
-CURRENT_STATE_DOCS_TASK_SHA256 = '987a8bbf4bfec6e8897fc97cdda6c0739c079d481c876f133cb65490d5ca062a'
-CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT = 59
-CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256 = '2b82ef1b9074116bdf2939b89e7a47dc7ceddc2ca5e17836eaf4c8d8aa9956d5'
-CURRENT_STATE_DOCS_SOURCES = (
+CURRENT_STATE_DOCS_TASK_SHA256='987a8bbf4bfec6e8897fc97cdda6c0739c079d481c876f133cb65490d5ca062a'
+CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT=59
+CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256='2b82ef1b9074116bdf2939b89e7a47dc7ceddc2ca5e17836eaf4c8d8aa9956d5'
+CURRENT_STATE_DOCS_SOURCES=(
     ('apbra-177-mvp-scope','4063307',12,'b57a5f862983532c9424893168c9b38b20935d3714d9da0d7cab90c60654f227'),
     ('apbra-177-preview-direction','8519682',21,'9ba429a6e15118994f749fffaa2fbdf1209bffc0181dd2a6033e10d0073c10e3'),
     ('apbra-177-deployment-portability','9568258',2,'e06c67fee11d6e0fa6a223c193f0087944aed092214d4e85c92ce28e0656eb4c'),
@@ -814,10 +814,10 @@ CURRENT_STATE_DOCS_SOURCES = (
     ('apbra-177-data-identity','4063348',6,'6162d535670ac8b1cb096f1c7062fdf96441d32638103253790ffa70f25daadd'),
     ('apbra-177-owner-doc-clarification','APBRA-177','Jira owner clarification and controller comment 10481, 2026-10-04','dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
 )
-CURRENT_STATE_DOCS_GATE_SHA256 = {"requirements":"ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22","adrs":"07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318","architecture_refs":"ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428","restricted_paths":"34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e","acceptance_criteria":"56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9","verification_required":"00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631","out_of_scope":"ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c","escalate_when":"b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c","dependencies":"9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74"}
-CURRENT_STATE_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-177-current-state-docs'
-CURRENT_STATE_DOCS_REGISTRATION_BRANCH = CURRENT_STATE_DOCS_BRANCH + '-registration'
-HOSTED_WEB_RELEASE_PATHS = {
+CURRENT_STATE_DOCS_GATE_SHA256={"requirements":"ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22","adrs":"07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318","architecture_refs":"ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428","restricted_paths":"34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e","acceptance_criteria":"56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9","verification_required":"00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631","out_of_scope":"ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c","escalate_when":"b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c","dependencies":"9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74"}
+CURRENT_STATE_DOCS_BRANCH='agent/APBRA-DOCS/APBRA-177-current-state-docs'
+CURRENT_STATE_DOCS_REGISTRATION_BRANCH=CURRENT_STATE_DOCS_BRANCH + '-registration'
+HOSTED_WEB_RELEASE_PATHS={
     'apps/api/Dockerfile',
     'apps/api/Dockerfile.dockerignore',
     'apps/api/src/apbra_api/api.py',
@@ -832,15 +832,15 @@ HOSTED_WEB_RELEASE_PATHS = {
     'tests/bootstrap/test_ci_policy.py',
     'scripts/smoke_hosted_image.sh',
 }
-HOSTED_WEB_RELEASE_REGISTRATION_PATHS = {
+HOSTED_WEB_RELEASE_REGISTRATION_PATHS={
     'docs/source-register.json',
     'scripts/check_bootstrap.py',
     'tasks/APBRA-173-production-web-release.json',
     'tests/bootstrap/test_hosted_web_release_scope.py',
     'tests/bootstrap/test_current_state_docs_scope.py',
 }
-HOSTED_WEB_RELEASE_TASK_SHA256 = 'fcf8ffdd388616c27fdf42f3687801df86ccd4f373d3c02b429608460aea2d57'
-HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT = 66
+HOSTED_WEB_RELEASE_TASK_SHA256='fcf8ffdd388616c27fdf42f3687801df86ccd4f373d3c02b429608460aea2d57'
+HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT= 66
 HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256 = '634e0fc2ab98cf546f93cbae5382d80f5d7f724b9589b4c812606cb702d6b17f'
 HOSTED_WEB_RELEASE_SOURCES = (
     ('apbra-173b-preview-direction','8519682',23,'8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
