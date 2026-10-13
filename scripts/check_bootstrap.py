@@ -21,7 +21,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
-q=runpy.run_path(Path(__file__).with_name("check_browser_metadata_runtime_20261013.py"))
+q=runpy.run_path(Path(__file__).parent/'check_br.py')
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
 f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
@@ -2815,7 +2815,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (owner_metadata, o['P']),
             (agent_details, n['P']),
             (metadata_observations, zz['P']),
-         (v,q['P']),
+(v,q['P']),
             (raw_ingress, u['P']),
             (fixture_staging, f['P']),
             (knowledge_lifecycle, k['P']),
@@ -3143,7 +3143,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not(v and active_branch==q['B'] and changed_paths<=q['P'])):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3157,7 +3157,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not(v and active_branch==q['B'] and changed_paths<=q['P'])):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and

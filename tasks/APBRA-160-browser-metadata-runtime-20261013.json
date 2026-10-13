@@ -7,16 +7,16 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Explicit owner-private browser metadata runtime tied to saved selected-company Tenant Settings; separate read-only capability never authorizes paid model execution.",
+  "objective": "Reusable explicit owner-private browser connection bound to saved Tenant Settings, separate metadata access and existing strict runtime attestation; invocation gated off until trusted owner/budget handoff.",
   "requirements": [
-    "Owner continuing MVP direction and current runtime-readiness delegation/Jira PLAN10855 authorize bounded source-only work. No owner sign-in or preview operation is authorized by source registration.",
+    "Owner ongoing MVP direction, practical runtime delegation and JiraPLAN10855/SCOPE10856 authorize this source-only twelve-path increment, not actual sign-in/paid/preview/security actions.",
     "An explicit owner-private browser CLI receives selected company and Azure identity IDs/lease deadline explicitly. Saved current Tenant Settings alone drive agent endpoint/version/limits. No default version/provider, no identity inference or fabricated knowledge qualification.",
     "Reuse reviewed private terminal/account confirmation/owned callback cleanup; memory token lease only, no SDK/cache/refresh while serving; close before server and clear on expiry/revocation/changed settings/exit.",
-    "Inject a distinct metadata credential only into authenticated admin agent-details. Preserve model credentials, automatic generation, tenant roles/isolation, budgets and all historical runtime/main/owner source byte-for-byte.",
+    "Separate read-only metadata access always serves only authenticated admin GETs. Optional reusable generation runtime requires existing strict currentFoundryHostBinding, exact knownaccount/tenant/client/company/deadline and savedprofile match, LIVE_METADATA_VERIFIED knowledge attestation, and a separately authorized trustedhost invocation/budget gate defaultfalse. No CLI/clientbool can grant paid capability; metadata observation cannot fabricate runtimequalification. Preserve all main/config/model/owner/settings bytes and existingtenantpermissions/budgets/reportlogic.",
     "Exact twelve-path scope, fake auth/transport/server and adversarial tests, source-preservation scope checks, full checks/independent review/strict CI before normal authorized merge. No live private config/DB access, auth, paid/report tests, activation or hosting."
   ],
   "adrs": [
-    "Extend existing API metadata dependency injection and standard private browser helper; read-only metadata lease does not claim full Foundry runtime/report qualification."
+    "One browser memory lease reuses existing strict FoundryTokenCredentialProvider for separately attested invocation, defaultdisabled, alongside separate unqualified metadata access. Saved Tenant Settings remain endpoint/version/limit authority. No duplicate discovery/provisioning/transport stack."
   ],
   "architecture_refs": [
     "Current main cceac17 has only legacy device-code serving; browser owner metadata closes its token. Existing selected-company endpoint uses saved settings. Provider-managed report logic remains untouched."
@@ -28,7 +28,7 @@
     "apps/api/tests/test_foundry_browser_metadata.py",
     "apps/api/tests/test_foundry_agent_details.py",
     "tasks/APBRA-160-browser-metadata-runtime-20261013.json",
-    "scripts/check_browser_metadata_runtime_20261013.py",
+    "scripts/check_br.py",
     "scripts/check_bootstrap.py",
     "tests/bootstrap/test_browser_metadata_runtime_scope.py",
     "tests/bootstrap/test_metadata_observations_scope.py",
@@ -55,9 +55,10 @@
   ],
   "acceptance_criteria": [
     "No Azure login/default credential discovery on import/startup. Explicit private manual entrypoint only.",
-    "Separate metadata access cannot reach model generation credential injection; no invented route/knowledge/runtime qualification.",
+    "Reusable browser runtime injects existing provider only under exact private attestation plus savedprofile equality; readyfalse bydefault until trusted owner/budget callback. Metadata never fabricates qualification or grants invocation.",
     "Selected company/profile/current settings bind every read. Expiry/settings drift/account mismatch/cleanup errors unavailable, no raw secret/error logging.",
-    "Fake browser/session tests prove cleanup and tenant isolation; historical main/owner/model/settings unchanged."
+    "Fake browser/session tests prove cleanup and tenant isolation; historical main/owner/model/settings unchanged.",
+    "PostSDKconstruction authority drift forbids authenticate; postaccountconfirmation account drift forbids token acquisition. Exact negative call-sequence regressions required."
   ],
   "verification_required": [
     "Meaningful fake browser/credential/server + admin metadata capability tests and negatives.",

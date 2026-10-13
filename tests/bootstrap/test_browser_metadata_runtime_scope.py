@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-HELPER = runpy.run_path(str(ROOT / 'scripts/check_browser_metadata_runtime_20261013.py'))
+HELPER = runpy.run_path(str(ROOT / 'scripts/check_br.py'))
 CHECKER = runpy.run_path(str(ROOT / 'scripts/check_bootstrap.py'))
 
 

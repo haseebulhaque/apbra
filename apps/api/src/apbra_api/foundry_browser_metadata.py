@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from .api import create_app
-from .config import Settings, get_settings
+from .config import FoundryHostBinding, Settings, get_settings
 from .foundry_agent_details import AgentMetadataAccess, agent_details
 from .foundry_owner_metadata import (
     OwnerMetadataPlan,
@@ -31,6 +31,7 @@ from .foundry_owner_metadata import (
 from .model_provider import (
     FoundryBearer,
     FoundryMemoryTokenCredential,
+    FoundryTokenCredentialProvider,
     ProviderConfigurationError,
     ProviderProfile,
 )
@@ -161,6 +162,8 @@ def run_browser_metadata(
     confirm: Callable[[TextIO, OwnerMetadataPlan, str, str], None] | None = None,
     serve: Callable[..., None] | None = None,
     observe: Callable[..., dict[str, object]] | None = None,
+    runtime: bool = False,
+    invocation_gate: Callable[[], bool] | None = None,
 ) -> None:
     """Owner executes after separate approval; injected seams enable offline checks.
 
@@ -174,7 +177,20 @@ def run_browser_metadata(
     try:
         plan.validate()
         settings = settings or get_settings()
-        _require(not settings.foundry_host_enabled)
+        _require(type(runtime) is bool)
+        binding: FoundryHostBinding | None = None
+        if runtime:
+            # The private attestation and exact known account remain mandatory.
+            # Metadata observation never manufactures this runtime authority.
+            binding = settings.foundry_host_binding()
+            _require(
+                binding.company_id == plan.company_id
+                and binding.tenant_id == plan.tenant_id
+                and binding.client_id == plan.client_id
+                and binding.authorization_deadline == plan.authorization_deadline
+            )
+        else:
+            _require(not settings.foundry_host_enabled and invocation_gate is None)
         settings.validate_security_profile()
         _local_address(settings)
         # Open and validate the private terminal before any database access.
@@ -209,10 +225,20 @@ def run_browser_metadata(
             )
             assert profile is not None
             validate_qualified_profile(profile, settings.qualified_provider_profiles())
+            if binding is not None:
+                _require(
+                    profile == binding.provider_profile
+                    and (
+                        profile.agent_version is None
+                        or profile.agent_version == binding.agent_version
+                    )
+                )
 
             def unchanged() -> bool:
                 try:
                     fresh = snapshot_loader()
+                    if binding is not None and settings.foundry_host_binding() != binding:
+                        return False
                     return (
                         time.time() < plan.authorization_deadline
                         and fresh.id == initial.id
@@ -244,6 +270,7 @@ def run_browser_metadata(
                 read_timeout=timeout,
                 retry_total=0,
             )
+            _require(unchanged())
             record = _quiet_call(sdk.authenticate, scopes=[_SCOPE])
             account = (record.tenant_id, record.client_id, record.home_account_id)
             label = getattr(record, "username", None)
@@ -255,12 +282,15 @@ def run_browser_metadata(
                 and 1 <= len(label) <= 255
                 and label.isprintable()
             )
+            if binding is not None:
+                _require(account[2] == binding.home_account_id)
             _require(unchanged())
             assert isinstance(label, str)
             approval(
                 terminal, terminal_plan, "Selected existing account: " + label, "CONFIRM ACCOUNT"
             )
             _require(unchanged())
+            _require(account == (record.tenant_id, record.client_id, record.home_account_id))
             acquired = _quiet_call(sdk.get_token, _SCOPE)
             _require(
                 account == (record.tenant_id, record.client_id, record.home_account_id)
@@ -294,11 +324,42 @@ def run_browser_metadata(
             _require(details.get("status") == "METADATA_OBSERVED_ONLY" and unchanged())
             del details
             _require(credentials.ready(plan.company_id, profile))
-            app = create_app(settings=settings, foundry_metadata_credentials=credentials)
+            runtime_credentials = None
+            if binding is not None:
+
+                def invocation_ready() -> bool:
+                    # Only a separately approved trusted host budget/permission
+                    # gate can enable invocation; CLI/API callers cannot do so.
+                    try:
+                        return (
+                            invocation_gate is not None
+                            and invocation_gate() is True
+                            and unchanged()
+                            and token is not None
+                            and token.ready()
+                        )
+                    except Exception:
+                        return False
+
+                runtime_credentials = FoundryTokenCredentialProvider(
+                    company_id=plan.company_id,
+                    profile=profile,
+                    token_credential=token,
+                    enabled=invocation_ready,
+                    knowledge_binding=binding.knowledge_binding,
+                    knowledge_scope=binding.knowledge_scope,
+                    agent_version=binding.agent_version,
+                    qualification=binding.qualification,
+                )
+            app = create_app(
+                settings=settings,
+                foundry_metadata_credentials=credentials,
+                foundry_credentials=runtime_credentials,
+            )
             host, port = _local_address(settings)
             terminal.write(
                 f"Metadata-only server ready at http://{host}:{port}; "
-                "generation credential not activated. Stop with Ctrl+C.\n"
+                "invocation requires separate trusted approval/budget gate. Stop with Ctrl+C.\n"
             )
             terminal.flush()
             # Do not hold SDK_SERIALIZER during serving: metadata worker
@@ -322,13 +383,19 @@ def run_browser_metadata(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Explicit private metadata-only browser server")
+    parser.add_argument(
+        "--runtime",
+        action="store_true",
+        help="Require existing private runtime attestation; invocation stays disabled",
+    )
     parser.add_argument("--company-id", required=True, type=UUID)
     parser.add_argument("--tenant-id", required=True, type=UUID)
     parser.add_argument("--client-id", required=True, type=UUID)
     parser.add_argument("--authorization-deadline", required=True, type=float)
     args = parser.parse_args()
     try:
-        run_browser_metadata(BrowserMetadataPlan(**vars(args)))
+        runtime = vars(args).pop("runtime")
+        run_browser_metadata(BrowserMetadataPlan(**vars(args)), runtime=runtime)
     except BaseException:
         raise SystemExit(_ERROR) from None
 
