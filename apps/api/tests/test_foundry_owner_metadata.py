@@ -1465,7 +1465,7 @@ def test_private_terminal_unsupported_platform_rejects_before_opening_owned_pty(
     assert owned_nonseekable_tty.opened == []
 
 
-def diagnostic_cli(flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> dict[str, str]:
+def diagnostic_cli(flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> dict[str, Any]:
     original = module.run_owner_metadata
     monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
     monkeypatch.setattr(
@@ -1478,7 +1478,16 @@ def diagnostic_cli(flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any) -> d
     output = capsys.readouterr()
     assert output.out == "" and CANARY not in output.err
     result = json.loads(output.err)
-    assert set(result) == {"status", "stage", "category"}
+    if "uri_facts" in result:
+        assert result["stage"].startswith("CALLBACK_URI")
+        assert set(result) == {"status", "stage", "category", "uri_facts"}
+        assert set(result["uri_facts"]) == set(module._URI_FACT_SCHEMA)
+        assert result["uri_facts"]["trust"] == "NOT_ESTABLISHED"
+        for key, allowed in module._URI_FACT_SCHEMA.items():
+            assert type(result["uri_facts"][key]) is str
+            assert result["uri_facts"][key] in allowed
+    else:
+        assert set(result) == {"status", "stage", "category"}
     assert result["status"] == "METADATA_UNAVAILABLE"
     assert type(result["stage"]) is str and result["stage"] in module._FAILURE_STAGES
     assert type(result["category"]) is str and result["category"] in module._FAILURE_CATEGORIES
@@ -2065,7 +2074,7 @@ def test_callback_guard_order_and_original_predicates_are_exactly_preserved() ->
             text=True,
         )
     )
-    current = ast.parse(Path(module.__file__).read_text())
+    current = _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
     original = next(
         node
         for node in ast.walk(old)
@@ -2195,7 +2204,8 @@ def test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
     flow.sdk.authenticate = auth
     assert diagnostic_cli(flow, monkeypatch, capsys) == {
         "status": "METADATA_UNAVAILABLE", "stage": module._uri_rejection_stage(uri),
-        "category": "CALLBACK_REJECTED"
+        "category": "CALLBACK_REJECTED",
+        "uri_facts": module._uri_rejection_facts(uri),
     }
     assert calls == ["flow"] and private.getvalue() == ""
     cleanup(flow)
@@ -2367,6 +2377,7 @@ def test_sdk_accepted_uri_never_invokes_classifier(
         raise AssertionError("Accepted URI reached classifier")
 
     monkeypatch.setattr(module, "_uri_rejection_stage", forbidden)
+    monkeypatch.setattr(module, "_uri_rejection_facts", forbidden)
     case = "www" if uri == "https://www.microsoft.com/devicelogin" else "standard"
     test_installed_sdk_ast_wrapper_preserves_guards_and_distinguishes_callback_checks(
         flow,
@@ -2451,7 +2462,7 @@ def test_h13_source_restores_after_only_declared_rejected_uri_diagnostics() -> N
             text=True,
         )
     )
-    new = ast.parse(Path(module.__file__).read_text())
+    new = _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
     original_stages = next(
         node
         for node in old.body
@@ -2605,14 +2616,433 @@ def test_fixed_uri_error_attrs_and_args_never_contain_private_components(
     assert vars(raised.value) == {
         "stage": "CALLBACK_URI_PUBLIC_USERINFO",
         "category": "CALLBACK_REJECTED",
+        "uri_facts": module._uri_rejection_facts(
+            fake._get_app().initiate_device_flow([])["verification_uri"]
+        ),
     }
     assert raised.value.args == ("FOUNDRY_QUALIFICATION_UNAVAILABLE",)
     assert module._failure_output(raised.value) == {
         "status": "METADATA_UNAVAILABLE",
         "stage": "CALLBACK_URI_PUBLIC_USERINFO",
         "category": "CALLBACK_REJECTED",
+        "uri_facts": vars(raised.value)["uri_facts"],
     }
     assert private.getvalue() == ""
     output = capsys.readouterr()
     assert output.out == "" and output.err == ""
     cleanup(flow)
+
+
+def _restore_complete_uri_extension(tree: ast.Module) -> ast.Module:
+    """Reverse only PLAN10834 diagnostic additions for retained historical AST checks."""
+    frozen = ast.parse(
+        subprocess.check_output(  # noqa: S603 - Fixed public source only.
+            [  # noqa: S607 - Fixed public Git source only.
+                "git",
+                "show",
+                "ee0e8c532a14a69f7084b63af18a99e1cb9ba6b7"
+                ":apps/api/src/apbra_api/foundry_owner_metadata.py",
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    original_output = next(
+        n
+        for n in frozen.body
+        if isinstance(n, ast.FunctionDef) and n.name == "_failure_output"
+    )
+    new_functions = {
+        "_uri_facts_baseline",
+        "_uri_rejection_facts",
+        "_uri_facts_projection",
+    }
+    tree.body = [
+        n
+        for n in tree.body
+        if not (
+            isinstance(n, ast.FunctionDef)
+            and n.name in new_functions
+            or isinstance(n, ast.Assign)
+            and isinstance(n.targets[0], ast.Name)
+            and n.targets[0].id == "_URI_FACT_SCHEMA"
+        )
+    ]
+    for i, n in enumerate(tree.body):
+        if isinstance(n, ast.FunctionDef) and n.name == "_failure_output":
+            tree.body[i] = original_output
+
+    class Reverse(ast.NodeTransformer):
+        def visit_AnnAssign(self, node: ast.AnnAssign) -> Any:
+            if isinstance(node.target, ast.Name) and node.target.id == "uri_facts":
+                return None
+            return self.generic_visit(node)
+
+        def visit_Nonlocal(self, node: ast.Nonlocal) -> Any:
+            if node.names == ["uri_facts"]:
+                return None
+            return node
+
+        def visit_Assign(self, node: ast.Assign) -> Any:
+            if (
+                len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "uri_facts"
+            ):
+                expected = ast.parse("uri_facts = _uri_rejection_facts(uri)").body[0]
+                assert ast.dump(node) == ast.dump(expected)
+                return None
+            return self.generic_visit(node)
+
+        def visit_If(self, node: ast.If) -> Any:
+            expected = ast.parse(
+                'if uri_facts is not None and stage.startswith("CALLBACK_URI"):'
+                ' setattr(captured, "uri_facts", _uri_facts_projection(uri_facts))'
+            ).body[0]
+            if ast.dump(node) == ast.dump(expected):
+                return None
+            return self.generic_visit(node)
+
+    return Reverse().visit(tree)
+
+
+def test_complete_uri_extension_preserves_all_other_h14_source_ast() -> None:
+    old = ast.parse(
+        subprocess.check_output(  # noqa: S603 - Fixed public source only.
+            [  # noqa: S607 - Fixed public Git source only.
+                "git",
+                "show",
+                "ee0e8c532a14a69f7084b63af18a99e1cb9ba6b7"
+                ":apps/api/src/apbra_api/foundry_owner_metadata.py",
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    assert ast.dump(
+        _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
+    ) == ast.dump(old)
+
+
+COMPLETE_URI_CASES = [
+    (
+        "https://microsoft.com/devicelogin",
+        {"documented_literal": "CANONICAL", "admission_literal": "MATCHED"},
+    ),
+    (
+        "https://www.microsoft.com/devicelogin",
+        {"documented_literal": "WWW", "admission_literal": "MATCHED"},
+    ),
+    (
+        "https://aka.ms/devicelogin",
+        {"documented_literal": "SHORTLINK", "admission_literal": "NOT_MATCHED"},
+    ),
+    ("https:///synthetic", {"host_role": "ABSENT", "authority": "ABSENT"}),
+    (
+        "https://login.microsoftonline.com/synthetic",
+        {"host_role": "AUTHORITY_HOST_ONLY"},
+    ),
+    (
+        "https://login.microsoft.com/synthetic",
+        {"host_role": "DISCOVERY_ALIAS_HOST_ONLY"},
+    ),
+    (
+        "https://login.microsoftonline.com.invalid/synthetic",
+        {"host_role": "UNCLASSIFIED"},
+    ),
+    ("https://synthetic_invalid/synthetic", {"host_role": "UNCLASSIFIED"}),
+    ("https://[::1]/synthetic", {"port": "ABSENT", "host_role": "UNCLASSIFIED"}),
+    ("https://[::1]:443/synthetic", {"port": "NUMBER_443"}),
+    (
+        "https://private@aka.ms:bad/DeviceLogin/?#",
+        {
+            "userinfo": "PRESENT",
+            "port": "INVALID",
+            "path": "OTHER",
+            "query": "EMPTY",
+            "fragment": "EMPTY",
+        },
+    ),
+    ("https://aka.ms/devicelogin?", {"query": "EMPTY", "documented_literal": "NONE"}),
+    (
+        "https://aka.ms/devicelogin#",
+        {"fragment": "EMPTY", "documented_literal": "NONE"},
+    ),
+    ("https://aka.ms/DeviceLogin", {"path": "DEVICELOGIN_CASE"}),
+    ("https://aka.ms/devicelogin/", {"path": "DEVICELOGIN_SLASH"}),
+    ("https://aka.ms:/devicelogin", {"port": "EMPTY"}),
+    ("https://aka.ms:65536/devicelogin", {"port": "INVALID"}),
+    ("https://aka.ms:444/devicelogin", {"port": "OTHER_NUMERIC"}),
+    ("HTTPS://AKA.MS/devicelogin", {"scheme": "HTTPS", "documented_literal": "NONE"}),
+    ("http://aka.ms/devicelogin", {"scheme": "OTHER"}),
+    ("//aka.ms/devicelogin", {"scheme": "ABSENT"}),
+    (
+        "https://[synthetic/devicelogin",
+        {"parse": "FAILED", "inspection": "PARSE_FAILED"},
+    ),
+]
+
+
+@pytest.mark.parametrize("uri,expected", COMPLETE_URI_CASES)
+def test_complete_uri_facts_distinguish_all_shape_properties(
+    uri: str, expected: Any
+) -> None:
+    facts = module._uri_rejection_facts(uri)
+    assert len(facts) == 15
+    assert facts["trust"] == "NOT_ESTABLISHED"
+    assert {k: facts[k] for k in expected} == expected
+    assert module._uri_facts_projection(facts) == facts
+    for key, allowed in module._URI_FACT_SCHEMA.items():
+        assert type(facts[key]) is str and facts[key] in allowed
+
+
+def test_complete_uri_all_controls_and_mixed_shapes_do_not_touch_parser_cache() -> None:
+    from itertools import product
+    from urllib.parse import urlsplit
+
+    for control in (*range(33), 127):
+        facts = module._uri_rejection_facts("https://aka.ms/devicelogin" + chr(control))
+        assert facts["controls"] == "PRESENT" and facts["parse"] == "UNASSESSED"
+    urlsplit("https://synthetic.invalid/public-cache-fixture")
+    before = urlsplit.cache_info()
+    for host, user, port, path, tail in product(
+        ("aka.ms", "microsoft.com", "synthetic.invalid", "login.microsoft.com"),
+        ("", "synthetic@"),
+        ("", ":443", ":bad"),
+        ("/devicelogin", "/DeviceLogin", "/other"),
+        ("", "?synthetic=1#synthetic", "#"),
+    ):
+        facts = module._uri_rejection_facts(
+            "https://" + user + host + port + path + tail
+        )
+        assert facts["inspection"] == "COMPLETE"
+        assert facts["userinfo"] == ("PRESENT" if user else "ABSENT")
+        assert (
+            facts["port"]
+            == {"": "ABSENT", ":443": "NUMBER_443", ":bad": "INVALID"}[port]
+        )
+        assert facts["query"] == ("NONEMPTY" if tail.startswith("?") else "ABSENT")
+        assert (
+            facts["fragment"]
+            == {"": "ABSENT", "?synthetic=1#synthetic": "NONEMPTY", "#": "EMPTY"}[tail]
+        )
+        assert facts["trust"] == "NOT_ESTABLISHED"
+    assert urlsplit.cache_info() == before
+
+
+def test_complete_uri_private_hooks_and_forged_projection_cannot_escape(
+    capsys: Any,
+) -> None:
+    hooks: list[str] = []
+
+    class PrivateMeta(type):
+        def __eq__(cls, other: Any) -> bool:
+            hooks.append("meta-eq")
+            print(CANARY)
+            return False
+
+        def __hash__(cls) -> int:
+            hooks.append("meta-hash")
+            print(CANARY)
+            return 0
+
+    class Private(metaclass=PrivateMeta):
+        @property
+        def __class__(self) -> type[str]:
+            hooks.append("class")
+            print(CANARY)
+            return str
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    class PrivateString(str):
+        def __hash__(self) -> int:
+            hooks.append("hash")
+            print(CANARY)
+            return 0
+
+        def __eq__(self, other: Any) -> bool:
+            hooks.append("eq")
+            print(CANARY)
+            return True
+
+    for opaque in (Private(), PrivateString("https://aka.ms/devicelogin")):
+        facts = module._uri_rejection_facts(opaque)
+        assert facts["input"] == "OTHER" and facts["inspection"] == "TYPE_STOP"
+        assert module._uri_facts_projection(opaque) == module._uri_facts_baseline()
+        forged = module._uri_facts_baseline()
+        forged["input"] = opaque
+        assert module._uri_facts_projection(forged)["input"] == "UNASSESSED"
+    for forged in (
+        {},
+        {"unexpected": CANARY},
+        {**module._uri_facts_baseline(), "input": CANARY},
+    ):
+        assert module._uri_facts_projection(forged) == module._uri_facts_baseline()
+    assert hooks == []
+    assert capsys.readouterr().out == ""
+
+
+def test_complete_uri_unexpected_parser_fault_never_asserts_false_input_type(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    def broken(uri: str) -> Any:
+        raise RuntimeError(CANARY)
+
+    monkeypatch.setattr(module, "_uri_urlsplit", SimpleNamespace(__wrapped__=broken))
+    facts = module._uri_rejection_facts("https://synthetic.invalid/" + CANARY)
+    assert facts == module._uri_facts_baseline()
+    assert facts["input"] == "UNASSESSED" and facts["inspection"] == "FAULT"
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("error_type", [KeyboardInterrupt, SystemExit])
+def test_complete_uri_facts_never_catches_process_interrupts(
+    error_type: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(uri: str) -> Any:
+        raise error_type(CANARY)
+
+    monkeypatch.setattr(module, "_uri_urlsplit", SimpleNamespace(__wrapped__=broken))
+    with pytest.raises(error_type):
+        module._uri_rejection_facts("https://synthetic.invalid/" + CANARY)
+
+
+def test_complete_uri_cli_preserves_first_stage_and_only_emits_fixed_shape_facts(
+    flow: Any, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    from datetime import UTC, datetime
+
+    class PrivateTTY(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    private = PrivateTTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+    uri = (
+        "https://"
+        + CANARY
+        + "@aka.ms:bad/DeviceLogin/?private="
+        + CANARY
+        + "#"
+        + CANARY
+    )
+    calls: list[str] = []
+    original_facts = module._uri_rejection_facts
+
+    def counted(value: object) -> Any:
+        calls.append("facts")
+        return original_facts(value)
+
+    monkeypatch.setattr(module, "_uri_rejection_facts", counted)
+
+    def auth(**kwargs: Any) -> Any:
+        flow.options["prompt_callback"](
+            uri, "SYNTH1234", datetime.fromtimestamp(1200, UTC)
+        )
+        raise AssertionError("Rejected callback continued")
+
+    flow.sdk.authenticate = auth
+    output = diagnostic_cli(flow, monkeypatch, capsys)
+    assert calls == ["facts"]
+    assert output["stage"] == "CALLBACK_URI_PARSE"
+    assert output["category"] == "QUALIFICATION_REJECTED"
+    facts = output["uri_facts"]
+    assert facts["host_role"] == "SHORTLINK_HOST_ONLY"
+    assert facts["port"] == "INVALID" and facts["userinfo"] == "PRESENT"
+    assert (
+        facts["path"] == "OTHER"
+        and facts["query"] == "NONEMPTY"
+        and facts["fragment"] == "NONEMPTY"
+    )
+    assert (
+        facts["trust"] == "NOT_ESTABLISHED"
+        and facts["admission_literal"] == "NOT_MATCHED"
+    )
+    assert private.getvalue() == ""
+    assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
+    cleanup(flow)
+
+
+def test_complete_uri_noncallback_and_forged_exception_keep_old_output_shape() -> None:
+    error = module._SafeMetadataFailure("SDK_CONSTRUCTION", "SDK_CONSTRUCTION_FAILED")
+    error.uri_facts = module._uri_facts_baseline()
+    assert module._failure_output(error) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "SDK_CONSTRUCTION",
+        "category": "SDK_CONSTRUCTION_FAILED",
+    }
+
+    class Forged(module._SafeMetadataFailure):
+        @property
+        def uri_facts(self) -> Any:
+            raise AssertionError("Opaque subclass facts accessed")
+
+    assert module._failure_output(Forged("CALLBACK_URI_HOST", "CALLBACK_REJECTED")) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "UNKNOWN",
+        "category": "UNAVAILABLE",
+    }
+
+
+@pytest.mark.parametrize("fault", ["unknown-field", "bad-value", "opaque", "string-subclass"])
+def test_complete_uri_cli_projection_rejects_forged_facts_without_private_hooks(
+    fault: str, capsys: Any
+) -> None:
+    hooks: list[str] = []
+
+    class PrivateString(str):
+        def __eq__(self, other: Any) -> bool:
+            hooks.append("eq")
+            print(CANARY)
+            return True
+
+        def __hash__(self) -> int:
+            hooks.append("hash")
+            print(CANARY)
+            return 0
+
+    class Opaque:
+        @property
+        def __class__(self) -> type[str]:
+            hooks.append("class")
+            print(CANARY)
+            return str
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    facts: Any = module._uri_facts_baseline()
+    if fault == "unknown-field":
+        facts["unknown"] = CANARY
+    elif fault == "bad-value":
+        facts["input"] = CANARY
+    elif fault == "opaque":
+        facts = Opaque()
+    else:
+        facts["input"] = PrivateString(CANARY)
+    error = module._SafeMetadataFailure("CALLBACK_URI_HOST", "CALLBACK_REJECTED")
+    error.uri_facts = facts
+    output = module._failure_output(error)
+    assert output == {
+        "status": "METADATA_UNAVAILABLE", "stage": "CALLBACK_URI_HOST",
+        "category": "CALLBACK_REJECTED", "uri_facts": module._uri_facts_baseline(),
+    }
+    assert output["uri_facts"]["input"] == "UNASSESSED"
+    assert CANARY not in json.dumps(output)
+    assert hooks == [] and capsys.readouterr().out == ""
