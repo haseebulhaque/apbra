@@ -1583,7 +1583,7 @@ def test_diagnostic_actual_boundaries_are_fixed_and_private(
     "mode,stage,category",
     [
         ("before", "AUTHENTICATION_BEFORE_CALLBACK", "AUTHENTICATION_FAILED"),
-        ("invalid", "CALLBACK_URI", "QUALIFICATION_REJECTED"),
+        ("invalid", "CALLBACK_URI_SCHEME", "QUALIFICATION_REJECTED"),
         ("write", "CALLBACK_OUTPUT", "TERMINAL_IO_FAILED"),
         ("after", "AUTHENTICATION_AFTER_CALLBACK", "AUTHENTICATION_FAILED"),
     ],
@@ -1853,6 +1853,8 @@ def test_cli_opaque_exception_class_hooks_never_execute_or_leak(
         "SDK_CONSTRUCTION_FAILED" if boundary == "construct" else "CLEANUP_FAILED"
     )
     assert hooks == []
+
+
     assert CANARY not in terminal_output.getvalue()
     cleanup(flow)
 
@@ -1924,7 +1926,7 @@ def installed_device_code_request_token() -> Any:
         ("terminal", "CALLBACK_TERMINAL"),
         ("expired", "CALLBACK_EXPIRY_VALUE"),
         ("nonfinite", "CALLBACK_EXPIRY_VALUE"),
-        ("uri", "CALLBACK_URI"),
+        ("uri", "CALLBACK_URI_PUBLIC_PATH_SLASH"),
         ("code", "CALLBACK_CODE"),
         ("code-type", "CALLBACK_CODE"),
         ("reentry", "CALLBACK_REENTRY"),
@@ -2089,6 +2091,9 @@ def test_callback_guard_order_and_original_predicates_are_exactly_preserved() ->
     ).body
     uri_check = checks[2]
     assert ast.dump(uri_check.test) == ast.dump(expected_uri)
+    expected_mark = ast.parse('mark(_uri_rejection_stage(uri), "CALLBACK_REJECTED")').body[0]
+    assert ast.dump(uri_check.body[0]) == ast.dump(expected_mark)
+    uri_check.body = uri_check.body[1:]
     uri_check.test = old_predicates[3]
     self_contained = [
         value
@@ -2189,7 +2194,8 @@ def test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
 
     flow.sdk.authenticate = auth
     assert diagnostic_cli(flow, monkeypatch, capsys) == {
-        "status": "METADATA_UNAVAILABLE", "stage": "CALLBACK_URI", "category": "CALLBACK_REJECTED"
+        "status": "METADATA_UNAVAILABLE", "stage": module._uri_rejection_stage(uri),
+        "category": "CALLBACK_REJECTED"
     }
     assert calls == ["flow"] and private.getvalue() == ""
     cleanup(flow)
@@ -2262,3 +2268,351 @@ def test_uri_exact_type_guard_never_executes_private_instance_or_metaclass_hooks
         flow, uri, installed_device_code_request_token, monkeypatch, capsys
     )
     assert hooks == []
+
+
+URI_REJECTION_CASES = [
+    (None, "CALLBACK_URI_TYPE_NULL"),
+    (b"synthetic", "CALLBACK_URI_TYPE_BYTES"),
+    (bytearray(b"synthetic"), "CALLBACK_URI_TYPE_BYTES"),
+    (False, "CALLBACK_URI_TYPE_BOOL"),
+    (123, "CALLBACK_URI_TYPE_NUMBER"),
+    (1.25, "CALLBACK_URI_TYPE_NUMBER"),
+    ([], "CALLBACK_URI_TYPE_SEQUENCE"),
+    ((), "CALLBACK_URI_TYPE_SEQUENCE"),
+    ({}, "CALLBACK_URI_TYPE_MAPPING"),
+    (object(), "CALLBACK_URI_TYPE_OTHER"),
+    (" https://microsoft.com/devicelogin", "CALLBACK_URI_CONTROL"),
+    ("https://microsoft.com/devicelogin\x7f", "CALLBACK_URI_CONTROL"),
+    ("https://microsoft.com/devicelogin\n", "CALLBACK_URI_CONTROL"),
+    ("https://[microsoft.com/devicelogin", "CALLBACK_URI_PARSE"),
+    ("https://microsoft.com:private/devicelogin", "CALLBACK_URI_PARSE"),
+    ("https://microsoft.com:999999/devicelogin", "CALLBACK_URI_PARSE"),
+    ("https://microsoft.com\uff1a443/devicelogin", "CALLBACK_URI_PARSE"),
+    ("http://microsoft.com/devicelogin", "CALLBACK_URI_SCHEME"),
+    (CANARY, "CALLBACK_URI_SCHEME"),
+    ("https://unknown.invalid/devicelogin", "CALLBACK_URI_HOST"),
+    ("https://microsoft.com.evil.invalid/devicelogin", "CALLBACK_URI_HOST"),
+    ("https://www.microsoft.com/devicelogin/", "CALLBACK_URI_PUBLIC_PATH_SLASH"),
+    ("https://microsoft.com/DeviceLogin", "CALLBACK_URI_PUBLIC_PATH_CASE"),
+    ("https://microsoft.com/private-path", "CALLBACK_URI_PATH"),
+    ("https://microsoft.com/%64evicelogin", "CALLBACK_URI_PATH"),
+    (
+        "https://private-account:private-password@microsoft.com/devicelogin",
+        "CALLBACK_URI_PUBLIC_USERINFO",
+    ),
+    (
+        "https://microsoft.com/devicelogin?private-code=synthetic",
+        "CALLBACK_URI_PUBLIC_QUERY",
+    ),
+    (
+        "https://microsoft.com/devicelogin#private-fragment",
+        "CALLBACK_URI_PUBLIC_FRAGMENT",
+    ),
+    ("https://microsoft.com:443/devicelogin", "CALLBACK_URI_PUBLIC_AUTHORITY"),
+    ("https://WWW.MICROSOFT.COM/devicelogin", "CALLBACK_URI_PUBLIC_AUTHORITY"),
+    ("HTTPS://microsoft.com/devicelogin", "CALLBACK_URI_PUBLIC_SPELLING"),
+    ("https://microsoft.com/devicelogin?", "CALLBACK_URI_PUBLIC_SPELLING"),
+    ("https://microsoft.com/devicelogin#", "CALLBACK_URI_PUBLIC_SPELLING"),
+]
+
+
+@pytest.mark.parametrize(
+    "uri,stage", URI_REJECTION_CASES, ids=lambda value: type(value).__name__
+)
+def test_fixed_uri_reason_table_and_cache_stays_unchanged(
+    uri: Any, stage: str, capsys: Any
+) -> None:
+    from urllib.parse import urlsplit
+
+    urlsplit("https://example.invalid/unrelated-public-fixture")
+    before = urlsplit.cache_info()
+    assert module._uri_rejection_stage(uri) == stage
+    assert urlsplit.cache_info() == before
+    assert stage in module._FAILURE_STAGES
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "uri,stage", URI_REJECTION_CASES, ids=lambda value: type(value).__name__
+)
+def test_sdk_uri_rejection_only_fixed_reason_without_challenge_poll_or_metadata(
+    flow: Any,
+    uri: Any,
+    stage: str,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    assert module._uri_rejection_stage(uri) == stage
+    test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
+        flow, uri, installed_device_code_request_token, monkeypatch, capsys
+    )
+
+
+@pytest.mark.parametrize(
+    "uri",
+    ["https://microsoft.com/devicelogin", "https://www.microsoft.com/devicelogin"],
+)
+def test_sdk_accepted_uri_never_invokes_classifier(
+    flow: Any,
+    uri: str,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    calls: list[str] = []
+
+    def forbidden(value: object) -> str:
+        calls.append("classifier")
+        raise AssertionError("Accepted URI reached classifier")
+
+    monkeypatch.setattr(module, "_uri_rejection_stage", forbidden)
+    case = "www" if uri == "https://www.microsoft.com/devicelogin" else "standard"
+    test_installed_sdk_ast_wrapper_preserves_guards_and_distinguishes_callback_checks(
+        flow,
+        case,
+        "AUTHENTICATION_AFTER_CALLBACK",
+        installed_device_code_request_token,
+        monkeypatch,
+        capsys,
+    )
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "fault,stage",
+    [
+        ("missing", "CALLBACK_URI_PARSE"),
+        ("value-error", "CALLBACK_URI_PARSE"),
+        ("unexpected", "CALLBACK_URI"),
+    ],
+)
+def test_uncached_parser_fallback_fault_privacy_and_unrelated_cache_preserved(
+    flow: Any,
+    fault: str,
+    stage: str,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    from urllib.parse import urlsplit
+
+    hooks: list[str] = []
+    cached_calls: list[str] = []
+
+    class PrivateError(Exception):
+        @property
+        def __class__(self) -> type[Exception]:
+            hooks.append("class")
+            print(CANARY)
+            return Exception
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    def broken(value: str) -> Any:
+        if fault == "value-error":
+            raise ValueError(CANARY)
+        raise PrivateError(CANARY)
+
+    class CacheSentinel:
+        def __call__(self, value: str) -> Any:
+            cached_calls.append("cached")
+            raise AssertionError("Called cached parser")
+
+    sentinel = CacheSentinel()
+    if fault != "missing":
+        sentinel.__wrapped__ = broken
+    monkeypatch.setattr(module, "_uri_urlsplit", sentinel)
+    urlsplit("https://example.invalid/unrelated-public-cache")
+    before = urlsplit.cache_info()
+    uri = "https://private-host.invalid/private-path?private-code=" + CANARY
+    assert module._uri_rejection_stage(uri) == stage
+    test_sdk_forwarded_uri_spoofs_and_nonstring_values_reject_without_challenge(
+        flow, uri, installed_device_code_request_token, monkeypatch, capsys
+    )
+    assert urlsplit.cache_info() == before
+    assert cached_calls == [] and hooks == []
+
+
+def test_h13_source_restores_after_only_declared_rejected_uri_diagnostics() -> None:
+    base = "18454c33cff6be0e42c8f412d3cdc1ec75d1c898"
+    old = ast.parse(
+        subprocess.check_output(  # noqa: S603 - Fixed public Git object only.
+            ["git", "show", base + ":apps/api/src/apbra_api/foundry_owner_metadata.py"],  # noqa: S607
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    new = ast.parse(Path(module.__file__).read_text())
+    original_stages = next(
+        node
+        for node in old.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FAILURE_STAGES"
+    )
+    stages = next(
+        node
+        for node in new.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "_FAILURE_STAGES"
+    )
+    assert set(ast.literal_eval(stages.value.args[0])) - set(
+        ast.literal_eval(original_stages.value.args[0])
+    ) == {value for _, value in URI_REJECTION_CASES}
+    new.body.remove(stages)
+    old.body.remove(original_stages)
+    additions = [
+        node
+        for node in new.body
+        if (isinstance(node, ast.FunctionDef) and node.name == "_uri_rejection_stage")
+        or (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "urllib.parse"
+            and len(node.names) == 1
+            and node.names[0].name == "urlsplit"
+            and node.names[0].asname == "_uri_urlsplit"
+        )
+    ]
+    assert len(additions) == 2
+    new.body = [node for node in new.body if node not in additions]
+    prompt = next(
+        node
+        for node in ast.walk(new)
+        if isinstance(node, ast.FunctionDef) and node.name == "prompt"
+    )
+    marks = [
+        node
+        for node in ast.walk(prompt)
+        if isinstance(node, ast.Expr)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "mark"
+        and isinstance(node.value.args[0], ast.Call)
+    ]
+    assert len(marks) == 1
+    expected = ast.parse('mark(_uri_rejection_stage(uri), "CALLBACK_REJECTED")').body[0]
+    assert ast.dump(marks[0]) == ast.dump(expected)
+    for node in ast.walk(prompt):
+        if isinstance(node, ast.If) and marks[0] in node.body:
+            node.body.remove(marks[0])
+    assert ast.dump(old) == ast.dump(new)
+
+
+@pytest.mark.parametrize(
+    "interrupt,category",
+    [(KeyboardInterrupt, "CANCELLED"), (SystemExit, "OPERATION_STOPPED")],
+)
+def test_uri_classifier_interrupts_keep_original_stage_and_cleanup(
+    flow: Any,
+    interrupt: type[BaseException],
+    category: str,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    def stopped(value: str) -> Any:
+        raise interrupt(CANARY)
+
+    monkeypatch.setattr(module, "_uri_urlsplit", SimpleNamespace(__wrapped__=stopped))
+    # Classification must not swallow original interruption handling into PARSE.
+
+    class TTY(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    private = TTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+    fake = SimpleNamespace(
+        _get_app=lambda **kwargs: SimpleNamespace(
+            initiate_device_flow=lambda scopes: {
+                "verification_uri": "https://unknown.invalid/private-" + CANARY,
+                "user_code": "SYNTH1234",
+                "expires_at": 1200,
+                "expires_in": 200,
+            }
+        ),
+        _prompt_callback=lambda *args: flow.options["prompt_callback"](*args),
+        _timeout=60,
+    )
+
+    def auth(**kwargs: Any) -> Any:
+        return installed_device_code_request_token(fake, module._SCOPE)
+
+    flow.sdk.authenticate = auth
+    assert diagnostic_cli(flow, monkeypatch, capsys) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "CALLBACK_URI",
+        "category": category,
+    }
+    assert private.getvalue() == ""
+    cleanup(flow)
+
+
+def test_fixed_uri_error_attrs_and_args_never_contain_private_components(
+    flow: Any,
+    installed_device_code_request_token: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    class TTY(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    private = TTY()
+
+    @contextmanager
+    def terminal(binding: Any) -> Any:
+        yield private
+
+    monkeypatch.setattr(module, "_qualification_terminal", terminal)
+    fake = SimpleNamespace(
+        _get_app=lambda **kwargs: SimpleNamespace(
+            initiate_device_flow=lambda scopes: {
+                "verification_uri": "https://"
+                + CANARY
+                + ":private-password@microsoft.com/devicelogin?code="
+                + CANARY,
+                "user_code": "SYNTH1234",
+                "expires_at": 1200,
+                "expires_in": 200,
+            }
+        ),
+        _prompt_callback=lambda *args: flow.options["prompt_callback"](*args),
+        _timeout=60,
+    )
+
+    def auth(**kwargs: Any) -> Any:
+        return installed_device_code_request_token(fake, module._SCOPE)
+
+    flow.sdk.authenticate = auth
+    with pytest.raises(ProviderConfigurationError) as raised:
+        run(flow)
+    assert vars(raised.value) == {
+        "stage": "CALLBACK_URI_PUBLIC_USERINFO",
+        "category": "CALLBACK_REJECTED",
+    }
+    assert raised.value.args == ("FOUNDRY_QUALIFICATION_UNAVAILABLE",)
+    assert module._failure_output(raised.value) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "CALLBACK_URI_PUBLIC_USERINFO",
+        "category": "CALLBACK_REJECTED",
+    }
+    assert private.getvalue() == ""
+    output = capsys.readouterr()
+    assert output.out == "" and output.err == ""
+    cleanup(flow)

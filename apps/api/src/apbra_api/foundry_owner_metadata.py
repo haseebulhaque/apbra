@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import Event, RLock, Thread, Timer
 from typing import Any, Protocol, TextIO, cast
+from urllib.parse import urlsplit as _uri_urlsplit
 
 import httpx
 
@@ -136,6 +137,25 @@ _FAILURE_STAGES = frozenset(
         "CALLBACK_TERMINAL",
         "CALLBACK_EXPIRY_VALUE",
         "CALLBACK_URI",
+        "CALLBACK_URI_TYPE_NULL",
+        "CALLBACK_URI_TYPE_BYTES",
+        "CALLBACK_URI_TYPE_BOOL",
+        "CALLBACK_URI_TYPE_NUMBER",
+        "CALLBACK_URI_TYPE_SEQUENCE",
+        "CALLBACK_URI_TYPE_MAPPING",
+        "CALLBACK_URI_TYPE_OTHER",
+        "CALLBACK_URI_CONTROL",
+        "CALLBACK_URI_PARSE",
+        "CALLBACK_URI_SCHEME",
+        "CALLBACK_URI_HOST",
+        "CALLBACK_URI_PUBLIC_PATH_SLASH",
+        "CALLBACK_URI_PUBLIC_PATH_CASE",
+        "CALLBACK_URI_PATH",
+        "CALLBACK_URI_PUBLIC_USERINFO",
+        "CALLBACK_URI_PUBLIC_QUERY",
+        "CALLBACK_URI_PUBLIC_FRAGMENT",
+        "CALLBACK_URI_PUBLIC_AUTHORITY",
+        "CALLBACK_URI_PUBLIC_SPELLING",
         "CALLBACK_CODE",
         "CALLBACK_REENTRY",
         "CALLBACK_OUTPUT",
@@ -229,6 +249,64 @@ def _failure_output(error: BaseException) -> dict[str, str]:
     else:
         stage, category = "UNKNOWN", "UNAVAILABLE"
     return {"status": "METADATA_UNAVAILABLE", "stage": stage, "category": category}
+
+
+def _uri_rejection_stage(uri: object) -> str:
+    """A fixed first-matching rejection fact, never admission or a raw value.
+
+    The uncached trusted parser avoids new global retention of URI/results. This
+    does not promise erasure of SDK/input/process memory. Successful callbacks
+    never invoke this classifier. Unexpected faults preserve the original stage.
+    """
+    kind = type(uri)
+    if uri is None:
+        return "CALLBACK_URI_TYPE_NULL"
+    if kind is bytes or kind is bytearray:
+        return "CALLBACK_URI_TYPE_BYTES"
+    if kind is bool:
+        return "CALLBACK_URI_TYPE_BOOL"
+    if kind is int or kind is float:
+        return "CALLBACK_URI_TYPE_NUMBER"
+    if kind is list or kind is tuple:
+        return "CALLBACK_URI_TYPE_SEQUENCE"
+    if kind is dict:
+        return "CALLBACK_URI_TYPE_MAPPING"
+    if kind is not str:
+        return "CALLBACK_URI_TYPE_OTHER"
+    value = cast(str, uri)
+    try:
+        if any(ord(character) <= 32 or ord(character) == 127 for character in value):
+            return "CALLBACK_URI_CONTROL"
+        parser = getattr(_uri_urlsplit, "__wrapped__", None)
+        if parser is None:
+            return "CALLBACK_URI_PARSE"
+        try:
+            parts = parser(value)
+            hostname = parts.hostname
+            _ = parts.port  # Validate malformed ports without reading userinfo or emitting values.
+        except ValueError:
+            return "CALLBACK_URI_PARSE"
+        if parts.scheme != "https":
+            return "CALLBACK_URI_SCHEME"
+        if hostname not in ("microsoft.com", "www.microsoft.com"):
+            return "CALLBACK_URI_HOST"
+        if parts.path == "/devicelogin/":
+            return "CALLBACK_URI_PUBLIC_PATH_SLASH"
+        if parts.path != "/devicelogin" and parts.path.lower() == "/devicelogin":
+            return "CALLBACK_URI_PUBLIC_PATH_CASE"
+        if parts.path != "/devicelogin":
+            return "CALLBACK_URI_PATH"
+        if "@" in parts.netloc:
+            return "CALLBACK_URI_PUBLIC_USERINFO"
+        if parts.query:
+            return "CALLBACK_URI_PUBLIC_QUERY"
+        if parts.fragment:
+            return "CALLBACK_URI_PUBLIC_FRAGMENT"
+        if parts.netloc not in ("microsoft.com", "www.microsoft.com"):
+            return "CALLBACK_URI_PUBLIC_AUTHORITY"
+        return "CALLBACK_URI_PUBLIC_SPELLING"
+    except Exception:
+        return "CALLBACK_URI"
 
 
 def _owner_terminal_provenance(binding: OwnerMetadataPlan) -> None:
@@ -991,6 +1069,7 @@ def run_owner_metadata(
                         "https://microsoft.com/devicelogin",
                         "https://www.microsoft.com/devicelogin",
                     ):
+                        mark(_uri_rejection_stage(uri), "CALLBACK_REJECTED")
                         raise _qualification_error()
                     mark("CALLBACK_CODE", "CALLBACK_REJECTED")
                     if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", code):
