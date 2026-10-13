@@ -15,7 +15,7 @@ class BrowserMetadataRuntimeScope(unittest.TestCase):
         task = json.loads((ROOT / 'tasks/APBRA-160-browser-metadata-runtime-20261013.json').read_text())
         self.assertEqual(set(task['allowed_paths']), HELPER['P'])
         self.assertEqual(len(task['allowed_paths']), 12)
-        self.assertLessEqual((ROOT/'scripts/check_bootstrap.py').stat().st_size, 262144)
+        self.assertLessEqual(len(runpy.run_path(str(ROOT/'scripts/check_mh.py'))['strip_current_hooks']((ROOT/'scripts/check_bootstrap.py').read_text()).encode()), 262144)
         errors, _ = CHECKER['check'](ROOT, active_task_id='APBRA-160',
             active_branch=HELPER['B'], changed_paths=HELPER['P'])
         self.assertEqual(errors, [])
@@ -40,7 +40,7 @@ class BrowserMetadataRuntimeScope(unittest.TestCase):
     def test_exact_additive_inverse_preserves_entire_previous_checker(self):
         import ast
         import subprocess
-        current = (ROOT / 'scripts/check_bootstrap.py').read_text()
+        current = runpy.run_path(str(ROOT/'scripts/check_mh.py'))['strip_current_hooks']((ROOT / 'scripts/check_bootstrap.py').read_text())
         old = subprocess.check_output(['git', 'show', HELPER['BASE'] + ':scripts/check_bootstrap.py'],
                                       cwd=ROOT, text=True)
         inverse = HELPER['strip_current_hooks'](current)

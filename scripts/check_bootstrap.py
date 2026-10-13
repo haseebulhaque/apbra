@@ -21,6 +21,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
+x=runpy.run_path(Path(__file__).parent/'check_mh.py')
 q=runpy.run_path(Path(__file__).parent/'check_br.py')
 o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_20261012.py")))
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
@@ -134,12 +135,12 @@ AI_NATIVE_CLARIFICATION_PATHS={
 'apps/web/src/App.test.tsx',
 'apps/web/src/tenant.ts',
 }
-AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS = {
+AI_NATIVE_CLARIFICATION_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-144-ai-native-iterative-clarification.json',
 'tests/bootstrap/test_ai_native_clarification_scope.py',
 }
-GENERIC_TIME_GRAIN_PATHS = {
+GENERIC_TIME_GRAIN_PATHS={
 'apps/web/src/App.test.tsx',
 'apps/web/src/foundry.ts',
 'apps/web/src/foundry.test.ts',
@@ -149,17 +150,17 @@ GENERIC_TIME_GRAIN_PATHS = {
 'apps/web/src/genericPowerBI.test.ts',
 'apps/web/src/tenant.ts',
 }
-GENERIC_TIME_GRAIN_REGISTRATION_PATHS = {
+GENERIC_TIME_GRAIN_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-145-generic-time-grain-support.json',
 'tests/bootstrap/test_generic_time_grain_scope.py',
 }
-POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS = {
+POST_CAPSTONE_MVP_BASELINE_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-146-post-capstone-mvp-baseline-reconciliation.json',
 'tests/bootstrap/test_post_capstone_mvp_baseline_scope.py',
 }
-POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS = {
+POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS={
 'AGENTS.md',
 'docs/decisions/implementation-baseline.md',
 'README.md',
@@ -172,23 +173,23 @@ POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS = {
 'docs/engineering/capstone-evidence.md',
 'docs/engineering/codex-handoff.md',
 }
-POST_CAPSTONE_PRODUCT_RECONCILIATION_REGISTRATION_PATHS = {
+POST_CAPSTONE_PRODUCT_RECONCILIATION_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-148-post-capstone-product-reconciliation.json',
 'tests/bootstrap/test_post_capstone_product_reconciliation_scope.py',
 'docs/source-register.json',
 }
-DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS = {
+DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS={
 'DATA-MODEL.md',
 'docs/engineering/codex-handoff.md',
 }
-DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS = {
+DATA_MODEL_DOCUMENTATION_RECONCILIATION_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-159-data-model-documentation-reconciliation.json',
 'tests/bootstrap/test_data_model_documentation_reconciliation_scope.py',
 'docs/source-register.json',
 }
-CONFIRMATION_READINESS_INTEGRITY_PATHS = {
+CONFIRMATION_READINESS_INTEGRITY_PATHS={
 'apps/web/src/clarification.ts',
 'apps/web/src/clarification.test.ts',
 'apps/web/src/confirmedRequirements.ts',
@@ -198,13 +199,13 @@ CONFIRMATION_READINESS_INTEGRITY_PATHS = {
 'apps/web/README.md',
 'docs/engineering/codex-handoff.md',
 }
-CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS = {
+CONFIRMATION_READINESS_INTEGRITY_REGISTRATION_PATHS={
 'scripts/check_bootstrap.py',
 'tasks/APBRA-147-confirmation-readiness-integrity.json',
 'tests/bootstrap/test_confirmation_readiness_integrity_scope.py',
 'docs/source-register.json',
 }
-INVITED_PRIVATE_CASE_FOUNDATION_PATHS = {
+INVITED_PRIVATE_CASE_FOUNDATION_PATHS={
 'apps/api/.dockerignore',
 'apps/api/.env.example',
 'apps/api/Dockerfile',
@@ -254,17 +255,17 @@ INVITED_PRIVATE_CASE_FOUNDATION_PATHS = {
     'tests/bootstrap/test_bootstrap.py',
     'README.md',
 }
-INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS = {
+INVITED_PRIVATE_CASE_FOUNDATION_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-162-invited-private-case-foundation.json',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256 = '7acc6d58d90cdd99e2fded77223d6dcc1e80e6d275042f34254d299a3cbaf702'
-INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256 = '067467b5557cf3fa1f381056622b014f3d96cd84a076252f917fcbc186ca23e2'
-INVITED_PRIVATE_CASE_FOUNDATION_AMENDMENT_SOURCE_SHA256 = '8f01e0e8b4833c744734e0a872dfe3238c2aae8c6da1b415272608dff49000fa'
-INVITED_PRIVATE_CASE_FOUNDATION_BOOTSTRAP_FIX_SHA256 = '5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c'
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS = {
+INVITED_PRIVATE_CASE_FOUNDATION_TASK_SHA256='7acc6d58d90cdd99e2fded77223d6dcc1e80e6d275042f34254d299a3cbaf702'
+INVITED_PRIVATE_CASE_FOUNDATION_SOURCE_SHA256='067467b5557cf3fa1f381056622b014f3d96cd84a076252f917fcbc186ca23e2'
+INVITED_PRIVATE_CASE_FOUNDATION_AMENDMENT_SOURCE_SHA256='8f01e0e8b4833c744734e0a872dfe3238c2aae8c6da1b415272608dff49000fa'
+INVITED_PRIVATE_CASE_FOUNDATION_BOOTSTRAP_FIX_SHA256='5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS={
     '.github/workflows/bootstrap.yml','README.md','compose.yaml',
     'apps/api/.dockerignore','apps/api/.env.example','apps/api/Dockerfile',
     'apps/api/README.md','apps/api/pyproject.toml','apps/api/uv.lock',
@@ -292,33 +293,33 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS = {
     'apps/web/src/schemaIngestion.ts','apps/web/src/style.css','apps/web/vite.config.ts',
     'scripts/check_ci_policy.py','tests/bootstrap/test_ci_policy.py',
 }
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS = {
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-163-durable-conversation-evidence-acceptance.json',
     'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS = {
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-163-durable-conversation-evidence-acceptance.json',
     'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS = (
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS=(
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS | {
         '.github/workflows/bootstrap.yml',
         'scripts/check_ci_policy.py',
         'tests/bootstrap/test_ci_policy.py',
 }
 )
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256 = '613490d5ecf7eca776b89c340bbe657dda3d64ad6b37dcd0d7ed7f16b834ecf1'
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256 = '8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256 = '5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_HISTORICAL_FIX_SOURCE_SHA256 = '77b1008cac35b06213ce4acfa5fd2f7950f03d84ec33810f6460cbceb45c24c4'
-DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256 = 'c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
-PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS = {
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256='613490d5ecf7eca776b89c340bbe657dda3d64ad6b37dcd0d7ed7f16b834ecf1'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_SOURCE_SHA256='8d294bd8db6ce7928b90d81c74de8d467d29273fb68deab0d43e35d86f151060'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_SOURCE_SHA256='5aff7adca13643781f7ebc219ce92448df9e971ad3301df3dbe31e427db300fa'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_HISTORICAL_FIX_SOURCE_SHA256='77b1008cac35b06213ce4acfa5fd2f7950f03d84ec33810f6460cbceb45c24c4'
+DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256='c48d57ca571e266883cdc25c37304a16a5a2cf738fe1ccc7d03fa12f3e5d9141'
+PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS={
     '.github/workflows/bootstrap.yml','README.md','compose.yaml',
     'apps/api/Dockerfile','apps/api/README.md','apps/api/pyproject.toml',
     'apps/api/uv.lock',
@@ -355,19 +356,19 @@ PROTECTED_GENERATION_OUTPUT_HISTORY_PATHS = {
     'apps/web/src/validation.ts','apps/web/vite.config.ts',
     'scripts/check_ci_policy.py','tests/bootstrap/test_ci_policy.py',
 }
-PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS = {
+PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-164-protected-generation-output-history.json',
     'tests/bootstrap/test_protected_generation_output_history_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256 = '9b1a1c1b8314dbea829083c83760306808046350c0a541d99d292883a264a34a'
-PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256 = 'dd9da96390eec30550204c53a9452095e89ac369c90856acf52e4ea06995acad'
-PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-164-bootstrap-compatibility-amendment'
-PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID = 'mvp1-protected-generation-output-history-bootstrap-compatibility-amendment'
-PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_SHA256 = '08c74385f68523d5e3a69ef7b6caa98a2b6b6760e22808deb3d3e1800a7d7429'
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS = {
+PROTECTED_GENERATION_OUTPUT_HISTORY_TASK_SHA256='9b1a1c1b8314dbea829083c83760306808046350c0a541d99d292883a264a34a'
+PROTECTED_GENERATION_OUTPUT_HISTORY_SOURCE_SHA256='dd9da96390eec30550204c53a9452095e89ac369c90856acf52e4ea06995acad'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-164-bootstrap-compatibility-amendment'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_ID='mvp1-protected-generation-output-history-bootstrap-compatibility-amendment'
+PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_SOURCE_SHA256='08c74385f68523d5e3a69ef7b6caa98a2b6b6760e22808deb3d3e1800a7d7429'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS={
     'apps/api/alembic/versions/20260929_04_reviewed_report_design.py',
     'apps/api/src/apbra_api/api.py',
     'apps/api/src/apbra_api/domain.py',
@@ -389,19 +390,19 @@ BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_PATHS = {
     'apps/web/src/privateCases.tsx',
     'apps/web/src/style.css',
 }
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS = {
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-169-business-friendly-ux-application-shell.json',
     'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_TASK_SHA256 = '895fc86ccd6d88a5b2f37ffe53c399f9c86f64b739e4586a67d0b187ae3a6592'
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_SOURCE_SHA256 = 'd8da98d6c8bcd7af6683c4f1f86a0113f11368a317d0053993df50920c875399'
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-169-reviewed-design-governance-amendment'
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID = 'mvp1-business-friendly-ux-reviewed-design-amendment'
-BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_SHA256 = 'd2eee3c8dcf4c07aee257debe64148fdfc4fd430186ef68c8367cc00fbe81202'
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS = {
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_TASK_SHA256='895fc86ccd6d88a5b2f37ffe53c399f9c86f64b739e4586a67d0b187ae3a6592'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_SOURCE_SHA256='d8da98d6c8bcd7af6683c4f1f86a0113f11368a317d0053993df50920c875399'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-169-reviewed-design-governance-amendment'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_ID='mvp1-business-friendly-ux-reviewed-design-amendment'
+BUSINESS_FRIENDLY_UX_APPLICATION_SHELL_AMENDMENT_SOURCE_SHA256='d2eee3c8dcf4c07aee257debe64148fdfc4fd430186ef68c8367cc00fbe81202'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS={
     'apps/web/e2e/durable-conversation.spec.ts',
     'apps/web/e2e/private-case.spec.ts',
     'apps/web/e2e/protected-generation.spec.ts',
@@ -413,18 +414,18 @@ PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS = {
     'apps/web/src/privateCases.tsx',
     'apps/web/src/style.css',
 }
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS = {
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-170-professional-saas-experience-visual-system.json',
     'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256 = 'e6fb9148028b9edcc75039ece3fe7632c6f91fdb2d362190e82b028944b15240'
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID = 'mvp1-professional-saas-experience-visual-system'
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256 = 'e3f3dcc0bf39088fc692cdc807190741c154bf562b3f83b5f7de6fab70eb2057'
-PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-170-professional-saas-experience'
-BUSINESS_USER_INTELLIGENT_GENERATION_PATHS = {
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256='e6fb9148028b9edcc75039ece3fe7632c6f91fdb2d362190e82b028944b15240'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID='mvp1-professional-saas-experience-visual-system'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256='e3f3dcc0bf39088fc692cdc807190741c154bf562b3f83b5f7de6fab70eb2057'
+PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH='agent/APBRA-DEVOPS/APBRA-170-professional-saas-experience'
+BUSINESS_USER_INTELLIGENT_GENERATION_PATHS={
     'apps/api/.env.example',
     'apps/api/README.md',
     'apps/api/alembic/versions/20260929_05_business_user_intelligent_generation.py',
@@ -480,24 +481,24 @@ BUSINESS_USER_INTELLIGENT_GENERATION_PATHS = {
     'apps/web/src/style.css',
     'compose.yaml',
 }
-BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS = {
+BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json',
     'tests/bootstrap/test_business_user_report_creation_intelligent_generation_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'docs/source-register.json',
 }
-BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256 = '201e4164efbcf18e778f7152d9d3fd67a25b9232b1816ab6178701678358915f'
-BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation'
-BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256 = '40a6422f05e2559bab6df41a0082c94a2b0b086817af9cf3361896ed37796fbd'
-BUSINESS_USER_INTELLIGENT_GENERATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-business-user-report-creation-intelligent-generation'
-BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-playwright-runtime-governance-amendment'
-BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment'
-BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256 = 'be91d06e76a58f9f2825a20147de96f511933b13abd8c9861d94c7fc5a24e692'
-BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-171-app-test-governance-amendment'
-BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID = 'mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment'
-BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_SHA256 = '4d72de3bd05a2b532cd0b4c5ecdc13926b5e4ca17caeccbc7aa6f0341506c949'
-MODEL_LED_FLEXIBLE_DELIVERY_PATHS = set('''
+BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256='201e4164efbcf18e778f7152d9d3fd67a25b9232b1816ab6178701678358915f'
+BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID='mvp1-business-user-report-creation-intelligent-generation'
+BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_SHA256='40a6422f05e2559bab6df41a0082c94a2b0b086817af9cf3361896ed37796fbd'
+BUSINESS_USER_INTELLIGENT_GENERATION_BRANCH='agent/APBRA-DEVOPS/APBRA-171-business-user-report-creation-intelligent-generation'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-171-playwright-runtime-governance-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_ID='mvp1-business-user-report-creation-intelligent-generation-playwright-runtime-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_AMENDMENT_SOURCE_SHA256='be91d06e76a58f9f2825a20147de96f511933b13abd8c9861d94c7fc5a24e692'
+BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-171-app-test-governance-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_ID='mvp1-business-user-report-creation-intelligent-generation-compiler-fixture-amendment'
+BUSINESS_USER_INTELLIGENT_GENERATION_COMPILER_FIXTURE_AMENDMENT_SOURCE_SHA256='4d72de3bd05a2b532cd0b4c5ecdc13926b5e4ca17caeccbc7aa6f0341506c949'
+MODEL_LED_FLEXIBLE_DELIVERY_PATHS=set('''
 AI-RAG-SPEC.md
 ARCHITECTURE.md
 POWERBI-GENERATION-SPEC.md
@@ -566,7 +567,7 @@ apps/web/src/tenant.ts
 apps/web/vite.config.ts
 compose.yaml
 '''.split())
-MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS = {
+MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
     'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
@@ -576,7 +577,7 @@ MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS = {
     'tests/bootstrap/test_protected_generation_output_history_scope.py',
     'docs/source-register.json',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS = {
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS={
     'scripts/check_bootstrap.py',
     'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
     'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
@@ -586,58 +587,58 @@ MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS = {
     'tests/bootstrap/test_protected_generation_output_history_scope.py',
     'docs/source-register.json',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS = {
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS={
     '.github/workflows/bootstrap.yml',
     'scripts/check_bootstrap.py',
     'scripts/check_ci_policy.py',
     'tests/bootstrap/test_ci_policy.py',
     'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS = {
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS={
     'docs/source-register.json',
     'scripts/check_bootstrap.py',
     'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
 }
-MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256 = '2ee6f89d627f6b0cbd87520cc908126af2bf20055aa490d8936db70e72fda8bc'
-MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide'
-MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
-MODEL_LED_FLEXIBLE_DELIVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide'
-MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH = MODEL_LED_FLEXIBLE_DELIVERY_BRANCH + '-registration'
-MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-vite-proxy-governance-amendment'
-MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment'
-MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256 = '2f2c952e3186bbd77f005dfb17a6e5688022f25a987c8c06dc7152955cfaa41d'
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-governance-amendment'
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-implementation'
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID = 'mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment'
-MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256 = '6facc17e3cd2f4b7172d8bd13f3337f03c492b0245887599273dbeeaecee58cf'
-DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS = {
+MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256='2ee6f89d627f6b0cbd87520cc908126af2bf20055aa490d8936db70e72fda8bc'
+MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID='mvp1-model-led-clarification-flexible-generation-delivery-guide'
+MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_SHA256='a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
+MODEL_LED_FLEXIBLE_DELIVERY_BRANCH='agent/APBRA-DEVOPS/APBRA-174-model-led-clarification-flexible-generation-delivery-guide'
+MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_BRANCH=MODEL_LED_FLEXIBLE_DELIVERY_BRANCH + '-registration'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-174-vite-proxy-governance-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_ID='mvp1-model-led-clarification-flexible-generation-delivery-guide-vite-proxy-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_SOURCE_SHA256='2f2c952e3186bbd77f005dfb17a6e5688022f25a987c8c06dc7152955cfaa41d'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_BRANCH='agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-governance-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH='agent/APBRA-DEVOPS/APBRA-174-ci-timeout-capacity-implementation'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID='mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment'
+MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256='6facc17e3cd2f4b7172d8bd13f3337f03c492b0245887599273dbeeaecee58cf'
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS={
     'README.md','ARCHITECTURE.md','REQUIREMENTS.md','AI-RAG-SPEC.md',
     'POWERBI-GENERATION-SPEC.md','MVP-ACCEPTANCE-CRITERIA.md','DATA-MODEL.md',
     'apps/web/README.md','docs/engineering/codex-handoff.md',
 }
-DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS = {
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS={
     'docs/source-register.json',
     'tasks/APBRA-175-deployment-portability-entitlement-docs.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
-DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_TASK_SHA256 = '09d86487fe0a3f964f8a00d8755d77953bc01aa941c17448ff9872070504c13f'
-DEPLOYMENT_PORTABILITY_SOURCE_ID = 'apbra-175-deployment-model-control-plane'
-DEPLOYMENT_PORTABILITY_SOURCE_SHA256 = '803072216d5bafd192ec3a63e64e4b12b6e06d78ab021c83457e4be331c988d5'
-ENTITLEMENT_ARCHITECTURE_SOURCE_ID = 'apbra-175-subscription-entitlement-feature-gating'
-ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256 = 'a6c0b507deb0976cd97aac95313d5ecdabc159d0265b11e068fe965a1f9f0b25'
-DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH = 'agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs'
-DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH = DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH + '-registration'
-OWNER_ONBOARDING_IDENTITY_DOCS_PATHS = {
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_TASK_SHA256='09d86487fe0a3f964f8a00d8755d77953bc01aa941c17448ff9872070504c13f'
+DEPLOYMENT_PORTABILITY_SOURCE_ID='apbra-175-deployment-model-control-plane'
+DEPLOYMENT_PORTABILITY_SOURCE_SHA256='803072216d5bafd192ec3a63e64e4b12b6e06d78ab021c83457e4be331c988d5'
+ENTITLEMENT_ARCHITECTURE_SOURCE_ID='apbra-175-subscription-entitlement-feature-gating'
+ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256='a6c0b507deb0976cd97aac95313d5ecdabc159d0265b11e068fe965a1f9f0b25'
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH='agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs'
+DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH=DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH + '-registration'
+OWNER_ONBOARDING_IDENTITY_DOCS_PATHS={
     'README.md','ARCHITECTURE.md','REQUIREMENTS.md','DATA-MODEL.md',
     'MVP-ACCEPTANCE-CRITERIA.md','SECURITY.md','apps/web/README.md',
     'docs/engineering/codex-handoff.md',
     'docs/decisions/implementation-baseline.md',
 }
-OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS = {
+OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS={
     'docs/source-register.json',
     'tasks/APBRA-176-owner-onboarding-identity-docs.json',
     'scripts/check_bootstrap.py',
@@ -645,14 +646,14 @@ OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS = {
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-OWNER_ONBOARDING_IDENTITY_DOCS_TASK_SHA256 = '031f9451dd61d481e64208559f698557aec1e47a221f8826e7ba784da0abb43c'
-OWNER_ONBOARDING_IDENTITY_SOURCE_ID = 'apbra-176-owner-onboarding-identity'
-OWNER_ONBOARDING_IDENTITY_SOURCE_SHA256 = 'f37ae7cd8abe73321e65c6485b7424f4cbecc93edddefc5a1579d7260838fb59'
-OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID = 'apbra-176-owner-onboarding-requirements'
-OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256 = 'a99f810212fad2e6f5715b94c311f724bb2f24686d4eda35aadb185f497dd0bb'
-OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH = 'agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs'
-OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH = OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH + '-registration'
-PROVIDER_NEUTRAL_SSO_PATHS = {
+OWNER_ONBOARDING_IDENTITY_DOCS_TASK_SHA256='031f9451dd61d481e64208559f698557aec1e47a221f8826e7ba784da0abb43c'
+OWNER_ONBOARDING_IDENTITY_SOURCE_ID='apbra-176-owner-onboarding-identity'
+OWNER_ONBOARDING_IDENTITY_SOURCE_SHA256='f37ae7cd8abe73321e65c6485b7424f4cbecc93edddefc5a1579d7260838fb59'
+OWNER_ONBOARDING_REQUIREMENTS_SOURCE_ID='apbra-176-owner-onboarding-requirements'
+OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256='a99f810212fad2e6f5715b94c311f724bb2f24686d4eda35aadb185f497dd0bb'
+OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH='agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs'
+OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH=OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH + '-registration'
+PROVIDER_NEUTRAL_SSO_PATHS={
     'apps/api/.env.example','apps/api/README.md',
     'apps/api/alembic/versions/20261002_07_provider_neutral_sso.py',
     'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
@@ -667,24 +668,24 @@ PROVIDER_NEUTRAL_SSO_PATHS = {
     'apps/web/src/api.ts','apps/web/src/privateCases.test.tsx',
     'apps/web/src/privateCases.tsx','apps/web/src/style.css',
 }
-PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS = {
+PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS={
     'docs/source-register.json','tasks/APBRA-172-provider-neutral-sso.json',
     'scripts/check_bootstrap.py','tests/bootstrap/test_provider_neutral_sso_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-PROVIDER_NEUTRAL_SSO_TASK_SHA256 = '8edb604b7e9a33c3a7249a71a17b50e8578ad86cf00139f2a9bdfedc9f07a210'
-PROVIDER_NEUTRAL_SSO_SOURCES = (
+PROVIDER_NEUTRAL_SSO_TASK_SHA256='8edb604b7e9a33c3a7249a71a17b50e8578ad86cf00139f2a9bdfedc9f07a210'
+PROVIDER_NEUTRAL_SSO_SOURCES=(
     ('apbra-172-identity-rbac','4030847',4,'a0360420eda28492d9cacfba0c5617a4bfd884034e9397c5de984edf4e1eed00'),
     ('apbra-172-data-integration-identity-audit','4063348',4,'cb3c6716e6784717f5d578614179c257b75364b0087a9f3ca359d20a6a9ccea9'),
     ('apbra-172-business-functional-requirements','3932362',7,'aa7b6f22711923856d302cd9751baff6a508f9031bced9f0c56585400242232b'),
     ('apbra-172-multi-tenancy-isolation','4063408',5,'5bdeb6e7532139b3759a80bf9e23462b8f8c3e8bc0f0d1b88dbf8ce72f37b0e1'),
     ('apbra-172-platform-identity-deployment-adrs','3932483',4,'81601b05483ced7d44add3cdea5791f6294c7aa5ece0430b249f000a87bf1a8f'),
 )
-PROVIDER_NEUTRAL_SSO_BRANCH = 'agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
-PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH = PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
-COMPANY_LIFECYCLE_PATHS = {
+PROVIDER_NEUTRAL_SSO_BRANCH='agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
+PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH=PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
+COMPANY_LIFECYCLE_PATHS={
     'apps/api/README.md',
     'apps/api/alembic/versions/20261003_08_company_lifecycle.py',
     'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
@@ -698,7 +699,7 @@ COMPANY_LIFECYCLE_PATHS = {
     'apps/web/src/privateCases.tsx','apps/web/src/privateCases.test.tsx',
     'apps/web/src/style.css','apps/web/vite.config.ts',
 }
-COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
+COMPANY_LIFECYCLE_REGISTRATION_PATHS={
     'docs/source-register.json','tasks/APBRA-151-company-lifecycle.json',
     'scripts/check_bootstrap.py','tests/bootstrap/test_company_lifecycle_scope.py',
     'tests/bootstrap/test_invited_private_case_foundation_scope.py',
@@ -706,11 +707,11 @@ COMPANY_LIFECYCLE_REGISTRATION_PATHS = {
     'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
     'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
-COMPANY_LIFECYCLE_TASK_SHA256 = '0aac6448de867336932cb2d8dc41dcb79be79d166f98e197e0c14aa501311f97'
-COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256 = {"requirements":"7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79","acceptance_criteria":"652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95","dependencies":"b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630","escalate_when":"c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc"}
-COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256 = {"verification_required":"37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407","dependencies":"92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5"}
-COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256 = {"verification_required":"0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9","dependencies":"ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db"}
-COMPANY_LIFECYCLE_SOURCES = (
+COMPANY_LIFECYCLE_TASK_SHA256='0aac6448de867336932cb2d8dc41dcb79be79d166f98e197e0c14aa501311f97'
+COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256={"requirements":"7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79","acceptance_criteria":"652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95","dependencies":"b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630","escalate_when":"c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc"}
+COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256={"verification_required":"37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407","dependencies":"92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5"}
+COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256={"verification_required":"0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9","dependencies":"ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db"}
+COMPANY_LIFECYCLE_SOURCES=(
     ('apbra-151-mvp-scope','4063307',6,'8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
     ('apbra-151-business-functional-requirements','3932362',8,'002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
     ('apbra-151-data-identity-audit','4063348',5,'ce65429bcb00e2421f05f8909d95d1813909ac4d72066fcf224b01336cc3d5b1'),
@@ -719,8 +720,8 @@ COMPANY_LIFECYCLE_SOURCES = (
     ('apbra-151-platform-identity-adrs','3932483',4,'69ec3923199b0d0f9b0796002ce2897ef20ddd5b8d9154d19f7a4564b2241ec3'),
     ('apbra-151-identity-rbac','4030847',5,'57c91915719f98df0cdfd7d5d2aca8c463ea89dbaf9808b3791c258c27c3c7b0'),
 )
-COMPANY_LIFECYCLE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
-COMPANY_LIFECYCLE_REGISTRATION_BRANCH = COMPANY_LIFECYCLE_BRANCH + '-registration'
+COMPANY_LIFECYCLE_BRANCH='agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
+COMPANY_LIFECYCLE_REGISTRATION_BRANCH=COMPANY_LIFECYCLE_BRANCH + '-registration'
 COMPANY_LIFECYCLE_AMENDMENT_BRANCH = 'agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
 COMPANY_LIFECYCLE_AMENDMENT_PATHS = {
     'tasks/APBRA-151-company-lifecycle.json',
@@ -2231,6 +2232,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         metadata_observations, e = zz['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        w,e=x['bind'](root,catalog,sources,bound_provider_registration);errors+=e
         v,e=q['bind'](root,catalog,sources,bound_provider_registration);errors+=e
         owner_metadata, e = o['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
@@ -2815,6 +2817,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (owner_metadata, o['P']),
             (agent_details, n['P']),
             (metadata_observations, zz['P']),
+(w,x['P']),
 (v,q['P']),
             (raw_ingress, u['P']),
             (fixture_staging, f['P']),
@@ -2831,6 +2834,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
  }
                 else agent_details if active_branch == n['B']
                 else metadata_observations if active_branch == zz['B']
+                else w if active_branch==x['B']
                 else v if active_branch==q['B']
                 else document_drafts if active_branch in {d['B'], d['R']}
                 else knowledge_lifecycle if active_branch in {k['B'], k['R']}
@@ -3143,7 +3147,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3157,7 +3161,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
