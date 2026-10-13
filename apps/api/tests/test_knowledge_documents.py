@@ -844,6 +844,7 @@ def test_sql_parameter_logging_never_exposes_document_originals(
 def test_fresh_python_process_recovers_committed_journal_and_originals(
     client: TestClient,
     database: Database,
+    database_url: str,
 ) -> None:
     import os
     import subprocess
@@ -878,6 +879,7 @@ def test_fresh_python_process_recovers_committed_journal_and_originals(
     assert isinstance(token, str)
     source_root = Path(__file__).resolve().parents[1] / "src"
     fixture = {
+        "database_url": database_url,
         "session_token": token,
         "membership_id": h["X-Expected-Membership-Id"],
         "command_key": h["Idempotency-Key"],
@@ -894,6 +896,7 @@ def test_fresh_python_process_recovers_committed_journal_and_originals(
 import hashlib,json,sys,os
 from pathlib import Path
 from uuid import UUID
+from sqlalchemy.engine import make_url
 import apbra_api.persistence as persisted
 import apbra_api.knowledge_documents as documents
 import apbra_api.knowledge_lifecycle as lifecycle
@@ -904,7 +907,11 @@ try:
     source=Path(os.environ["PYTHONPATH"]).resolve()
     assert all(Path(module.__file__).resolve().is_relative_to(source)
                for module in (persisted,documents,lifecycle))
-    database=Database("postgresql+psycopg://postgres@127.0.0.1:54324/apbra_test")
+    url=make_url(fixture["database_url"])
+    assert url.drivername=="postgresql+psycopg"
+    assert url.host in {"127.0.0.1","localhost"} and url.port is not None
+    assert url.database=="apbra_test" and not url.query
+    database=Database(fixture["database_url"])
     service=KnowledgeDocumentsService()
     with database.session() as db:
         context=authorize(db, fixture["session_token"], fixture["membership_id"])
