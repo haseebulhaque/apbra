@@ -25,7 +25,14 @@ from urllib.parse import urlsplit as _uri_urlsplit
 
 import httpx
 
-from .foundry_metadata_projection import _agent_observation, _knowledge_observation
+from .foundry_metadata_projection import (
+    ProjectionError,
+    _knowledge_observation,
+    _projection_reason,
+)
+from .foundry_metadata_projection import (
+    _owner_agent_observation as _agent_observation,
+)
 from .model_provider import FoundryAccessToken, ProviderConfigurationError
 
 _SCOPE = "https://ai.azure.com/.default"
@@ -307,6 +314,13 @@ def _failure_output(error: BaseException) -> dict[str, Any]:
         facts = getattr(error, "uri_facts", None)
         if facts is not None:
             result["uri_facts"] = _uri_facts_projection(facts)
+    if (
+        (error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt)
+        and stage == "AGENT_PROJECTION"
+    ):
+        reason = getattr(error, "projection_reason", None)
+        if reason is not None:
+            result["projection_reason"] = _projection_reason(reason)
     return result
 
 
@@ -1287,6 +1301,7 @@ def run_owner_metadata(
     stage, category = "BINDING", "QUALIFICATION_REJECTED"
     captured: _SafeMetadataFailure | _SafeMetadataInterrupt | None = None
     uri_facts: dict[str, str] | None = None
+    projection_reason: str | None = None
 
     def mark(next_stage: str, next_category: str) -> None:
         nonlocal stage, category
@@ -1406,8 +1421,15 @@ def run_owner_metadata(
                     factory,
                 )
                 mark("AGENT_PROJECTION", "PROJECTION_FAILED")
-                observation, search_origin = _agent_observation(properties, version, binding)
+                try:
+                    observation, search_origin = _agent_observation(properties, version, binding)
+                except BaseException as error:
+                    if type(error) is ProjectionError:
+                        projection_reason = _projection_reason(error.reason)
+                    raise
+                projection_reason = "POST_PROJECTION_GUARD"
                 memory.guard()
+                projection_reason = None
                 mark("SEARCH_CONFIRMATION", "CONFIRMATION_FAILED")
                 _confirm_private(
                     terminal,
@@ -1446,6 +1468,10 @@ def run_owner_metadata(
                 return result
             except BaseException as error:
                 captured = _safe_failure(stage, category, error)
+                if projection_reason is not None and stage == "AGENT_PROJECTION":
+                    setattr(  # noqa: B010 - Only local projection/guard facts on exact safe exceptions.
+                        captured, "projection_reason", _projection_reason(projection_reason)
+                    )
                 if uri_facts is not None and stage.startswith("CALLBACK_URI"):
                     setattr(  # noqa: B010 - Optional facts only on locally created exact safe exceptions.
                         captured, "uri_facts", _uri_facts_projection(uri_facts)

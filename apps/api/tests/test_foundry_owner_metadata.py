@@ -3051,6 +3051,7 @@ def test_complete_uri_cli_projection_rejects_forged_facts_without_private_hooks(
 
 def _restore_browser_route(tree: ast.Module) -> ast.Module:
     """Only explicit approved browser factory/default reversal, no guard changes."""
+    tree = _restore_projection_reason_extension(tree)
     additions = [
         n
         for n in tree.body
@@ -3427,3 +3428,604 @@ def test_browser_permission_or_consent_failure_is_unavailable_without_retry(
     assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
     assert capsys.readouterr().out == ""
     cleanup(flow)
+
+
+def _restore_projection_reason_extension(tree: ast.Module) -> ast.Module:
+    """Remove only exact, counted additions; preserve every other source node."""
+
+    def parsed(source: str) -> ast.stmt:
+        return ast.parse(source).body[0]
+
+    expected_imports = ast.parse(
+        "from .foundry_metadata_projection import "
+        "ProjectionError, _knowledge_observation, _projection_reason\n"
+        "from .foundry_metadata_projection import _owner_agent_observation as _agent_observation"
+    ).body
+    imports = [
+        index
+        for index, node in enumerate(tree.body)
+        if isinstance(node, ast.ImportFrom) and node.module == "foundry_metadata_projection"
+    ]
+    assert len(imports) == 2
+    assert [ast.dump(tree.body[index]) for index in imports] == [
+        ast.dump(node) for node in expected_imports
+    ]
+    tree.body[imports[0]] = parsed(
+        "from .foundry_metadata_projection import _agent_observation, _knowledge_observation"
+    )
+    del tree.body[imports[1]]
+    output_addition = parsed(
+        'if (error_type is _SafeMetadataFailure or error_type is _SafeMetadataInterrupt)'
+        ' and stage == "AGENT_PROJECTION":\n'
+        ' reason = getattr(error, "projection_reason", None)\n'
+        " if reason is not None:\n"
+        '  result["projection_reason"] = _projection_reason(reason)'
+    )
+    output = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_failure_output"
+    )
+    matches = [
+        index
+        for index, node in enumerate(output.body)
+        if ast.dump(node) == ast.dump(output_addition)
+    ]
+    assert len(matches) == 1
+    del output.body[matches[0]]
+    expected_try = parsed(
+        "try:\n"
+        " observation, search_origin = _agent_observation(properties, version, binding)\n"
+        "except BaseException as error:\n"
+        " if type(error) is ProjectionError:\n"
+        "  projection_reason = _projection_reason(error.reason)\n"
+        " raise"
+    )
+    additions = [
+        parsed("projection_reason: str | None = None"),
+        parsed('projection_reason = "POST_PROJECTION_GUARD"'),
+        parsed("projection_reason = None"),
+        parsed(
+            'if projection_reason is not None and stage == "AGENT_PROJECTION":'
+            ' setattr(captured, "projection_reason", _projection_reason(projection_reason))'
+        ),
+    ]
+    addition_dumps = [ast.dump(node) for node in additions]
+    counts = [0] * len(additions)
+    try_count = 0
+
+    class Reverse(ast.NodeTransformer):
+        def visit(self, node: ast.AST) -> Any:
+            nonlocal try_count
+            dumped = ast.dump(node)
+            if dumped == ast.dump(expected_try):
+                try_count += 1
+                return expected_try.body[0]  # type: ignore[attr-defined]
+            if dumped in addition_dumps:
+                counts[addition_dumps.index(dumped)] += 1
+                return None
+            return super().visit(node)
+
+    run = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "run_owner_metadata"
+    )
+    Reverse().visit(run)
+    assert counts == [1, 1, 1, 1]
+    assert try_count == 1
+    return tree
+
+
+def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> None:
+    before = subprocess.check_output(  # noqa: S603 - Fixed public source only.
+        [
+            "/usr/bin/git",
+            "show",
+            "b305ec75c70c2da8503a9b6ce2d0641502be5b8c"
+            ":apps/api/src/apbra_api/foundry_owner_metadata.py",
+        ],
+        cwd=ROOT,
+    )
+    assert ast.dump(
+        _restore_projection_reason_extension(ast.parse(Path(module.__file__).read_text()))
+    ) == ast.dump(ast.parse(before))
+    before_main = subprocess.check_output(  # noqa: S603 - Fixed public source only.
+        [
+            "/usr/bin/git",
+            "show",
+            "b305ec75c70c2da8503a9b6ce2d0641502be5b8c:apps/api/src/apbra_api/main.py",
+        ],
+        cwd=ROOT,
+    )
+    assert before_main == (ROOT / "apps/api/src/apbra_api/main.py").read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        (
+            "    return result\n\n\ndef _uri_rejection_stage(uri: object) -> str:",
+            '    print("SYNTHETIC_PRIVATE_OUTPUT")\n    return result\n\n\n'
+            'def _uri_rejection_stage(uri: object) -> str:',
+        ),
+        ('"status": "METADATA_UNAVAILABLE"', '"status": "CHANGED_STATUS"'),
+        ('"category": category', '"category": "CHANGED_CATEGORY"'),
+        ('and stage == "AGENT_PROJECTION"\n    ):', "and True\n    ):"),
+        ("if type(error) is ProjectionError:", "if isinstance(error, ProjectionError):"),
+        (
+            "projection_reason = _projection_reason(error.reason)\n                    raise",
+            'projection_reason = _projection_reason(error.reason)\n'
+            '                    print("SYNTHETIC_PRIVATE_OUTPUT")\n                    raise',
+        ),
+        ("    ProjectionError,\n", "    ProjectionError,\n    extra_import,\n"),
+        ("projection_reason: str | None = None", "projection_reason: object = None"),
+    ],
+)
+def test_projection_preservation_inverse_rejects_unexpected_source_mutations(
+    original: str, replacement: str
+) -> None:
+    source = Path(module.__file__).read_text()
+    assert source.count(original) == 1
+    mutated = ast.parse(source.replace(original, replacement, 1))
+    before = subprocess.check_output(  # noqa: S603 - Fixed public source only.
+        [
+            "/usr/bin/git",
+            "show",
+            "b305ec75c70c2da8503a9b6ce2d0641502be5b8c:apps/api/src/apbra_api/foundry_owner_metadata.py",
+        ],
+        cwd=ROOT,
+    )
+    try:
+        restored = _restore_projection_reason_extension(mutated)
+    except AssertionError:
+        return
+    assert ast.dump(restored) != ast.dump(ast.parse(before))
+
+
+def schema_projection_records(flow: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Synthetic records with every required GetAgent/GetVersion envelope field."""
+    import copy
+
+    properties, version = copy.deepcopy(flow.properties), copy.deepcopy(flow.version)
+    version.update(metadata=None, id="synthetic-version", created_at=1700000000)
+    properties.update(
+        id="synthetic-agent",
+        state="enabled",
+        configuration_state="enabled",
+        versions={"latest": copy.deepcopy(version)},
+    )
+    return properties, version
+
+
+@pytest.mark.parametrize(
+    "omission", ["endpoint", "selector", "read-only", "all-approved"]
+)
+def test_projection_documented_omissions_are_unknown_without_runtime_or_tool_grants(
+    flow: Any, omission: str
+) -> None:
+    properties, version = schema_projection_records(flow)
+    if omission in {"endpoint", "all-approved"}:
+        properties.pop("agent_endpoint")
+    if omission == "selector":
+        properties["agent_endpoint"].pop("version_selector")
+    if omission in {"read-only", "all-approved"}:
+        version["definition"]["tools"][0]["allowed_tools"] = {
+            "tool_names": ["knowledge_base_retrieve"]
+        }
+    observation, origin = projection._owner_agent_observation(
+        properties, version, module._PLAN
+    )
+    assert (
+        observation["observedEndpointSelector"] is None
+        if omission != "read-only"
+        else observation["observedEndpointSelector"] is not None
+    )
+    if omission in {"read-only", "all-approved"}:
+        assert observation["tools"][0]["readOnly"] is None
+    assert observation["tools"][0]["allowedTools"] == ["knowledge_base_retrieve"]
+    assert origin == "https://synthetic.search.windows.net"
+    # The actual default Browser flow still reads only metadata and keeps all
+    # existing runtime/routing/grounding/isolation claims false.
+    flow.properties.clear()
+    flow.properties.update(properties)
+    flow.version.clear()
+    flow.version.update(version)
+    result = run(flow)
+    assert result["routingVerified"] is False and result["runtimeActivated"] is False
+    assert (
+        result["groundingVerified"] is False
+        and result["tenantIsolationVerified"] is False
+    )
+    assert len([e for e in flow.events if e.startswith("GET:")]) == 3
+    cleanup(flow)
+
+
+@pytest.mark.parametrize(
+    "mutation,reason",
+    [
+        ("identity", "IDENTITY"),
+        ("endpoint-null", "ENDPOINT_SHAPE"),
+        ("selector-null", "SELECTOR_SHAPE"),
+        ("rules-missing", "SELECTOR_RULES"),
+        ("rule-kind", "SELECTOR_RULE_KIND"),
+        ("percentage", "SELECTOR_PERCENTAGE"),
+        ("rule-version", "SELECTOR_VERSION"),
+        ("total", "SELECTOR_TOTAL"),
+        ("definition", "DEFINITION_KIND"),
+        ("model", "MODEL_IDENTIFIER"),
+        ("tools", "TOOLS_BINDING"),
+        ("tool-type", "TOOL_TYPE"),
+        ("url", "MCP_LOCATION"),
+        ("bad-port", "MCP_LOCATION"),
+        ("label", "MCP_LABEL"),
+        ("readonly-null", "MCP_FILTER_READ_ONLY"),
+        ("allowed-missing", "MCP_ALLOWED_TOOLS"),
+        ("allowed-null", "MCP_ALLOWED_TOOLS"),
+        ("names-missing", "MCP_ALLOWED_TOOLS"),
+        ("names-empty", "MCP_ALLOWED_TOOLS"),
+        ("names-extra", "MCP_ALLOWED_TOOLS"),
+        ("duplicate-source", "MCP_SOURCE_COUNT"),
+        ("instructions", "INSTRUCTIONS_SHAPE"),
+        ("response", "RESPONSE_CONFIGURATION"),
+    ],
+)
+def test_projection_closed_reasons_keep_every_binding_and_bound_failclosed(
+    flow: Any, mutation: str, reason: str, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    import copy
+
+    properties, version = schema_projection_records(flow)
+    definition = version["definition"]
+    tool = definition["tools"][0]
+    if mutation == "identity":
+        properties["name"] = CANARY
+    elif mutation == "endpoint-null":
+        properties["agent_endpoint"] = None
+    elif mutation == "selector-null":
+        properties["agent_endpoint"]["version_selector"] = None
+    elif mutation == "rules-missing":
+        properties["agent_endpoint"]["version_selector"] = {}
+    elif mutation == "rule-kind":
+        properties["agent_endpoint"]["version_selector"]["version_selection_rules"][0][
+            "type"
+        ] = CANARY
+    elif mutation == "percentage":
+        properties["agent_endpoint"]["version_selector"]["version_selection_rules"][0][
+            "traffic_percentage"
+        ] = True
+    elif mutation == "rule-version":
+        properties["agent_endpoint"]["version_selector"]["version_selection_rules"][0][
+            "agent_version"
+        ] = CANARY + "\n"
+    elif mutation == "total":
+        properties["agent_endpoint"]["version_selector"]["version_selection_rules"][0][
+            "traffic_percentage"
+        ] = 99
+    elif mutation == "definition":
+        definition["kind"] = CANARY
+    elif mutation == "model":
+        definition["model"] = CANARY + "\n"
+    elif mutation == "tools":
+        definition["tools"] = []
+    elif mutation == "tool-type":
+        tool["type"] = CANARY + "\n"
+    elif mutation == "url":
+        tool["server_url"] = "https://" + CANARY + ".invalid/path?token=" + CANARY
+    elif mutation == "bad-port":
+        tool["server_url"] = (
+            "https://synthetic.search.windows.net:bad/knowledgebases/"
+            + module._PLAN.knowledge_base
+            + "/mcp"
+        )
+    elif mutation == "label":
+        tool["server_label"] = "Knowledge standards"
+    elif mutation == "readonly-null":
+        tool["allowed_tools"] = {
+            "read_only": None,
+            "tool_names": ["knowledge_base_retrieve"],
+        }
+    elif mutation == "allowed-missing":
+        tool.pop("allowed_tools")
+    elif mutation == "allowed-null":
+        tool["allowed_tools"] = None
+    elif mutation == "names-missing":
+        tool["allowed_tools"] = {"read_only": True}
+    elif mutation == "names-empty":
+        tool["allowed_tools"] = {"tool_names": []}
+    elif mutation == "names-extra":
+        tool["allowed_tools"] = ["knowledge_base_retrieve", CANARY]
+    elif mutation == "duplicate-source":
+        definition["tools"].append(copy.deepcopy(tool))
+    elif mutation == "instructions":
+        definition["instructions"] = 123
+    elif mutation == "response":
+        definition["text"] = {"value": "\ud800"}
+    with pytest.raises(projection.ProjectionError) as error:
+        projection._owner_agent_observation(properties, version, module._PLAN)
+    assert type(error.value) is projection.ProjectionError
+    assert vars(error.value) == {"reason": reason}
+    assert error.value.args == ("FOUNDRY_QUALIFICATION_UNAVAILABLE",)
+    flow.properties.clear()
+    flow.properties.update(properties)
+    flow.version.clear()
+    flow.version.update(version)
+    if mutation == "response":
+        # Escaped surrogate is decoded as a string, then fails UTF-8 size projection.
+        # Use raw ASCII JSON at MockTransport; HTTPX json= refuses encoding it.
+        def raw_response(request: Any) -> Any:
+            value = version if "/versions/" in request.url.path else properties
+            return httpx.Response(
+                200, content=json.dumps(value).encode(), request=request
+            )
+
+        flow.response = raw_response
+    original = module.run_owner_metadata
+    monkeypatch.setattr(
+        module,
+        "run_owner_metadata",
+        lambda: original(credential_factory=flow.factory, client_factory=flow.client),
+    )
+    monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+    with pytest.raises(SystemExit):
+        module.main()
+    output = capsys.readouterr()
+    assert output.out == "" and CANARY not in output.err
+    if mutation == "response":
+        # Strict transport encoding rejects this malformed scalar before the
+        # projector. Preserve the real earlier phase; pure reason checked above.
+        assert json.loads(output.err) == {
+            "status": "METADATA_UNAVAILABLE", "stage": "AGENT_PROPERTIES_GET",
+            "category": "QUALIFICATION_REJECTED",
+        }
+        assert len([e for e in flow.events if e.startswith("GET:")]) == 1
+    else:
+        assert json.loads(output.err) == {
+            "status": "METADATA_UNAVAILABLE", "stage": "AGENT_PROJECTION",
+            "category": "QUALIFICATION_REJECTED", "projection_reason": reason,
+        }
+        assert len([e for e in flow.events if e.startswith("GET:")]) == 2
+    assert "CONFIRM SEARCH" not in flow.events
+    cleanup(flow)
+
+
+def test_projection_post_field_expiry_is_distinct_and_cleanup_overrides_reason(
+    flow: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original = module._agent_observation
+
+    def expires(properties: Any, version: Any, binding: Any) -> Any:
+        result = original(properties, version, binding)
+        flow.clock = flow.expiry + 1
+        return result
+
+    monkeypatch.setattr(module, "_agent_observation", expires)
+    with pytest.raises(ProviderConfigurationError) as error:
+        run(flow)
+    assert module._failure_output(error.value) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "AGENT_PROJECTION",
+        "category": "QUALIFICATION_REJECTED",
+        "projection_reason": "POST_PROJECTION_GUARD",
+    }
+    assert "CONFIRM SEARCH" not in flow.events
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("where", ["SDK", "projector-subclass", "post-guard-opaque"])
+def test_projection_reason_never_reads_forged_exception_hooks(
+    flow: Any, where: str, monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    hooks: list[str] = []
+
+    class Private(projection.ProjectionError):
+        @property
+        def __class__(self) -> type[Exception]:
+            hooks.append("class")
+            print(CANARY)
+            return Exception
+
+        @property
+        def reason(self) -> str:
+            hooks.append("reason")
+            print(CANARY)
+            return CANARY
+
+        def __init__(self) -> None:
+            ProviderConfigurationError.__init__(self, CANARY)
+
+        def __str__(self) -> str:
+            hooks.append("str")
+            print(CANARY)
+            return CANARY
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    def fails(*args: Any, **kwargs: Any) -> Any:
+        raise Private()
+
+    if where == "SDK":
+        flow.sdk.authenticate = fails
+    elif where == "projector-subclass":
+        monkeypatch.setattr(module, "_agent_observation", fails)
+    else:
+        passed = [False]
+        original_projector = module._agent_observation
+        original_guard = module._OwnerMemory.guard
+
+        def observed(*args: Any, **kwargs: Any) -> Any:
+            result = original_projector(*args, **kwargs)
+            passed[0] = True
+            return result
+
+        def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
+            if passed[0]:
+                raise Private()
+            return original_guard(self, *args, **kwargs)
+
+        monkeypatch.setattr(module, "_agent_observation", observed)
+        monkeypatch.setattr(module._OwnerMemory, "guard", guarded)
+    with pytest.raises(ProviderConfigurationError) as error:
+        run(flow)
+    output = module._failure_output(error.value)
+    if where == "post-guard-opaque":
+        assert output["projection_reason"] == "POST_PROJECTION_GUARD"
+    else:
+        assert "projection_reason" not in output
+    assert CANARY not in json.dumps(output) and hooks == []
+    assert capsys.readouterr().out == ""
+    cleanup(flow)
+
+
+def test_projection_opaque_metadata_and_forged_reason_fail_without_hooks(
+    flow: Any, capsys: Any
+) -> None:
+    hooks: list[str] = []
+
+    class Private:
+        @property
+        def __class__(self) -> type[str]:
+            hooks.append("class")
+            print(CANARY)
+            return str
+
+        def __repr__(self) -> str:
+            hooks.append("repr")
+            print(CANARY)
+            return CANARY
+
+    properties, version = schema_projection_records(flow)
+    version["definition"]["text"] = {"unknown": Private()}
+    with pytest.raises(projection.ProjectionError) as error:
+        projection._owner_agent_observation(properties, version, module._PLAN)
+    assert error.value.reason == "METADATA_SHAPE"
+    local = projection.ProjectionError(Private())
+    assert local.reason == "UNKNOWN"
+    local.reason = Private()
+    assert projection._projection_reason(local.reason) == "UNKNOWN"
+    assert hooks == [] and capsys.readouterr().out == ""
+
+
+def test_projection_cleanup_failure_discards_captured_field_reason(
+    flow: Any, capsys: Any
+) -> None:
+    flow.properties["name"] = CANARY
+    flow.fail = "close"
+    with pytest.raises(ProviderConfigurationError) as error:
+        run(flow)
+    assert module._failure_output(error.value) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "CLEANUP",
+        "category": "CLEANUP_FAILED",
+    }
+    assert "projection_reason" not in vars(error.value)
+    assert not flow.memories[-1]._cleanup_verified
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "where", ["rule-count", "tool-count", "model-length", "duplicate-name"]
+)
+def test_projection_existing_item_and_identifier_bounds_are_retained(
+    flow: Any, where: str
+) -> None:
+    import copy
+
+    properties, version = schema_projection_records(flow)
+    rule = properties["agent_endpoint"]["version_selector"]["version_selection_rules"][
+        0
+    ]
+    tool = version["definition"]["tools"][0]
+    if where == "rule-count":
+        properties["agent_endpoint"]["version_selector"]["version_selection_rules"] = [
+            copy.deepcopy(rule)
+        ] * 101
+        expected = "SELECTOR_RULES"
+    elif where == "tool-count":
+        version["definition"]["tools"] = [copy.deepcopy(tool)] * 101
+        expected = "TOOLS_BINDING"
+    elif where == "model-length":
+        version["definition"]["model"] = "x" * 256
+        expected = "MODEL_IDENTIFIER"
+    else:
+        tool["allowed_tools"] = ["knowledge_base_retrieve"] * 2
+        expected = "MCP_ALLOWED_TOOLS"
+    with pytest.raises(projection.ProjectionError) as error:
+        projection._owner_agent_observation(properties, version, module._PLAN)
+    assert error.value.reason == expected
+
+
+def test_projection_cycles_and_hostile_dictionary_keys_fail_without_stringification(
+    flow: Any, capsys: Any
+) -> None:
+    hooks: list[str] = []
+
+    class PrivateKey(str):
+        def __hash__(self) -> int:
+            return hash("name")
+
+        def __eq__(self, other: Any) -> bool:
+            hooks.append("eq")
+            print(CANARY)
+            return True
+
+    properties, version = schema_projection_records(flow)
+    properties["unknown"] = properties
+    with pytest.raises(projection.ProjectionError) as error:
+        projection._owner_agent_observation(properties, version, module._PLAN)
+    assert error.value.reason == "METADATA_SHAPE"
+    # Build without equality against an existing name. Shape validation must stop
+    # before any lookup could invoke this private key's equality hook.
+    properties = {PrivateKey("name"): "synthetic"}
+    with pytest.raises(projection.ProjectionError) as error:
+        projection._owner_agent_observation(properties, version, module._PLAN)
+    assert error.value.reason == "METADATA_SHAPE"
+    assert hooks == [] and capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("reason", [None, "synthetic-unregistered-private", 123])
+def test_projection_unregistered_reason_cannot_escape_safe_projection(
+    reason: Any,
+) -> None:
+    error = module._SafeMetadataFailure("AGENT_PROJECTION", "QUALIFICATION_REJECTED")
+    error.projection_reason = reason
+    output = module._failure_output(error)
+    if reason is None:
+        assert "projection_reason" not in output
+    else:
+        assert output["projection_reason"] == "UNKNOWN"
+
+
+@pytest.mark.parametrize("omission", ["endpoint", "selector", "read-only"])
+def test_owner_projection_compatibility_is_separate_from_unchanged_legacy(
+    flow: Any, omission: str
+) -> None:
+    properties, version = schema_projection_records(flow)
+    if omission == "endpoint":
+        properties.pop("agent_endpoint")
+    elif omission == "selector":
+        properties["agent_endpoint"].pop("version_selector")
+    else:
+        version["definition"]["tools"][0]["allowed_tools"] = {
+            "tool_names": ["knowledge_base_retrieve"]
+        }
+    with pytest.raises(ProviderConfigurationError) as error:
+        projection._agent_observation(properties, version, module._PLAN)
+    assert type(error.value) is ProviderConfigurationError
+    assert error.value.args == ("FOUNDRY_QUALIFICATION_UNAVAILABLE",)
+    observed, _ = projection._owner_agent_observation(properties, version, module._PLAN)
+    if omission == "read-only":
+        assert observed["tools"][0]["readOnly"] is None
+    else:
+        assert observed["observedEndpointSelector"] is None
+
+
+def test_owner_projection_explicit_observations_equal_unmodified_legacy(flow: Any) -> None:
+    properties, version = schema_projection_records(flow)
+    assert projection._owner_agent_observation(properties, version, module._PLAN) == (
+        projection._agent_observation(properties, version, module._PLAN)
+    )
+    assert module._agent_observation is projection._owner_agent_observation
