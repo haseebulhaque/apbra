@@ -126,7 +126,7 @@ class BrowserMetadataCredential:
         if company_id != self._snapshot.company_id or profile != self._profile:
             return False
         try:
-            valid = self._unchanged() is True and self._token.ready()
+            valid = self._token.ready() and self._unchanged() is True
         except Exception:
             valid = False
         if not valid:
@@ -153,6 +153,35 @@ class BrowserMetadataCredential:
 
 
 def run_browser_metadata(
+    plan: BrowserMetadataPlan,
+    *,
+    settings: Settings | None = None,
+    credential_factory: Callable[..., _DeviceCredential] | None = None,
+    snapshot_loader: Callable[[], TenantSettingsSnapshot] | None = None,
+    terminal_factory: Callable[..., AbstractContextManager[TextIO]] | None = None,
+    confirm: Callable[[TextIO, OwnerMetadataPlan, str, str], None] | None = None,
+    serve: Callable[..., None] | None = None,
+    observe: Callable[..., dict[str, object]] | None = None,
+    runtime: bool = False,
+    invocation_gate: Callable[[], bool] | None = None,
+) -> None:
+    """Keep the complete private lifecycle quiet without holding the SDK lock."""
+    with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
+        _run_browser_metadata(
+            plan,
+            settings=settings,
+            credential_factory=credential_factory,
+            snapshot_loader=snapshot_loader,
+            terminal_factory=terminal_factory,
+            confirm=confirm,
+            serve=serve,
+            observe=observe,
+            runtime=runtime,
+            invocation_gate=invocation_gate,
+        )
+
+
+def _run_browser_metadata(
     plan: BrowserMetadataPlan,
     *,
     settings: Settings | None = None,
@@ -203,7 +232,11 @@ def run_browser_metadata(
             approval(
                 terminal,
                 terminal_plan,
-                "Approve this company-bound metadata-only server. Stop for new Microsoft "
+                "Approve this company-bound browser server. Stop for new Microsoft consent "
+                "or permissions. No token export. Invocation needs a separate trusted owner "
+                "approval and budget gate."
+                if runtime
+                else "Approve this company-bound metadata-only server. Stop for new Microsoft "
                 "consent or permissions. No model generation, token export or paid calls.",
                 "CONFIRM PRIVATE METADATA SERVER",
             )
@@ -358,7 +391,7 @@ def run_browser_metadata(
             )
             host, port = _local_address(settings)
             terminal.write(
-                f"Metadata-only server ready at http://{host}:{port}; "
+                f"Company-bound browser server ready at http://{host}:{port}; "
                 "invocation requires separate trusted approval/budget gate. Stop with Ctrl+C.\n"
             )
             terminal.flush()
@@ -369,16 +402,19 @@ def run_browser_metadata(
     except BaseException:
         raise ProviderConfigurationError(_ERROR) from None
     finally:
-        try:
-            if sdk is not None:
-                _quiet_call(sdk.close)
-        except BaseException:
+        cleanup_failed = False
+        for close in (
+            sdk.close if sdk is not None else None,
+            token.close if token is not None else None,
+            database.engine.dispose if database is not None else None,
+        ):
+            if close is not None:
+                try:
+                    _quiet_call(close)
+                except BaseException:
+                    cleanup_failed = True
+        if cleanup_failed:
             raise ProviderConfigurationError(_ERROR) from None
-        finally:
-            if token is not None:
-                token.close()
-            if database is not None:
-                database.engine.dispose()
 
 
 def main() -> None:

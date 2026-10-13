@@ -410,3 +410,49 @@ def test_runtime_private_attestation_mismatch_cannot_acquire_or_enable(
     with pytest.raises(ProviderConfigurationError, match=m._ERROR):
         execute(context, sdk)
     assert "get_token" not in sdk.calls and not context.captured
+
+
+@pytest.mark.parametrize("fault", ["snapshot", "dispose"])
+def test_private_database_failures_are_quiet_and_all_credentials_cleaned(
+    monkeypatch: Any,
+    capsys: Any,
+    fault: str,
+) -> None:
+    context = setup(monkeypatch)
+    sdk = SDK()
+    closed: list[bool] = []
+
+    def dispose() -> None:
+        closed.append(True)
+        print(CANARY)
+        if fault == "dispose":
+            raise RuntimeError(CANARY)
+
+    def load(*args: Any) -> TenantSettingsSnapshot:
+        print(CANARY)
+        if fault == "snapshot":
+            raise RuntimeError(CANARY)
+        return context.snapshot
+
+    monkeypatch.setattr(
+        m, "Database", lambda *args: SimpleNamespace(engine=SimpleNamespace(dispose=dispose))
+    )
+    monkeypatch.setattr(m, "_snapshot", load)
+    with pytest.raises(ProviderConfigurationError, match=m._ERROR) as error:
+        m.run_browser_metadata(
+            context.plan,
+            settings=context.settings,
+            credential_factory=lambda **kwargs: sdk,
+            terminal_factory=terminal,
+            confirm=lambda *args: None,
+            observe=lambda *args: {"status": "METADATA_OBSERVED_ONLY"},
+            serve=lambda *args: None,
+        )
+    assert closed == [True]
+    if fault == "dispose":
+        assert sdk.closed
+        assert not context.captured["foundry_metadata_credentials"].ready(COMPANY, context.profile)
+    else:
+        assert sdk.calls == []
+    output = capsys.readouterr()
+    assert CANARY not in output.out + output.err + str(error.value)
