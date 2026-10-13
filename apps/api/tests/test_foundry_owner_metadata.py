@@ -2635,6 +2635,7 @@ def test_fixed_uri_error_attrs_and_args_never_contain_private_components(
 
 def _restore_complete_uri_extension(tree: ast.Module) -> ast.Module:
     """Reverse only PLAN10834 diagnostic additions for retained historical AST checks."""
+    tree = _restore_browser_route(tree)
     frozen = ast.parse(
         subprocess.check_output(  # noqa: S603 - Fixed public source only.
             [  # noqa: S607 - Fixed public Git source only.
@@ -3046,3 +3047,383 @@ def test_complete_uri_cli_projection_rejects_forged_facts_without_private_hooks(
     assert output["uri_facts"]["input"] == "UNASSESSED"
     assert CANARY not in json.dumps(output)
     assert hooks == [] and capsys.readouterr().out == ""
+
+
+def _restore_browser_route(tree: ast.Module) -> ast.Module:
+    """Only explicit approved browser factory/default reversal, no guard changes."""
+    additions = [
+        n
+        for n in tree.body
+        if isinstance(n, ast.FunctionDef) and n.name == "_browser_credential"
+    ]
+    assert len(additions) == 1
+    tree.body.remove(additions[0])
+    selectors = [
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.Name) and n.id == "_browser_credential"
+    ]
+    assert len(selectors) == 1
+    selectors[0].id = "_device_credential"
+    return tree
+
+
+def test_browser_default_preserves_all_other_source_ast() -> None:
+    old = ast.parse(
+        subprocess.check_output(  # noqa: S603 - Fixed immutable public source.
+            [  # noqa: S607 - Fixed public Git comparison.
+                "git",
+                "show",
+                "e078adb587e00c96f06444c9fd0d18c50faa68a6"
+                ":apps/api/src/apbra_api/foundry_owner_metadata.py",
+            ],
+            cwd=ROOT,
+            text=True,
+        )
+    )
+    assert ast.dump(
+        _restore_browser_route(ast.parse(Path(module.__file__).read_text()))
+    ) == ast.dump(old)
+
+
+@pytest.fixture
+def fake_browser_sdk(flow: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """No SDK construction or socket: import targets and listener are fake modules."""
+    from types import ModuleType
+
+    servers: list[Any] = []
+    state = SimpleNamespace(
+        servers=servers, options={}, failure=None, close_failure=False
+    )
+
+    class FakeServer:
+        def __init__(self, hostname: str, port: int, timeout: int) -> None:
+            assert hostname == "localhost" and 8400 <= port < 9000
+            assert timeout == 300
+            self.closed = False
+            servers.append(self)
+
+        def server_close(self) -> None:
+            if state.close_failure:
+                raise ValueError(CANARY)
+            self.closed = True
+
+        def wait_for_redirect(self) -> Any:
+            self.server_close()
+            return {"code": CANARY, "state": "synthetic-state"}
+
+    class FakeBrowser:
+        def __init__(self, **kwargs: Any) -> None:
+            state.options = kwargs
+            flow.options = kwargs
+            assert "prompt_callback" not in kwargs
+            assert kwargs["disable_automatic_authentication"] is True
+            assert kwargs["cache_persistence_options"] is None
+            self._server_class = kwargs["_server_class"]
+
+        def authenticate(self, *, scopes: list[str]) -> Any:
+            server = self._server_class("localhost", 8400, 300)
+            assert server in servers
+            if state.failure is not None:
+                print(CANARY)
+                logging.error(CANARY)
+                raise state.failure(CANARY)
+            server.wait_for_redirect()
+            return flow.sdk.authenticate(scopes=scopes)
+
+        def get_token(self, *scopes: str) -> Any:
+            return flow.sdk.get_token(*scopes)
+
+        def close(self) -> None:
+            flow.sdk.close()
+
+    def forbidden(**kwargs: Any) -> Any:
+        raise AssertionError("Browser owner route reached Device or CLI")
+
+    identity = ModuleType("azure.identity")
+    identity.InteractiveBrowserCredential = FakeBrowser
+    identity.DeviceCodeCredential = forbidden
+    identity.AzureCliCredential = forbidden
+    internal = ModuleType("azure.identity._internal.auth_code_redirect_handler")
+    internal.AuthCodeRedirectServer = FakeServer
+    monkeypatch.setitem(sys.modules, "azure.identity", identity)
+    monkeypatch.setitem(
+        sys.modules, "azure.identity._internal.auth_code_redirect_handler", internal
+    )
+    monkeypatch.setattr(module, "_device_credential", forbidden)
+    return state
+
+
+def test_browser_default_canonical_reads_identity_and_no_device_fallback(
+    flow: Any, fake_browser_sdk: Any
+) -> None:
+    result = module.run_owner_metadata(client_factory=flow.client)
+    assert result["status"] == "METADATA_OBSERVED_ONLY"
+    assert "uri_facts" not in result
+    options = fake_browser_sdk.options
+    assert options["tenant_id"] == module._PLAN.tenant_id
+    assert options["client_id"] == module._PLAN.client_id
+    assert options["authority"] == "login.microsoftonline.com"
+    assert options["additionally_allowed_tenants"] == []
+    assert (
+        options["enable_support_logging"] is False
+        and options["logging_enable"] is False
+    )
+    assert options["timeout"] == 300 and options["retry_total"] == 0
+    assert len([e for e in flow.events if e.startswith("GET:")]) == 3
+    assert flow.events.index("CONFIRM PRIVATE TERMINAL") < flow.events.index("AUTH")
+    assert flow.events.index("AUTH") < flow.events.index("CONFIRM ACCOUNT")
+    assert flow.events.index("CONFIRM SEARCH") < flow.events.index(
+        "TOKEN:" + module._SEARCH_SCOPE
+    )
+    assert fake_browser_sdk.servers and all(s.closed for s in fake_browser_sdk.servers)
+    cleanup(flow)
+
+
+@pytest.mark.parametrize(
+    "error_type,category",
+    [
+        (ValueError, "AUTHENTICATION_FAILED"),
+        (TimeoutError, "TIMEOUT"),
+        (KeyboardInterrupt, "CANCELLED"),
+        (SystemExit, "OPERATION_STOPPED"),
+    ],
+)
+def test_browser_pre_redirect_failure_and_interrupt_closes_owned_listener_no_private_output(
+    flow: Any,
+    fake_browser_sdk: Any,
+    error_type: Any,
+    category: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    fake_browser_sdk.failure = error_type
+    original = module.run_owner_metadata
+    monkeypatch.setattr(
+        module, "run_owner_metadata", lambda: original(client_factory=flow.client)
+    )
+    monkeypatch.setattr(module.sys, "argv", ["owner-metadata"])
+    with pytest.raises(SystemExit, match="Foundry owner metadata is unavailable"):
+        module.main()
+    output = capsys.readouterr()
+    assert output.out == "" and CANARY not in output.err
+    assert json.loads(output.err) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "AUTHENTICATION_BEFORE_CALLBACK",
+        "category": category,
+    }
+    assert all(s.closed for s in fake_browser_sdk.servers)
+    assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
+    cleanup(flow)
+
+
+@pytest.mark.parametrize(
+    "denied", ["CONFIRM PRIVATE TERMINAL", "CONFIRM ACCOUNT", "CONFIRM SEARCH"]
+)
+def test_browser_private_consent_boundaries_never_start_next_operation(
+    flow: Any, fake_browser_sdk: Any, denied: str
+) -> None:
+    flow.denied = denied
+    with pytest.raises(ProviderConfigurationError):
+        module.run_owner_metadata(client_factory=flow.client)
+    if denied == "CONFIRM PRIVATE TERMINAL":
+        assert fake_browser_sdk.options == {} and fake_browser_sdk.servers == []
+    if denied == "CONFIRM ACCOUNT":
+        assert not any(
+            e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events
+        )
+    assert all(s.closed for s in fake_browser_sdk.servers)
+    cleanup(flow)
+
+
+def test_browser_owned_callback_cleanup_failure_cannot_claim_success(
+    flow: Any, fake_browser_sdk: Any
+) -> None:
+    fake_browser_sdk.close_failure = True
+    with pytest.raises(ProviderConfigurationError) as error:
+        module.run_owner_metadata(client_factory=flow.client)
+    assert module._failure_output(error.value)["stage"] == "CLEANUP"
+    assert flow.memories[-1]._cleanup_failed and not flow.memories[-1]._cleanup_verified
+    assert not any(e.startswith("GET:") for e in flow.events)
+
+
+@pytest.fixture
+def installed_browser_request_token(installed_device_code_request_token: Any) -> Any:
+    """Pinned stock browser method AST, fake app/listener/browser only."""
+    import hashlib
+    import sysconfig
+
+    source = (
+        Path(sysconfig.get_path("purelib")) / "azure/identity/_credentials/browser.py"
+    )
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == (
+        "2aa6bfb86f733cdfcfe0887df7f483cc6a6310e00e498c46802501db0f64c64f"
+    )
+    credential = next(
+        n
+        for n in ast.parse(source.read_bytes()).body
+        if isinstance(n, ast.ClassDef) and n.name == "InteractiveBrowserCredential"
+    )
+    method = next(
+        n
+        for n in credential.body
+        if isinstance(n, ast.FunctionDef) and n.name == "_request_token"
+    )
+    namespace = dict(installed_device_code_request_token.__globals__)
+    namespace.update(
+        {
+            "socket": SimpleNamespace(error=OSError),
+            "CredentialUnavailableError": ValueError,
+            "within_dac": SimpleNamespace(get=lambda: False),
+        }
+    )
+    exec(  # noqa: S102 - Fixed SHA-pinned installed method only, fake collaborators.
+        compile(ast.Module(body=[method], type_ignores=[]), str(source), "exec"),
+        namespace,
+    )
+    return namespace["_request_token"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "success",
+        "flow-missing",
+        "flow-error",
+        "browser-failed",
+        "timeout",
+        "cancel",
+        "redeem-error",
+    ],
+)
+def test_stock_browser_method_with_owned_listener_closes_all_exits(
+    flow: Any,
+    fake_browser_sdk: Any,
+    installed_browser_request_token: Any,
+    case: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: Any,
+) -> None:
+    # Replace only fake SDK.authenticate with the exact installed method. Its
+    # server hook is still our owned wrapper around a fake listener; no sockets.
+    identity = sys.modules["azure.identity"]
+    base = identity.InteractiveBrowserCredential
+    calls: list[str] = []
+
+    class App:
+        def initiate_auth_code_flow(self, scopes: Any, **kwargs: Any) -> Any:
+            calls.append("flow")
+            assert scopes == [module._SCOPE]
+            assert kwargs["redirect_uri"] == "http://localhost:8400"
+            assert (
+                kwargs["prompt"] == "select_account"
+                and kwargs["response_mode"] == "form_post"
+            )
+            if case == "flow-error":
+                raise ValueError(CANARY)
+            return (
+                {}
+                if case == "flow-missing"
+                else {"auth_uri": "https://synthetic.invalid/authorize"}
+            )
+
+        def acquire_token_by_auth_code_flow(
+            self, flow_value: Any, response: Any, **kwargs: Any
+        ) -> Any:
+            calls.append("redeem")
+            assert response["state"] == "synthetic-state" and response["code"] == CANARY
+            if case == "redeem-error":
+                raise ValueError(CANARY)
+            return flow.sdk.record
+
+    class Browser(base):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            self._parsed_url = None
+            self._timeout = kwargs["timeout"]
+            self._login_hint = None
+
+        def _get_app(self, **kwargs: Any) -> Any:
+            return App()
+
+        def authenticate(self, *, scopes: list[str]) -> Any:
+            return installed_browser_request_token(self, *scopes)
+
+    def open_browser(uri: str) -> bool:
+        calls.append("browser")
+        if case == "cancel":
+            raise KeyboardInterrupt(CANARY)
+        return case != "browser-failed"
+
+    monkeypatch.setattr(identity, "InteractiveBrowserCredential", Browser)
+    monkeypatch.setitem(
+        installed_browser_request_token.__globals__, "_open_browser", open_browser
+    )
+    # wrap_exceptions closes over its original globals, but _request_token runs
+    # its independently owned namespace through the wrapper's __wrapped__.
+    monkeypatch.setitem(
+        installed_browser_request_token.__wrapped__.__globals__,
+        "_open_browser",
+        open_browser,
+    )
+    if case == "timeout":
+        server = sys.modules[
+            "azure.identity._internal.auth_code_redirect_handler"
+        ].AuthCodeRedirectServer
+
+        def timed_out(self: Any) -> dict[str, Any]:
+            self.server_close()
+            return {}
+
+        monkeypatch.setattr(server, "wait_for_redirect", timed_out)
+    if case == "success":
+        assert (
+            module.run_owner_metadata(client_factory=flow.client)["status"]
+            == "METADATA_OBSERVED_ONLY"
+        )
+        assert calls == ["flow", "browser", "redeem"]
+    else:
+        error_type = (
+            KeyboardInterrupt if case == "cancel" else ProviderConfigurationError
+        )
+        with pytest.raises(error_type):
+            module.run_owner_metadata(client_factory=flow.client)
+        assert not any(
+            e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events
+        )
+        assert "redeem" not in calls or case == "redeem-error"
+    assert fake_browser_sdk.servers and all(s.closed for s in fake_browser_sdk.servers)
+    output = capsys.readouterr()
+    assert output.out == "" and CANARY not in output.err
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("field", ["tenant_id", "client_id", "home_account_id"])
+def test_browser_record_validation_stops_tokens_and_metadata(
+    flow: Any, fake_browser_sdk: Any, field: str
+) -> None:
+    setattr(flow.sdk.record, field, "" if field == "home_account_id" else CANARY)
+    with pytest.raises(ProviderConfigurationError) as error:
+        module.run_owner_metadata(client_factory=flow.client)
+    assert module._failure_output(error.value)["stage"] == "ACCOUNT_VALIDATION"
+    assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
+    assert all(s.closed for s in fake_browser_sdk.servers)
+    cleanup(flow)
+
+
+def test_browser_permission_or_consent_failure_is_unavailable_without_retry(
+    flow: Any, fake_browser_sdk: Any, capsys: Any
+) -> None:
+    fake_browser_sdk.failure = PermissionError
+    with pytest.raises(ProviderConfigurationError) as error:
+        module.run_owner_metadata(client_factory=flow.client)
+    assert module._failure_output(error.value) == {
+        "status": "METADATA_UNAVAILABLE",
+        "stage": "AUTHENTICATION_BEFORE_CALLBACK",
+        "category": "AUTHENTICATION_FAILED",
+    }
+    assert len(fake_browser_sdk.servers) == 1
+    assert all(s.closed for s in fake_browser_sdk.servers)
+    assert not any(e.startswith("TOKEN:") or e.startswith("GET:") for e in flow.events)
+    assert capsys.readouterr().out == ""
+    cleanup(flow)
