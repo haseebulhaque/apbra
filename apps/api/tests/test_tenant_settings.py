@@ -877,3 +877,64 @@ def test_historical_policy_capacity_metadata_is_versioned_without_six_visual_cou
             select(TenantSettingsVersionRow)).all()}
     for identity, contents, digest in before:
         assert after[identity] == (contents, digest)
+
+
+@pytest.mark.parametrize("selector,status", [("owner", 200), ("member", 403)])
+def test_agent_details_are_admin_only_saved_settings_and_no_store(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, selector: str, status: int,
+) -> None:
+    import apbra_api.api as api_module
+
+    calls: list[object] = []
+    sign_in(client, "owner")
+    saved = client.get("/api/tenant-settings").json()
+    sign_in(client, selector)
+
+    def fake_details(company_id: UUID, profile: object, credentials: object) -> dict[str, object]:
+        calls.append((company_id, profile))
+        return {"status": "METADATA_UNAVAILABLE", "warnings": ["SYNTHETIC_UNKNOWN"]}
+
+    monkeypatch.setattr(api_module, "agent_details", fake_details)
+    result = client.get("/api/tenant-settings/agent-details")
+    assert result.status_code == status
+    if status == 200:
+        assert result.headers["cache-control"] == "no-store"
+        assert result.json()["settings_version"] == saved["version"]
+        assert len(calls) == 1
+    else:
+        assert calls == []
+
+
+def test_agent_details_reject_caller_targets_before_metadata_io(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import apbra_api.api as api_module
+
+    sign_in(client, "owner")
+
+    def forbidden(*args: object) -> dict[str, object]:
+        pytest.fail("Caller selector must never reach metadata I/O")
+
+    monkeypatch.setattr(api_module, "agent_details", forbidden)
+    result = client.get("/api/tenant-settings/agent-details?endpoint=https://foreign.invalid")
+    assert result.status_code == 422
+
+
+def test_agent_details_recheck_revoked_admin_after_read(
+    client: TestClient, database: Database, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import apbra_api.api as api_module
+
+    session = sign_in(client, "owner")
+    membership_id = UUID(session["actor"]["membership_id"])
+
+    def revoke(*args: object) -> dict[str, object]:
+        with database.session() as db:
+            row = db.get(MembershipRow, membership_id)
+            assert row is not None
+            row.role = "MEMBER"
+            db.commit()
+        return {"status": "METADATA_OBSERVED_ONLY", "warnings": []}
+
+    monkeypatch.setattr(api_module, "agent_details", revoke)
+    assert client.get("/api/tenant-settings/agent-details").status_code == 403

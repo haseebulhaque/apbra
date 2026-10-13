@@ -21,7 +21,15 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 
 # Historical callers may still carry this policy metadata. Version-2 schemas
 # never use it to bound or manufacture AI-authored geometry.
@@ -565,6 +573,7 @@ class ProviderProfile(BaseModel):
     endpoint: str = Field(min_length=1, max_length=2_000)
     model_or_deployment: str = Field(min_length=1, max_length=255)
     api_version: str = Field(min_length=1, max_length=80)
+    agent_version: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,80}$")
     region: str = Field(min_length=1, max_length=120)
     prompt_version: str = Field(min_length=1, max_length=120)
     configuration_id: str = Field(min_length=1, max_length=120)
@@ -576,9 +585,21 @@ class ProviderProfile(BaseModel):
     request_timeout_seconds: float = Field(gt=0, le=300)
     retry_limit: int = Field(ge=0, le=5)
 
+    @model_serializer(mode="wrap")
+    def serialize_profile(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        result = cast(dict[str, Any], handler(self))
+        # Preserve encoded historical tenant versions when no version was configured.
+        if self.agent_version is None:
+            result.pop("agent_version", None)
+        return result
+
     @model_validator(mode="after")
     def validate_endpoint(self) -> ProviderProfile:
         parsed = urlparse(self.endpoint)
+        if self.agent_version in {".", ".."}:
+            raise ValueError("agent version cannot be a dot path segment")
+        if self.agent_version is not None and self.protocol != "FOUNDRY_AGENT_RESPONSES":
+            raise ValueError("agent version requires an agent profile")
         if (
             parsed.scheme != "https"
             or not parsed.hostname

@@ -264,42 +264,49 @@ def _owner_agent_observation(
         raise ProjectionError("IDENTITY")
     # Optional schema objects are unknown when omitted, never assumed latest/pinned.
     observed_rules: list[dict[str, Any]] | None = None
-    if "agent_endpoint" in properties:
-        endpoint = properties["agent_endpoint"]
-        if type(endpoint) is not dict:
-            raise ProjectionError("ENDPOINT_SHAPE")
-        if "version_selector" in endpoint:
-            selector = endpoint["version_selector"]
-            if type(selector) is not dict:
-                raise ProjectionError("SELECTOR_SHAPE")
-            rules = selector.get("version_selection_rules")
-            if (
-                type(rules) is not list
-                or not 1 <= len(rules) <= binding.max_projection_items
-            ):
-                raise ProjectionError("SELECTOR_RULES")
-            observed_rules = []
-            for rule in rules:
+    metadata_warnings: list[str] = []
+    try:
+        if "agent_endpoint" in properties:
+            endpoint = properties["agent_endpoint"]
+            if type(endpoint) is not dict:
+                raise ProjectionError("ENDPOINT_SHAPE")
+            if "version_selector" in endpoint:
+                selector = endpoint["version_selector"]
+                if type(selector) is not dict:
+                    raise ProjectionError("SELECTOR_SHAPE")
+                rules = selector.get("version_selection_rules")
                 if (
-                    type(rule) is not dict
-                    or type(rule.get("type")) is not str
-                    or rule.get("type") != "FixedRatio"
+                    type(rules) is not list
+                    or not 1 <= len(rules) <= binding.max_projection_items
                 ):
-                    raise ProjectionError("SELECTOR_RULE_KIND")
-                percentage = rule.get("traffic_percentage")
-                if type(percentage) is not int or not 0 <= percentage <= 100:
-                    raise ProjectionError("SELECTOR_PERCENTAGE")
-                observed_rules.append(
-                    {
-                        "type": "FixedRatio",
-                        "version": _projection_identifier(
-                            rule.get("agent_version"), binding, "SELECTOR_VERSION"
-                        ),
-                        "trafficPercentage": percentage,
-                    }
-                )
-            if sum(rule["trafficPercentage"] for rule in observed_rules) != 100:
-                raise ProjectionError("SELECTOR_TOTAL")
+                    raise ProjectionError("SELECTOR_RULES")
+                observed_rules = []
+                for rule in rules:
+                    if (
+                        type(rule) is not dict
+                        or type(rule.get("type")) is not str
+                        or rule.get("type") != "FixedRatio"
+                    ):
+                        raise ProjectionError("SELECTOR_RULE_KIND")
+                    percentage = rule.get("traffic_percentage")
+                    if type(percentage) is not int or not 0 <= percentage <= 100:
+                        raise ProjectionError("SELECTOR_PERCENTAGE")
+                    observed_rules.append(
+                        {
+                            "type": "FixedRatio",
+                            "version": _projection_identifier(
+                                rule.get("agent_version"), binding, "SELECTOR_VERSION"
+                            ),
+                            "trafficPercentage": percentage,
+                        }
+                    )
+                if sum(rule["trafficPercentage"] for rule in observed_rules) != 100:
+                    raise ProjectionError("SELECTOR_TOTAL")
+    except ProjectionError as error:
+        # Endpoint selection is an observation, never a GET target or authority.
+        # Discard partial/unsafe values; emit only the finite local reason.
+        observed_rules = None
+        metadata_warnings.append(_projection_reason(error.reason))
     definition = version.get("definition")
     if (
         type(definition) is not dict
@@ -409,6 +416,7 @@ def _owner_agent_observation(
         "storedInstructionUtf8Bytes": instruction_bytes,
         "responseConfigurationUtf8Bytes": response_bytes,
         "observedEndpointSelector": observed_rules,
+        **({"metadataWarnings": metadata_warnings} if metadata_warnings else {}),
         "tools": safe_tools,
         "searchOrigin": search_origins[0],
     }, search_origins[0]

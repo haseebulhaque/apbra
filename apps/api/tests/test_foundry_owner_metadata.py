@@ -3645,13 +3645,6 @@ def test_projection_documented_omissions_are_unknown_without_runtime_or_tool_gra
     "mutation,reason",
     [
         ("identity", "IDENTITY"),
-        ("endpoint-null", "ENDPOINT_SHAPE"),
-        ("selector-null", "SELECTOR_SHAPE"),
-        ("rules-missing", "SELECTOR_RULES"),
-        ("rule-kind", "SELECTOR_RULE_KIND"),
-        ("percentage", "SELECTOR_PERCENTAGE"),
-        ("rule-version", "SELECTOR_VERSION"),
-        ("total", "SELECTOR_TOTAL"),
         ("definition", "DEFINITION_KIND"),
         ("model", "MODEL_IDENTIFIER"),
         ("tools", "TOOLS_BINDING"),
@@ -3927,7 +3920,7 @@ def test_projection_cleanup_failure_discards_captured_field_reason(
 
 
 @pytest.mark.parametrize(
-    "where", ["rule-count", "tool-count", "model-length", "duplicate-name"]
+    "where", ["tool-count", "model-length", "duplicate-name"]
 )
 def test_projection_existing_item_and_identifier_bounds_are_retained(
     flow: Any, where: str
@@ -4029,3 +4022,74 @@ def test_owner_projection_explicit_observations_equal_unmodified_legacy(flow: An
         projection._agent_observation(properties, version, module._PLAN)
     )
     assert module._agent_observation is projection._owner_agent_observation
+
+
+@pytest.mark.parametrize(
+    "value", [None, True, 6, "", "*", "latest version", CANARY + "\n", "x" * 256]
+)
+def test_informational_selector_version_does_not_reject_metadata(
+    flow: Any, value: Any, capsys: Any
+) -> None:
+    properties, version = schema_projection_records(flow)
+    rule = properties["agent_endpoint"]["version_selector"]["version_selection_rules"][0]
+    rule["agent_version"] = value
+    observation, origin = projection._owner_agent_observation(properties, version, module._PLAN)
+    assert observation["observedEndpointSelector"] is None
+    assert observation["metadataWarnings"] == ["SELECTOR_VERSION"]
+    assert observation["observedVersion"] == "6"
+    assert origin == "https://synthetic.search.windows.net"
+    flow.properties.clear()
+    flow.properties.update(properties)
+    flow.version.clear()
+    flow.version.update(version)
+    result = run(flow)
+    assert result["metadataWarnings"] == ["SELECTOR_VERSION"]
+    assert result["runtimeActivated"] is False
+    assert len([event for event in flow.events if event.startswith("GET:")]) == 3
+    assert capsys.readouterr().out == ""
+    cleanup(flow)
+
+
+@pytest.mark.parametrize("mutation,reason", [
+    ("endpoint", "ENDPOINT_SHAPE"), ("selector", "SELECTOR_SHAPE"),
+    ("missing-rules", "SELECTOR_RULES"), ("kind", "SELECTOR_RULE_KIND"),
+    ("percentage", "SELECTOR_PERCENTAGE"), ("total", "SELECTOR_TOTAL"),
+    ("count", "SELECTOR_RULES"),
+])
+def test_optional_selector_warning_paths_preserve_bounds_without_connection_veto(
+    flow: Any, mutation: str, reason: str, capsys: Any,
+) -> None:
+    import copy
+
+    properties, version = schema_projection_records(flow)
+    endpoint = properties["agent_endpoint"]
+    selector = endpoint["version_selector"]
+    rule = selector["version_selection_rules"][0]
+    if mutation == "endpoint":
+        properties["agent_endpoint"] = None
+    elif mutation == "selector":
+        endpoint["version_selector"] = None
+    elif mutation == "missing-rules":
+        selector.clear()
+    elif mutation == "kind":
+        rule["type"] = CANARY
+    elif mutation == "percentage":
+        rule["traffic_percentage"] = True
+    elif mutation == "total":
+        rule["traffic_percentage"] = 99
+    else:
+        selector["version_selection_rules"] = [copy.deepcopy(rule)] * 101
+    observed, origin = projection._owner_agent_observation(properties, version, module._PLAN)
+    assert observed["observedEndpointSelector"] is None
+    assert observed["metadataWarnings"] == [reason]
+    assert CANARY not in json.dumps({key: value for key, value in observed.items()
+                                   if key != "storedInstructionUtf8Bytes"})
+    assert origin == "https://synthetic.search.windows.net"
+    flow.properties.clear()
+    flow.properties.update(properties)
+    flow.version.clear()
+    flow.version.update(version)
+    assert run(flow)["metadataWarnings"] == [reason]
+    assert len([event for event in flow.events if event.startswith("GET:")]) == 3
+    assert capsys.readouterr().out == ""
+    cleanup(flow)
