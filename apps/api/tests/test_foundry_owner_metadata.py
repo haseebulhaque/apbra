@@ -4048,3 +4048,48 @@ def test_informational_selector_version_does_not_reject_metadata(
     assert len([event for event in flow.events if event.startswith("GET:")]) == 3
     assert capsys.readouterr().out == ""
     cleanup(flow)
+
+
+@pytest.mark.parametrize("mutation,reason", [
+    ("endpoint", "ENDPOINT_SHAPE"), ("selector", "SELECTOR_SHAPE"),
+    ("missing-rules", "SELECTOR_RULES"), ("kind", "SELECTOR_RULE_KIND"),
+    ("percentage", "SELECTOR_PERCENTAGE"), ("total", "SELECTOR_TOTAL"),
+    ("count", "SELECTOR_RULES"),
+])
+def test_optional_selector_warning_paths_preserve_bounds_without_connection_veto(
+    flow: Any, mutation: str, reason: str, capsys: Any,
+) -> None:
+    import copy
+
+    properties, version = schema_projection_records(flow)
+    endpoint = properties["agent_endpoint"]
+    selector = endpoint["version_selector"]
+    rule = selector["version_selection_rules"][0]
+    if mutation == "endpoint":
+        properties["agent_endpoint"] = None
+    elif mutation == "selector":
+        endpoint["version_selector"] = None
+    elif mutation == "missing-rules":
+        selector.clear()
+    elif mutation == "kind":
+        rule["type"] = CANARY
+    elif mutation == "percentage":
+        rule["traffic_percentage"] = True
+    elif mutation == "total":
+        rule["traffic_percentage"] = 99
+    else:
+        selector["version_selection_rules"] = [copy.deepcopy(rule)] * 101
+    observed, origin = projection._owner_agent_observation(properties, version, module._PLAN)
+    assert observed["observedEndpointSelector"] is None
+    assert observed["metadataWarnings"] == [reason]
+    assert CANARY not in json.dumps({key: value for key, value in observed.items()
+                                   if key != "storedInstructionUtf8Bytes"})
+    assert origin == "https://synthetic.search.windows.net"
+    flow.properties.clear()
+    flow.properties.update(properties)
+    flow.version.clear()
+    flow.version.update(version)
+    assert run(flow)["metadataWarnings"] == [reason]
+    assert len([event for event in flow.events if event.startswith("GET:")]) == 3
+    assert capsys.readouterr().out == ""
+    cleanup(flow)
