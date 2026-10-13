@@ -26,6 +26,7 @@ o=runpy.run_path(str(Path(__file__).with_name("check_foundry_owner_metadata_2026
 u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingress_20261012.py")))
 f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
 k=runpy.run_path(str(Path(__file__).with_name("check_knowledge_lifecycle_20261012.py")))
+d=runpy.run_path(str(Path(__file__).with_name("check_tenant_document_drafts_20261013.py")))
 
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 
@@ -2290,6 +2291,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
         errors += e
         knowledge_lifecycle, e = k['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        document_drafts, e = d['bind'](root, catalog, sources, bound_provider_registration)
+        errors += e
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2864,6 +2867,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             (raw_ingress, u['P']),
             (fixture_staging, f['P']),
             (knowledge_lifecycle, k['P']),
+            (document_drafts, d['P']),
     )
         registered_tasks = {registered['task_id']: registered for registered, _ in
     legacy_authorities + bound_authorities if registered is not None}
@@ -2873,6 +2877,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
     task if active_branch in {
     CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
     }
+                else document_drafts if active_branch in {d['B'], d['R']}
                 else knowledge_lifecycle if active_branch in {k['B'], k['R']}
                 else fixture_staging if active_branch in {f['B'], f['R']}
                 else raw_ingress if active_branch in {u['B'], u['R']}
@@ -2915,6 +2920,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                     not u['stage'](active_task_id, active_branch, changed_paths) and
                     not f['stage'](active_task_id, active_branch, changed_paths) and
                     not k['stage'](active_task_id, active_branch, changed_paths) and
+                    not d['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
     active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
     changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -2959,65 +2965,65 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
     changed_paths == PROVIDER_RETRIEVAL_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
     active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
-                         changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS) and
+    changed_paths == FOUNDRY_HOST_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
-                         changed_paths == FOUNDRY_QUALIFICATION_REGISTRATION_PATHS) and
+    active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
+    changed_paths == FOUNDRY_QUALIFICATION_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
-                         changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
+    active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
+    changed_paths == FOUNDRY_SCHEMA_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == DEMO_UX_REGISTRATION_BRANCH and
-                         changed_paths == DEMO_UX_REGISTRATION_PATHS) and
+    active_branch == DEMO_UX_REGISTRATION_BRANCH and
+    changed_paths == DEMO_UX_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-173' and
-                         active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
-                         changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
+    active_branch == PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH and
+    changed_paths == PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-173' and
-                         active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
-                         changed_paths == HOSTED_WEB_RELEASE_REGISTRATION_PATHS) and
+    active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH and
+    changed_paths == HOSTED_WEB_RELEASE_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-177' and
-                         active_branch == CURRENT_STATE_DOCS_REGISTRATION_BRANCH and
-                         changed_paths == CURRENT_STATE_DOCS_REGISTRATION_PATHS) and
+    active_branch == CURRENT_STATE_DOCS_REGISTRATION_BRANCH and
+    changed_paths == CURRENT_STATE_DOCS_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-151' and
-                         active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
+    active_branch == COMPANY_LIFECYCLE_REGISTRATION_BRANCH and
+    changed_paths == COMPANY_LIFECYCLE_REGISTRATION_PATHS) and
                     not (active_task_id == 'APBRA-151' and
-                         active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS) and
+    active_branch == COMPANY_LIFECYCLE_AMENDMENT_BRANCH and
+    changed_paths == COMPANY_LIFECYCLE_AMENDMENT_PATHS) and
                     not (active_task_id == 'APBRA-151' and
-                         active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
-                         changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS) and
+    active_branch == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH and
+    changed_paths == COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == CURRENT_DEMO_SOURCE_BRANCH and
-                         changed_paths == CURRENT_DEMO_SOURCE_PATHS) and
+    active_branch == CURRENT_DEMO_SOURCE_BRANCH and
+    changed_paths == CURRENT_DEMO_SOURCE_PATHS) and
                     not (active_task_id == 'APBRA-160' and
-                         active_branch == APBRA160_CI_CAPACITY_BRANCH and
-                         changed_paths == APBRA160_CI_CAPACITY_PATHS)):
+    active_branch == APBRA160_CI_CAPACITY_BRANCH and
+    changed_paths == APBRA160_CI_CAPACITY_PATHS)):
                 errors.append('Active branch conflicts with task authority: ' + active_branch)
                 active_task = None
             if (active_task_id == 'APBRA-160' and
-                    active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
-                    changed_paths != PROVIDER_RETRIEVAL_REGISTRATION_PATHS):
+    active_branch == PROVIDER_RETRIEVAL_REGISTRATION_BRANCH and
+    changed_paths != PROVIDER_RETRIEVAL_REGISTRATION_PATHS):
                 errors.append('APBRA-160 provider retrieval registration must change exactly three governance files')
             if (active_task_id == 'APBRA-160' and
-                    active_branch == PROVIDER_RETRIEVAL_BRANCH and
-                    changed_paths.intersection(PROVIDER_RETRIEVAL_REGISTRATION_PATHS)):
+    active_branch == PROVIDER_RETRIEVAL_BRANCH and
+    changed_paths.intersection(PROVIDER_RETRIEVAL_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 provider retrieval implementation cannot change governance files')
             if (active_task_id == 'APBRA-160' and
-                    active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
-                    changed_paths != FOUNDRY_HOST_REGISTRATION_PATHS):
+    active_branch == FOUNDRY_HOST_REGISTRATION_BRANCH and
+    changed_paths != FOUNDRY_HOST_REGISTRATION_PATHS):
                 errors.append('APBRA-160 Foundry host registration must change exactly three governance files')
             if (active_task_id == 'APBRA-160' and
-                    active_branch == FOUNDRY_HOST_BRANCH and
-                    changed_paths.intersection(FOUNDRY_HOST_REGISTRATION_PATHS)):
+    active_branch == FOUNDRY_HOST_BRANCH and
+    changed_paths.intersection(FOUNDRY_HOST_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry host implementation cannot change governance files')
             if (active_task_id == 'APBRA-160' and
-                    active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
-                    changed_paths != FOUNDRY_QUALIFICATION_REGISTRATION_PATHS):
+    active_branch == FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH and
+    changed_paths != FOUNDRY_QUALIFICATION_REGISTRATION_PATHS):
                 errors.append('APBRA-160 Foundry qualification registration must change exactly three governance files')
             if (active_task_id == 'APBRA-160' and
-                    active_branch == FOUNDRY_QUALIFICATION_BRANCH and
-                    changed_paths.intersection(FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)):
+    active_branch == FOUNDRY_QUALIFICATION_BRANCH and
+    changed_paths.intersection(FOUNDRY_QUALIFICATION_REGISTRATION_PATHS)):
                 errors.append('APBRA-160 Foundry qualification implementation cannot change governance files')
             errors += r['errors'](active_task_id, active_branch, changed_paths) + r['errors11'](active_task_id, active_branch, changed_paths)
             errors += g['errors'](active_task_id, active_branch, changed_paths)
@@ -3026,6 +3032,7 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
             errors += u['errors'](active_task_id, active_branch, changed_paths)
             errors += f['errors'](active_task_id, active_branch, changed_paths)
             errors += k['errors'](active_task_id, active_branch, changed_paths)
+            errors += d['errors'](active_task_id, active_branch, changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3383,6 +3390,8 @@ def check(root: Path = ROOT, *, active_task_id: str | None = None,
                      and name in u['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and k['stage'](active_task_id, active_branch, changed_paths)
                      and name in k['G'] and path_allowed(name, task, card)) or
+                    (active_task is not None and d['stage'](active_task_id, active_branch, changed_paths)
+                     and name in d['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and f['stage'](active_task_id, active_branch, changed_paths)
                      and name in f['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)

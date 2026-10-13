@@ -39,7 +39,7 @@ def restore_h9_fixture_selection(tree):
 
 class KnowledgeLifecycleScopeTests(unittest.TestCase):
     def copy(self, root):
-        for name in {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']:
+        for name in fixture_names.document_drafts_registration_names(ROOT, h['G']):
             path = ROOT / name
             if path.is_file():
                 target = root / name
@@ -244,7 +244,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
 
     def test_whole_original_checker_ast_matches_after_only_seven_additive_hooks(self):
         original = subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/check_bootstrap.py'], cwd=ROOT, text=True)
-        current = (ROOT / 'scripts/check_bootstrap.py').read_text()
+        current = fixture_names.knowledge_registration_snapshot(ROOT, 'scripts/check_bootstrap.py').decode('utf-8')
         hooks = [
             'k=runpy.run_path(str(Path(__file__).with_name("check_knowledge_lifecycle_20261012.py")))\n',
             "        knowledge_lifecycle, e = k['bind'](root, catalog, sources, bound_provider_registration)\n        errors += e\n",
@@ -337,7 +337,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
                 self.assertEqual(ast.dump(old), ast.dump(new))
         path = 'tests/bootstrap/historical_fixture_staging.py'
         old_bytes = subprocess.check_output(['git', 'show', base + ':' + path], cwd=ROOT)
-        current = (ROOT / path).read_bytes()
+        current = fixture_names.knowledge_registration_snapshot(ROOT, path)
         self.assertTrue(current.startswith(old_bytes))
         old, new = ast.parse(old_bytes), ast.parse(current)
         additions = {'KNOWLEDGE_REGISTRATION_BASE', 'KNOWLEDGE_REGISTRATION_TREE',
@@ -355,9 +355,9 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
         self.assertEqual(removed, 4)
         new.body = kept
         self.assertEqual(ast.dump(old), ast.dump(new))
-        self.assertEqual((ROOT / 'scripts/check_bootstrap.py').read_bytes(),
+        self.assertEqual(fixture_names.knowledge_registration_snapshot(ROOT, 'scripts/check_bootstrap.py'),
                          subprocess.check_output(['git', 'show', base + ':scripts/check_bootstrap.py'], cwd=ROOT))
-        self.assertEqual(len((ROOT / 'scripts/check_bootstrap.py').read_bytes()), 262076)
+        self.assertEqual(len(fixture_names.knowledge_registration_snapshot(ROOT, 'scripts/check_bootstrap.py')), 262076)
 
     def test_h9_universe_exact_pins_shape_and_git_failures_are_closed(self):
         self.assertEqual(fixture_names.KNOWLEDGE_REGISTRATION_BASE, '287ceac2c67979d60f45d44d0d0da21798f96dcd')
