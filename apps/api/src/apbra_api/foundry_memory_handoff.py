@@ -371,14 +371,19 @@ def run_receiver(
             if binding is not None:
 
                 def ready() -> bool:
+                    def current() -> bool:
+                        if not unchanged():
+                            stopped.set()
+                            if token is not None:
+                                token.close()
+                            return False
+                        return True
+
                     try:
-                        return (
-                            invocation_gate is not None
-                            and invocation_gate() is True
-                            and unchanged()
-                            and token is not None
-                            and token.ready()
-                        )
+                        if not current():
+                            return False
+                        allowed = invocation_gate is not None and invocation_gate() is True
+                        return current() and allowed and token is not None and token.ready()
                     except Exception:
                         return False
 

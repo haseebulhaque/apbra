@@ -338,3 +338,48 @@ def test_docker_server_uses_explicit_internal_listener(monkeypatch: Any) -> None
     m._serve(object(), (m.CONTAINER_LISTEN, 8000), stop)
     assert captured["host"] == m.CONTAINER_LISTEN and captured["port"] == 8000
     assert captured["access_log"] is False and stop.is_set()
+
+
+def test_runtime_drift_clears_lease_without_metadata_request(monkeypatch: Any) -> None:
+    from pydantic import SecretStr
+    from apbra_api.config import FoundryHostBinding
+
+    c = setup(monkeypatch)
+    c.settings.profile = "development"
+    binding = FoundryHostBinding(
+        company_id=c.plan.company_id,
+        tenant_id=c.plan.tenant_id,
+        client_id=c.plan.client_id,
+        home_account_id="synthetic.account",
+        provider_profile=c.profile,
+        knowledge_binding="explicit-fixture-knowledge",
+        knowledge_scope="TENANT_PRIVATE",
+        agent_version="configured-version",
+        qualification="LIVE_METADATA_VERIFIED",
+        manual_authentication_approved=True,
+        authorization_deadline=c.plan.authorization_deadline,
+    )
+    c.settings.foundry_host_enabled = True
+    c.settings.foundry_host_binding_json = SecretStr(binding.model_dump_json())
+    monkeypatch.setattr(m, "create_app", lambda **kw: kw)
+    p = Pipe(m.HELLO + account_frame(c.plan) + frame(c.plan))
+
+    def serve(app: Any, settings: Any, stopped: threading.Event) -> None:
+        runtime = app["foundry_credentials"]
+        assert runtime.ready(c.plan.company_id, c.profile)
+        c.snapshot = replace(c.snapshot, id=uuid4())
+        assert not runtime.ready(c.plan.company_id, c.profile)
+        assert stopped.is_set()
+        assert not app["foundry_metadata_credentials"]._token.ready()
+
+    m.run_receiver(
+        c.plan,
+        p,
+        settings=c.settings,
+        snapshot_loader=lambda: c.snapshot,
+        serve=serve,
+        nonce_factory=lambda: NONCE,
+        runtime=True,
+        invocation_gate=lambda: True,
+    )
+    assert p.closed
