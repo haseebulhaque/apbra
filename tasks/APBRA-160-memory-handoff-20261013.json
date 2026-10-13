@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-MEMORY-HANDOFF-20261013",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Owner-approved source-only one-shot memory bearer handoff from private Mac browser process to exact owned Docker API receiver; no live activation or paid calls.",
+  "requirements": [
+    "Owner explicit 2026-10-13 19:36UTC approval of source handoff and owner-private passive updater, delegated in current task; JiraPLAN10860 renews previous explicit tokentransport/export exclusion for this finite SOURCE increment only.",
+    "One exact owner UnixDocker socket/fullcontainerID/fullimageID/unchangedPID1 receiver; noTTY/echo. Receiver randomnonce, bounded frame and lifetime, duplicate/truncated/replay refusal; no token Env/argv/files/logs/caches/refresh. ExistingSDK/browser/privateTTY/account confirmation and callbackclose precede handoff.",
+    "Saved current company TenantSettings binds every read and drift revokes. Metadata lease grants no invocation. Optionalruntime requires existing strict homeaccount/tenant/client/company/deadline/profile/knowledge LIVE_METADATA_VERIFIED binding, trusted budget gate defaultsfalse; transport frame cannot manufacture qualification.",
+    "No actual tool auth/livecredential transmission/privateconfig inspection/activation/paid calls. All source tests synthetic; exactscope/fullchecks/freshreview/requiredCI/normalmerge.",
+    "Review corrections: require StdinOnce=true and exact loopbackPortBindings plus explicitly supplied internal listener/public port; privateaccount claim acknowledged by strictreceiver BEFORE SDKgettoken; monitor only boundedstdin/lease checks, never DBreads, joins before privacyrestoration/DBdisposal. Historical strict262076bootstrap cap retained through AST-identical lexical whitespace compression; no old controls/caps weakened. SyntheticDocker publiccanary disconnect qualification passed withnetworknone/readonly/capdrop/noauth."
+  ],
+  "adrs": [
+    "Direct owner-approved one-shot attached stdin source path; no HTTP broker, persistent service or new dependencies."
+  ],
+  "architecture_refs": [
+    "Reuse PR157 BrowserMetadataCredential and existing FoundryMemoryTokenCredential/FoundryTokenCredentialProvider; current selectedcompany TenantSettings remains authoritative."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/tests/test_foundry_memory_handoff.py",
+    "apps/api/tests/test_foundry_browser_handoff.py",
+    "tasks/APBRA-160-memory-handoff-20261013.json",
+    "scripts/check_mh.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_memory_handoff_scope.py",
+    "tests/bootstrap/test_browser_metadata_runtime_scope.py",
+    "tests/bootstrap/test_metadata_observations_scope.py",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/tenant_settings.py"
+  ],
+  "acceptance_criteria": [
+    "Imports never discover credentials/startprocess/readprivateconfig. Explicitmanual ownerentrypoint only; exactpeer identity rechecked before/after eachstep.",
+    "Frames bounded/versioned/nonced and expire; no output includes token/account/rawerrors. Disconnect/cancellation/expiry revokes receiver and endsserver; SDKcallbackclosed beforetransfer.",
+    "Existing sourceidentity/auth/model/settings/privateTTY/reportlogic unchanged; fakeendtoend proves memoryhandoff/adminisolation/defaultinvocationOFF and failure cleanup."
+  ],
+  "verification_required": [
+    "Synthetic protocol/peer/browser/account/SDKcleanup tests including secretcanary silence; strictscope/historicalASTinverse/sourcepins; fullapp/checks/scans/independentreview/hostedCI."
+  ],
+  "out_of_scope": [
+    "Tool-performed real authentication/live token transmission/private container inspection/activation/paidtests; preview/source/data destructive changes, endpoint/version/provider/reportpolicy defaults, consent/resources/hosting173B."
+  ],
+  "escalate_when": [
+    "A required action is denied, source identity/privacy/isolation checks fail, new costs/consent/access are required, or required exact-head checks/review are absent. Stop the denied action."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "582de1565135737983f5bb87bca713d71ab61cd2",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-memory-handoff",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Exactly twelve source/check/test paths; actual runtimeactivation separate, paidgateclosed.",
+  "dependencies": [
+    "Released PR157582de15; passiveownerpacket582de15 remainsindependentlyreviewed with unchangedbytes."
+  ]
+}
