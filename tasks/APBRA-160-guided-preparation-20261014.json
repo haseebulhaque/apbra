@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-GUIDED-PREPARATION-20261014",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Guided owner-private preparation and qualified finite provider cost controls for the original saved report; no manual technical grant JSON, activation or paid calls.",
+  "requirements": [
+    "Current explicit parent/owner development delegation and PLAN10879 authorize one finite registration then product increment to remove qualification JSON/digests/literals/account IDs/case-context assembly. Source authority ends22:28 Australia/Sydney14October2026; no automatic merge, tool sign-in or runtime/paid authority follows.",
+    "Current Tenant Settings and server-derived actor/company/privatecase context govern the exact existing selected report. Derive current version/digests/request/input/interpretation/confirmation privately; owner uses ordinary saved-report selection, posted October total/currency and explicit bounded stage/attempt choices. No newest-case guessing, cross-tenant enumeration, new case or original evidence/history replacement.",
+    "Use approved private memory-only browser authentication to derive actual tenant/client/homeaccount and existing authorized read-only agent/KB observations; human performs sign-in, SDK/callback closes and no new scope/consent/security policy or persistent token follows. Derive attestation/proof identifiers and digests internally from verified facts. No account placeholder, manual grant/technical JSON, fabricated qualifier or informational metadata-derived authority.",
+    "Keep same selected endpoint/agent/version and Foundry-owned instructions/model/tools/reasoning/layout/RAG. Optional selectors/unknown metadata stay informational. No model API key substitution for Entra agent service, provider fallback, silent cloud setting update or reporting/business decision in code.",
+    "Qualify optional tenant-configurable finite tool/iteration and retrieval/input-context controls only against documented support of the exact selected endpoint and actual configured tools. Built-in max_tool_calls is not presumed to bound MCP. Prefer existing supported bounded pre-execution MCP approval/call mechanism where available; no gateway/new service or tool-policy change without separate authority. Missing proof stays a precise visible limitation, not a zero charge or forced RAG disable.",
+    "Calculate conservative attempt/chain AUD reservations using verified enforced service/model maxima and versioned applicable meter/currency provenance, retained uncertainty and existing attempt/reservation history. Owner supplies current posted total/currency, not unknowable exact future billing or hashes. Current posted+unposted exposure+outstanding reserves+full-chain reserve must fit October A$10; no automatic refund for failed/timeout/unknown exposure and no fabricated price/FX/free allowance.",
+    "Trusted phase separation: nonpaid saved-state/cost readiness precedes authentication; actual selected account and scoped knowledge/invocation qualification precede paid capability. Preserve exact owned nonce/peer, one-shot memory transport, existing actor/privatecase/CSRF guards, atomic per-dispatch attempt reservations, concurrency/replay/drift/expiry/disconnect/cancellation safety.",
+    "Registration preserves all current product bytes first; independently reviewed registration/CI/normal merge precedes bounded product edits. Only listed product seams supersede older source immutability restrictions after that gate; auth/secret/persistence/generation/business-policy and workflow controls remain unchanged. Frozen packet8c9b18c and original preview remain retained; any successor owner operation separately reviewed/approved. v21 generationEnabled is not active bounded runtime."
+  ],
+  "adrs": [
+    "Reuse existing protected saved-case/Tenant Settings UI/API and optional private host transport. New import-safe preparation/cost module isolates technical derivation and finite qualification; no persistent billing broker, gateway or dependency. Actual provider control support is qualified before forwarding any option."
+  ],
+  "architecture_refs": [
+    "Released PR161131e6bc report runtime, existing actor-authorized case/settings/API and Entra memory helper; official Foundry Responses and Search limit references recorded in PLAN10879. Existing Foundry session is expired; actual live provider limits/meter remain unobserved."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/foundry_agent_details.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/src/apbra_api/foundry_cost_limits.py",
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/foundry_metadata_projection.py",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/foundry_private_preparation.py",
+    "apps/api/src/apbra_api/foundry_report_runtime.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/tests/test_api.py",
+    "apps/api/tests/test_foundry_agent_details.py",
+    "apps/api/tests/test_foundry_browser_handoff.py",
+    "apps/api/tests/test_foundry_browser_metadata.py",
+    "apps/api/tests/test_foundry_cost_limits.py",
+    "apps/api/tests/test_foundry_memory_handoff.py",
+    "apps/api/tests/test_foundry_owner_metadata.py",
+    "apps/api/tests/test_foundry_private_preparation.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/api/tests/test_model_provider.py",
+    "apps/api/tests/test_tenant_settings.py",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/EnterpriseUI.test.tsx",
+    "apps/web/src/api.test.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/privateCases.test.tsx",
+    "apps/web/src/privateCases.tsx",
+    "scripts/check_bootstrap.py",
+    "scripts/check_gp.py",
+    "tasks/APBRA-160-guided-preparation-20261014.json",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "tests/bootstrap/test_browser_metadata_runtime_scope.py",
+    "tests/bootstrap/test_guided_preparation_scope.py",
+    "tests/bootstrap/test_memory_handoff_scope.py",
+    "tests/bootstrap/test_metadata_observations_scope.py",
+    "tests/bootstrap/test_report_runtime_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/generation.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Ten governance-only files first, exact base131e6bc and finite39path universe; no product edits, current protected source hashes and whole old checker AST preserved. Later product phase cannot include registration files.",
+    "Owner never assembles grant JSON, technical IDs/digests/qualification literals. Existing report selection and approved private SDK record derive them; explicit account/case/operation approval still required.",
+    "Effective optional technical caps are authoritative Tenant Settings, qualified and enforced by exact supported provider mechanism. No fabricated default, MCP coverage claim or business/report choice. Precise unsupported/unknown cost readiness is distinct from metadata connection status.",
+    "Conservative reservation calculation and private prepared/account phases preserve A$10 total/month, saved-state/tenant scope, every consumed failure exposure and finite actual dispatch slots. No actor or provider permission derives from model output/UI evidence.",
+    "Focused positive/negative derivation, cap/enforcement/provenance/currency/budget, phase/account/nonce, cross-tenant/privatecase, optional metadata/replay/cancellation tests plus required full checks/review/CI. Offline evidence does not claim live runtime/report."
+  ],
+  "verification_required": [
+    "Registration exact-task/gate/source pins, separate phases/path negatives, mutation/symlink/failure handling, current product bytes and old checker AST; full bootstrap/CI-policy checks, tree/history secret scans and fresh independent exact-head review plus hosted CI before normal merge. Subsequent product applicable full API/web/build/browser/Ruff/mypy/lock/scans and independent review; live qualification separately owner-only."
+  ],
+  "out_of_scope": [
+    "Actual owner/tool authentication/token refresh or credential/container config inspection; bypass of blocked local API navigation; cloud model/tools/security/billing/permission changes; new dependencies/gateway/services; live token handoff/runtime activation/paid report; invented costs/FX/knowledge scope; new case/business policy/provider recipe; hosting173B."
+  ],
+  "escalate_when": [
+    "Stop a denied action; exact provider cap mechanism needs unsupported endpoint/tool/security changes, privacy/tenant/budget proof fails, authority expires or approved paths need expansion. No alternate endpoint or secret-bearing inspection workaround."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "131e6bc9cb2a7fc7646d58d26fb0ac14e1748f94",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-guided-preparation",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Ten governance files register exactly29 product/source-test paths. Existing main/app/auth/persistence/generation/secret/workflow bytes preserved. Source release does not approve owner sign-in, provider changes, activation or paid calls.",
+  "dependencies": [
+    "PR161 normal release131e6bc; source may proceed offline while owner independently refreshes existing Foundry administration session. Actual deployed model/meter and MCP/retrieval limits must be observed through established authorized read-only access before runtime qualification."
+  ]
+}
