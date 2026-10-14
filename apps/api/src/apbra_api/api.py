@@ -633,8 +633,6 @@ def create_app(
         }
 
     def settings_response(db: Session, snapshot: TenantSettingsSnapshot) -> dict[str, Any]:
-        from .foundry_cost_limits import limit_readiness
-
         profile = snapshot.settings.provider_profile
         is_foundry = profile is not None and profile.protocol == "FOUNDRY_AGENT_RESPONSES"
         ready = False
@@ -646,9 +644,6 @@ def create_app(
         return {
             "id": str(snapshot.id),
             "version": snapshot.version,
-            "provider_cost_controls": limit_readiness(
-                profile.foundry_cost_limits if is_foundry and profile is not None else None
-            ),
             "digest": snapshot.digest,
             "validation_status": snapshot.validation_status,
             "applicability": "COMPANY_NEW_OR_REVALIDATED_OPERATIONS",

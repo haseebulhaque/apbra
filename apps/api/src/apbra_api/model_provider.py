@@ -31,8 +31,6 @@ from pydantic import (
     model_validator,
 )
 
-from .foundry_cost_limits import FoundryCostLimits
-
 # Historical callers may still carry this policy metadata. Version-2 schemas
 # never use it to bound or manufacture AI-authored geometry.
 COMPILER_MAX_VISUALS_PER_PAGE = 6
@@ -586,7 +584,6 @@ class ProviderProfile(BaseModel):
     time_budget_seconds: float = Field(gt=0, le=600)
     request_timeout_seconds: float = Field(gt=0, le=300)
     retry_limit: int = Field(ge=0, le=5)
-    foundry_cost_limits: FoundryCostLimits | None = None
 
     @model_serializer(mode="wrap")
     def serialize_profile(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
@@ -594,15 +591,11 @@ class ProviderProfile(BaseModel):
         # Preserve encoded historical tenant versions when no version was configured.
         if self.agent_version is None:
             result.pop("agent_version", None)
-        if self.foundry_cost_limits is None:
-            result.pop("foundry_cost_limits", None)
         return result
 
     @model_validator(mode="after")
     def validate_endpoint(self) -> ProviderProfile:
         parsed = urlparse(self.endpoint)
-        if self.foundry_cost_limits is not None and self.protocol != "FOUNDRY_AGENT_RESPONSES":
-            raise ValueError("agent cost controls require an agent profile")
         if self.agent_version in {".", ".."}:
             raise ValueError("agent version cannot be a dot path segment")
         if self.agent_version is not None and self.protocol != "FOUNDRY_AGENT_RESPONSES":
@@ -1198,7 +1191,7 @@ class FoundryAgentResponsesProvider:
             raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED")
         # No application system prompt, instructions, tools or model override.
         # No remote conversation reuse; retries carry only this operation's context.
-        body: dict[str, Any] = {
+        return {
             "input": [{"role": "user", "content": content}],
             "text": {"format": {
                 "type": "json_schema", "name": request.task.lower(),
@@ -1208,17 +1201,6 @@ class FoundryAgentResponsesProvider:
             "stream": False,
             "store": False,
         }
-        controls = self.profile.foundry_cost_limits
-        if controls is not None:
-            # Generic max_tool_calls only documents built-in tools. Stored MCP
-            # tools require a qualified pre-execution approval boundary; no
-            # endpoint/tool override, silent RAG disable or post-hoc claim.
-            if (controls.max_mcp_calls is not None
-                    or controls.max_retrieval_output_tokens is not None):
-                raise ProviderCallError("MODEL_MCP_COST_CONTROL_UNQUALIFIED")
-            if controls.max_builtin_tool_calls is not None:
-                body["max_tool_calls"] = controls.max_builtin_tool_calls
-        return body
 
     def _candidate(
         self, payload: Any,
@@ -1354,9 +1336,6 @@ class FoundryAgentResponsesProvider:
 
         last_code = "MODEL_PROVIDER_FAILED"
         limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
-        controls = self.profile.foundry_cost_limits
-        if controls is not None and controls.max_provider_requests is not None:
-            limit = min(limit, controls.max_provider_requests)
         try:
             body = self._body(request)
             while calls < limit:

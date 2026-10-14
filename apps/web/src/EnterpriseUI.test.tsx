@@ -1,23 +1,6 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {Callout,DisclosurePanel,FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper} from './EnterpriseUI';
-import {AgentCostControls,preserveSettingsDraft} from './EnterpriseApp';
-import type {TenantSettingsDocument} from './api';
-
-it('keeps unknown agent limits blank and distinguishes built-in tools from MCP',()=>{
-  const html=renderToStaticMarkup(<AgentCostControls limits={null} onChange={()=>{}}/>);
-  expect((html.match(/value=""/g)??[]).length).toBe(4);
-  expect(html).toContain('built-in tool limits do not bound MCP');
-  expect(html).toContain('Saving a value does not qualify remote enforcement');
-});
-
-it('shows only explicit configured agent limits and respects the busy state',()=>{
-  const html=renderToStaticMarkup(<AgentCostControls disabled limits={{max_builtin_tool_calls:null,max_mcp_calls:1,max_provider_requests:2,max_retrieval_output_tokens:null}} onChange={()=>{}}/>);
-  expect(html).toContain('value="1"');
-  expect(html).toContain('value="2"');
-  expect((html.match(/value=""/g)??[]).length).toBe(2);
-  expect(html).toContain('disabled=""');
-});
 
 it('renders keyboard-accessible navigation with an active page',()=>{
   const html=renderToStaticMarkup(<NavItem active label="Create Report" icon="+" onClick={()=>{}}/>);
@@ -54,24 +37,4 @@ it('renders attention and error messages without colour-only meaning',()=>{
   expect(html).toContain('Human review required');
   expect(html).toContain('Cannot generate automatically');
   expect(html).toContain('Generation has not started');
-});
-
-it('preserves concurrent agent limits when reconciling a scalar-only draft',()=>{
-  const before={provider_profile:{profile_id:'fixture',protocol:'FOUNDRY_AGENT_RESPONSES',max_output_tokens:100,foundry_cost_limits:{max_mcp_calls:1,max_provider_requests:2}}} as TenantSettingsDocument;
-  const draft=structuredClone(before),latest=structuredClone(before);
-  draft.provider_profile!.max_output_tokens=200;
-  latest.provider_profile!.foundry_cost_limits!.max_mcp_calls=3;
-  const reconciled=preserveSettingsDraft(before,draft,latest);
-  expect(reconciled.provider_profile!.max_output_tokens).toBe(200);
-  expect(reconciled.provider_profile!.foundry_cost_limits!.max_mcp_calls).toBe(3);
-});
-
-it('retains an intentional agent-limit draft while preserving unrelated concurrent settings',()=>{
-  const before={provider_profile:{profile_id:'fixture',protocol:'FOUNDRY_AGENT_RESPONSES',max_output_tokens:100,foundry_cost_limits:{max_mcp_calls:1,max_provider_requests:2}}} as TenantSettingsDocument;
-  const draft=structuredClone(before),latest=structuredClone(before);
-  draft.provider_profile!.foundry_cost_limits!.max_mcp_calls=2;
-  latest.provider_profile!.max_output_tokens=300;
-  const reconciled=preserveSettingsDraft(before,draft,latest);
-  expect(reconciled.provider_profile!.max_output_tokens).toBe(300);
-  expect(reconciled.provider_profile!.foundry_cost_limits!.max_mcp_calls).toBe(2);
 });

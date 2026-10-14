@@ -22,7 +22,8 @@ class Preparation:
 
     Nonpaid readiness runs before SDK construction. Qualification reads only
     the already approved account's selected agent/knowledge metadata privately.
-    The host must verify actual enforcement and rates before returning a grant.
+    The host verifies rates and identity, discloses the conservative estimate
+    and residual direct-MCP risk, and respects the existing October ceiling.
     """
     preflight: Callable[[], None]
     qualify: Callable[[Any, Any], ReportApproval]
