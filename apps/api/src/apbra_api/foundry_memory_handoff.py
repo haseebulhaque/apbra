@@ -242,6 +242,7 @@ def run_receiver(
     nonce_factory: Callable[[], str] | None = None,
     listener: tuple[str, int] | None = None,
     published_port: int | None = None,
+    application_factory: Callable[..., Any] | None = None,
 ) -> None:
     """Trusted host entrypoint. CLI cannot enable invocation or manufacture attestation."""
     from .config import get_settings
@@ -289,6 +290,10 @@ def run_receiver(
                         plan.authorization_deadline,
                     )
                 )
+            require(
+                application_factory is None
+                or (binding is not None and callable(application_factory))
+            )
             if snapshot_loader is None:
                 database = Database(settings.database_url)
 
@@ -397,7 +402,7 @@ def run_receiver(
                     agent_version=binding.agent_version,
                     qualification=binding.qualification,
                 )
-            app = create_app(
+            app = (application_factory or create_app)(
                 settings=settings,
                 foundry_metadata_credentials=credentials,
                 foundry_credentials=runtime_credentials,
@@ -463,6 +468,13 @@ def main() -> None:
     listener = (args.pop("listen_host"), args.pop("listen_port"))
     published = args.pop("published_port")
     try:
+        if runtime:
+            from .foundry_report_runtime import run_private_report_receiver
+
+            run_private_report_receiver(
+                HandoffPlan(**args), StdioChannel(), listener=listener, published_port=published
+            )
+            return
         run_receiver(
             HandoffPlan(**args),
             StdioChannel(),

@@ -42,6 +42,26 @@ from .foundry_owner_metadata import (
 _SCOPE = "https://ai.azure.com/.default"
 
 
+def _private_report_frame(plan: HandoffPlan, approval: Any, nonce: str) -> tuple[bytes, str]:
+    """Dependency-qualified host framing; receiver validates every authority fact."""
+    value = approval if type(approval) is dict else approval.model_dump(mode="json")
+    require(type(value) is dict and type(value.get("binding")) is dict)
+    binding = value["binding"]
+    require(
+        (binding.get("company_id"), binding.get("tenant_id"), binding.get("client_id"),
+         binding.get("authorization_deadline"))
+        == (str(plan.company_id), str(plan.tenant_id), str(plan.client_id),
+            plan.authorization_deadline)
+    )
+    account = binding.get("home_account_id")
+    require(type(account) is str and re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", account))
+    require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce))
+    raw = json.dumps({"v": 1, "nonce": nonce, "approval": value},
+                     separators=(",", ":"), allow_nan=False).encode()
+    require(0 < len(raw) <= MAX_FRAME)
+    return len(raw).to_bytes(4, "big") + raw, account
+
+
 class DockerAttach:
     """Finite CLI operations on one explicit owner Unix socket/container/image."""
 
@@ -263,6 +283,7 @@ def run_handoff(
     terminal_factory: Callable[..., AbstractContextManager[TextIO]] | None = None,
     confirm: Callable[..., None] | None = None,
     hold: Callable[[], None] | None = None,
+    report_approval: Any | None = None,
 ) -> None:
     """Only independently owner-run private TTY; caller cannot supply persisted bearer."""
     sdk = None
@@ -273,6 +294,9 @@ def run_handoff(
     try:
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             plan.validate()
+            require(report_approval is not None or getattr(peer, "runtime", False) is False)
+            if report_approval is not None:
+                require(getattr(peer, "runtime", False) is True)
 
             def check() -> None:
                 require(time.time() < plan.authorization_deadline)
@@ -287,7 +311,9 @@ def run_handoff(
                     terminal,
                     terminal_plan,
                     "Approve one temporary memory lease to the exact owned Docker receiver. "
-                    "No new consent, permissions, token persistence or paid calls.",
+                    + ("No new consent, permissions or token persistence. "
+                     "Sign-in itself sends no report request." if report_approval is not None else
+                     "No new consent, permissions, token persistence or paid calls."),
                     "CONFIRM PRIVATE MEMORY HANDOFF",
                 )
                 check()
@@ -307,6 +333,25 @@ def run_handoff(
                     and re.fullmatch(r"[a-f0-9]{64}", challenge["nonce"])
                 )
                 check()
+                if report_approval is not None:
+                    approval(
+                        terminal,
+                        terminal_plan,
+                        "Authorize the approved report steps for the selected saved report "
+                        "within its explicitly reserved October budget. "
+                        "This sign-in sends no report request.",
+                        "CONFIRM ONE CASE REPORT",
+                    )
+                    check()
+                    private_frame, expected_account = _private_report_frame(
+                        plan, report_approval, challenge["nonce"]
+                    )
+                    try:
+                        peer.write(private_frame)
+                    finally:
+                        private_frame = b""
+                    require(line(peer, plan.authorization_deadline) == b"REPORT_APPROVAL_ACCEPTED")
+                    check()
                 timeout = min(300, plan.authorization_deadline - time.time())
                 require(timeout > 0)
                 sdk = (credential_factory or _browser_credential)(
@@ -336,6 +381,8 @@ def run_handoff(
                     and label.isprintable()
                 )
                 check()
+                if report_approval is not None:
+                    require(account[2] == expected_account)
                 assert isinstance(label, str)
                 approval(
                     terminal,
