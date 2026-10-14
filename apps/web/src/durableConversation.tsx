@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {acceptanceApi,capabilitiesApi,conversationApi,evidenceApi,referenceMaterialApi,type AcceptanceState,type CaseRecord,type ConversationEvent,type DurableQuestion,type EvidenceItem,type ReferenceMaterial,type UploadCapabilities} from './api';
+import {ApiError,acceptanceApi,capabilitiesApi,conversationApi,evidenceApi,referenceMaterialApi,type AcceptanceState,type CaseRecord,type ConversationEvent,type DurableQuestion,type EvidenceItem,type ReferenceMaterial,type UploadCapabilities} from './api';
 import {DurableGeneration} from './durableGeneration';
 
 const emptyAcceptance:AcceptanceState={interpretation:null,confirmed_contract:null};
@@ -42,6 +42,8 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
   const messageCommand=useRef<{text:string;key:string}|null>(null);
   const answerCommand=useRef<{signature:string;key:string}|null>(null);
   const refinementCommand=useRef<{text:string;key:string}|null>(null);
+  const uploadLifetime=useRef(0),uploadCommand=useRef<symbol|null>(null);
+  useEffect(()=>()=>{uploadLifetime.current+=1;uploadCommand.current=null},[record.id]);
 
   const refresh=async()=>{
     const generation=++refreshGeneration.current;
@@ -112,23 +114,43 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
   }
 
   async function uploadSelected(){
-    if(!pendingFiles.length)return;
+    if(!pendingFiles.length||uploadCommand.current!==null)return;
+    const lifetime=uploadLifetime.current,caseId=record.id,command=Symbol('upload');
+    uploadCommand.current=command;
     refreshGeneration.current+=1;
     setBusy(true);
     setBusyStep('Saving and checking selected files');
-    let version=contextVersionRef.current;
-    for(const pending of pendingFiles){
-      setPendingFiles(current=>current.map(item=>item.id===pending.id?{...item,status:'UPLOADING',error:undefined}:item));
-      try{
-        if(pending.kind==='DATA_SOURCE'){
-          const item=await evidenceApi.add(record.id,pending.file,version,csrfToken);version=item.semantic_context_version??version;setEvidence(current=>current.some(existing=>existing.id===item.id)?current:[...current,item]);
-        }else{
-          const item=await referenceMaterialApi.add(record.id,pending.file,version,csrfToken);version=item.semantic_context_version??version;setReferences(current=>current.some(existing=>existing.id===item.id)?current:[...current,item]);
+    const beforeVersion=contextVersionRef.current;let version=beforeVersion;
+    const current=()=>uploadLifetime.current===lifetime&&uploadCommand.current===command&&caseIdRef.current===caseId;
+    try{
+      for(const pending of pendingFiles){
+        if(!current())return;
+        setPendingFiles(items=>items.map(item=>item.id===pending.id?{...item,status:'UPLOADING',error:undefined}:item));
+        try{
+          if(pending.kind==='DATA_SOURCE'){
+            const item=await evidenceApi.add(caseId,pending.file,version,csrfToken);
+            if(!current())return;
+            version=item.semantic_context_version??version;setEvidence(items=>items.some(existing=>existing.id===item.id)?items:[...items,item]);
+          }else{
+            const item=await referenceMaterialApi.add(caseId,pending.file,version,csrfToken);
+            if(!current())return;
+            version=item.semantic_context_version??version;setReferences(items=>items.some(existing=>existing.id===item.id)?items:[...items,item]);
+          }
+          contextVersionRef.current=version;setPendingFiles(items=>items.filter(item=>item.id!==pending.id));
+        }catch(error){
+          if(!current())return;
+          const message=error instanceof Error?error.message:'Upload failed.';
+          setPendingFiles(items=>items.map(item=>item.id===pending.id?{...item,status:'FAILED',error:message}:item));onError(error);
+          if(error instanceof ApiError&&(error.status===401||error.status===403)){
+            if(error.status===403&&version!==beforeVersion&&current())changed(version);
+            return;
+          }
         }
-        contextVersionRef.current=version;setPendingFiles(current=>current.filter(item=>item.id!==pending.id));
-      }catch(error){const message=error instanceof Error?error.message:'Upload failed.';setPendingFiles(current=>current.map(item=>item.id===pending.id?{...item,status:'FAILED',error:message}:item));onError(error)}
+      }
+      if(current())changed(version);
+    }finally{
+      if(uploadLifetime.current===lifetime&&uploadCommand.current===command){uploadCommand.current=null;setBusy(false);setBusyStep(null)}
     }
-    changed(version);setBusy(false);setBusyStep(null);
   }
 
   async function prepare(){
