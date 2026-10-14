@@ -102,3 +102,31 @@ class GuidedPreparationScope(unittest.TestCase):
             'apps/api/src/apbra_api/auth_boundary.py','apps/api/src/apbra_api/authorization.py','apps/api/src/apbra_api/tenant_secrets.py','apps/api/src/apbra_api/persistence.py','infrastructure/**','local-data/**'])
         self.assertIn('built-in', ' '.join(task['requirements']).lower())
         self.assertIn('v21 generationEnabled is not active bounded runtime',' '.join(task['requirements']))
+
+    def test_prospective_product_witness_excludes_protected_and_governance_paths(self):
+        checker=dict(C)
+        checker['delivery_context']=lambda root:('APBRA-160',H['B'],{'apps/api/src/apbra_api/config.py'})
+        allowed=H['qualified_product_paths'](ROOT,checker)
+        self.assertEqual(allowed,H['PRODUCT'])
+        self.assertFalse(allowed & H['GOV'])
+        self.assertFalse(allowed & (set(H['RETAINED'])-H['PRODUCT']))
+
+    def test_current_pin_exception_rejects_invalid_actual_delivery_or_check(self):
+        for task,branch,paths in [('APBRA-27',H['B'],H['PRODUCT']),
+              ('APBRA-160','agent/APBRA-DEVOPS/APBRA-160-foreign',H['PRODUCT']),
+              ('APBRA-160',H['B'],H['GOV']),('APBRA-160',H['B'],set()),
+              ('APBRA-160',H['B'],H['PRODUCT']|{'compose.yaml'})]:
+            checker={'delivery_context':lambda root:(task,branch,paths)}
+            self.assertEqual(H['qualified_product_paths'](ROOT,checker),set())
+        checker=dict(C)
+        checker['delivery_context']=lambda root:('APBRA-160',H['B'],{'apps/api/src/apbra_api/config.py'})
+        checker['check']=lambda *args,**kwargs:(['Rejected'],{})
+        self.assertEqual(H['qualified_product_paths'](ROOT,checker),set())
+
+    def test_withdrawn_binding_cannot_supersede_current_pins(self):
+        from unittest.mock import patch
+        checker=dict(C)
+        checker['delivery_context']=lambda root:('APBRA-160',H['B'],{'apps/api/src/apbra_api/config.py'})
+        witness=H['qualified_product_paths']
+        with patch.dict(witness.__globals__,{'bind':lambda *args:(None,['Withdrawn'])}):
+            self.assertEqual(witness(ROOT,checker),set())

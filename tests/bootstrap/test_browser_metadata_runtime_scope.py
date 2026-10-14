@@ -55,5 +55,12 @@ class BrowserMetadataRuntimeScope(unittest.TestCase):
 
     def test_historical_runtime_identity_settings_sources_remain_exact(self):
         import hashlib
+        import subprocess
+        guided=runpy.run_path(str(ROOT/'scripts/check_gp.py'))
+        allowed=guided['qualified_product_paths'](ROOT,CHECKER)
         for name, expected in HELPER['RETAINED'].items():
-            self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(), expected)
+            with self.subTest(name=name):
+                baseline=subprocess.check_output(['git','show',HELPER['BASE']+':'+name],cwd=ROOT)
+                self.assertEqual(hashlib.sha256(baseline).hexdigest(),expected)
+                if name not in allowed:
+                    self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),expected)
