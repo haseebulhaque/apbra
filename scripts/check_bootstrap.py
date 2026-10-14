@@ -21,6 +21,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
+gp=runpy.run_path(Path(__file__).parent/'check_gp.py')
 rr=runpy.run_path(Path(__file__).parent/'check_rr.py')
 x=runpy.run_path(Path(__file__).parent/'check_mh.py')
 q=runpy.run_path(Path(__file__).parent/'check_br.py')
@@ -853,7 +854,7 @@ HOSTED_WEB_RELEASE_SOURCES = (
     ('apbra-173b-reconciliation','6422580',62,'5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
     ('apbra-173b-owner-architecture-acceptance','APBRA-173','Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100','f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
 )
-HOSTED_WEB_RELEASE_GATE_SHA256 = {"requirements":"09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30","adrs":"e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650","architecture_refs":"9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f","restricted_paths":"cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672","acceptance_criteria":"b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e","verification_required":"ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356","out_of_scope":"052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512","escalate_when":"4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81","dependencies":"6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1"}
+HOSTED_WEB_RELEASE_GATE_SHA256={"requirements":"09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30","adrs":"e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650","architecture_refs":"9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f","restricted_paths":"cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672","acceptance_criteria":"b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e","verification_required":"ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356","out_of_scope":"052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512","escalate_when":"4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81","dependencies":"6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1"}
 HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
 FOUNDRY_SCHEMA_PATHS = {
@@ -896,13 +897,13 @@ FOUNDRY_SCHEMA_SOURCES = (
     ('apbra-160-editable-first-draft-direction','8519682',28,'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'),
     ('apbra-160-editable-first-draft-delivery','9404417',9,'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9'),
 )
-FOUNDRY_SCHEMA_GATE_SHA256 = {"requirements":"843a56bc013e1c0db367b0d6c9f118e6ebbe5d51c03a1931fad930059d963b2f","adrs":"2c7a575cc35488c6e1cd10aeeef41575646c26bc9804e8b446d779c09360fd25","architecture_refs":"756a3adacb850a15bf297617b552e39af2fc630599f900a580d70d437cff8c13","restricted_paths":"5da9a2143668174dc898d0ed884c32c49b587a0524bf2c37bc7ae53e0ccf2fbe","acceptance_criteria":"24df1f8b274ff60bfe8d4a202ceffa1de766e1a00dfe357e811192e4c99c2e97","verification_required":"3e0d547686d5b640d8f207673e3017e8426874607eab3a1ce96af58c8d78582f","out_of_scope":"d84f2cd70d79358d10e16173234e3f8e5cd9623c4ab2a6dd9432e6a1b27efa29","escalate_when":"434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1","dependencies":"1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded"}
-PROVIDER_RETRIEVAL_PATHS = {'apps/api/src/apbra_api/config.py','apps/web/src/durableConversation.tsx','apps/web/scripts/generation-bridge.ts','apps/web/scripts/semantic-bridge.ts','apps/web/src/deploymentGuide.test.ts','apps/web/src/deploymentGuide.ts','apps/api/src/apbra_api/model_provider.py','apps/web/src/privateCases.test.tsx','apps/web/src/durableGeneration.tsx','apps/web/src/api.test.ts','apps/api/src/apbra_api/generation.py','apps/web/src/durableGeneration.test.tsx','apps/api/tests/test_model_provider.py','apps/web/src/foundry.ts','apps/api/tests/test_conversations.py','apps/web/e2e/protected-generation.spec.ts','apps/web/src/api.ts','apps/api/src/apbra_api/tenant_settings.py','apps/web/src/foundry.test.ts','apps/web/src/durableConversation.test.tsx','apps/api/tests/test_generation.py','apps/web/src/EnterpriseApp.tsx','apps/api/src/apbra_api/api.py','apps/web/e2e/tenant-settings.spec.ts','apps/api/tests/test_tenant_settings.py','apps/api/tests/test_semantic_bridge.py','apps/web/e2e/durable-conversation.spec.ts','apps/api/src/apbra_api/application.py','apps/api/tests/test_api.py'}
+FOUNDRY_SCHEMA_GATE_SHA256={"requirements":"843a56bc013e1c0db367b0d6c9f118e6ebbe5d51c03a1931fad930059d963b2f","adrs":"2c7a575cc35488c6e1cd10aeeef41575646c26bc9804e8b446d779c09360fd25","architecture_refs":"756a3adacb850a15bf297617b552e39af2fc630599f900a580d70d437cff8c13","restricted_paths":"5da9a2143668174dc898d0ed884c32c49b587a0524bf2c37bc7ae53e0ccf2fbe","acceptance_criteria":"24df1f8b274ff60bfe8d4a202ceffa1de766e1a00dfe357e811192e4c99c2e97","verification_required":"3e0d547686d5b640d8f207673e3017e8426874607eab3a1ce96af58c8d78582f","out_of_scope":"d84f2cd70d79358d10e16173234e3f8e5cd9623c4ab2a6dd9432e6a1b27efa29","escalate_when":"434388f945c93c78a0d41534cecf18808d2953a46ca78c1d15d0306007d80ba1","dependencies":"1221beb8ab123577609b619662c9483b192cf0ce44d5da6de61eca5b2af55ded"}
+PROVIDER_RETRIEVAL_PATHS={'apps/api/src/apbra_api/config.py','apps/web/src/durableConversation.tsx','apps/web/scripts/generation-bridge.ts','apps/web/scripts/semantic-bridge.ts','apps/web/src/deploymentGuide.test.ts','apps/web/src/deploymentGuide.ts','apps/api/src/apbra_api/model_provider.py','apps/web/src/privateCases.test.tsx','apps/web/src/durableGeneration.tsx','apps/web/src/api.test.ts','apps/api/src/apbra_api/generation.py','apps/web/src/durableGeneration.test.tsx','apps/api/tests/test_model_provider.py','apps/web/src/foundry.ts','apps/api/tests/test_conversations.py','apps/web/e2e/protected-generation.spec.ts','apps/web/src/api.ts','apps/api/src/apbra_api/tenant_settings.py','apps/web/src/foundry.test.ts','apps/web/src/durableConversation.test.tsx','apps/api/tests/test_generation.py','apps/web/src/EnterpriseApp.tsx','apps/api/src/apbra_api/api.py','apps/web/e2e/tenant-settings.spec.ts','apps/api/tests/test_tenant_settings.py','apps/api/tests/test_semantic_bridge.py','apps/web/e2e/durable-conversation.spec.ts','apps/api/src/apbra_api/application.py','apps/api/tests/test_api.py'}
 PROVIDER_RETRIEVAL_REGISTRATION_PATHS = {'tasks/APBRA-160-provider-retrieval.json','scripts/check_bootstrap.py','tests/bootstrap/test_provider_retrieval_scope.py'}
 PROVIDER_RETRIEVAL_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval'
 PROVIDER_RETRIEVAL_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-provider-retrieval-registration'
 PROVIDER_RETRIEVAL_TASK_SHA256 = '78522272fdd8c20c0ce184eec2a22122397e2e49edb3f9fc6a79655ff2338cf2'
-PROVIDER_RETRIEVAL_GATE_SHA256 = {"requirements":"323309c11b31b810b31a895c46a1e15a8a948186ebfc5384277bfaa57748625c","adrs":"ebf931961a3783807a614f29ea4be730c3664d0b147cac18d364125cdc631edf","architecture_refs":"35c08977912347960b51fc6b7f33ecfc186dd341dc7c864cf802389d9037cfe7","restricted_paths":"14419d236e945cea71dc8999014ad50d01d6c5a44a23718612b7f63766481bc7","acceptance_criteria":"dbcb7e2efde54d5d219cdb438011baaf21d6a388dee2e236d53b56f2ba51d9f2","verification_required":"c371ba3f93fe70d9e4aebc8dc0964e98cd0f28e26303a9864e89b1b7e2bf33d0","out_of_scope":"23bba94e16b368800cf68b86547a49527a4ef26076aff2067fa1c199b2191f84","escalate_when":"b97ea55133cba8dd8abae0eaa5be205ee1c37aebe52df37b69e99e4137f35375","dependencies":"d05be20dfc2167a0b399ad6a101dc0c91d50095ca546a4f09d797a892d234a66","effective_release":"6385f7bf58136115858f87c4dd65c7e39aaf1d225f3cfb3092e8eeb818cbc5cd","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
+PROVIDER_RETRIEVAL_GATE_SHA256={"requirements":"323309c11b31b810b31a895c46a1e15a8a948186ebfc5384277bfaa57748625c","adrs":"ebf931961a3783807a614f29ea4be730c3664d0b147cac18d364125cdc631edf","architecture_refs":"35c08977912347960b51fc6b7f33ecfc186dd341dc7c864cf802389d9037cfe7","restricted_paths":"14419d236e945cea71dc8999014ad50d01d6c5a44a23718612b7f63766481bc7","acceptance_criteria":"dbcb7e2efde54d5d219cdb438011baaf21d6a388dee2e236d53b56f2ba51d9f2","verification_required":"c371ba3f93fe70d9e4aebc8dc0964e98cd0f28e26303a9864e89b1b7e2bf33d0","out_of_scope":"23bba94e16b368800cf68b86547a49527a4ef26076aff2067fa1c199b2191f84","escalate_when":"b97ea55133cba8dd8abae0eaa5be205ee1c37aebe52df37b69e99e4137f35375","dependencies":"d05be20dfc2167a0b399ad6a101dc0c91d50095ca546a4f09d797a892d234a66","effective_release":"6385f7bf58136115858f87c4dd65c7e39aaf1d225f3cfb3092e8eeb818cbc5cd","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
 PROVIDER_RETRIEVAL_SOURCES = FOUNDRY_SCHEMA_SOURCES
 PROVIDER_RETRIEVAL_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 FOUNDRY_HOST_PATHS = {'apps/api/tests/test_model_provider.py','apps/api/pyproject.toml','apps/api/src/apbra_api/model_provider.py','apps/api/src/apbra_api/main.py','apps/api/uv.lock','apps/api/src/apbra_api/config.py'}
@@ -910,7 +911,7 @@ FOUNDRY_HOST_REGISTRATION_PATHS = {'tasks/APBRA-160-foundry-host.json','scripts/
 FOUNDRY_HOST_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-host'
 FOUNDRY_HOST_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-host-registration'
 FOUNDRY_HOST_TASK_SHA256 = '8c2df5654d5fac6d929800881d39b54f809be5164c5bf0342328942c89aa4f93'
-FOUNDRY_HOST_GATE_SHA256 = {"requirements":"6c28746ffdbda24034f5d4ddcb645f80001e1ff048862fde8ef2e89dd700ff6a","adrs":"8d96bab63ecbd37614f9707a709fb9cc0376df4f257b26f1417418b6b80bddad","architecture_refs":"3b432bb91142e2f748282a601cd5972d8a236dea6c533f44d2efac7a600043a0","restricted_paths":"be5f05d658cdefb103541b20782fd9634ffa4beb159c2ae0e9757a72bf2ae029","acceptance_criteria":"e25e323fb28f2121e76f798b205a33fa7d56d50b6744a98fb5bad57531aaf848","verification_required":"d071446ffde2a22023dcf474b854d4f7310c3cc066b4f56f39fd4fbe5a7b8257","out_of_scope":"9c97c2304236a6db9e19c2c8ed0d48e6453557fe1fa0490e160c251499f03eba","escalate_when":"77375135f94a2a32064a4db36dfe18a0a06d1ffedf610b14eba632b24252634c","dependencies":"45d36a6c2adcf36bdb7bb4d2de69bc4717e8a2bb4648d2aa33fa5c943b844a88","effective_release":"a214863ef9572e831beece9d1562de0cc93d20cd09473638aa500bc5e1905684","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
+FOUNDRY_HOST_GATE_SHA256={"requirements":"6c28746ffdbda24034f5d4ddcb645f80001e1ff048862fde8ef2e89dd700ff6a","adrs":"8d96bab63ecbd37614f9707a709fb9cc0376df4f257b26f1417418b6b80bddad","architecture_refs":"3b432bb91142e2f748282a601cd5972d8a236dea6c533f44d2efac7a600043a0","restricted_paths":"be5f05d658cdefb103541b20782fd9634ffa4beb159c2ae0e9757a72bf2ae029","acceptance_criteria":"e25e323fb28f2121e76f798b205a33fa7d56d50b6744a98fb5bad57531aaf848","verification_required":"d071446ffde2a22023dcf474b854d4f7310c3cc066b4f56f39fd4fbe5a7b8257","out_of_scope":"9c97c2304236a6db9e19c2c8ed0d48e6453557fe1fa0490e160c251499f03eba","escalate_when":"77375135f94a2a32064a4db36dfe18a0a06d1ffedf610b14eba632b24252634c","dependencies":"45d36a6c2adcf36bdb7bb4d2de69bc4717e8a2bb4648d2aa33fa5c943b844a88","effective_release":"a214863ef9572e831beece9d1562de0cc93d20cd09473638aa500bc5e1905684","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
 FOUNDRY_HOST_SOURCES = FOUNDRY_SCHEMA_SOURCES
 FOUNDRY_HOST_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 FOUNDRY_QUALIFICATION_PATHS = {'apps/api/tests/test_model_provider.py','apps/api/src/apbra_api/config.py','apps/api/src/apbra_api/main.py'}
@@ -918,7 +919,7 @@ FOUNDRY_QUALIFICATION_REGISTRATION_PATHS = {'tests/bootstrap/test_foundry_qualif
 FOUNDRY_QUALIFICATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification'
 FOUNDRY_QUALIFICATION_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-foundry-qualification-registration'
 FOUNDRY_QUALIFICATION_TASK_SHA256 = '7f238804977619dcc8120b58ae4df562b35a0409ddef545711d1782f51ae4aae'
-FOUNDRY_QUALIFICATION_GATE_SHA256 = {"requirements":"4e326dc8d87ad8258e5724e71f52cd438ba00695406edb09649f1368d6501337","adrs":"497693b8401a2c3e0871ff93ee7b48317c97339c4d916585ff1a34174ce94890","architecture_refs":"081817e73e3e30833aee2e5896abe65d875bcce9daf666d4a620d4dab63db808","restricted_paths":"9034e40a893b883fa5d2026dbd72be8af31f472d4fc1eae942fa651c33a8ff0f","acceptance_criteria":"42d48025bac15a836c3d17105c754544c6673178fdcd246ed90466ec059b8a22","verification_required":"e39fd3bb51bdb59f46018e97628dd3fbc814746dd3e7d0fe015e594a16a4a74f","out_of_scope":"f1fc7e0bb6d162f21a642b05059f8b4101ef34ce9c4163780b6b0750d1c911f1","escalate_when":"363d6c576984e7f41fc4171a1a947f43b7903a74780d8638a119b2a3348411df","dependencies":"3cc62a8204219a6d096ab3e78f4e734e9cbbff077241dd24bb8b22457b765a68","effective_release":"37b6482aeb18252f354ece4731884d31fd58ae9532f562f43cfb381c2cf8e8a3","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
+FOUNDRY_QUALIFICATION_GATE_SHA256={"requirements":"4e326dc8d87ad8258e5724e71f52cd438ba00695406edb09649f1368d6501337","adrs":"497693b8401a2c3e0871ff93ee7b48317c97339c4d916585ff1a34174ce94890","architecture_refs":"081817e73e3e30833aee2e5896abe65d875bcce9daf666d4a620d4dab63db808","restricted_paths":"9034e40a893b883fa5d2026dbd72be8af31f472d4fc1eae942fa651c33a8ff0f","acceptance_criteria":"42d48025bac15a836c3d17105c754544c6673178fdcd246ed90466ec059b8a22","verification_required":"e39fd3bb51bdb59f46018e97628dd3fbc814746dd3e7d0fe015e594a16a4a74f","out_of_scope":"f1fc7e0bb6d162f21a642b05059f8b4101ef34ce9c4163780b6b0750d1c911f1","escalate_when":"363d6c576984e7f41fc4171a1a947f43b7903a74780d8638a119b2a3348411df","dependencies":"3cc62a8204219a6d096ab3e78f4e734e9cbbff077241dd24bb8b22457b765a68","effective_release":"37b6482aeb18252f354ece4731884d31fd58ae9532f562f43cfb381c2cf8e8a3","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582","source_ids":"cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2"}
 FOUNDRY_QUALIFICATION_SOURCES = FOUNDRY_SCHEMA_SOURCES
 FOUNDRY_QUALIFICATION_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 LOCAL_RECOVERY_PATHS = {'apps/api/tests/test_rekey_tenant_secrets.py','apps/api/src/apbra_api/rekey_tenant_secrets.py','apps/api/src/apbra_api/tenant_secrets.py'}
@@ -926,7 +927,7 @@ LOCAL_RECOVERY_REGISTRATION_PATHS = {'tasks/APBRA-160-local-rekey.json','scripts
 LOCAL_RECOVERY_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey'
 LOCAL_RECOVERY_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-local-rekey-clean-registration'
 LOCAL_RECOVERY_TASK_SHA256 = '63c5ba8add3f1edaf3433460adbd9c9f504f2885bd832535d08aab6197d8b592'
-LOCAL_RECOVERY_GATE_SHA256 = {"requirements":"20a8243d2c014b9254f37f124b92062ab475b3f72429e8085e205a3cd900c9a4","adrs":"b2d848dccced5dad02b35ad8823548df93ed6d26f506879e021685628a38ea51","architecture_refs":"3c1e5bd1055f7f60c3248686b7650b2cc39d04c5b7abe132f786c013fee98fb1","restricted_paths":"e515ba02be97593fc54eef10b9284355cb36c792a827638bd1329f93b9f53b46","acceptance_criteria":"90d4190ce08546aada6bd478143e171efef9bd67a602b6678976d5ac606ee007","verification_required":"a801e044ceaeb0e74b16035bea0d12306b692cef4a04df525a1a65f326aaa526","out_of_scope":"030b4ac42d4a4d59c5eb1ffcaa39c0a8e98bd70cc84d3c03e01cbb8be89e8777","escalate_when":"957e029f91dfe88d547fa550fd2a23a3f819f19aa4ac4760896232a3f45c745f","dependencies":"a7ca3f13676c6e1427db2f2b5df9d42965e8458788ff111b22079542a9faf426","effective_release":"03fd13e33a9671b7647526a1f06d57fe10f5376cdb75d8e6d06402b0c215cf30","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","source_ids":"7a1a4b216859154f70d8b3aa0d18b1c679ab8965bd42b97e217b11b385925890","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
+LOCAL_RECOVERY_GATE_SHA256={"requirements":"20a8243d2c014b9254f37f124b92062ab475b3f72429e8085e205a3cd900c9a4","adrs":"b2d848dccced5dad02b35ad8823548df93ed6d26f506879e021685628a38ea51","architecture_refs":"3c1e5bd1055f7f60c3248686b7650b2cc39d04c5b7abe132f786c013fee98fb1","restricted_paths":"e515ba02be97593fc54eef10b9284355cb36c792a827638bd1329f93b9f53b46","acceptance_criteria":"90d4190ce08546aada6bd478143e171efef9bd67a602b6678976d5ac606ee007","verification_required":"a801e044ceaeb0e74b16035bea0d12306b692cef4a04df525a1a65f326aaa526","out_of_scope":"030b4ac42d4a4d59c5eb1ffcaa39c0a8e98bd70cc84d3c03e01cbb8be89e8777","escalate_when":"957e029f91dfe88d547fa550fd2a23a3f819f19aa4ac4760896232a3f45c745f","dependencies":"a7ca3f13676c6e1427db2f2b5df9d42965e8458788ff111b22079542a9faf426","effective_release":"03fd13e33a9671b7647526a1f06d57fe10f5376cdb75d8e6d06402b0c215cf30","owner_acceptance":"6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11","source_ids":"7a1a4b216859154f70d8b3aa0d18b1c679ab8965bd42b97e217b11b385925890","task_mode":"3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2","readiness":"3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582"}
 LOCAL_RECOVERY_SOURCE_SHA256 = 'a546483c8784c3192c15d20ad21935f7d3bae421ea76ad3086808fb4bf7f6eb6'
 LOCAL_RECOVERY_ALL_SOURCES_SHA256 = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 FOUNDRY_SCHEMA_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-editable-draft'
@@ -963,7 +964,7 @@ DEMO_UX_SOURCES = (
     ('apbra-160-screen-interactions','4063368',5,'3cf12cb56cf804f3720e9215d15af34a57ec553469699cd635af072147296f3f'),
     ('apbra-160-reviewer-administration','4063388',6,'05749da8117cf5495cda152d1e2e1eb42a97494533ab5626f1881d583ddb05a1'),
 )
-DEMO_UX_GATE_SHA256 = {"requirements":"c5a1307d65817fd8e0c391b740df19d7b4842312f0fe78517ec5a447ec102ec5","adrs":"08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7","architecture_refs":"6ec72c7e222ce482456ada6b43128865470e2864884a322692b5e0c29d80307a","restricted_paths":"3ccd44f8f74a4ef21f15ddb1fcdd45bdb29b5d83e1a79fdf75bd310b0f9fbf29","acceptance_criteria":"cfb3ba85f7b20cfe3d6f79e24270c763be58e12a3f4e01fc4de7b5d6d5f75504","verification_required":"13c9be515b02d85ed50994700e3c10da8f9734ef8cbc3c78d3b78f34369798bc","out_of_scope":"4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5","escalate_when":"b32a0f51f125326763c2b20fa5c23facb3c5010b1d79afa988cd791ea3358eba","dependencies":"3fb8b59c130f0dde1d08cb116628c4211374a1684c1a941a6b861533960519cf"}
+DEMO_UX_GATE_SHA256={"requirements":"c5a1307d65817fd8e0c391b740df19d7b4842312f0fe78517ec5a447ec102ec5","adrs":"08944297abd884ee5c68f1eeef814a929fa74f33567b06ea9e3a91cc7ad0adb7","architecture_refs":"6ec72c7e222ce482456ada6b43128865470e2864884a322692b5e0c29d80307a","restricted_paths":"3ccd44f8f74a4ef21f15ddb1fcdd45bdb29b5d83e1a79fdf75bd310b0f9fbf29","acceptance_criteria":"cfb3ba85f7b20cfe3d6f79e24270c763be58e12a3f4e01fc4de7b5d6d5f75504","verification_required":"13c9be515b02d85ed50994700e3c10da8f9734ef8cbc3c78d3b78f34369798bc","out_of_scope":"4ecc70a57f25006337e6792ae6d1f500281043c26fd21e35ad94995138503ee5","escalate_when":"b32a0f51f125326763c2b20fa5c23facb3c5010b1d79afa988cd791ea3358eba","dependencies":"3fb8b59c130f0dde1d08cb116628c4211374a1684c1a941a6b861533960519cf"}
 DEMO_UX_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux'
 DEMO_UX_REGISTRATION_BRANCH = 'agent/APBRA-DEVOPS/APBRA-160-demo-ux-registration'
 DEMO_UX_VITE_ORIGINAL_SHA256 = 'dac004933ad7814f66e4ebaa2116867e151b396f60ef5d80d0a88bd786a8a320'
@@ -1120,33 +1121,33 @@ def catalog_errors(catalog: dict) -> list[str]:
             errors.append('Unknown reviewer role')
     return errors
 def task_errors(task:dict,catalog:dict,sources:dict)->list[str]:
-    errors = []
-    cards = {c['agent_id']: c for c in catalog['cards']}
-    card = cards.get(task['assigned_agent'])
-    if card is None:
-        return ['Unknown agent role']
-    if task['agent_card_version'] != card['card_version']:
-        errors.append('Stale agent card version')
-    if any(not valid_path(p) for p in task['allowed_paths'] + task['restricted_paths']):
-        errors.append('Unsafe task scope')
-    if not task['branch'].startswith('agent/'+task['assigned_agent']+'/'+task['task_id']+'-'):
-        errors.append('Branch must match the agent and Jira task')
-    source_map = {s['id']: s for s in sources['sources']}
-    if any(s not in source_map for s in task['source_ids']):
-        errors.append('Unknown source reference')
-    if task['task_mode'] == 'IMPLEMENTATION' or task['readiness'] == 'READY_FOR_IMPLEMENTATION':
-        if task['task_mode'] != 'IMPLEMENTATION' or task['readiness'] != 'READY_FOR_IMPLEMENTATION':
-            errors.append('Implementation mode/readiness mismatch')
-        if task['owner_acceptance'] != 'RECORDED':
-            errors.append('Implementation acceptance is not recorded')
-        if card['max_autonomy'] != 'A3':
-            errors.append('Role cannot perform implementation')
-        if any(source_map[s].get('status')not in{'ACCEPTED','BASELINED'}for s in task['source_ids']if s in source_map):
-            errors.append('Proposed sources cannot authorize implementation' if any(source_map[s].get('status') == 'PROPOSED' for s in task['source_ids'] if s in source_map) else 'Unaccepted sources cannot authorize implementation')
-    if task['task_mode'] == 'SPECIFICATION' and task['readiness'] == 'READY_FOR_SPECIFICATION':
-        if task['owner_acceptance'] not in ('BOOTSTRAP_ONLY', 'RECORDED'):
-            errors.append('Specification authority missing')
-    return errors
+ errors = []
+ cards = {c['agent_id']: c for c in catalog['cards']}
+ card = cards.get(task['assigned_agent'])
+ if card is None:
+  return ['Unknown agent role']
+ if task['agent_card_version'] != card['card_version']:
+  errors.append('Stale agent card version')
+ if any(not valid_path(p) for p in task['allowed_paths'] + task['restricted_paths']):
+  errors.append('Unsafe task scope')
+ if not task['branch'].startswith('agent/'+task['assigned_agent']+'/'+task['task_id']+'-'):
+  errors.append('Branch must match the agent and Jira task')
+ source_map = {s['id']: s for s in sources['sources']}
+ if any(s not in source_map for s in task['source_ids']):
+  errors.append('Unknown source reference')
+ if task['task_mode'] == 'IMPLEMENTATION' or task['readiness'] == 'READY_FOR_IMPLEMENTATION':
+  if task['task_mode'] != 'IMPLEMENTATION' or task['readiness'] != 'READY_FOR_IMPLEMENTATION':
+   errors.append('Implementation mode/readiness mismatch')
+  if task['owner_acceptance'] != 'RECORDED':
+   errors.append('Implementation acceptance is not recorded')
+  if card['max_autonomy'] != 'A3':
+   errors.append('Role cannot perform implementation')
+  if any(source_map[s].get('status')not in{'ACCEPTED','BASELINED'}for s in task['source_ids']if s in source_map):
+   errors.append('Proposed sources cannot authorize implementation' if any(source_map[s].get('status') == 'PROPOSED' for s in task['source_ids'] if s in source_map) else 'Unaccepted sources cannot authorize implementation')
+ if task['task_mode'] == 'SPECIFICATION' and task['readiness'] == 'READY_FOR_SPECIFICATION':
+  if task['owner_acceptance'] not in ('BOOTSTRAP_ONLY', 'RECORDED'):
+   errors.append('Specification authority missing')
+ return errors
 def workflow_errors(text: str) -> list[str]:
     errors = []
     try:
@@ -1188,37 +1189,37 @@ def repo_files(root: Path) -> list[Path]:
 def bound_provider_registration(root,catalog,sources,*,filename,label,branch,
  base, paths, task_sha, gates, source_bindings,
  sources_sha, count_label):
-    """Equivalent finite provider/host registrations; retain their exact errors."""
-    path=root/'tasks'/filename
-    if not path.exists():
-        return None, []
-    registered = load_json(path)
-    failures=schema_errors(load_json(root/'contracts/engineering/task-contract.schema.json'),registered)
-    if not failures:
-        failures += task_errors(registered, catalog, sources)
-        def digest(value):
-            return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        prefix = 'APBRA-160 ' + label
-        if digest(registered) != task_sha:
-            failures.append(prefix + ' task binding differs')
-        if (registered['task_id'], registered['assigned_agent'], registered['agent_card_version'],
-                registered['branch'],registered['base_commit'])!=('APBRA-160','APBRA-DEVOPS','0.1',branch,base):
-            failures.append(prefix + ' identity/base/branch differs')
-        if set(registered['allowed_paths']) != paths or len(registered['allowed_paths']) != len(paths):
-            failures.append(prefix+' requires exact '+count_label+' literal paths')
-        if registered['source_ids'] != [row[0] for row in source_bindings]:
-            failures.append(prefix + ' requires exact accepted sources')
-        for section, expected in gates.items():
-            if digest(registered[section]) != expected:
-                failures.append(prefix + ' changed gate: ' + section)
-        if digest(sources) != sources_sha:
-            failures.append(prefix + ' historical source register changed')
-        for source_id, content_id, version, expected in source_bindings:
-            rows=[row for row in sources['sources']if row.get('id')==source_id]
-            if(len(rows)!=1 or(rows[0].get('content_id'),rows[0].get('version'),
-                    rows[0].get('status'))!=(content_id,version,'ACCEPTED')or digest(rows[0])!=expected):
-                failures.append(prefix + ' source binding differs: ' + source_id)
-    return (None if failures else registered), failures
+ """Equivalent finite provider/host registrations; retain their exact errors."""
+ path=root/'tasks'/filename
+ if not path.exists():
+  return None, []
+ registered = load_json(path)
+ failures=schema_errors(load_json(root/'contracts/engineering/task-contract.schema.json'),registered)
+ if not failures:
+  failures += task_errors(registered, catalog, sources)
+  def digest(value):
+   return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+  prefix = 'APBRA-160 ' + label
+  if digest(registered) != task_sha:
+   failures.append(prefix + ' task binding differs')
+  if (registered['task_id'], registered['assigned_agent'], registered['agent_card_version'],
+    registered['branch'],registered['base_commit'])!=('APBRA-160','APBRA-DEVOPS','0.1',branch,base):
+   failures.append(prefix + ' identity/base/branch differs')
+  if set(registered['allowed_paths']) != paths or len(registered['allowed_paths']) != len(paths):
+   failures.append(prefix+' requires exact '+count_label+' literal paths')
+  if registered['source_ids'] != [row[0] for row in source_bindings]:
+   failures.append(prefix + ' requires exact accepted sources')
+  for section, expected in gates.items():
+   if digest(registered[section]) != expected:
+    failures.append(prefix + ' changed gate: ' + section)
+  if digest(sources) != sources_sha:
+   failures.append(prefix + ' historical source register changed')
+  for source_id, content_id, version, expected in source_bindings:
+   rows=[row for row in sources['sources']if row.get('id')==source_id]
+   if(len(rows)!=1 or(rows[0].get('content_id'),rows[0].get('version'),
+     rows[0].get('status'))!=(content_id,version,'ACCEPTED')or digest(rows[0])!=expected):
+    failures.append(prefix + ' source binding differs: ' + source_id)
+ return (None if failures else registered), failures
 def check(root:Path=ROOT,*,active_task_id:str|None=None,
  active_branch:str|None=None,
  changed_paths:set[str]|None=None)->tuple[list[str],dict]:
@@ -2233,6 +2234,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         errors += e
         metadata_observations, e = zz['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        gt,eg=gp['bind'](root,catalog,sources,bound_provider_registration);errors+=eg
         rt,er=rr['bind'](root,catalog,sources,bound_provider_registration);errors+=er
         w,e=x['bind'](root,catalog,sources,bound_provider_registration);errors+=e
         v,e=q['bind'](root,catalog,sources,bound_provider_registration);errors+=e
@@ -2826,6 +2828,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             (fixture_staging, f['P']),
             (knowledge_lifecycle, k['P']),
             (document_drafts, d['P']),
+(gt,gp['P']),
  )
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}
@@ -2837,6 +2840,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  }
                 else agent_details if active_branch == n['B']
                 else metadata_observations if active_branch == zz['B']
+                else gt if active_branch==gp['B']
                 else rt if active_branch==rr['B']
                 else w if active_branch==x['B']
                 else v if active_branch==q['B']
@@ -2996,6 +3000,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += f['errors'](active_task_id, active_branch, changed_paths)
             errors += k['errors'](active_task_id, active_branch, changed_paths)
             errors += d['errors'](active_task_id, active_branch, changed_paths)
+            errors+=gp['phase_errors'](gt,active_branch,changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3151,7 +3156,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3165,7 +3170,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
