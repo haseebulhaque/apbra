@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -29,6 +30,7 @@ from apbra_api import foundry_browser_handoff as browser
 from apbra_api import foundry_memory_handoff as receiver
 from apbra_api import foundry_report_runtime as m
 from apbra_api import foundry_report_runtime as report
+from apbra_api import oidc_adapter
 from apbra_api.api import create_app
 from apbra_api.application import AcceptanceService
 from apbra_api.config import FoundryHostBinding
@@ -54,6 +56,14 @@ def october_authorization_clock(monkeypatch):
     utc_time = time.gmtime
     offset = 1791936000.0 - wall_time()  # 2026-10-14 00:00 UTC, advancing normally.
     monkeypatch.setattr(time, "time", lambda: wall_time() + offset)
+
+    class AuthorizationDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(time.time(), tz)
+
+    # The synthetic issuer and JWT validator must share the authorization clock.
+    monkeypatch.setattr(oidc_adapter, "datetime", AuthorizationDateTime)
     monkeypatch.setattr(
         time, "gmtime", lambda stamp=None: utc_time(time.time() if stamp is None else stamp)
     )
@@ -492,14 +502,14 @@ def new_settings(db, company, updates, *, invalid_digest=False):
 
 
 @pytest.fixture
-def saved(settings, database, client):
+def saved(settings, database, client, monkeypatch):
     session = sign_in(client, "owner")
     company = UUID(session["actor"]["company_id"])
     # Synthetic settings only; preserve authoritative serialization and digest.
     p = approval().binding.provider_profile
     with database.session() as db:
         new_settings(db, company, {"provider_profile": p})
-    settings.qualified_provider_profiles_json = json.dumps([p.model_dump()])
+    monkeypatch.setattr(settings, "qualified_provider_profiles_json", json.dumps([p.model_dump()]))
     case = client.post(
         "/api/cases",
         json={"request_text": "Create a report of total amount by division."},
@@ -1249,10 +1259,8 @@ class TestPrivateApproval(unittest.TestCase):
         self.assertEqual(gate.receipt()["attempts_consumed"], 1)
 
     def test_spent_slots_keep_read_resolution_but_cannot_dispatch_again(self):
-        from test_runtime_draft import Tests as CoreTests
-
         a = grant()
-        state = CoreTests().state(a)
+        state = TestReservations().state(a)
         gate = report.Reservations(a, lambda: True, lambda: state)
         raw = Credentials(a)
         credentials = report.ReservedCredentials(raw, gate)
