@@ -1,4 +1,4 @@
-"""Synthetic unpublished product-draft tests; no network, DB, SDK or owner data."""
+"""Synthetic runtime tests with disposable PostgreSQL and mocked provider/browser peers."""
 
 import concurrent.futures
 import contextlib
