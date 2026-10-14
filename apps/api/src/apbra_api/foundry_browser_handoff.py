@@ -419,8 +419,9 @@ def run_handoff(
                             f"{slot.stage}: {slot.attempts} attempt(s)"
                             for slot in report_approval.slots
                         ) + ". Direct MCP work can exceed the estimate; this is not an Azure "
-                        "hard cap. October A$10 remains the ceiling; no automatic retry or refund. "
-                        "Continue?", "YES",
+                        "hard cap. October A$10 remains the ceiling. Saved retry allowance: "
+                        + str(report_approval.binding.provider_profile.retry_limit)
+                        + ". Failed or unknown work is not refunded. Continue?", "YES",
                     )
                     check()
                     try:

@@ -104,3 +104,29 @@ def test_derived_grant_follows_account_confirmation_before_token(monkeypatch, ca
     assert len(peer.frames) == 3 and sdk.closed and peer.closed
     assert peer.frames[0]["approval"]["binding"]["home_account_id"] == sdk.record.home_account_id
     assert capsys.readouterr().out == ""
+
+
+
+def test_absent_optional_agent_version_is_not_replaced_with_historical_default():
+    a=grant()
+    binding=a.binding.model_copy(update={"agent_version":None})
+    a=a.model_copy(update={"binding":binding})
+    result=prepare(a)
+    assert result.binding.agent_version is None
+    assert result.binding.provider_profile == a.binding.provider_profile
+
+
+def test_preparation_prompt_states_saved_retry_allowance_without_changing_policy(monkeypatch):
+    c = setup(monkeypatch)
+    sdk = Browser()
+    peer = ReportPeer()
+    messages=[]
+    run_handoff(c.plan,peer,
+        preparation=Preparation(
+            lambda: None, lambda record, credential: prepare(grant(c), record=record)
+        ),
+        credential_factory=lambda **_:sdk,terminal_factory=terminal,
+        confirm=lambda terminal,plan,message,phrase:messages.append(message),hold=lambda:None)
+    assert any("Saved retry allowance: 0" in message for message in messages)
+    assert any("not an Azure hard cap" in message for message in messages)
+    assert not any("no automatic retry" in message for message in messages)

@@ -42,7 +42,7 @@ class QualifiedAgentFacts:
     provider_profile: ProviderProfile
     knowledge_binding: str
     knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
-    agent_version: str
+    agent_version: str | None
     authorization_deadline: float
 
 
