@@ -213,7 +213,7 @@ class FoundryHostBinding(BaseModel):
     provider_profile: ProviderProfile
     knowledge_binding: str = Field(pattern=r"^[A-Za-z0-9_.:-]{1,120}$")
     knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
-    agent_version: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,80}$")
+    agent_version: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,80}$")
     qualification: Literal["LIVE_METADATA_VERIFIED"]
     manual_authentication_approved: bool
     authorization_deadline: float = Field(gt=0, allow_inf_nan=False)

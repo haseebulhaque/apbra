@@ -93,10 +93,9 @@ def test_missing_version_is_unknown_and_never_fetches_historical_or_latest() -> 
 
 
 @pytest.mark.parametrize('mutation', ['identity', 'version', 'redirect', 'oversize',
-    'malformed', 'private-error', 'capability-change', 'foreign-access', 'calls'])
+    'malformed', 'private-error', 'capability-change', 'foreign-access'])
 def test_security_transport_and_tenant_bounds_fail_without_raw_output(mutation: str) -> None:
-    configured = profile(agent_version='configured-version',
-                         **({'max_calls_per_operation': 1} if mutation == 'calls' else {}))
+    configured = profile(agent_version='configured-version')
     credential = Credentials(configured)
     responses = records()
     seen: list[str] = []
@@ -127,7 +126,7 @@ def test_security_transport_and_tenant_bounds_fail_without_raw_output(mutation: 
     assert result['status'] == 'METADATA_UNAVAILABLE'
     assert CANARY not in json.dumps(result)
     assert len(seen) <= 2
-    if mutation in {'foreign-access', 'calls'}:
+    if mutation in {'foreign-access'}:
         assert seen == []
 
 
@@ -250,3 +249,19 @@ def test_distinct_metadata_access_has_no_report_qualification_and_uses_saved_tar
     assert not hasattr(credential.access, 'knowledge_binding')
     assert not hasattr(credential.access, 'qualification')
     assert CANARY not in repr(credential.access)
+
+
+
+def test_one_paid_dispatch_limit_does_not_reject_two_approved_metadata_gets():
+    configured=profile(agent_version='configured-version',max_calls_per_operation=1)
+    seen=[]
+    values=records()
+    def handler(request):
+        seen.append(request)
+        assert request.method=='GET'
+        return httpx.Response(200,json=values[len(seen)-1])
+    result=agent_details(COMPANY,configured,Credentials(configured),
+        transport=httpx.MockTransport(handler))
+    assert len(seen)==2
+    assert result['status']=='METADATA_OBSERVED_ONLY'
+    assert configured.max_calls_per_operation==1 and configured.retry_limit==0

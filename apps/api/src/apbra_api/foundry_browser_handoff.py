@@ -284,6 +284,7 @@ def run_handoff(
     confirm: Callable[..., None] | None = None,
     hold: Callable[[], None] | None = None,
     report_approval: Any | None = None,
+    preparation: Any | None = None,
 ) -> None:
     """Only independently owner-run private TTY; caller cannot supply persisted bearer."""
     sdk = None
@@ -294,9 +295,16 @@ def run_handoff(
     try:
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             plan.validate()
-            require(report_approval is not None or getattr(peer, "runtime", False) is False)
-            if report_approval is not None:
+            require(not (report_approval is not None and preparation is not None))
+            report_mode = report_approval is not None or preparation is not None
+            require(report_mode or getattr(peer, "runtime", False) is False)
+            if report_mode:
                 require(getattr(peer, "runtime", False) is True)
+            if preparation is not None:
+                from .foundry_private_preparation import Preparation
+
+                require(type(preparation) is Preparation)
+                preparation.preflight()
 
             def check() -> None:
                 require(time.time() < plan.authorization_deadline)
@@ -312,9 +320,9 @@ def run_handoff(
                     terminal_plan,
                     "Approve one temporary memory lease to the exact owned Docker receiver. "
                     + ("No new consent, permissions or token persistence. "
-                     "Sign-in itself sends no report request." if report_approval is not None else
+                     "Sign-in itself sends no report request." if report_mode else
                      "No new consent, permissions, token persistence or paid calls."),
-                    "CONFIRM PRIVATE MEMORY HANDOFF",
+                    "YES" if preparation is not None else "CONFIRM PRIVATE MEMORY HANDOFF",
                 )
                 check()
                 peer.attach()
@@ -333,16 +341,17 @@ def run_handoff(
                     and re.fullmatch(r"[a-f0-9]{64}", challenge["nonce"])
                 )
                 check()
-                if report_approval is not None:
+                if report_mode:
                     approval(
                         terminal,
                         terminal_plan,
                         "Authorize the approved report steps for the selected saved report "
                         "within its explicitly reserved October budget. "
                         "This sign-in sends no report request.",
-                        "CONFIRM ONE CASE REPORT",
+                        "YES" if preparation is not None else "CONFIRM ONE CASE REPORT",
                     )
                     check()
+                if report_approval is not None:
                     private_frame, expected_account = _private_report_frame(
                         plan, report_approval, challenge["nonce"]
                     )
@@ -388,10 +397,39 @@ def run_handoff(
                     terminal,
                     terminal_plan,
                     "Selected existing account: " + label,
-                    "CONFIRM ACCOUNT",
+                    "YES" if preparation is not None else "CONFIRM ACCOUNT",
                 )
                 require(account == (record.tenant_id, record.client_id, record.home_account_id))
                 check()
+                if preparation is not None:
+                    # The confirmed SDK record and private verified reads derive
+                    # the grant; no owner-supplied account ID or technical JSON.
+                    report_approval = preparation.qualify(record, sdk)
+                    require(account == (record.tenant_id, record.client_id, record.home_account_id))
+                    check()
+                    private_frame, expected_account = _private_report_frame(
+                        plan, report_approval, challenge["nonce"]
+                    )
+                    require(account[2] == expected_account)
+                    approval(
+                        terminal, terminal_plan,
+                        "Selected saved report only. Estimated reservation A$"
+                        + report_approval.chain_reserve_aud
+                        + " for " + ", ".join(
+                            f"{slot.stage}: {slot.attempts} attempt(s)"
+                            for slot in report_approval.slots
+                        ) + ". Direct MCP work can exceed the estimate; this is not an Azure "
+                        "hard cap. October A$10 remains the ceiling. Saved retry allowance: "
+                        + str(report_approval.binding.provider_profile.retry_limit)
+                        + ". Failed or unknown work is not refunded. Continue?", "YES",
+                    )
+                    check()
+                    try:
+                        peer.write(private_frame)
+                    finally:
+                        private_frame = b""
+                    require(line(peer, plan.authorization_deadline) == b"REPORT_APPROVAL_ACCEPTED")
+                    check()
                 claim = json.dumps(
                     {
                         "v": 1,
