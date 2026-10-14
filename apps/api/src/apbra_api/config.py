@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .foundry_cost_limits import QualifiedMcpControls
 from .model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
@@ -216,11 +217,15 @@ class FoundryHostBinding(BaseModel):
     agent_version: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,80}$")
     qualification: Literal["LIVE_METADATA_VERIFIED"]
     manual_authentication_approved: bool
+    mcp_controls: QualifiedMcpControls | None = Field(default=None, repr=False)
     authorization_deadline: float = Field(gt=0, allow_inf_nan=False)
 
     def binding_digest(self) -> str:
         return hashlib.sha256(
-            json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+            json.dumps(
+                self.model_dump(mode="json", exclude_none=True),
+                sort_keys=True, separators=(",", ":")
+            ).encode()
         ).hexdigest()
 
     def __repr__(self) -> str:

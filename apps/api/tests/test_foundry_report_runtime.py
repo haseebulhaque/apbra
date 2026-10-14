@@ -819,6 +819,9 @@ def test_factory_real_api_cached_confirm_auth_and_private_case_before_dispatch(s
 
 def test_factory_hook_is_exactly_additive_and_metadata_cannot_use_it():
     current = Path(receiver.__file__).read_text()
+    mcp_hook = "                    mcp_controls=binding.mcp_controls,\n"
+    assert current.count(mcp_hook) == 1
+    current = current.replace(mcp_hook, "", 1)
     restored = current.replace(
         "    application_factory: Callable[..., Any] | None = None,\n", "", 1
     )
@@ -1580,3 +1583,41 @@ class TestPrivateApproval(unittest.TestCase):
         self.assertEqual(channel.output.count(b"REPORT_APPROVAL_ACCEPTED"), 1)
         self.assertEqual(channel.output.count(b"ACCOUNT_ACCEPTED"), 1)
         self.assertNotIn(peer.frames[-1]["token"].encode(), channel.output)
+
+
+
+def test_qualified_continuation_slots_are_distinct_from_retry_allowance_and_roundtrip():
+    from apbra_api.foundry_cost_limits import (
+        FoundryCostLimits,
+        QualifiedMcpControls,
+        provider_identity_digest,
+    )
+    a=approval(2)
+    profile=a.binding.provider_profile.model_copy(update={
+        "retry_limit":0,
+        "foundry_cost_limits":FoundryCostLimits(max_mcp_calls=1,max_provider_requests=2),
+    })
+    profile=ProviderProfile.model_validate(profile.model_dump())
+    proof=QualifiedMcpControls(configuration_id=profile.configuration_id,
+        provider_identity_digest=provider_identity_digest(profile),
+        agent_version=a.binding.agent_version,knowledge_binding=a.binding.knowledge_binding,
+        server_label="synthetic-kb",tool_name="knowledge_base_retrieve",approval_policy="always",
+        stateless_continuation_qualified=True,retrieval_argument_path=("maxOutputSize",),
+        enforcement_provenance="synthetic-qualified-runtime")
+    binding=a.binding.model_copy(update={"provider_profile":profile,"mcp_controls":proof})
+    a=m.ReportApproval.model_validate(a.model_copy(update={"binding":binding}).model_dump())
+    plan=HandoffPlan(binding.company_id,binding.tenant_id,binding.client_id,
+        binding.authorization_deadline)
+    raw=m.approval_frame(plan,a,NONCE)
+    decoded=m.receive_approval(plan,Pipe(raw),NONCE)
+    assert decoded.binding.mcp_controls == proof
+    case=TestReservations()
+    gate=case.gate(decoded)
+    credentials=m.ReservedCredentials(Credentials(decoded),gate)
+    with gate.operation(decoded.case_id,"REPORT_DESIGN"):
+        access=credentials.resolve(binding.company_id,profile)
+        access.credential()
+        access.credential()
+        with pytest.raises(ProviderConfigurationError):
+            access.credential()
+    assert gate.receipt()["attempts_consumed"]==2
