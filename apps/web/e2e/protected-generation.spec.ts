@@ -582,3 +582,116 @@ for(const version of ['2.0','2e0'] as const)test(`expert raw geometry exact sche
  await page.route('**/api/cases/recovery-b/reviewed-designs',route=>{posts++;body=route.request().postData()??'';return route.fulfill({status:409,json:{error:{code:'SYNTHETIC_EQUIVALENT',message:'Synthetic equivalent version reached intake.'}}})});
  const source=`{"schema_version":${version},"pages":[]}`,draft=page.getByLabel('Expert report design JSON');await draft.fill(source);await page.getByRole('button',{name:'Submit expert-reviewed design',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Synthetic equivalent version reached intake.');expect(posts).toBe(1);expect(JSON.parse(body).report_design.schema_version).toBe(2);await expect(draft).toHaveValue(source);
 });
+
+for(const status of ['PENDING','RUNNING'] as const)test(`saved ${status.toLowerCase()} build prevents another submission and unlocks after completion`,async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);
+  await page.route('**/api/cases/recovery-a/generation',async route=>{
+    state.calls.push(route.request().method()+' /api/cases/recovery-a/generation');
+    if(route.request().method()!=='GET'){await route.abort('failed');return}
+    await route.fulfill({json:{items:[{...state.attempt('recovery-a',state.finished?'SUCCEEDED':'RUNNING'),status:state.finished?'SUCCEEDED':status}]}});
+  });
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  const build=page.locator('.build-readiness .command-bar button').first();
+  await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toBeVisible();
+  await expect(build).toBeDisabled();await expect(build).toHaveAttribute('aria-busy','true');
+  await openStep(page,'Information');await openStep(page,'Build');await expect(build).toBeDisabled();
+  await page.reload();await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  await expect(build).toBeDisabled();
+  state.finished=true;
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toHaveCount(0);
+  await openStep(page,'Report');await page.locator('.report-history summary').click();
+  await expect(page.locator('.generation-history li')).toContainText('Report ready');
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('unreadable build history prevents another build until explicit read recovery',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;state.historyUnavailable=true;
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  await expect(page.getByText('Build history could not be refreshed',{exact:true})).toBeVisible();
+  const build=page.locator('.build-readiness .command-bar button').first();
+  await expect(build).toBeDisabled();
+  await expect(page.getByLabel('Eligible report design')).toHaveValue('design-recovery-a');
+  state.historyUnavailable=false;await page.getByRole('button',{name:'Refresh build history',exact:true}).click();
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();
+  await expect(page.getByText('Build history could not be refreshed',{exact:true})).toHaveCount(0);
+  await openStep(page,'Report');await expect(page.getByLabel('Current report')).toBeVisible();
+  expect(state.calls.filter(call=>!call.startsWith('GET '))).toEqual([]);
+});
+
+test('one build dispatch stays disabled through its pending acknowledgement and wizard navigation',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);
+  let dispatches=0,saved=false,release!:()=>void;
+  const held=new Promise<void>(resolve=>{release=resolve});
+  const pending={...state.attempt('recovery-b','RUNNING'),status:'PENDING'};
+  await page.route('**/api/cases/recovery-b/generation',async route=>{
+    if(route.request().method()==='GET'){await route.fulfill({json:{items:saved?[pending]:[]}});return}
+    if(route.request().method()!=='POST'){await route.abort('failed');return}
+    dispatches++;await held;saved=true;await route.fulfill({json:{attempt:pending}});
+  });
+  try{
+    await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');
+    const build=page.locator('.build-readiness .command-bar button').first();await expect(build).toBeEnabled();
+    await build.evaluate((button:HTMLButtonElement)=>{button.click();button.click()});
+    await expect.poll(()=>dispatches).toBe(1);await expect(page.getByText('Submitting this build',{exact:true})).toBeVisible();
+    await expect(build).toBeDisabled();
+    await openStep(page,'Information');await openStep(page,'Build');await expect(build).toBeDisabled();
+    release();await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toBeVisible();
+    await expect(page.getByText('Submitting this build',{exact:true})).toHaveCount(0);
+    await expect(build).toBeDisabled();await expect(build).toHaveAttribute('aria-busy','true');
+    await expect(build).toContainText('Waiting to build');expect(dispatches).toBe(1);
+  }finally{release()}
+});
+
+test('an uncertain build acknowledgement reuses its original idempotency key on explicit retry',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page),bodies:Array<{command_key:string;confirmed_contract_id:string;reviewed_design_id:string}>=[];
+  let saved=false;
+  const completed=state.attempt('recovery-b','SUCCEEDED');
+  await page.route('**/api/cases/recovery-b/generation',async route=>{
+    if(route.request().method()==='GET'){await route.fulfill({json:{items:saved?[completed]:[]}});return}
+    if(route.request().method()!=='POST'){await route.abort('failed');return}
+    bodies.push(route.request().postDataJSON());
+    if(bodies.length===1){await route.abort('failed');return}
+    saved=true;await route.fulfill({json:{attempt:completed}});
+  });
+  await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');
+  const build=page.locator('.build-readiness .command-bar button').first();await expect(build).toBeEnabled();
+  await build.click();await expect.poll(()=>bodies.length).toBe(1);await expect(build).toBeEnabled();
+  await build.click();await expect.poll(()=>bodies.length).toBe(2);
+  expect(bodies[0].command_key).toBeTruthy();expect(bodies[1]).toEqual(bodies[0]);
+  expect(bodies[0].confirmed_contract_id).toBe('contract-recovery-b');expect(bodies[0].reviewed_design_id).toBe('design-recovery-b');
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();
+  await openStep(page,'Report');await expect(page.getByLabel('Current report')).toBeVisible();
+});
+
+test('an earlier unfinished current build stays cancellable when a newer completed version is visible',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);state.finished=true;
+  const old={...state.attempt('recovery-a','RUNNING'),id:'earlier-active',attempt_number:1};
+  const completed={...state.attempt('recovery-a','SUCCEEDED'),id:'newer-completed',attempt_number:2};
+  let cancelled=false,cancels=0;
+  await page.route('**/api/cases/recovery-a/generation',async route=>{
+    if(route.request().method()!=='GET'){await route.abort('failed');return}
+    await route.fulfill({json:{items:[completed,{...old,status:cancelled?'CANCELLED':'RUNNING'}]}});
+  });
+  await page.route('**/api/cases/recovery-a/generation/earlier-active/cancel',async route=>{
+    if(route.request().method()!=='POST'){await route.abort('failed');return}
+    cancels++;cancelled=true;await route.fulfill({json:{attempt:{...old,status:'CANCELLED',cancelled_at:'2026-10-14T00:00:00Z'}}});
+  });
+  await page.getByRole('button',{name:/Recovery report A/}).first().click();await openStep(page,'Build');
+  await expect(page.locator('.build-readiness .command-bar button').first()).toBeDisabled();
+  await page.getByRole('button',{name:'Cancel build',exact:true}).click();
+  await expect(page.getByRole('button',{name:/^Build another version/})).toBeEnabled();expect(cancels).toBe(1);
+  await openStep(page,'Report');await expect(page.getByLabel('Current report')).toContainText('Version 2');
+  await page.locator('.report-history summary').click();await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Cancelled');
+});
+
+test('an unfinished historical confirmation does not block the current confirmed build',async({page})=>{
+  const state=await syntheticGenerationWorkspace(page);
+  await page.route('**/api/cases/recovery-b/generation',async route=>{
+    if(route.request().method()!=='GET'){await route.abort('failed');return}
+    await route.fulfill({json:{items:[{...state.attempt('recovery-b','RUNNING'),confirmed_contract_id:'historical-confirmation'}]}});
+  });
+  await page.getByRole('button',{name:/Recovery report B/}).first().click();await openStep(page,'Build');
+  await expect(page.locator('.build-readiness .command-bar button').first()).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Cancel build',exact:true})).toHaveCount(0);
+});

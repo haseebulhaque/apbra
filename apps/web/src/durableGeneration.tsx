@@ -37,6 +37,7 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
   const [historyError,setHistoryError]=useState(false);
   const [unavailableDownloads,setUnavailableDownloads]=useState<Set<string>>(new Set());
   const buildCommand=useRef<{signature:string;key:string}|null>(null);
+  const buildInFlight=useRef<symbol|null>(null);
   const designCommand=useRef<{contractId:string;key:string}|null>(null);
   const activeKey=useRef('');
   const refreshSequence=useRef(0);
@@ -96,6 +97,7 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
     setDownloadError('');
     setUnavailableDownloads(new Set());
     buildCommand.current=null;
+    buildInFlight.current=null;
     designCommand.current=null;
     void refresh().catch(onError);
     return()=>{activeKey.current='';operationEpoch.current+=1;refreshSequence.current+=1};
@@ -112,15 +114,19 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
     return()=>window.clearInterval(timer);
   },[busy,activeAttempt,caseId,contract?.id,contract?.current]);
 
+  const unfinishedBuild=contract?.current?attempts.find(item=>item.confirmed_contract_id===contract.id&&['PENDING','RUNNING'].includes(item.status)):undefined;
+
   async function run(mode:Mode,source?:GenerationAttempt){
     const epoch=operationEpoch.current;
-    if(!contract?.current||!canBuild)return;
+    if(!contract?.current||!canBuild||historyError||unfinishedBuild||buildInFlight.current)return;
     const designId=mode==='RETRY'?source?.reviewed_design_id:selected;
     if(!designId)return;
+    const operation=Symbol();
     const signature=[contract.id,designId,mode,source?.id??''].join(':');
     if(!buildCommand.current||buildCommand.current.signature!==signature){
       buildCommand.current={signature,key:crypto.randomUUID()};
     }
+    buildInFlight.current=operation;
     setBusy(true);
     try{
       const attempt=await generationApi.start(caseId,contract.id,designId,buildCommand.current.key,csrfToken,mode,source?.id);
@@ -128,7 +134,10 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
       buildCommand.current=null;
       setAttempts(current=>[attempt,...current.filter(item=>item.id!==attempt.id)]);
       await refresh();
-    }catch(error){if(isCurrent(epoch))onError(error)}finally{if(isCurrent(epoch))setBusy(false)}
+    }catch(error){if(isCurrent(epoch))onError(error)}finally{
+      if(buildInFlight.current===operation)buildInFlight.current=null;
+      if(isCurrent(epoch))setBusy(false);
+    }
   }
 
   async function propose(){
@@ -218,12 +227,12 @@ export function DurableGeneration({caseId,contract,csrfToken,actorRole='MEMBER',
     {historyError&&<div role="alert" className="state-callout danger"><strong>Build history could not be refreshed</strong><p>Displayed entries may be out of date. Retry to check the current saved state.</p><button className="subtle" onClick={()=>void refresh().catch(onError)}>Refresh build history</button></div>}
     <div hidden={visibleStep==='report'} aria-busy={busy||reviewBusy}>
     {designError&&<div role="alert" className="state-callout danger"><strong>Report design could not be refreshed</strong><p>Saved build history is loaded separately. Retry this read before creating or cancelling a build.</p><button className="subtle" onClick={()=>void refresh().catch(onError)}>Refresh report design</button></div>}
-    {!contract?.current?<div role="status" className="state-callout info"><strong>Confirm your understanding to continue</strong><p>Review and confirm the current meaning before building. Earlier reports remain available below.</p></div>:designs.length===0?<div role="status" className="state-callout info design-needed"><strong>Create the report design</strong><p>APBRA will suggest a report layout, check that it can be built with your data, and save the result in report history. If it cannot produce an eligible design, your requirements remain saved and expert help is available.</p>{canBuild&&<button aria-busy={reviewBusy} disabled={reviewBusy} onClick={()=>void propose()}>{reviewBusy&&<span className="processing-spinner" aria-hidden="true"/>}{reviewBusy?'Creating and checking design…':'Create report design'} <span aria-hidden="true">→</span></button>}{designAttempts[0]?.status==='FAILED'&&<p className="supporting-copy">{automaticDesignPreflightMessage(designAttempts[0])??'The latest automatic design was not eligible. Retry when the configured capability is available or open Details for experts for assistance.'}</p>}</div>:<div className="build-readiness"><div className="readiness-heading"><span className="readiness-mark" aria-hidden="true">✓</span><div><span className="eyebrow">Ready for your next step</span><h4>Eligible report design available</h4><p>{designs.find(item=>item.id===selected)?.origin==='AUTO_ELIGIBLE'?'APBRA created this design and checked that it can be built.':'An authorised expert reviewed this design.'}</p></div></div><label htmlFor={'reviewed-plan-'+caseId}>Eligible report design</label><select id={'reviewed-plan-'+caseId} value={selected} onChange={event=>setSelected(event.target.value)}>{designs.map((item,index)=><option key={item.id} value={item.id}>Design {designs.length-index} · {item.provenance_label} · {item.summary.page_count} page{item.summary.page_count===1?'':'s'} · {item.summary.visual_count} visual{item.summary.visual_count===1?'':'s'}</option>)}</select><div className="plan-facts"><span><strong>{designs.find(item=>item.id===selected)?.summary.page_count??0}</strong> pages</span><span><strong>{designs.find(item=>item.id===selected)?.summary.visual_count??0}</strong> visuals</span><span>{designs.find(item=>item.id===selected)?.provenance_label??'Eligibility checked'}</span></div><p className="supporting-copy">{designs.find(item=>item.id===selected)?.summary.description} APBRA checks eligibility again when you build.</p>{canBuild&&<div className="command-bar"><button disabled={busy||!selected} onClick={()=>void run(current?'REGENERATE':'BUILD')}>{busy?'Building report…':current?'Build another version':'Build report'} <span aria-hidden="true">→</span></button><button className="subtle" aria-busy={reviewBusy} disabled={reviewBusy} onClick={()=>void propose()}>{reviewBusy&&<span className="processing-spinner" aria-hidden="true"/>}{reviewBusy?'Creating design…':'Create another design'}</button>{retryable&&<button className="subtle" disabled={busy} onClick={()=>void run('RETRY',latestForContract)}>Retry failed build</button>}</div>}</div>}
+    {!contract?.current?<div role="status" className="state-callout info"><strong>Confirm your understanding to continue</strong><p>Review and confirm the current meaning before building. Earlier reports remain available below.</p></div>:designs.length===0?<div role="status" className="state-callout info design-needed"><strong>Create the report design</strong><p>APBRA will suggest a report layout, check that it can be built with your data, and save the result in report history. If it cannot produce an eligible design, your requirements remain saved and expert help is available.</p>{canBuild&&<button aria-busy={reviewBusy} disabled={reviewBusy} onClick={()=>void propose()}>{reviewBusy&&<span className="processing-spinner" aria-hidden="true"/>}{reviewBusy?'Creating and checking design…':'Create report design'} <span aria-hidden="true">→</span></button>}{designAttempts[0]?.status==='FAILED'&&<p className="supporting-copy">{automaticDesignPreflightMessage(designAttempts[0])??'The latest automatic design was not eligible. Retry when the configured capability is available or open Details for experts for assistance.'}</p>}</div>:<div className="build-readiness"><div className="readiness-heading"><span className="readiness-mark" aria-hidden="true">✓</span><div><span className="eyebrow">Ready for your next step</span><h4>Eligible report design available</h4><p>{designs.find(item=>item.id===selected)?.origin==='AUTO_ELIGIBLE'?'APBRA created this design and checked that it can be built.':'An authorised expert reviewed this design.'}</p></div></div><label htmlFor={'reviewed-plan-'+caseId}>Eligible report design</label><select id={'reviewed-plan-'+caseId} value={selected} onChange={event=>setSelected(event.target.value)}>{designs.map((item,index)=><option key={item.id} value={item.id}>Design {designs.length-index} · {item.provenance_label} · {item.summary.page_count} page{item.summary.page_count===1?'':'s'} · {item.summary.visual_count} visual{item.summary.visual_count===1?'':'s'}</option>)}</select><div className="plan-facts"><span><strong>{designs.find(item=>item.id===selected)?.summary.page_count??0}</strong> pages</span><span><strong>{designs.find(item=>item.id===selected)?.summary.visual_count??0}</strong> visuals</span><span>{designs.find(item=>item.id===selected)?.provenance_label??'Eligibility checked'}</span></div><p className="supporting-copy">{designs.find(item=>item.id===selected)?.summary.description} APBRA checks eligibility again when you build.</p>{canBuild&&<div className="command-bar"><button aria-busy={busy||Boolean(unfinishedBuild)} disabled={busy||Boolean(unfinishedBuild)||historyError||!selected} onClick={()=>void run(current?'REGENERATE':'BUILD')}>{busy?'Submitting build…':unfinishedBuild?statusLabel(unfinishedBuild.status)+'…':current?'Build another version':'Build report'} <span aria-hidden="true">→</span></button><button className="subtle" aria-busy={reviewBusy} disabled={reviewBusy} onClick={()=>void propose()}>{reviewBusy&&<span className="processing-spinner" aria-hidden="true"/>}{reviewBusy?'Creating design…':'Create another design'}</button>{retryable&&<button className="subtle" disabled={busy||Boolean(unfinishedBuild)||historyError} onClick={()=>void run('RETRY',latestForContract)}>Retry failed build</button>}</div>}</div>}
     {reviewBusy&&<div className="state-callout info action-feedback" role="status" aria-live="polite" aria-atomic="true"><span className="processing-spinner" aria-hidden="true"/><div><strong>Preparing report design…</strong><p>Your saved requirements remain available. Wait for this action to finish before creating another design.</p></div></div>}
     {contract?.current&&canBuild===false&&<p role="status">You can inspect this private report, but building or cancelling requires editor access. Ask the report owner if you need to build.</p>}
     {busy&&<div className="state-callout info building-state" role="status" aria-live="polite"><span className="processing-spinner" aria-hidden="true"/><div><strong>Submitting this build</strong><p>APBRA will record the attempt and run its checks. A downloadable report appears only after the build succeeds.</p></div></div>}
     {latestForContract?.status==='FAILED'&&<div className="state-callout danger" role="alert"><strong>This build failed</strong><p>No successful candidate was published for this attempt. The failure remains in history. Review the recorded reason, then retry only after the cause is resolved.</p></div>}
-    {latestForContract&&['PENDING','RUNNING'].includes(latestForContract.status)&&<div role="status" aria-live="polite" className="state-callout info building-state"><span className="processing-spinner" aria-hidden="true"/><div><strong>{statusLabel(latestForContract.status)}</strong><p>{canBuild?'You may cancel this attempt; it will remain in history.':'An editor can cancel this attempt; it will remain in history.'}</p></div>{canBuild&&<button className="subtle" disabled={cancelling===latestForContract.id} onClick={()=>void cancel(latestForContract)}>{cancelling===latestForContract.id?'Cancelling…':'Cancel build'}</button>}</div>}
+    {unfinishedBuild&&<div role="status" aria-live="polite" className="state-callout info building-state"><span className="processing-spinner" aria-hidden="true"/><div><strong>{statusLabel(unfinishedBuild.status)}</strong><p>{canBuild?'You may cancel this attempt; it will remain in history.':'An editor can cancel this attempt; it will remain in history.'}</p></div>{canBuild&&<button className="subtle" disabled={cancelling===unfinishedBuild.id} onClick={()=>void cancel(unfinishedBuild)}>{cancelling===unfinishedBuild.id?'Cancelling…':'Cancel build'}</button>}</div>}
     {latestForContract&&['FAILED','CANCELLED'].includes(latestForContract.status)&&!retryable&&<p role="status">This earlier design is no longer eligible for retry. Create a current design or ask for expert assistance.</p>}
     </div>
     <div hidden={visibleStep==='build'}>
