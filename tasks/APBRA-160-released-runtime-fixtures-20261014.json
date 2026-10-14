@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-RELEASED-RUNTIME-FIXTURES-20261014",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Repair three historical runtime fixture failures on consuming branches by proving the exact already released configuration blob, without changing historical assertions, product code or producing-branch authority.",
+  "requirements": [
+    "Owner continuation2026-10-14T11:32:25Z and delegated next independent MVP task authorize necessary bounded release corrections; JiraAPBRA-160 PLAN10885. No invented expiry or security waiver.",
+    "Consume only config.py byte-identical to normal released PR164/main73db18d04b86f3c6c6549c6a045ac6fc861e42b9, after exact published blob/hash and release-ancestor proof plus valid existing guided task/source binding.",
+    "Preserve the existing qualified guided producer path; historical base hashes remain asserted unchanged and no arbitrary current HEAD or branch exception qualifies runtime source."
+  ],
+  "adrs": [
+    "Confluence accepted editable first draft8519682v28/9404417v9 remains unchanged. Current source8519682v90/9404417v10 and owner continuation are supplementary delivery evidence.",
+    "Only source governance and synthetic checks change; no runtime, credentials, permissions, report reasoning/design, approval controls, spend or hosting.",
+    "A separately registered five-file governance stage precedes the preserved two-file UX candidate publication. Existing UI authority and source/history stay intact."
+  ],
+  "architecture_refs": [
+    "JiraAPBRA-160 PLAN10884 UX candidate6bfdf3d, independent review PASS and full local browser100/API1762/web458 evidence; bootstrap598 retainedFAIL3 is the exact blocker.",
+    "JiraAPBRA-160 PLAN10885 finite five-file release fixture scope; actual actor Codex via authenticated haseebulhaque connections.",
+    "PR164 released main73db18d after exactheadf2de108 required CI38543298417 and independent review; config.py hash10c8c7f37d20a4fcb22a86d11dc7f14f8d1a342e33a2df331620618f71547510."
+  ],
+  "allowed_paths": [
+    "scripts/check_bootstrap.py",
+    "scripts/check_gp.py",
+    "scripts/check_uf.py",
+    "tasks/APBRA-160-released-runtime-fixtures-20261014.json",
+    "tests/bootstrap/test_released_runtime_fixture_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    ".github/**",
+    "docs/**",
+    "agents/**",
+    "contracts/**",
+    "compose.yaml",
+    ".env",
+    "infrastructure/**",
+    "workers/**",
+    "packages/**"
+  ],
+  "acceptance_criteria": [
+    "Exactly five governance paths on the literal registered branch; no partial, wildcard, product, workflow or unrelated file admission.",
+    "Only the exact approved config path can be qualified as released; current file/blob SHA and literal release ancestry must match. Missing release, modified bytes, symlinks, unsafe ancestry and invalid bound task/source fail closed.",
+    "Existing producing branch valid task/scope/checker requirements are preserved. Published consumption does not grant config-edit authority on another branch.",
+    "All historical raw source/task rows, old baseline hashes, checker functions/constants after documented inverses and existing test assertions remain preserved; no skips, weakened tests or current-head repinning.",
+    "Checker remains within its existing262076/262144 byte bounds; any necessary comment shortening has whole-AST parity before additive hooks."
+  ],
+  "verification_required": [
+    "Focused positive/negative released blob, ancestry, symlink, binding, phase and preservation tests; three original failing runtime fixture tests must pass unchanged.",
+    "Full bootstrap, CI-policy/checker, exact-five-file/source preservation audit, diff/JSON checks and exact-tree/fetched-history secret scans.",
+    "Fresh genuine independent exacthead review, required hosted CI, native strict gates and authorized normal merge; verify released main before rebasing the preserved UX candidate."
+  ],
+  "out_of_scope": [
+    "Any UI/backend/runtime/product behavior, source-history repinning, broad source/branch/hash exception, guard removal, scanner suppression or flaky-test skip.",
+    "Owner private actions, denied credential-bearing configuration inspection, authentication, paid/provider calls, preview updates, resource/permission changes, hosting173B and APBRA178 approval controls."
+  ],
+  "escalate_when": [
+    "A sixth path, new source acceptance, product change or security waiver is required.",
+    "Exact published proof, preservation, mandatory tests/scans, independent review or native required checks fail."
+  ],
+  "dependencies": [
+    "Preserve reviewed UI6bfdf3d independently; no competing implementation or combined governance/product release.",
+    "Base is exact normal released73db18d; prior task/source contracts and PR164 evidence remain immutable.",
+    "Registration and correction must pass fresh gates before the subsequent UX publication; real Foundry/report acceptance remains owner-dependent."
+  ],
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "73db18d04b86f3c6c6549c6a045ac6fc861e42b9",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-released-runtime-fixtures",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Bounded existing MVP governance correction only after independent exacthead and required CI/native merge gates",
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION"
+}

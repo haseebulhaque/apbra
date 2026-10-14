@@ -97,6 +97,10 @@ def phase_errors(task,branch,paths):
     if branch!=B:return []
     return [] if ok(task,branch,paths) else ['APBRA-160 guided preparation requires exact governance-only registration or product-only scope']
 def strip_current_hooks(source):
+    if "uf=runpy.run_path(" in source:
+        import runpy
+        from pathlib import Path
+        source=runpy.run_path(Path(__file__).with_name('check_uf.py'))['strip_hooks'](source)
     for count,hook in HOOKS:
         if source.count(hook)!=count:raise ValueError('Guided preparation hook differs')
         source=source.replace(hook,'')
@@ -107,7 +111,9 @@ def qualified_product_paths(root,checker):
     import json
     task_id,branch,paths=checker['delivery_context'](root)
     if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:
-        return set()
+        import runpy
+        from pathlib import Path
+        return runpy.run_path(Path(__file__).with_name('check_uf.py'))['qualified_consumption'](root,checker)
     task,errors=bind(root,json.loads((root/'agents/catalog.json').read_text()),
         json.loads((root/'docs/source-register.json').read_text()),
         checker['bound_provider_registration'])

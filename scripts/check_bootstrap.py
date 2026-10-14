@@ -21,6 +21,7 @@ g=runpy.run_path(str(Path(__file__).with_name("check_renderer_geometry_20261011.
 a=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_20261012.py")))
 n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")))
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
+uf=runpy.run_path(Path(__file__).parent/'check_uf.py')
 gp=runpy.run_path(Path(__file__).parent/'check_gp.py')
 rr=runpy.run_path(Path(__file__).parent/'check_rr.py')
 x=runpy.run_path(Path(__file__).parent/'check_mh.py')
@@ -2234,6 +2235,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         errors += e
         metadata_observations, e = zz['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        ut,eu=uf['bind'](root,catalog,sources,bound_provider_registration);errors+=eu
         gt,eg=gp['bind'](root,catalog,sources,bound_provider_registration);errors+=eg
         rt,er=rr['bind'](root,catalog,sources,bound_provider_registration);errors+=er
         w,e=x['bind'](root,catalog,sources,bound_provider_registration);errors+=e
@@ -2440,8 +2442,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  and len(source_rows) !=
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
  ):
-# A historical registration remains valid after a separately
-# pinned, append-only APBRA-177 source block is registered.
+# Pinned append-only APBRA-177 source.
                     later_rows = source_rows[
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
  + len(PRIVATE_CONTENT_STORAGE_SOURCES):
@@ -2765,8 +2766,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += extension_errors
             if extension_errors:
                 company_lifecycle_task = None
-# Keep established overlapping Capstone coverage while preventing a
-# newer hash-bound registration from rescuing its historical files.
+# New scopes cannot rescue old ones.
         legacy_authorities = (
  (shell_task, CAPSTONE_SHELL_PATHS),
  (requirements_task, CAPSTONE_REQUIREMENTS_PATHS),
@@ -2829,6 +2829,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             (knowledge_lifecycle, k['P']),
             (document_drafts, d['P']),
 (gt,gp['P']),
+(ut,uf['P']),
  )
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}
@@ -2840,6 +2841,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  }
                 else agent_details if active_branch == n['B']
                 else metadata_observations if active_branch == zz['B']
+                else ut if active_branch==uf['B']
                 else gt if active_branch==gp['B']
                 else rt if active_branch==rr['B']
                 else w if active_branch==x['B']
@@ -3001,6 +3003,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += k['errors'](active_task_id, active_branch, changed_paths)
             errors += d['errors'](active_task_id, active_branch, changed_paths)
             errors+=gp['phase_errors'](gt,active_branch,changed_paths)
+            errors+=uf['phase_errors'](ut,active_branch,changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3156,7 +3159,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3170,7 +3173,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
@@ -3460,7 +3463,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         return errors, manifest
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         return ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
-# Historical current-pin exceptions use this checked delivery context.
+# Checked delivery context.
 def delivery_context(root: Path = ROOT) -> tuple[str | None, str | None, set[str]]:
     """Resolve the current branch task and exact Git changes without cumulative authority."""
     branch = os.getenv('GITHUB_HEAD_REF')
@@ -3489,7 +3492,7 @@ def write_report(root: Path, name: str, report: dict) -> None:
         raise ValueError('Report must be a safe relative path under artifacts/')
     root = root.resolve(strict=True)
     parts = name.split('/')
-# Validate every existing component before creating any directories.
+# Validate before mkdir.
     candidate = root
     for index, part in enumerate(parts):
         candidate = candidate / part
@@ -3505,7 +3508,7 @@ def write_report(root: Path, name: str, report: dict) -> None:
             raise ValueError('Report parent must be a directory')
     if not candidate.resolve().is_relative_to(root / 'artifacts'):
         raise ValueError('Report escaped artifacts/')
-# Bind traversal to directory descriptors; never follow a replaced symlink.
+# Descriptor traversal; no symlinks.
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     directory = os.open(root, flags)
     try:
@@ -3554,7 +3557,7 @@ def main() -> int:
     for error in errors:
         print(error, file=sys.stderr)
     return 1 if errors else 0
-# Only exact immutable strings are memoized; all other calls retain original behavior.
+# Cache exact strings only.
 def _memoized_path(function):
     memo = cache(function)
     def call(*args, **kwargs):
