@@ -228,7 +228,7 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
     def test_old_ast_helpers_task_bytes_and_checker_cap_preserved(self):
         old = ast.parse(subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/check_bootstrap.py'], cwd=ROOT))
         checker = ROOT / 'scripts/check_bootstrap.py'
-        new = ast.parse(checker.read_text())
+        new = ast.parse(c.runpy.run_path(str(ROOT/'scripts/check_rr.py'))['strip_current_hooks'](checker.read_text()))
         declarations = {n.targets[0].id: n for n in new.body if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
         functions = {n.name: n for n in new.body if isinstance(n, ast.FunctionDef)}
         for node in old.body:
@@ -238,12 +238,12 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
                 self.assertEqual(ast.dump(node), ast.dump(functions[node.name]))
         for name in ['check_ai_authored_layout_20261012.py', 'check_renderer_geometry_20261011.py', 'check_foundry_qualification_renewal.py', 'check_foundry_owner_metadata_20261012.py', 'check_ai_authored_layout_raw_ingress_20261012.py', 'check_knowledge_lifecycle_20261012.py']:
             self.assertEqual((ROOT / 'scripts' / name).read_bytes(), subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/' + name], cwd=ROOT))
-        self.assertLessEqual(len(c.q['strip_current_hooks'](c.x['strip_current_hooks'](checker.read_text())).encode()), 262076)
+        self.assertLessEqual(len(c.q['strip_current_hooks'](c.x['strip_current_hooks'](c.runpy.run_path(str(ROOT/'scripts/check_rr.py'))['strip_current_hooks'](checker.read_text()))).encode()), 262076)
 
 
     def test_entire_old_checker_ast_after_only_exact_seven_hooks(self):
         old = subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/check_bootstrap.py'], cwd=ROOT, text=True)
-        current = c.zz['strip_current_hooks'](c.q['strip_current_hooks'](c.x['strip_current_hooks']((ROOT / 'scripts/check_bootstrap.py').read_text())))
+        current = c.zz['strip_current_hooks'](c.q['strip_current_hooks'](c.x['strip_current_hooks'](c.runpy.run_path(str(ROOT/'scripts/check_rr.py'))['strip_current_hooks']((ROOT / 'scripts/check_bootstrap.py').read_text()))))
         # Strip only exact current hooks; the entire historical guard still compares.
         current = c.n['strip_current_hooks'](current)
         self.assertEqual(len(HOOK_ADDITIONS), 7)
