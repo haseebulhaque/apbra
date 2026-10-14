@@ -628,3 +628,34 @@ test('admin explicitly reads agent details from saved settings and sees unknown 
  await expect(admin.getByText(/Model deployment: Unknown/)).toBeVisible();
  await expect(admin.getByText(/Server authentication capability is unavailable/)).toBeVisible();expect(reads).toBe(1);
 });
+
+for(const outcome of ['conflict','uncertain-known','uncertain-unavailable'] as const)test(`restore recovery probe ${outcome}`,async({page})=>{
+ const {state,version}=await syntheticSettingsDialogFixture(page),admin=page.getByLabel('Tenant administration');
+ await admin.getByRole('button',{name:/Branding & organisation/}).click();await admin.getByLabel('Display name',{exact:true}).fill('Preserved restore recovery draft');await admin.getByRole('button',{name:/AI & models/}).click();
+ await admin.getByText('Settings history',{exact:true}).click();await admin.getByRole('button',{name:'Review restore',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Restore tenant settings'});await dialog.getByRole('button',{name:'Restore as new version',exact:true}).click();await expect.poll(()=>Boolean(state.held)).toBe(true);
+ await page.route('**/api/tenant-settings',route=>route.request().method()==='GET'?outcome==='uncertain-unavailable'?route.fulfill({status:503,json:{error:{code:'TEMPORARY',message:'Synthetic current unavailable'}}}):route.fulfill({json:version(3)}):route.abort());
+ if(outcome==='conflict')await state.held!.fulfill({status:409,json:{error:{code:'VERSION_CONFLICT',message:'Synthetic stale restore'}}});else await state.held!.abort();
+ await expect(dialog).toHaveCount(0);
+ if(outcome==='conflict'){await expect(admin.getByRole('button',{name:'Load latest settings and keep my draft'})).toBeVisible();await admin.getByRole('button',{name:'Load latest settings and keep my draft'}).click();await expect(admin).toContainText('Current effective version 3')}
+ else if(outcome==='uncertain-known'){await expect(admin).toContainText('Current effective version 3');await expect(admin).toContainText('restore response could not be confirmed')}
+ else{await expect(admin.getByRole('button',{name:'Check current settings before another save'})).toBeVisible();await expect(admin.getByRole('button',{name:'Review restore',exact:true})).toBeDisabled()}
+ await admin.getByRole('button',{name:/Branding & organisation/}).click();await expect(admin.getByLabel('Display name',{exact:true})).toHaveValue('Preserved restore recovery draft');expect(state.posts).toEqual(['/api/tenant-settings/restore']);
+});
+
+test('uncertain restore pauses writes until explicit successful current-settings read',async({page})=>{
+ const {state,version}=await syntheticSettingsDialogFixture(page),admin=page.getByLabel('Tenant administration');
+ await admin.getByRole('button',{name:/Branding & organisation/}).click();await admin.getByLabel('Display name',{exact:true}).fill('Retained uncertain restore draft');await admin.getByRole('button',{name:/AI & models/}).click();
+ await admin.getByText('Settings history',{exact:true}).click();await admin.getByRole('button',{name:'Review restore',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Restore as new version',exact:true}).click();await expect.poll(()=>Boolean(state.held)).toBe(true);
+ let unavailable=true;
+ await page.route('**/api/tenant-settings',route=>route.request().method()==='GET'?unavailable?route.fulfill({status:503,json:{error:{code:'TEMPORARY',message:'Synthetic read unavailable'}}}):route.fulfill({json:version(3)}):route.abort());
+ await state.held!.fulfill({status:503,json:{error:{code:'TEMPORARY',message:'Synthetic restore response unavailable'}}});
+ await expect(page.getByRole('dialog')).toHaveCount(0);const reconcile=admin.getByRole('button',{name:'Check current settings before another save'});await expect(reconcile).toBeVisible();await reconcile.click();await expect(admin).toContainText('The current policy is still unavailable');await expect(admin.getByRole('button',{name:'Review restore',exact:true})).toBeDisabled();
+ unavailable=false;await reconcile.click();await expect(admin).toContainText('Current effective version 3');await expect(reconcile).toHaveCount(0);await expect(admin.getByRole('button',{name:'Review restore',exact:true})).toBeEnabled();await admin.getByRole('button',{name:/Branding & organisation/}).click();await expect(admin.getByLabel('Display name',{exact:true})).toHaveValue('Retained uncertain restore draft');expect(state.posts).toEqual(['/api/tenant-settings/restore']);
+});
+
+test('one restore dispatch retains committed success when history read fails',async({page})=>{
+ const {state,version}=await syntheticSettingsDialogFixture(page),admin=page.getByLabel('Tenant administration');
+ await admin.getByText('Settings history',{exact:true}).click();await admin.getByRole('button',{name:'Review restore',exact:true}).click();const dialog=page.getByRole('dialog');await expect(dialog).toContainText('restores all non-secret settings');await expect(dialog).toContainText('discards unsaved section drafts after success');
+ await dialog.getByRole('button',{name:'Restore as new version',exact:true}).evaluate(button=>{(button as HTMLButtonElement).click();(button as HTMLButtonElement).click()});await expect.poll(()=>Boolean(state.held)).toBe(true);expect(state.posts).toEqual(['/api/tenant-settings/restore']);expect(state.held!.request().postDataJSON()).toEqual({source_version:1,expected_version:2,confirm_consequences:true});
+ await page.route('**/api/tenant-settings/history',route=>route.fulfill({status:503,json:{error:{code:'TEMPORARY',message:'Synthetic history unavailable'}}}));await state.held!.fulfill({json:version(3)});await expect(dialog).toHaveCount(0);await expect(admin).toContainText('Current effective version 3');await expect(admin).toContainText('the committed restore remains effective');await expect(admin).not.toContainText('restore response could not be confirmed');expect(state.posts).toEqual(['/api/tenant-settings/restore']);
+});
