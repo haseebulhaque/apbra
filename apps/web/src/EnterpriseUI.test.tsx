@@ -1,7 +1,8 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {Callout,DisclosurePanel,FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper} from './EnterpriseUI';
-import {AgentCostControls} from './EnterpriseApp';
+import {AgentCostControls,preserveSettingsDraft} from './EnterpriseApp';
+import type {TenantSettingsDocument} from './api';
 
 it('keeps unknown agent limits blank and distinguishes built-in tools from MCP',()=>{
   const html=renderToStaticMarkup(<AgentCostControls limits={null} onChange={()=>{}}/>);
@@ -53,4 +54,24 @@ it('renders attention and error messages without colour-only meaning',()=>{
   expect(html).toContain('Human review required');
   expect(html).toContain('Cannot generate automatically');
   expect(html).toContain('Generation has not started');
+});
+
+it('preserves concurrent agent limits when reconciling a scalar-only draft',()=>{
+  const before={provider_profile:{profile_id:'fixture',protocol:'FOUNDRY_AGENT_RESPONSES',max_output_tokens:100,foundry_cost_limits:{max_mcp_calls:1,max_provider_requests:2}}} as TenantSettingsDocument;
+  const draft=structuredClone(before),latest=structuredClone(before);
+  draft.provider_profile!.max_output_tokens=200;
+  latest.provider_profile!.foundry_cost_limits!.max_mcp_calls=3;
+  const reconciled=preserveSettingsDraft(before,draft,latest);
+  expect(reconciled.provider_profile!.max_output_tokens).toBe(200);
+  expect(reconciled.provider_profile!.foundry_cost_limits!.max_mcp_calls).toBe(3);
+});
+
+it('retains an intentional agent-limit draft while preserving unrelated concurrent settings',()=>{
+  const before={provider_profile:{profile_id:'fixture',protocol:'FOUNDRY_AGENT_RESPONSES',max_output_tokens:100,foundry_cost_limits:{max_mcp_calls:1,max_provider_requests:2}}} as TenantSettingsDocument;
+  const draft=structuredClone(before),latest=structuredClone(before);
+  draft.provider_profile!.foundry_cost_limits!.max_mcp_calls=2;
+  latest.provider_profile!.max_output_tokens=300;
+  const reconciled=preserveSettingsDraft(before,draft,latest);
+  expect(reconciled.provider_profile!.max_output_tokens).toBe(300);
+  expect(reconciled.provider_profile!.foundry_cost_limits!.max_mcp_calls).toBe(2);
 });

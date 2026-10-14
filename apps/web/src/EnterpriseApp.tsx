@@ -111,7 +111,7 @@ const tenantSections=Object.keys(tenantSectionFields) as TenantSettingsSection[]
 function settingAtPath(settings:TenantSettingsDocument,path:string):unknown{return path.split('.').reduce<unknown>((part,key)=>(part as Record<string,unknown>)[key],settings)}
 export function settingsSectionChanges(before:TenantSettingsDocument,after:TenantSettingsDocument,section:TenantSettingsSection):Record<string,unknown>{return Object.fromEntries(tenantSectionFields[section].filter(path=>JSON.stringify(settingAtPath(before,path))!==JSON.stringify(settingAtPath(after,path))).map(path=>[path,structuredClone(settingAtPath(after,path))]))}
 function applySectionChanges(settings:TenantSettingsDocument,changes:Record<string,unknown>):TenantSettingsDocument{const next=structuredClone(settings),root=next as unknown as Record<string,unknown>;for(const [path,value] of Object.entries(changes)){const parts=path.split('.'),target=parts.slice(0,-1).reduce<Record<string,unknown>>((part,key)=>part[key] as Record<string,unknown>,root);target[parts[parts.length-1]]=structuredClone(value)}return next}
-function preserveSettingsDraft(before:TenantSettingsDocument,draft:TenantSettingsDocument,latest:TenantSettingsDocument):TenantSettingsDocument{const changedKeys=settingsChangedKeys(before,draft);return applySectionChanges(latest,Object.fromEntries(changedKeys.map(key=>[key,structuredClone(settingAtPath(draft,key))])))}
+export function preserveSettingsDraft(before:TenantSettingsDocument,draft:TenantSettingsDocument,latest:TenantSettingsDocument):TenantSettingsDocument{const changedKeys=settingsChangedKeys(before,draft);return applySectionChanges(latest,Object.fromEntries(changedKeys.map(key=>[key,structuredClone(settingAtPath(draft,key))])))}
 
 function settingsChangedKeys(before:TenantSettingsDocument,after:TenantSettingsDocument):string[]{
   const visit=(left:unknown,right:unknown,path:string):string[]=>{
@@ -119,7 +119,7 @@ function settingsChangedKeys(before:TenantSettingsDocument,after:TenantSettingsD
     if(path==='provider_profile'&&left&&right){
       const before=left as TenantProviderProfile,afterProfile=right as TenantProviderProfile;
       if(!matchesQualificationIdentity(before,afterProfile))return [path];
-      return (['max_calls_per_operation','max_input_characters','max_output_tokens','time_budget_seconds','request_timeout_seconds','retry_limit','foundry_cost_limits'] as const).filter(key=>before[key]!==afterProfile[key]).map(key=>`${path}.${key}`);
+      return (['max_calls_per_operation','max_input_characters','max_output_tokens','time_budget_seconds','request_timeout_seconds','retry_limit','foundry_cost_limits'] as const).filter(key=>JSON.stringify(before[key])!==JSON.stringify(afterProfile[key])).map(key=>`${path}.${key}`);
     }
     if(path==='conventions.terminology'||left===null||right===null||typeof left!=='object'||typeof right!=='object'||Array.isArray(left)||Array.isArray(right))return [path];
     return Object.keys(right as Record<string,unknown>).flatMap(key=>visit((left as Record<string,unknown>)[key],(right as Record<string,unknown>)[key],path?`${path}.${key}`:key));
