@@ -31,12 +31,7 @@ from pydantic import (
     model_validator,
 )
 
-from .foundry_cost_limits import (
-    FoundryCostLimits,
-    McpContinuation,
-    QualifiedMcpControls,
-    provider_identity_digest,
-)
+from .foundry_cost_limits import FoundryCostLimits
 
 # Historical callers may still carry this policy metadata. Version-2 schemas
 # never use it to bound or manufacture AI-authored geometry.
@@ -987,7 +982,6 @@ class FoundryAccess:
     knowledge_binding: str
     knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
     agent_version: str | None = None
-    mcp_controls: QualifiedMcpControls | None = field(default=None, repr=False)
     qualification: Literal["OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"] = "OFFLINE_FIXTURE"
 
 
@@ -1103,7 +1097,6 @@ class FoundryTokenCredentialProvider:
         knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"],
         agent_version: str | None,
         qualification: Literal["OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"],
-        mcp_controls: QualifiedMcpControls | None = None,
     ) -> None:
         self._company_id = company_id
         self._profile = profile.model_copy(deep=True)
@@ -1114,7 +1107,7 @@ class FoundryTokenCredentialProvider:
             configuration_id=profile.configuration_id,
             credential=self._bearer, knowledge_binding=knowledge_binding,
             knowledge_scope=knowledge_scope, agent_version=agent_version,
-            qualification=qualification, mcp_controls=mcp_controls,
+            qualification=qualification,
         )
         _validate_foundry_access(self._profile, self._access, company_id)
 
@@ -1217,7 +1210,12 @@ class FoundryAgentResponsesProvider:
         }
         controls = self.profile.foundry_cost_limits
         if controls is not None:
-            # Built-in max_tool_calls is distinct from qualified MCP approvals.
+            # Generic max_tool_calls only documents built-in tools. Stored MCP
+            # tools require a qualified pre-execution approval boundary; no
+            # endpoint/tool override, silent RAG disable or post-hoc claim.
+            if (controls.max_mcp_calls is not None
+                    or controls.max_retrieval_output_tokens is not None):
+                raise ProviderCallError("MODEL_MCP_COST_CONTROL_UNQUALIFIED")
             if controls.max_builtin_tool_calls is not None:
                 body["max_tool_calls"] = controls.max_builtin_tool_calls
         return body
@@ -1356,32 +1354,10 @@ class FoundryAgentResponsesProvider:
 
         last_code = "MODEL_PROVIDER_FAILED"
         limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
-        retries = 0
-        mcp: McpContinuation | None = None
         controls = self.profile.foundry_cost_limits
         if controls is not None and controls.max_provider_requests is not None:
             limit = min(limit, controls.max_provider_requests)
         try:
-            if controls is not None and (
-                controls.max_mcp_calls is not None
-                or controls.max_retrieval_output_tokens is not None
-            ):
-                proof = self._access.mcp_controls
-                if not isinstance(proof, QualifiedMcpControls) or (
-                    proof.configuration_id, proof.agent_version, proof.knowledge_binding
-                ) != (
-                    self.profile.configuration_id, self._access.agent_version,
-                    self._access.knowledge_binding
-                ) or proof.provider_identity_digest != provider_identity_digest(self.profile):
-                    raise ProviderCallError("MODEL_MCP_COST_CONTROL_UNQUALIFIED")
-                try:
-                    mcp = McpContinuation(controls, proof)
-                except ValueError as exc:
-                    raise ProviderCallError(str(exc)) from None
-                # A continuation is a real reserved dispatch, not a retry.
-                limit = self.profile.max_calls_per_operation
-                if controls.max_provider_requests is not None:
-                    limit = min(limit, controls.max_provider_requests)
             body = self._body(request)
             while calls < limit:
                 remaining = self.profile.time_budget_seconds - (time.monotonic() - started)
@@ -1440,30 +1416,12 @@ class FoundryAgentResponsesProvider:
                         raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
                     if response.status_code in {408, 429, 500, 502, 503, 504}:
                         last_code = "MODEL_PROVIDER_TRANSIENT_FAILURE"
-                        if (retries >= self.profile.retry_limit
-                                or (mcp is not None and mcp.approved)):
-                            raise ProviderCallError(last_code)
-                        retries += 1
                         continue
                     if not 200 <= response.status_code < 300:
                         raise ProviderCallError("MODEL_PROVIDER_REJECTED")
                     output_usage = usage.get("output_tokens") if isinstance(usage, dict) else None
                     if type(output_usage) is int and output_usage > self.profile.max_output_tokens:
                         raise ProviderCallError("MODEL_OUTPUT_BUDGET_EXCEEDED")
-                    if mcp is not None:
-                        try:
-                            continuation = mcp.next_input(payload, body["input"])
-                        except ValueError as exc:
-                            raise ProviderCallError(str(exc)) from None
-                        if continuation is not None:
-                            if calls >= limit:
-                                raise ProviderCallError("MODEL_PROVIDER_REQUEST_BUDGET_EXCEEDED")
-                            if len(json.dumps(continuation, ensure_ascii=False)) > (
-                                self.profile.max_input_characters
-                            ):
-                                raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED")
-                            body["input"] = continuation
-                            continue
                     value, grounding = self._candidate(payload)
                     candidate_digest = _candidate_digest(value)
                     try:
@@ -1472,8 +1430,7 @@ class FoundryAgentResponsesProvider:
                         elif request.validator is not None:
                             request.validator(value)
                     except Exception as exc:
-                        if (calls >= limit or retries >= self.profile.retry_limit
-                                or (mcp is not None and mcp.approved)):
+                        if calls >= limit:
                             raise ProviderCallError("MODEL_CANDIDATE_REJECTED") from exc
                         instruction = (
                             request.retry_instruction(exc) if request.retry_instruction else
@@ -1481,7 +1438,6 @@ class FoundryAgentResponsesProvider:
                         )
                         if not isinstance(instruction, str) or not instruction.strip():
                             raise ProviderCallError("MODEL_RETRY_INSTRUCTION_INVALID") from exc
-                        retries += 1
                         body["input"] = [*body["input"],
                                          {"role": "assistant", "content": json.dumps(value)},
                                          {"role": "user", "content": instruction[:20_000]}]
@@ -1502,9 +1458,6 @@ class FoundryAgentResponsesProvider:
                     )
                 except (httpx.TimeoutException, httpx.TransportError):
                     last_code = "MODEL_PROVIDER_TIMEOUT"
-                    if retries >= self.profile.retry_limit or (mcp is not None and mcp.approved):
-                        raise ProviderCallError(last_code) from None
-                    retries += 1
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     raise ProviderCallError("MODEL_OUTPUT_INVALID") from exc
             raise ProviderCallError(last_code)

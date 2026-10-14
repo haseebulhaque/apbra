@@ -11,7 +11,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from .config import FoundryHostBinding
-from .foundry_cost_limits import AttemptEstimate, QualifiedMcpControls
+from .foundry_cost_limits import AttemptEstimate
 from .foundry_report_runtime import ReportApproval, ReportState, Slot, Stage, money, require
 from .model_provider import ProviderProfile
 
@@ -43,7 +43,6 @@ class QualifiedAgentFacts:
     knowledge_scope: Literal["SHARED_STANDARDS", "TENANT_PRIVATE"]
     agent_version: str
     authorization_deadline: float
-    mcp_controls: QualifiedMcpControls | None = None
 
 
 def derive_approval(
@@ -78,7 +77,6 @@ def derive_approval(
         agent_version=qualified_agent.agent_version,
         qualification="LIVE_METADATA_VERIFIED", manual_authentication_approved=True,
         authorization_deadline=qualified_agent.authorization_deadline,
-        mcp_controls=qualified_agent.mcp_controls,
     )
     require(state.company_id == binding.company_id and state.profile == binding.provider_profile)
     require(state.secret_reference_id is None)

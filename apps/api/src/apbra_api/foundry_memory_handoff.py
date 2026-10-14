@@ -401,7 +401,6 @@ def run_receiver(
                     knowledge_scope=binding.knowledge_scope,
                     agent_version=binding.agent_version,
                     qualification=binding.qualification,
-                    mcp_controls=binding.mcp_controls,
                 )
             app = (application_factory or create_app)(
                 settings=settings,

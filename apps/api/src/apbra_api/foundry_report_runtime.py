@@ -121,14 +121,10 @@ class ReportApproval(BaseModel):
                     and self.expected_interpretation_id is None
                     and self.expected_interpretation_digest is None
                 )
-            profile = self.binding.provider_profile
-            controls = profile.foundry_cost_limits
-            maximum = min(profile.max_calls_per_operation, profile.retry_limit + 1)
-            if (self.binding.mcp_controls is not None and controls is not None
-                    and controls.max_mcp_calls is not None):
-                maximum = profile.max_calls_per_operation
-            if controls is not None and controls.max_provider_requests is not None:
-                maximum = min(maximum, controls.max_provider_requests)
+            maximum = min(
+                self.binding.provider_profile.max_calls_per_operation,
+                self.binding.provider_profile.retry_limit + 1,
+            )
             with localcontext() as context:
                 context.rounding = ROUND_CEILING
                 planned = Decimal(0)
