@@ -86,9 +86,8 @@ def agent_details(
         if profile.agent_version is not None:
             urls.append(base + "/versions/" + profile.agent_version
                         + "?api-version=" + profile.api_version)
-        if len(urls) > profile.max_calls_per_operation:
-            result["warnings"] = ["METADATA_CALL_BUDGET_UNAVAILABLE"]
-            return result
+        # These one or two approved read-only metadata GETs are separate from
+        # paid model dispatch slots. Time, identity and response bounds remain.
 
         def read(url: str) -> dict[str, Any]:
             remaining = deadline - time.monotonic()

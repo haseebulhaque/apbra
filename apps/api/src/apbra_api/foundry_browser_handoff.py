@@ -413,12 +413,14 @@ def run_handoff(
                     require(account[2] == expected_account)
                     approval(
                         terminal, terminal_plan,
-                        "Selected saved report only. Reserve A$"
+                        "Selected saved report only. Estimated reservation A$"
                         + report_approval.chain_reserve_aud
                         + " for " + ", ".join(
                             f"{slot.stage}: {slot.attempts} attempt(s)"
                             for slot in report_approval.slots
-                        ) + ". Continue?", "YES",
+                        ) + ". Direct MCP work can exceed the estimate; this is not an Azure "
+                        "hard cap. October A$10 remains the ceiling; no automatic retry or refund. "
+                        "Continue?", "YES",
                     )
                     check()
                     try:
