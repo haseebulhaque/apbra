@@ -33,6 +33,39 @@ from apbra_api.tenant_settings import (
 )
 
 
+def test_optional_agent_cost_limits_roundtrip_without_qualifying_or_acquiring_credentials(
+    settings: Settings, database: Database,
+) -> None:
+    from test_model_provider import foundry_profile
+
+    qualified = foundry_profile()
+    runtime = settings.model_copy(update={
+        "qualified_provider_profiles_json": json.dumps([qualified.model_dump(mode="json")]),
+    })
+    client = TestClient(create_app(settings=runtime, database=database))
+    owner = sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    configured = deepcopy(before["settings"])
+    configured["automatic_generation_enabled"] = False
+    configured["provider_profile"] = qualified.model_dump(mode="json")
+    configured["provider_profile"]["foundry_cost_limits"] = {
+        "max_builtin_tool_calls": None, "max_mcp_calls": 1,
+        "max_provider_requests": 2, "max_retrieval_output_tokens": None,
+    }
+    result = client.put("/api/tenant-settings", headers=csrf(owner), json={
+        "expected_version": before["version"], "settings": configured,
+    })
+    assert result.status_code == 200
+    assert result.json()["settings"]["provider_profile"] == configured["provider_profile"]
+    readiness = result.json()["provider_cost_controls"]
+    assert readiness["qualifiesInvocation"] is False
+    assert readiness["warnings"] == ["MCP_PRE_EXECUTION_APPROVAL_QUALIFICATION_REQUIRED"]
+    assert result.json()["credential"]["status"] == "NOT_CONFIGURED"
+    assert client.get("/api/tenant-settings").json()["provider_cost_controls"] == readiness
+    sign_in(client, "member")
+    assert client.get("/api/tenant-settings").status_code == 403
+
+
 @pytest.mark.parametrize("role", ["COMPANY_OWNER", "COMPANY_ADMIN", "MEMBER", "EXPERT"])
 def test_workspace_branding_projects_only_own_rendering_values_without_writes(
     client: TestClient, database: Database, role: str,

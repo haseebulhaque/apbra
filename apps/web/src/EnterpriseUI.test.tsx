@@ -1,6 +1,22 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {Callout,DisclosurePanel,FileDownloadRow,NavItem,ProcessingState,StatusBadge,WorkflowStepper} from './EnterpriseUI';
+import {AgentCostControls} from './EnterpriseApp';
+
+it('keeps unknown agent limits blank and distinguishes built-in tools from MCP',()=>{
+  const html=renderToStaticMarkup(<AgentCostControls limits={null} onChange={()=>{}}/>);
+  expect((html.match(/value=""/g)??[]).length).toBe(4);
+  expect(html).toContain('built-in tool limits do not bound MCP');
+  expect(html).toContain('Saving a value does not qualify remote enforcement');
+});
+
+it('shows only explicit configured agent limits and respects the busy state',()=>{
+  const html=renderToStaticMarkup(<AgentCostControls disabled limits={{max_builtin_tool_calls:null,max_mcp_calls:1,max_provider_requests:2,max_retrieval_output_tokens:null}} onChange={()=>{}}/>);
+  expect(html).toContain('value="1"');
+  expect(html).toContain('value="2"');
+  expect((html.match(/value=""/g)??[]).length).toBe(2);
+  expect(html).toContain('disabled=""');
+});
 
 it('renders keyboard-accessible navigation with an active page',()=>{
   const html=renderToStaticMarkup(<NavItem active label="Create Report" icon="+" onClick={()=>{}}/>);
