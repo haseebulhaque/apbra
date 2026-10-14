@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[2]
 H=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
 C=runpy.run_path(str(ROOT/'scripts/check_bootstrap.py'))
 NAME='tasks/APBRA-160-released-runtime-fixtures-20261014.json'
+FIRST_REVIEWED_GOVERNANCE='1e0c41a6c3f79efd0648911cf64bd701ae419dd5'
 
 class ReleasedRuntimeFixtureScope(unittest.TestCase):
  def test_exact_five_file_registration_and_known_consumer_authority(self):
@@ -82,9 +83,17 @@ class ReleasedRuntimeFixtureScope(unittest.TestCase):
   with patch('subprocess.check_output',return_value=b'SYNTHETIC_WRONG_RELEASE_BLOB'):
    self.assertEqual(H['released_runtime_paths'](ROOT),set())
  def test_prior_runtime_and_all_old_source_task_bytes_are_unchanged(self):
+  # Audit the immutable governance artifact, not future independently authorised product work.
+  subprocess.run(['git','merge-base','--is-ancestor',FIRST_REVIEWED_GOVERNANCE,'HEAD'],cwd=ROOT,check=True)
+  task,branch,changed=C['delivery_context'](ROOT)
+  errors,_=C['check'](ROOT,active_task_id=task,active_branch=branch,changed_paths=changed)
+  self.assertEqual(errors,[])
   paths=subprocess.check_output(['git','ls-tree','-r','--name-only',H['BASE']],cwd=ROOT,text=True).splitlines()
   for name in paths:
    if name not in H['P']:
-    with self.subTest(name=name):self.assertEqual((ROOT/name).read_bytes(),subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT))
+    with self.subTest(name=name):
+     original=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT)
+     self.assertEqual(subprocess.check_output(['git','show',FIRST_REVIEWED_GOVERNANCE+':'+name],cwd=ROOT),original)
+     if branch==H['B']:self.assertEqual((ROOT/name).read_bytes(),original)
 
 if __name__=='__main__':unittest.main()
