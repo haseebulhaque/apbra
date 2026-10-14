@@ -3460,6 +3460,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         return errors, manifest
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         return ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
+# Historical current-pin exceptions use this checked delivery context.
 def delivery_context(root: Path = ROOT) -> tuple[str | None, str | None, set[str]]:
     """Resolve the current branch task and exact Git changes without cumulative authority."""
     branch = os.getenv('GITHUB_HEAD_REF')

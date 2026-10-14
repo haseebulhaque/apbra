@@ -51,3 +51,9 @@ class MetadataObservationsScope(unittest.TestCase):
         changed = current.replace('return errors, manifest', 'return [], manifest', 1)
         self.assertNotEqual(ast.dump(ast.parse(HELPER['strip_current_hooks'](changed))),
                             ast.dump(ast.parse(old)))
+
+    def test_historical_delivery_cannot_supersede_guided_current_pins(self):
+        guided=runpy.run_path(str(ROOT/'scripts/check_gp.py'))
+        checker=dict(CHECKER)
+        checker['delivery_context']=lambda root:('APBRA-160',HELPER['B'],HELPER['P'])
+        self.assertEqual(guided['qualified_product_paths'](ROOT,checker),set())

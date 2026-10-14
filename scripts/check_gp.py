@@ -4,8 +4,8 @@ GOV = ['scripts/check_bootstrap.py', 'scripts/check_gp.py', 'tasks/APBRA-160-gui
 PRODUCT = ['apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/foundry_agent_details.py', 'apps/api/src/apbra_api/foundry_browser_handoff.py', 'apps/api/src/apbra_api/foundry_cost_limits.py', 'apps/api/src/apbra_api/foundry_memory_handoff.py', 'apps/api/src/apbra_api/foundry_metadata_projection.py', 'apps/api/src/apbra_api/foundry_owner_metadata.py', 'apps/api/src/apbra_api/foundry_private_preparation.py', 'apps/api/src/apbra_api/foundry_report_runtime.py', 'apps/api/src/apbra_api/model_provider.py', 'apps/api/src/apbra_api/tenant_settings.py', 'apps/api/tests/test_api.py', 'apps/api/tests/test_foundry_agent_details.py', 'apps/api/tests/test_foundry_browser_handoff.py', 'apps/api/tests/test_foundry_browser_metadata.py', 'apps/api/tests/test_foundry_cost_limits.py', 'apps/api/tests/test_foundry_memory_handoff.py', 'apps/api/tests/test_foundry_owner_metadata.py', 'apps/api/tests/test_foundry_private_preparation.py', 'apps/api/tests/test_foundry_report_runtime.py', 'apps/api/tests/test_model_provider.py', 'apps/api/tests/test_tenant_settings.py', 'apps/web/src/EnterpriseApp.tsx', 'apps/web/src/EnterpriseUI.test.tsx', 'apps/web/src/api.test.ts', 'apps/web/src/api.ts', 'apps/web/src/privateCases.test.tsx', 'apps/web/src/privateCases.tsx']
 B = 'agent/APBRA-DEVOPS/APBRA-160-guided-preparation'
 BASE = '131e6bc9cb2a7fc7646d58d26fb0ac14e1748f94'
-TASK_SHA = '4be4a4d14d0331a3f0f72b4d7e7492e524a9c3c0cb61d6a874c744c9b83e0881'
-GATES = {'requirements': '3f3c3bdd5a26a3f0b9d8d9260ba741cca9c163249f98f322c156237aaca83bad', 'adrs': 'f27c8f6dc945cc6375f9ac8833885d1f2ae87bfcb2741dd4b18a2aafc2441f62', 'architecture_refs': 'aa53221822d13f1ca0ad57999dfcbb9869c06532d17ea4e956bb2008e7503c9c', 'restricted_paths': '4ed07f126d6c6fd8990874b71bb317cd0177a34fd6b8d4d7fb1ef1ff3d51626c', 'acceptance_criteria': '0a7c8c4633216b19419a7ff1fd0a4c5187bbdb01c94fe94aad3bf19479c68e09', 'verification_required': '023812de156703e131e39d0132a3120ed2e828dbdfba2ee871e89009f45ce113', 'out_of_scope': '53431f71937e1d5ecb8167fccf7ed13556ad75a0136d23d80085bed541a7459f', 'escalate_when': '800cc137fe1c33eef97d88a3ddcd2730861e67f126a09e48cdb972dee78ad57b', 'dependencies': '7acaaa8e159736309942a75bbe307c0b4ed64f113839c127b21710c9add80f51', 'effective_release': '66313913e59ba94566abb276d09296cf06332b63e05bed8332ced8bbe1f2e0ea', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
+TASK_SHA = 'f8f824a1ad13c74d988446059234964352b42dbcb23a611c3386788327455708'
+GATES = {'requirements': '3e5e7008ef647b64b398cd02e9686a23bedf45ccd8f7ef3dc54209057beb4987', 'adrs': 'f27c8f6dc945cc6375f9ac8833885d1f2ae87bfcb2741dd4b18a2aafc2441f62', 'architecture_refs': 'aa53221822d13f1ca0ad57999dfcbb9869c06532d17ea4e956bb2008e7503c9c', 'restricted_paths': '4ed07f126d6c6fd8990874b71bb317cd0177a34fd6b8d4d7fb1ef1ff3d51626c', 'acceptance_criteria': '114b85d6da8c96fd7cb0052d6fac107061dcbf4f9f729ce2cc57ebd45a9c1723', 'verification_required': '023812de156703e131e39d0132a3120ed2e828dbdfba2ee871e89009f45ce113', 'out_of_scope': '53431f71937e1d5ecb8167fccf7ed13556ad75a0136d23d80085bed541a7459f', 'escalate_when': '800cc137fe1c33eef97d88a3ddcd2730861e67f126a09e48cdb972dee78ad57b', 'dependencies': '7acaaa8e159736309942a75bbe307c0b4ed64f113839c127b21710c9add80f51', 'effective_release': '66313913e59ba94566abb276d09296cf06332b63e05bed8332ced8bbe1f2e0ea', 'owner_acceptance': '6f105f5731b79c03247a9e657ec1eb6993e0a3c8b07f0527b5809daf82f2ae11', 'source_ids': 'cd1caf07ef536b903925f1bf8799dc59d6728464a6503e1570436a3e9a95c8b2', 'task_mode': '3e4f9b13887d4518542eac030c3e675f85a206e355823e8d1afbaf1b8b4c20c2', 'readiness': '3a67d3485c1c494d3642204d9a0236f717e45048cf8e8ce235474e7f826d6582'}
 SOURCES = [('apbra-160-editable-first-draft-direction', '8519682', 28, 'cd53001720d227702d54bb89c5acdab7d18ba7b50f6c05b4ba166731bcc112af'), ('apbra-160-editable-first-draft-delivery', '9404417', 9, 'cddfc3bb32bf5e17687733281e2afb6288833c1c360ebc81a6c6c4a1ec7e91c9')]
 SOURCES_SHA = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
 PIN_PATHS = [
@@ -101,3 +101,16 @@ def strip_current_hooks(source):
         if source.count(hook)!=count:raise ValueError('Guided preparation hook differs')
         source=source.replace(hook,'')
     return source
+
+def qualified_product_paths(root,checker):
+    """Supersede current pins only with actual bound, checked product delivery."""
+    import json
+    task_id,branch,paths=checker['delivery_context'](root)
+    if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:
+        return set()
+    task,errors=bind(root,json.loads((root/'agents/catalog.json').read_text()),
+        json.loads((root/'docs/source-register.json').read_text()),
+        checker['bound_provider_registration'])
+    if errors or not ok(task,branch,paths):return set()
+    errors,_=checker['check'](root,active_task_id=task_id,active_branch=branch,changed_paths=paths)
+    return set() if errors else PRODUCT.copy()
