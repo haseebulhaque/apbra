@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-REPORT-RUNTIME-20261014",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Bounded offline trusted report runtime bootstrap and atomic per-dispatch reservation for the existing saved retail case; no activation or paid calls.",
+  "requirements": [
+    "Owner outcome-bounded finish-MVP authority10757 and current explicit delegated direction; JiraPLAN10865 select actual offline report runtime/bootstrap/reservations, no metadata-only intermediate activation. This finite task supersedes previous runtime SOURCE exclusions for exactly six product paths after registration gates; actual private configuration/auth/activation/paid operations remain separately closed.",
+    "Reuse existing saved retail case/full original requirements/history; no new case, report recipe, business-semantic rejection or changed AI-led reasoning/layout/instructions/tools/RAG. Current Tenant Settings remain authoritative; main/config/model-provider/API/application/generation/report policy bytes retained.",
+    "Trusted owner-private memory approval uses existing strict FoundryHostBinding homeaccount/company/tenant/client/profile/knowledge/version LIVE_METADATA_VERIFIED and finite deadline; metadata observations/optional selector shape never manufacture attestation. No attestation/bearer Env/argv/files/logs/cache; separate bounded nonce-bound private approval frame before existing browser account/token transport, exact owned peer and no CLI boolean/default spend grant.",
+    "Inject a trusted app-factory wrapper only for optional runtime, preserving default receiver behavior. Candidate request context identifies exact selected saved case/stage; existing API actor/company/privatecase/CSRF guards precede irreversible reservation. ready/resolve never spend. First actual bearer dispatch atomically claims one server-generated request/stage and each explicitly approved retry consumes an attempt; concurrent/repeated/foreign requests cannot steal/reuse slots. Failures/timeouts retain exposure, no automatic refund or extra paid retry.",
+    "Owner-proven current posted/unposted/resource exposure/outstanding reserves plus full-chain AUD reserve must fit total A$10 October cap. Costs/nested model/planning/retrieval/Search/MCP bounds never guessed. Unknown/incomplete/unqualified proof defaults closed. Actual later report stage sequence/attempt bounds must be explicitly approved and bound to settings/profile/case/deadline; Understanding and design are separate operations unless a valid existing confirmed interpretation allows design only.",
+    "All tests synthetic/offline, including FastAPI threadpool ContextVar propagation, wrong tenant/case/stage, unknown/overcap costs, concurrency/replay/retries/idempotency, cancellation/expiry/drift, nonce/framing/account/secretcanary cleanup. No owner data/config inspection, SDK authentication, live token transport, paid calls, resource/permission/consent changes, hosting or MVP completion claim."
+  ],
+  "adrs": [
+    "Additive private-memory runtime bootstrap and process-local locked dispatch reservation on one owned one-shot API receiver; no persistent broker, distributed billing service, new dependency or default authorization."
+  ],
+  "architecture_refs": [
+    "Reuse released PR15847619bb source transport, existing FoundryHostBinding/FoundryTokenCredentialProvider/FoundryAgentResponsesProvider and existing protected retail-case API/report pipeline."
+  ],
+  "allowed_paths": [
+    "tasks/APBRA-160-report-runtime-20261014.json",
+    "scripts/check_rr.py",
+    "scripts/check_bootstrap.py",
+    "tests/bootstrap/test_report_runtime_scope.py",
+    "tests/bootstrap/test_memory_handoff_scope.py",
+    "tests/bootstrap/test_browser_metadata_runtime_scope.py",
+    "tests/bootstrap/test_metadata_observations_scope.py",
+    "tests/bootstrap/test_agent_details_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py",
+    "apps/api/src/apbra_api/foundry_report_runtime.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/tests/test_foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/tests/test_foundry_browser_handoff.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/model_provider.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/generation.py",
+    "apps/api/src/apbra_api/tenant_settings.py",
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Registration governance only first; six product paths only after independent exact-head review, CI, normal registration merge. No previous source/task/checker rules weakened.",
+    "Usable import-safe trusted bootstrap/runtime peer and bounded nonsecret receipts; no actual auth/spend defaults. Existing owner private terminal/browser/account/callbackclose/tokenlease/settings drift/loopback guards preserved.",
+    "Dispatch reservations prove authorized server-derived identity/stage/case, one request claim, configured approved attempt bounds and exact finite full-chain headroom; metadata/readiness/UI reads consume no slots. Failed/unknown billed attempts stay consumed. Existing AI-led design and saved retail data unchanged."
+  ],
+  "verification_required": [
+    "Exact finite source/task/scope pins, additive inverse preserves historical AST/bytecaps and retained product bytes; focused pure runtime/transport/reservation/adversarial/concurrency tests then applicable full bootstrap/API/web/browser/mypy/Ruff/scans, fresh independent review, hosted CI and normal merge."
+  ],
+  "out_of_scope": [
+    "Actual owner/tool authentication, private configuration inspection, activation, live transfer or paid calls; unknown-cost qualification, billing management access, new provider/resources/consent, provider-document writes, business/report policies, new case, hosting173B."
+  ],
+  "escalate_when": [
+    "A required action is denied, approved source paths/requirements conflict or need expansion, privacy/isolation fails, actual cost/attestation/activation proof is missing or live calls would be needed for offline implementation."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "47619bb350033907732287fb762347261cb904dd",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-dispatch-runtime",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Nine governance paths register exactly six additive product paths, then separately verified product release. No activation/auth/spend authority. All source release gates preserved.",
+  "dependencies": [
+    "Normal merged PR15847619bb. Current passive owner packet remains unchanged and receipt pending; metadata-only operational activation is not a prerequisite for source implementation."
+  ]
+}
