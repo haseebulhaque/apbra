@@ -61,6 +61,13 @@ def qualified_consumption(root,checker):
     import runpy
     from pathlib import Path
     try:
+        if not callable(checker.get('bound_provider_registration')) or not callable(checker.get('delivery_context')):return set()
+        actual=runpy.run_path(Path(__file__).with_name('check_bootstrap.py'))
+        context=actual['delivery_context'](root)
+        if checker['delivery_context'](root)!=context:return set()
+        task_id,branch,paths=context
+        errors,_=actual['check'](root,active_task_id=task_id,active_branch=branch,changed_paths=paths)
+        if errors:return set()
         catalog=json.loads((root/'agents/catalog.json').read_text())
         sources=json.loads((root/'docs/source-register.json').read_text())
         own,errors=bind(root,catalog,sources,checker['bound_provider_registration'])

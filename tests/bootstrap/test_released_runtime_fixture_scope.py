@@ -47,7 +47,15 @@ class ReleasedRuntimeFixtureScope(unittest.TestCase):
   gp=runpy.run_path(str(ROOT/'scripts/check_gp.py'))
   for branch in ['main',C['DEMO_UX_BRANCH'],'agent/APBRA-DEVOPS/APBRA-160-unknown']:
    checker={**C,'delivery_context':lambda root,b=branch:('APBRA-160',b,{'apps/web/src/durableGeneration.tsx'})}
-   self.assertEqual(gp['qualified_product_paths'](ROOT,checker),{H['CONFIG']})
+   self.assertEqual(gp['qualified_product_paths'](ROOT,checker),set())
+ def test_missing_or_noncallable_callbacks_and_rejected_actual_context_fail_closed(self):
+  for checker in [{},{'delivery_context':C['delivery_context']},{**C,'bound_provider_registration':None},{**C,'delivery_context':None}]:
+   with self.subTest(keys=tuple(checker)):self.assertEqual(H['qualified_consumption'](ROOT,checker),set())
+  actual={**C,'check':lambda *a,**kw:(['SYNTHETIC_REJECTED'],{})}
+  original=runpy.run_path
+  def load(path,*a,**kw):
+   return actual if Path(path).name=='check_bootstrap.py' else original(path,*a,**kw)
+  with patch('runpy.run_path',side_effect=load):self.assertEqual(H['qualified_consumption'](ROOT,C),set())
  def test_invalid_task_or_source_binding_cannot_consume_published_paths(self):
   checker={**C,'bound_provider_registration':lambda *a,**k:(None,['SYNTHETIC_INVALID_BINDING'])}
   self.assertEqual(H['qualified_consumption'](ROOT,checker),set())
