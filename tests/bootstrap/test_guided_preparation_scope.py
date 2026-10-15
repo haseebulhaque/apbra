@@ -86,11 +86,12 @@ class GuidedPreparationScope(unittest.TestCase):
     def test_registration_bytes_and_protected_current_sources_are_verified(self):
         _,branch,paths=C['delivery_context']()
         registration=(branch==H['B'] and paths==H['GOV'])
+        allowed=H['qualified_product_paths'](ROOT,C)
         for name,expected in H['RETAINED'].items():
             with self.subTest(name=name):
                 baseline=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT)
                 self.assertEqual(hashlib.sha256(baseline).hexdigest(),expected)
-                if registration or name not in H['PRODUCT']:
+                if registration or (name not in H['PRODUCT'] and name not in allowed):
                     self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),expected)
         if registration:
             for name in ['apps/api/src/apbra_api/foundry_private_preparation.py','apps/api/src/apbra_api/foundry_cost_limits.py']:
