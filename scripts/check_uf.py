@@ -86,3 +86,5 @@ def qualified_consumption(root,checker):
         if prior is None or errors:return set()
         return released_runtime_paths(root)
     except (OSError,ValueError):return set()
+
+# Release-transition test uses explicit missing ancestry; authority is unchanged.

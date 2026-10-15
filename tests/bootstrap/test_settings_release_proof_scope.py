@@ -19,8 +19,8 @@ APP=H['PIN_PATHS'][0]
 digest=lambda value:hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 class SettingsReleaseProofScope(unittest.TestCase):
-    def test_exact_six_governance_paths_no_product_or_foreign_authority(self):
-        task=json.loads((ROOT/NAME).read_text());self.assertEqual(set(task['allowed_paths']),H['P']);self.assertEqual(len(H['P']),6)
+    def test_exact_seven_governance_paths_no_product_or_foreign_authority(self):
+        task=json.loads((ROOT/NAME).read_text());self.assertEqual(set(task['allowed_paths']),H['P']);self.assertEqual(len(H['P']),7)
         errors,_=C['check'](ROOT,active_task_id='APBRA-160',active_branch=H['B'],changed_paths=H['P']);self.assertEqual(errors,[])
         for paths in [H['P']-{'scripts/check_sp.py'},H['P']|{APP},{APP},{'compose.yaml'},{'.github/workflows/bootstrap.yml'}]:
             self.assertFalse(H['ok'](task,H['B'],paths))
@@ -50,9 +50,22 @@ class SettingsReleaseProofScope(unittest.TestCase):
                 for mutation in [source.replace(after,'',1),source+after]:
                     with self.assertRaises(ValueError):strip(mutation)
     def test_registration_does_not_consume_unreleased_candidate_or_allow_edit(self):
-        self.assertEqual(H['released_product_paths'](ROOT),set())
+        # Missing ancestry is an explicit negative fixture, independent of
+        # whether the actual checkout is before or after the product release.
+        actual_run=subprocess.run
+        def without_candidate(command,*args,**kwargs):
+            if command==['git','merge-base','--is-ancestor',H['CANDIDATE'],'HEAD']:
+                return subprocess.CompletedProcess(command,1)
+            return actual_run(command,*args,**kwargs)
+        with patch('subprocess.run',side_effect=without_candidate):
+            self.assertEqual(H['released_product_paths'](ROOT),set())
+            uf=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
+            self.assertEqual(uf['qualified_consumption'](ROOT,C),{'apps/api/src/apbra_api/config.py'})
+    def test_current_union_keeps_actual_context_validation(self):
         uf=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
-        self.assertEqual(uf['qualified_consumption'](ROOT,C),{'apps/api/src/apbra_api/config.py'})
+        self.assertEqual(uf['qualified_consumption'](ROOT,C),{'apps/api/src/apbra_api/config.py'}|H['released_product_paths'](ROOT))
+        wrong={**C,'delivery_context':lambda root:('APBRA-160','agent/APBRA-DEVOPS/APBRA-160-unknown',{'apps/api/src/apbra_api/application.py'})}
+        self.assertEqual(uf['qualified_consumption'](ROOT,wrong),set())
     def fixture(self,folder):
         root=Path(folder)
         for name in [NAME,'agents/catalog.json','docs/source-register.json','contracts/engineering/task-contract.schema.json']:

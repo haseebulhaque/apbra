@@ -44,7 +44,16 @@ class ReleasedRuntimeFixtureScope(unittest.TestCase):
    for mutation in [guided.replace(after,'',1),guided+after]:
     with self.assertRaises(ValueError):H['strip_gp_changes'](mutation)
  def test_only_exact_published_configuration_is_consumed_on_other_branches(self):
-  self.assertEqual(H['qualified_consumption'](ROOT,C),{H['CONFIG']})
+  # Keep this original config-only contract focused. The separately tested
+  # SP extension can legitimately consume another exact released source now.
+  original=runpy.run_path
+  def configuration_only(path,*args,**kwargs):
+   loaded=original(path,*args,**kwargs)
+   if Path(path).name=='check_sp.py':
+    return {**loaded,'released_product_paths':lambda root:set()}
+   return loaded
+  with patch('runpy.run_path',side_effect=configuration_only):
+   self.assertEqual(H['qualified_consumption'](ROOT,C),{H['CONFIG']})
   gp=runpy.run_path(str(ROOT/'scripts/check_gp.py'))
   for branch in ['main',C['DEMO_UX_BRANCH'],'agent/APBRA-DEVOPS/APBRA-160-unknown']:
    checker={**C,'delivery_context':lambda root,b=branch:('APBRA-160',b,{'apps/web/src/durableGeneration.tsx'})}

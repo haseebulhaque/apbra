@@ -46,3 +46,5 @@ def qualified_product_paths(root,checker):
     if errors or not ok(task,branch,paths):return set()
     errors,_=checker['check'](root,active_task_id=task_id,active_branch=branch,changed_paths=paths)
     return set() if errors else PRODUCT.copy()
+
+# Release-transition test uses explicit missing ancestry; authority is unchanged.
