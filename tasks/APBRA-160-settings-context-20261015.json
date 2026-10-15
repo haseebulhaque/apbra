@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-SETTINGS-CONTEXT-20261015",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Preserve saved report history while explicitly refreshing material tenant-settings context before fresh Understanding and private report authorization.",
+  "requirements": [
+    "Owner renewed six-hour continuation at2026-10-15T06:59:37Z ending12:59:37Z and APBRA-160 PLAN10905 authorize this bounded registration, correction, tests, review and gated normal merge. No renewal of expired runtime lease follows.",
+    "Owner read-only diagnostic proves INTERPRETATION_MATERIAL_SETTINGS_CURRENT=false. Authoritative current Tenant Settings govern a fresh Understanding; no guessed historical changed field, version mismatch, agent pin or fabricated metadata.",
+    "Explicit nonpaid normal actor/CSRF/private-case edit-authorized transition locks the selected case, verifies actual material settings mismatch and advances semantic context once before grant discovery. Preserve original request, evidence, conversation, interpretations, confirmations, designs, clarification cycles and limits; audit technical refresh without invented business conversation.",
+    "Idempotent retries and stale/concurrent requests cannot repeatedly advance context. No context mutation after a private grant is bound. Stale cached Understanding cannot be returned as current; normal UI reconciles the returned semantic context before further actions.",
+    "Nonpaid refresh and state inspection must not construct a paid provider or require Entra token/model key. Keep auth, tenant isolation, CSRF, private grants, lifecycle, budget, MCP require_approval never, Foundry-owned report reasoning and all actual provider settings unchanged.",
+    "Exactly seven governance-only paths precede product-only changes among nine finite product paths. Only these product seams can supersede historical current-source pins under valid exact task/source/branch/full scope checks; original baseline Git blobs and protected-source assertions remain.",
+    "No worker authentication, original credential/container configuration inspection, original preview activation or paid calls. Owner approval for paid MVP tests does not replace factual budget/access qualification; October A$10 total and bound owner-only private authentication remain."
+  ],
+  "adrs": [
+    "Reuse normal case/Tenant Settings persistence and UI; no schema, dependency, alternate provider or new service. Technical context refresh is distinct from business clarification/refinement and confirmation."
+  ],
+  "architecture_refs": [
+    "Released main5a2989b PR170; AcceptanceService material-settings digest and unique case/context interpretation storage; current owner diagnostic proves material mismatch; APBRA-160 PLAN10905."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/foundry_report_runtime.py",
+    "apps/api/tests/test_api.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/web/src/api.test.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/durableConversation.test.tsx",
+    "apps/web/src/durableConversation.tsx",
+    "scripts/check_bootstrap.py",
+    "scripts/check_gp.py",
+    "scripts/check_sc.py",
+    "scripts/check_uf.py",
+    "tasks/APBRA-160-settings-context-20261015.json",
+    "tests/bootstrap/test_guided_preparation_scope.py",
+    "tests/bootstrap/test_settings_context_scope.py"
+  ],
+  "restricted_paths": [
+    ".env",
+    "**/.env",
+    ".github/**",
+    "compose.yaml",
+    "apps/api/alembic/**",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/generation.py",
+    "apps/api/src/apbra_api/auth_boundary.py",
+    "apps/api/src/apbra_api/authorization.py",
+    "apps/api/src/apbra_api/tenant_secrets.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Finite exact governance then product-only phases; no product bytes change during registration; historical checker AST preserved by exact inverse hooks.",
+    "Fresh context only for evidenced material-stale current-context interpretation; same-settings, already-refreshed, cross-tenant, CSRF and stale-concurrency paths preserve data and fail safely.",
+    "Saved report and history remain; fresh Understanding is unconfirmed until existing explicit confirmation. Context is bound before report grant, with no paid factory on refresh/state.",
+    "Focused genuine mismatch, history, idempotency, concurrency, tenant/CSRF, UI lifetime/context reconciliation and private-grant tests; full required checks and exact-head independent review/CI before merge."
+  ],
+  "verification_required": [
+    "Registration exact task/source/section pins, phase/path/branch negatives, mutation/symlink, exact inverse AST and product-byte preservation; full bootstrap/CI policy/scans and independent review plus required hosted CI.",
+    "Product full API/web/build/browser, Ruff/mypy, lock, scope/historical checks and secret scans; independent exact-head review and hosted required CI; offline tests do not claim live Azure/report success."
+  ],
+  "out_of_scope": [
+    "Any credential inspection, worker sign-in/token refresh, endpoint/version/tool/security/permission change, paid worker call, new reporting decision, silent confirmation, schema/persistence rewrite, history deletion, hosting173B/APBRA178."
+  ],
+  "escalate_when": [
+    "Denied action, expired authority, missing verification/budget/access proof or additional paths; stop exact blocked action without workaround."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque authenticated GitHub and Atlassian tools",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "5a2989b6358b753c49f1390416c72493997bcb64",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-settings-context",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Seven governance files register nine product paths only; registration does not activate runtime, authorize token handling or spend.",
+  "dependencies": [
+    "Normal release main5a2989b; current Tenant Settings23 route observed by owner; independent reviewer and required CI remain mandatory."
+  ]
+}

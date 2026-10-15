@@ -26,6 +26,10 @@ def phase_errors(task,branch,paths):
     return ['Released runtime fixtures require exact five-file governance-only scope'] if branch==B and paths and not ok(task,branch,paths) else []
 
 def strip_hooks(source):
+    if "sc=runpy.run_path(" in source:
+        import runpy
+        from pathlib import Path
+        source=runpy.run_path(Path(__file__).with_name('check_sc.py'))['strip_hooks'](source)
     for count,hook in HOOKS:
         if source.count(hook)!=count:raise ValueError('Released runtime fixture hook differs')
         source=source.replace(hook,'')
@@ -51,6 +55,9 @@ GP_EDITS = [('def strip_current_hooks(source):\n', 'def strip_current_hooks(sour
 
 
 def strip_gp_changes(source):
+    import runpy
+    from pathlib import Path
+    source=runpy.run_path(Path(__file__).with_name('check_sc.py'))['strip_gp_changes'](source)
     for before,after in GP_EDITS:
         if source.count(after)!=1:raise ValueError('Released consumption GP hook differs')
         source=source.replace(after,before)

@@ -113,6 +113,8 @@ def qualified_product_paths(root,checker):
     if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:
         import runpy
         from pathlib import Path
+        qualified=runpy.run_path(Path(__file__).with_name('check_sc.py'))['qualified_product_paths'](root,checker)
+        if qualified:return qualified
         return runpy.run_path(Path(__file__).with_name('check_uf.py'))['qualified_consumption'](root,checker)
     task,errors=bind(root,json.loads((root/'agents/catalog.json').read_text()),
         json.loads((root/'docs/source-register.json').read_text()),
