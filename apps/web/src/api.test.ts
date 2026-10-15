@@ -123,3 +123,10 @@ it('keeps latest Azure metadata distinct from an unpinned saved invocation route
  const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
  expect(calls).toHaveLength(1);expect(calls[0][0]).toBe('/api/tenant-settings/agent-details');expect(calls[0][1].body).toBeUndefined();
 });
+
+it('retains redacted original metadata error details for the administration UI',async()=>{
+ const diagnostic={operation:'AGENT_METADATA_GET',exception_type:'builtins.ValueError',message:'Agent metadata HTTP status 403',message_truncated:false,frames:[{file:'foundry_agent_details.py',function:'read',line:120}]};
+ vi.stubGlobal('fetch',vi.fn(async()=>response({status:'METADATA_UNAVAILABLE',settings_version:23,warnings:['METADATA_READ_UNAVAILABLE'],diagnostic})));
+ const details=await tenantSettingsApi.agentDetails();
+ expect(details.diagnostic).toEqual(diagnostic);expect(details.diagnostic?.message).toContain('403');
+});

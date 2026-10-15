@@ -371,3 +371,53 @@ def test_late_capability_change_clears_inline_observations() -> None:
     assert result['observedVersion'] is None and result['metadataSource'] is None
     assert result['modelDeployment'] is None and result['storedInstructionUtf8Bytes'] is None
     assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize('status', [401, 403, 429, 503])
+def test_http_failure_preserves_exact_operation_status_type_and_trace_without_body(
+    status: int,
+) -> None:
+    configured = profile()
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(status, text=CANARY)))
+    details = result['diagnostic']
+    assert details['operation'] == 'AGENT_METADATA_GET'
+    assert details['exception_type'] == 'builtins.ValueError'
+    assert details['message'] == f'Agent metadata HTTP status {status}'
+    assert any(f['file'] == 'foundry_agent_details.py' and f['function'] == 'read'
+               for f in details['frames'])
+    assert CANARY not in json.dumps(result)
+
+
+def test_json_error_keeps_original_decoder_message_and_actual_type_without_payload() -> None:
+    configured = profile()
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(200,
+            content=b'{', headers={'content-type': 'application/json'})))
+    details = result['diagnostic']
+    assert details['operation'] == 'AGENT_METADATA_GET_RESPONSE_JSON_DECODE'
+    assert details['exception_type'] == 'json.decoder.JSONDecodeError'
+    assert 'Expecting property name enclosed in double quotes' in details['message']
+    assert details['frames'] and details['frames'][-1]['file'] == 'decoder.py'
+
+def test_diagnostic_preserves_original_meaning_and_codes_while_redacting_private_values():
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    private = 'opaque-private-authentication-value'
+    try:
+        raise RuntimeError('Authentication failed AADSTS700016: invalid_client; '
+            'Bearer ' + private + '; account person@example.invalid; '
+            'tenant 00000000-0000-0000-0000-000000000001; '
+            "directory 'Private Company'; https://host.invalid/secret/path; "
+            '{"error":"invalid_client","private":"raw-response-secret"}')
+    except RuntimeError as error:
+        details = _redacted_error_details(error, 'BROWSER_AUTHENTICATION', redactions=(private,))
+    encoded = json.dumps(details)
+    assert details['exception_type'] == 'builtins.RuntimeError'
+    assert 'Authentication failed AADSTS700016' in details['message']
+    assert details['provider_error_codes'] == ['AADSTS700016', 'invalid_client']
+    assert details['frames'][-1]['function'] == \
+        'test_diagnostic_preserves_original_meaning_and_codes_while_redacting_private_values'
+    for value in [private, 'person@example.invalid', '00000000-0000-0000-0000-000000000001',
+                  'Private Company', 'host.invalid', 'raw-response-secret']:
+        assert value not in encoded
+    assert 'OtherException' not in encoded

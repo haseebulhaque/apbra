@@ -7,6 +7,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -16,6 +17,60 @@ import httpx
 from .foundry_owner_metadata import _quiet_call
 from .model_provider import FoundryBearer, FoundryCredentialProvider, ProviderProfile
 
+
+def _redacted_error_details(
+    error: BaseException, operation: str, *, redactions: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Original error meaning without credentials, payloads, paths or locals.
+
+    For private owner/admin error boundaries. Known sensitive values are removed
+    before structural redaction. Trace coordinates include basename/function/line
+    only, never source text or locals. This does not qualify any connection.
+    """
+    try:
+        message = str(error)
+    except BaseException:
+        message = "Exception message could not be rendered"
+    for value in sorted((v for v in redactions if type(v) is str and v),
+                        key=len, reverse=True):
+        message = message.replace(value, "<redacted>")
+    codes = sorted(set(re.findall(
+        r"\b(?:AADSTS[0-9]{3,12}|invalid_client|invalid_grant|interaction_required|"
+        r"consent_required|authorization_declined|temporarily_unavailable|"
+        r"server_error|invalid_scope|unauthorized_client|access_denied)\b", message)))
+    message = re.sub(r"\{.*\}|\[.*\]", "[REDACTED_PAYLOAD]", message, flags=re.S)
+    message = re.sub(r"(?i)\b(?:https?|postgres(?:ql)?(?:\+\w+)?|file)://\S+",
+                     "[REDACTED_URL]", message)
+    message = re.sub(r"(?i)\b(authorization|bearer|token|password|secret|api[_-]?key|"
+                     r"client_secret|access_token|refresh_token)\b(\s*[:=]\s*)\S+",
+                     r"\1\2[REDACTED]", message)
+    message = re.sub(r"(?i)\bBearer\s+\S+", "Bearer <redacted>", message)
+    message = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "[REDACTED_ACCOUNT]", message)
+    message = re.sub(r"(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b",
+                     "[REDACTED_ID]", message)
+    message = re.sub(r"(['\"])[^'\"\n]*\1", "[REDACTED_VALUE]", message)
+    message = re.sub(r"(?:/[A-Za-z0-9_.%+~-]+){2,}", "[REDACTED_PATH]", message)
+    message = re.sub(r"\b[A-Za-z0-9_./+=:-]{20,}\b",
+                     lambda match: match[0] if match[0] in {
+                         "FOUNDRY_QUALIFICATION_UNAVAILABLE", "FOUNDRY_MEMORY_HANDOFF_UNAVAILABLE"
+                     } else "[REDACTED_OPAQUE]", message)
+    message = "".join(c if c.isprintable() or c in "\n\t" else "?" for c in message)
+    result: dict[str, Any] = {
+        "operation": operation,
+        "exception_type": type(error).__module__ + "." + type(error).__qualname__,
+        "message": message[:4096], "message_truncated": len(message) > 4096, "frames": [],
+    }
+    if codes:
+        result["provider_error_codes"] = codes
+    tb = BaseException.__getattribute__(error, "__traceback__")
+    while tb is not None:
+        code = tb.tb_frame.f_code
+        result["frames"].append({"file": Path(code.co_filename).name,
+                                 "function": code.co_name, "line": tb.tb_lineno})
+        tb = tb.tb_next
+    result["frames_truncated"] = len(result["frames"]) > 16
+    result["frames"] = result["frames"][-16:]
+    return result
 
 @dataclass(frozen=True)
 class AgentMetadataAccess:
@@ -74,10 +129,14 @@ def agent_details(
         result["warnings"] = ["ENTRA_AUTHENTICATION_UNAVAILABLE"]
         return result
     deadline = time.monotonic() + profile.time_budget_seconds
+    operation = "METADATA_CREDENTIAL_READINESS"
+    private_values: list[str] = [profile.endpoint]
     try:
         if credentials.ready(company_id, profile) is not True:
             raise ValueError("Capability unavailable")
+        operation = "METADATA_CREDENTIAL_RESOLVE"
         access = credentials.resolve(company_id, profile)
+        operation = "METADATA_ACCESS_BINDING_VALIDATE"
         if (access.company_id != company_id or access.profile_id != profile.profile_id
                 or access.configuration_id != profile.configuration_id
                 or (profile.agent_version is not None
@@ -91,10 +150,18 @@ def agent_details(
         # paid model dispatch slots. Time, identity and response bounds remain.
 
         def read(url: str) -> dict[str, Any]:
+            nonlocal operation
+            operation = ("AGENT_VERSION_METADATA_GET" if "/versions/" in url
+                         else "AGENT_METADATA_GET")
+            private_values.append(url)
             remaining = deadline - time.monotonic()
             if remaining <= 0 or credentials.ready(company_id, profile) is not True:
                 raise ValueError("Expired capability")
+            operation += "_TOKEN_ACQUISITION"
             bearer = _quiet_call(access.credential)
+            private_values.append(bearer.token)
+            operation = ("AGENT_VERSION_METADATA_GET" if "/versions/" in url
+                         else "AGENT_METADATA_GET")
             if credentials.ready(company_id, profile) is not True:
                 raise ValueError("Capability changed during acquisition")
             remaining = deadline - time.monotonic()
@@ -115,15 +182,17 @@ def agent_details(
                         "Authorization": "Bearer " + bearer.token,
                         "Accept": "application/json", "Accept-Encoding": "identity",
                     }) as response:
-                        if (response.status_code != 200
-                                or response.headers.get("content-type", "").split(";", 1)[0]
+                        if response.status_code != 200:
+                            raise ValueError(f"Agent metadata HTTP status {response.status_code}")
+                        if (response.headers.get("content-type", "").split(";", 1)[0]
                                 != "application/json"):
-                            raise ValueError("Metadata unavailable")
+                            raise ValueError("Agent metadata response content type is not JSON")
                         for chunk in response.iter_bytes():
                             if (time.monotonic() >= deadline
                                     or len(raw) + len(chunk) > profile.max_input_characters):
                                 raise ValueError("Metadata bound exceeded")
                             raw.extend(chunk)
+                operation += "_RESPONSE_JSON_DECODE"
                 document = json.loads(raw, object_pairs_hook=_json_object)
                 if bearer.expires_at <= time.time():
                     raise ValueError("Bearer expired during metadata read")
@@ -134,6 +203,7 @@ def agent_details(
                 raw.clear()
 
         records = [_quiet_call(read, url) for url in urls]
+        operation = "AGENT_METADATA_IDENTITY_AND_PROJECTION"
         properties = records[0]
         if properties.get("object") != "agent" or properties.get("name") != agent:
             raise ValueError("Agent identity differs")
@@ -195,8 +265,10 @@ def agent_details(
             raise ValueError("Capability changed")
         result.update(status="METADATA_OBSERVED_ONLY", warnings=warnings)
         return result
-    except Exception:
-        # Do not expose response bodies, URLs, identities, bearer or exception text.
+    except Exception as error:
+        # Retain operation/type/redacted original message/trace, never raw responses.
+        result["diagnostic"] = _redacted_error_details(
+            error, operation, redactions=tuple(private_values))
         result.update(observedVersion=None, metadataSource=None,
                       modelDeployment=None, storedInstructionUtf8Bytes=None, toolTypes=[],
                       warnings=["METADATA_READ_UNAVAILABLE"])
