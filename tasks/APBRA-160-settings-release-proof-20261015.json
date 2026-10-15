@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-SETTINGS-RELEASE-PROOF-20261015",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Consume only the exact reviewed material-settings application correction after its literal candidate ancestor is released; preserve historical source pins and finite edit authority.",
+  "requirements": [
+    "Owner renewed continued MVP fixes/review/tests/normal merges until2026-10-15T12:59:37Z. APBRA-160 implementation10907 records actual bounded product correction and requires exact immutable protected-source consumption before release. This is governance only, no product edit or runtime/paid authority.",
+    "Consume only application.py byte-identical to literal source candidatec92d488793fb541f79b1fc8ab7637244d96c477b with SHA2560fcd6ede465a37e3bbb3c9bd4ffc0d5e2825293135f3c0ecec5b4db1e7f7a6d4, and only if that literal candidate is an ancestor of actual HEAD, its Git blob matches and the current file matches. Do not repin historical baseline hashes or trust arbitrary current HEAD/branch.",
+    "Full actual existing checker context/task/source validation plus exact bound new task precedes qualified consumption. Preserve independently proven exact published config.py consumption; consuming either path never grants edits on a foreign branch.",
+    "Exactly six governance files first; all prior product/task/source bytes and accepted security/tenant/private-case/budget/provider controls remain. Candidate product changes retain existing finite settings-context task authority and require separate exact-head review and required CI before release."
+  ],
+  "adrs": [
+    "Reuse strict released-runtime consumption chain. New helper admits only one immutable application blob, with literal ancestor/task/source/hash proof; no broad main/branch exemption.",
+    "Governance and product candidates remain separate. Source consumption is not source edit, native approval, deployment or live report verification."
+  ],
+  "architecture_refs": [
+    "Released PR171/main4370d42 registers nine product seams. Actual product candidatec92d488 resolves stale material-settings Understanding via explicit nonpaid context refresh.",
+    "Existing GP/UF/SC exact inverse hooks, historical source pins and real-context validation remain; accepted Confluence8519682v28/9404417v9 source register immutable."
+  ],
+  "allowed_paths": [
+    "scripts/check_bootstrap.py",
+    "scripts/check_uf.py",
+    "scripts/check_sc.py",
+    "scripts/check_sp.py",
+    "tasks/APBRA-160-settings-release-proof-20261015.json",
+    "tests/bootstrap/test_settings_release_proof_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    ".github/**",
+    "docs/**",
+    "agents/**",
+    "contracts/**",
+    "compose.yaml",
+    ".env",
+    "infrastructure/**",
+    "workers/**",
+    "packages/**"
+  ],
+  "acceptance_criteria": [
+    "Exactly six governance paths on literal branch; no partial/mixed/product/unregistered admission.",
+    "Only literal candidate ancestor and both immutable Git/current application blob hashes qualify; missing/changed candidate, current bytes, symlinks, withdrawn task/source or rejected actual scope fail closed.",
+    "Every historical baseline is still checked against original Git snapshots. Exact additive inverses retain whole previous bootstrap/UF/SC AST and existing negative tests.",
+    "Current registration keeps all product bytes unchanged. Candidate product release separately meets full checks, independent review, required CI and authorized normal merge."
+  ],
+  "verification_required": [
+    "Focused exact candidate/current blob, ancestor, task/source/symlink/error/phase/foreign path negatives; inverse mutation tests and product-byte preservation. Full bootstrap/checker/CI policy, exact-tree/history scans, independent exact-head review and required hosted CI before normal merge.",
+    "Before product release verify immutable application consumption on simulated merged main and actual full scope; retain old hashes and all historical source checks."
+  ],
+  "out_of_scope": [
+    "Any product/backend/UI behavior, arbitrary source repinning, broad branch/hash exception, old checker guard removal, skips, scanner suppression, workflow/credential/cloud/tool/security/budget change, original preview activation, paid call or hosting."
+  ],
+  "escalate_when": [
+    "Denied action, additional path, altered candidate protected blob, authority expiry, missing source/review/CI/scanner proof. Stop exact blocked action without workaround."
+  ],
+  "dependencies": [
+    "Exact registrationmain4370d42 and actual product candidatec92d488793fb541f79b1fc8ab7637244d96c477b; candidate protected application hash0fcd6ede465a37e3bbb3c9bd4ffc0d5e2825293135f3c0ecec5b4db1e7f7a6d4. Product release occurs only after independent final review and CI; source consumption activates only after literal candidate ancestry."
+  ],
+  "actual_authenticated_actor": "Codex execution via haseebulhaque authenticated Atlassian and GitHub connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "4370d42f433969ade23b1806946b380e8b6c3d11",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-settings-release-proof",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Six governance files admit one exact immutable reviewed application blob as consumed source, never edit authority or a rewrite of historical pins.",
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION"
+}

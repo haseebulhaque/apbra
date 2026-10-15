@@ -23,6 +23,7 @@ n=runpy.run_path(str(Path(__file__).with_name("check_agent_details_20261013.py")
 zz=runpy.run_path(str(Path(__file__).with_name("check_metadata_observations_20261013.py")))
 uf=runpy.run_path(Path(__file__).parent/'check_uf.py')
 sc=runpy.run_path(Path(__file__).parent/'check_sc.py')
+sp=runpy.run_path(Path(__file__).parent/'check_sp.py')
 gp=runpy.run_path(Path(__file__).parent/'check_gp.py')
 rr=runpy.run_path(Path(__file__).parent/'check_rr.py')
 x=runpy.run_path(Path(__file__).parent/'check_mh.py')
@@ -412,85 +413,85 @@ PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_PATHS={
 'apps/web/e2e/protected-generation.spec.ts',
 'apps/web/src/durableConversation.test.tsx',
 'apps/web/src/durableConversation.tsx',
-    'apps/web/src/durableGeneration.test.tsx',
-    'apps/web/src/durableGeneration.tsx',
-    'apps/web/src/privateCases.test.tsx',
-    'apps/web/src/privateCases.tsx',
-    'apps/web/src/style.css',
+'apps/web/src/durableGeneration.test.tsx',
+'apps/web/src/durableGeneration.tsx',
+'apps/web/src/privateCases.test.tsx',
+'apps/web/src/privateCases.tsx',
+'apps/web/src/style.css',
 }
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-170-professional-saas-experience-visual-system.json',
-    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-170-professional-saas-experience-visual-system.json',
+'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'docs/source-register.json',
 }
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_TASK_SHA256='e6fb9148028b9edcc75039ece3fe7632c6f91fdb2d362190e82b028944b15240'
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_ID='mvp1-professional-saas-experience-visual-system'
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_SOURCE_SHA256='e3f3dcc0bf39088fc692cdc807190741c154bf562b3f83b5f7de6fab70eb2057'
 PROFESSIONAL_SAAS_EXPERIENCE_VISUAL_SYSTEM_REGISTRATION_BRANCH='agent/APBRA-DEVOPS/APBRA-170-professional-saas-experience'
 BUSINESS_USER_INTELLIGENT_GENERATION_PATHS={
-    'apps/api/.env.example',
-    'apps/api/README.md',
-    'apps/api/alembic/versions/20260929_05_business_user_intelligent_generation.py',
-    'apps/api/src/apbra_api/api.py',
-    'apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/config.py',
-    'apps/api/src/apbra_api/domain.py',
-    'apps/api/src/apbra_api/evidence.py',
-    'apps/api/src/apbra_api/generation.py',
-    'apps/api/src/apbra_api/model_provider.py',
-    'apps/api/src/apbra_api/persistence.py',
-    'apps/api/src/apbra_api/reference_material.py',
-    'apps/api/src/apbra_api/semantic_bridge.py',
-    'apps/api/tests/conftest.py',
-    'apps/api/tests/test_api.py',
-    'apps/api/tests/test_authorization.py',
-    'apps/api/tests/test_cases.py',
-    'apps/api/tests/test_conversations.py',
-    'apps/api/tests/test_evidence.py',
-    'apps/api/tests/test_generation.py',
-    'apps/api/tests/test_migrations.py',
-    'apps/api/tests/test_model_provider.py',
-    'apps/api/tests/test_reference_material.py',
-    'apps/api/tests/test_semantic_bridge.py',
-    'apps/web/e2e/durable-conversation.spec.ts',
-    'apps/web/e2e/private-case.spec.ts',
-    'apps/web/e2e/protected-generation.spec.ts',
-    'apps/web/playwright.config.ts',
-    'apps/web/scripts/generation-bridge.ts',
-    'apps/web/scripts/semantic-bridge.ts',
-    'apps/web/src/App.test.tsx',
-    'apps/web/src/api.test.ts',
-    'apps/web/src/api.ts',
-    'apps/web/src/clarification.test.ts',
-    'apps/web/src/clarification.ts',
-    'apps/web/src/confirmedRequirements.test.ts',
-    'apps/web/src/confirmedRequirements.ts',
-    'apps/web/src/durableConversation.test.tsx',
-    'apps/web/src/durableConversation.tsx',
-    'apps/web/src/durableGeneration.test.tsx',
-    'apps/web/src/durableGeneration.tsx',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/foundry.ts',
-    'apps/web/src/genericFoundry.integration.test.ts',
-    'apps/web/src/genericPowerBI.test.ts',
-    'apps/web/src/genericPowerBI.ts',
-    'apps/web/src/guardrail.test.ts',
-    'apps/web/src/guardrail.ts',
-    'apps/web/src/privateCases.test.tsx',
-    'apps/web/src/privateCases.tsx',
-    'apps/web/src/reportDesignNormalization.test.ts',
-    'apps/web/src/reportDesignNormalization.ts',
-    'apps/web/src/style.css',
-    'compose.yaml',
+'apps/api/.env.example',
+'apps/api/README.md',
+'apps/api/alembic/versions/20260929_05_business_user_intelligent_generation.py',
+'apps/api/src/apbra_api/api.py',
+'apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/config.py',
+'apps/api/src/apbra_api/domain.py',
+'apps/api/src/apbra_api/evidence.py',
+'apps/api/src/apbra_api/generation.py',
+'apps/api/src/apbra_api/model_provider.py',
+'apps/api/src/apbra_api/persistence.py',
+'apps/api/src/apbra_api/reference_material.py',
+'apps/api/src/apbra_api/semantic_bridge.py',
+'apps/api/tests/conftest.py',
+'apps/api/tests/test_api.py',
+'apps/api/tests/test_authorization.py',
+'apps/api/tests/test_cases.py',
+'apps/api/tests/test_conversations.py',
+'apps/api/tests/test_evidence.py',
+'apps/api/tests/test_generation.py',
+'apps/api/tests/test_migrations.py',
+'apps/api/tests/test_model_provider.py',
+'apps/api/tests/test_reference_material.py',
+'apps/api/tests/test_semantic_bridge.py',
+'apps/web/e2e/durable-conversation.spec.ts',
+'apps/web/e2e/private-case.spec.ts',
+'apps/web/e2e/protected-generation.spec.ts',
+'apps/web/playwright.config.ts',
+'apps/web/scripts/generation-bridge.ts',
+'apps/web/scripts/semantic-bridge.ts',
+'apps/web/src/App.test.tsx',
+'apps/web/src/api.test.ts',
+'apps/web/src/api.ts',
+'apps/web/src/clarification.test.ts',
+'apps/web/src/clarification.ts',
+'apps/web/src/confirmedRequirements.test.ts',
+'apps/web/src/confirmedRequirements.ts',
+'apps/web/src/durableConversation.test.tsx',
+'apps/web/src/durableConversation.tsx',
+'apps/web/src/durableGeneration.test.tsx',
+'apps/web/src/durableGeneration.tsx',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/genericFoundry.integration.test.ts',
+'apps/web/src/genericPowerBI.test.ts',
+'apps/web/src/genericPowerBI.ts',
+'apps/web/src/guardrail.test.ts',
+'apps/web/src/guardrail.ts',
+'apps/web/src/privateCases.test.tsx',
+'apps/web/src/privateCases.tsx',
+'apps/web/src/reportDesignNormalization.test.ts',
+'apps/web/src/reportDesignNormalization.ts',
+'apps/web/src/style.css',
+'compose.yaml',
 }
 BUSINESS_USER_INTELLIGENT_GENERATION_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json',
-    'tests/bootstrap/test_business_user_report_creation_intelligent_generation_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-171-business-user-report-creation-intelligent-generation.json',
+'tests/bootstrap/test_business_user_report_creation_intelligent_generation_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'docs/source-register.json',
 }
 BUSINESS_USER_INTELLIGENT_GENERATION_TASK_SHA256='201e4164efbcf18e778f7152d9d3fd67a25b9232b1816ab6178701678358915f'
 BUSINESS_USER_INTELLIGENT_GENERATION_SOURCE_ID='mvp1-business-user-report-creation-intelligent-generation'
@@ -572,38 +573,38 @@ apps/web/vite.config.ts
 compose.yaml
 '''.split())
 MODEL_LED_FLEXIBLE_DELIVERY_REGISTRATION_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
-    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
-    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
-    'tests/bootstrap/test_protected_generation_output_history_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
+'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+'tests/bootstrap/test_protected_generation_output_history_scope.py',
+'docs/source-register.json',
 }
 MODEL_LED_FLEXIBLE_DELIVERY_AMENDMENT_PATHS={
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
-    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
-    'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
-    'tests/bootstrap/test_protected_generation_output_history_scope.py',
-    'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_business_friendly_ux_application_shell_scope.py',
+'tests/bootstrap/test_professional_saas_experience_visual_system_scope.py',
+'tests/bootstrap/test_protected_generation_output_history_scope.py',
+'docs/source-register.json',
 }
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_PATHS={
-    '.github/workflows/bootstrap.yml',
-    'scripts/check_bootstrap.py',
-    'scripts/check_ci_policy.py',
-    'tests/bootstrap/test_ci_policy.py',
-    'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
+'.github/workflows/bootstrap.yml',
+'scripts/check_bootstrap.py',
+'scripts/check_ci_policy.py',
+'tests/bootstrap/test_ci_policy.py',
+'tests/bootstrap/test_durable_conversation_evidence_acceptance_scope.py',
 }
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
+'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-174-model-led-clarification-flexible-generation-delivery-guide.json',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_model_led_clarification_flexible_generation_delivery_guide_scope.py',
 }
 MODEL_LED_FLEXIBLE_DELIVERY_TASK_SHA256='2ee6f89d627f6b0cbd87520cc908126af2bf20055aa490d8936db70e72fda8bc'
 MODEL_LED_FLEXIBLE_DELIVERY_SOURCE_ID='mvp1-model-led-clarification-flexible-generation-delivery-guide'
@@ -618,16 +619,16 @@ MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_BRANCH='agent/APBRA-DEVOPS/APBRA-174-ci-
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_ID='mvp1-model-led-clarification-flexible-generation-delivery-guide-ci-capacity-amendment'
 MODEL_LED_FLEXIBLE_DELIVERY_CI_CAPACITY_SOURCE_SHA256='6facc17e3cd2f4b7172d8bd13f3337f03c492b0245887599273dbeeaecee58cf'
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_PATHS={
-    'README.md','ARCHITECTURE.md','REQUIREMENTS.md','AI-RAG-SPEC.md',
-    'POWERBI-GENERATION-SPEC.md','MVP-ACCEPTANCE-CRITERIA.md','DATA-MODEL.md',
-    'apps/web/README.md','docs/engineering/codex-handoff.md',
+'README.md','ARCHITECTURE.md','REQUIREMENTS.md','AI-RAG-SPEC.md',
+'POWERBI-GENERATION-SPEC.md','MVP-ACCEPTANCE-CRITERIA.md','DATA-MODEL.md',
+'apps/web/README.md','docs/engineering/codex-handoff.md',
 }
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'tasks/APBRA-175-deployment-portability-entitlement-docs.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'docs/source-register.json',
+'tasks/APBRA-175-deployment-portability-entitlement-docs.json',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_TASK_SHA256='09d86487fe0a3f964f8a00d8755d77953bc01aa941c17448ff9872070504c13f'
 DEPLOYMENT_PORTABILITY_SOURCE_ID='apbra-175-deployment-model-control-plane'
@@ -637,18 +638,18 @@ ENTITLEMENT_ARCHITECTURE_SOURCE_SHA256='a6c0b507deb0976cd97aac95313d5ecdabc159d0
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH='agent/APBRA-DEVOPS/APBRA-175-deployment-portability-entitlement-docs'
 DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_REGISTRATION_BRANCH=DEPLOYMENT_PORTABILITY_ENTITLEMENT_DOCS_BRANCH + '-registration'
 OWNER_ONBOARDING_IDENTITY_DOCS_PATHS={
-    'README.md','ARCHITECTURE.md','REQUIREMENTS.md','DATA-MODEL.md',
-    'MVP-ACCEPTANCE-CRITERIA.md','SECURITY.md','apps/web/README.md',
-    'docs/engineering/codex-handoff.md',
-    'docs/decisions/implementation-baseline.md',
+'README.md','ARCHITECTURE.md','REQUIREMENTS.md','DATA-MODEL.md',
+'MVP-ACCEPTANCE-CRITERIA.md','SECURITY.md','apps/web/README.md',
+'docs/engineering/codex-handoff.md',
+'docs/decisions/implementation-baseline.md',
 }
 OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'tasks/APBRA-176-owner-onboarding-identity-docs.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+'docs/source-register.json',
+'tasks/APBRA-176-owner-onboarding-identity-docs.json',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
 OWNER_ONBOARDING_IDENTITY_DOCS_TASK_SHA256='031f9451dd61d481e64208559f698557aec1e47a221f8826e7ba784da0abb43c'
 OWNER_ONBOARDING_IDENTITY_SOURCE_ID='apbra-176-owner-onboarding-identity'
@@ -658,26 +659,26 @@ OWNER_ONBOARDING_REQUIREMENTS_SOURCE_SHA256='a99f810212fad2e6f5715b94c311f724bb2
 OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH='agent/APBRA-DOCS/APBRA-176-owner-onboarding-docs'
 OWNER_ONBOARDING_IDENTITY_DOCS_REGISTRATION_BRANCH=OWNER_ONBOARDING_IDENTITY_DOCS_BRANCH + '-registration'
 PROVIDER_NEUTRAL_SSO_PATHS={
-    'apps/api/.env.example','apps/api/README.md',
-    'apps/api/alembic/versions/20261002_07_provider_neutral_sso.py',
-    'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/auth_boundary.py','apps/api/src/apbra_api/authorization.py',
-    'apps/api/src/apbra_api/config.py','apps/api/src/apbra_api/domain.py',
-    'apps/api/src/apbra_api/identity_service.py','apps/api/src/apbra_api/oidc_adapter.py',
-    'apps/api/src/apbra_api/persistence.py',
-    'apps/api/tests/test_authentication.py','apps/api/tests/test_authorization.py',
-    'apps/api/tests/test_identity_service.py','apps/api/tests/test_invitations.py',
-    'apps/api/tests/test_migrations.py','apps/web/README.md',
-    'apps/web/e2e/private-case.spec.ts','apps/web/src/api.test.ts',
-    'apps/web/src/api.ts','apps/web/src/privateCases.test.tsx',
-    'apps/web/src/privateCases.tsx','apps/web/src/style.css',
+'apps/api/.env.example','apps/api/README.md',
+'apps/api/alembic/versions/20261002_07_provider_neutral_sso.py',
+'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/auth_boundary.py','apps/api/src/apbra_api/authorization.py',
+'apps/api/src/apbra_api/config.py','apps/api/src/apbra_api/domain.py',
+'apps/api/src/apbra_api/identity_service.py','apps/api/src/apbra_api/oidc_adapter.py',
+'apps/api/src/apbra_api/persistence.py',
+'apps/api/tests/test_authentication.py','apps/api/tests/test_authorization.py',
+'apps/api/tests/test_identity_service.py','apps/api/tests/test_invitations.py',
+'apps/api/tests/test_migrations.py','apps/web/README.md',
+'apps/web/e2e/private-case.spec.ts','apps/web/src/api.test.ts',
+'apps/web/src/api.ts','apps/web/src/privateCases.test.tsx',
+'apps/web/src/privateCases.tsx','apps/web/src/style.css',
 }
 PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS={
-    'docs/source-register.json','tasks/APBRA-172-provider-neutral-sso.json',
-    'scripts/check_bootstrap.py','tests/bootstrap/test_provider_neutral_sso_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+'docs/source-register.json','tasks/APBRA-172-provider-neutral-sso.json',
+'scripts/check_bootstrap.py','tests/bootstrap/test_provider_neutral_sso_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
 PROVIDER_NEUTRAL_SSO_TASK_SHA256='8edb604b7e9a33c3a7249a71a17b50e8578ad86cf00139f2a9bdfedc9f07a210'
 PROVIDER_NEUTRAL_SSO_SOURCES=(
@@ -690,26 +691,26 @@ PROVIDER_NEUTRAL_SSO_SOURCES=(
 PROVIDER_NEUTRAL_SSO_BRANCH='agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
 PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH=PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
 COMPANY_LIFECYCLE_PATHS={
-    'apps/api/README.md',
-    'apps/api/alembic/versions/20261003_08_company_lifecycle.py',
-    'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/bootstrap.py','apps/api/src/apbra_api/domain.py',
-    'apps/api/src/apbra_api/persistence.py','apps/api/src/apbra_api/tenant_settings.py',
-    'apps/api/tests/test_bootstrap.py','apps/api/tests/test_company_lifecycle.py',
-    'apps/api/tests/test_invitations.py',
-    'apps/api/tests/test_migrations.py','apps/api/tests/test_tenant_settings.py',
-    'apps/web/README.md','apps/web/e2e/private-case.spec.ts',
-    'apps/web/src/api.ts','apps/web/src/api.test.ts',
-    'apps/web/src/privateCases.tsx','apps/web/src/privateCases.test.tsx',
-    'apps/web/src/style.css','apps/web/vite.config.ts',
+'apps/api/README.md',
+'apps/api/alembic/versions/20261003_08_company_lifecycle.py',
+'apps/api/src/apbra_api/api.py','apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/bootstrap.py','apps/api/src/apbra_api/domain.py',
+'apps/api/src/apbra_api/persistence.py','apps/api/src/apbra_api/tenant_settings.py',
+'apps/api/tests/test_bootstrap.py','apps/api/tests/test_company_lifecycle.py',
+'apps/api/tests/test_invitations.py',
+'apps/api/tests/test_migrations.py','apps/api/tests/test_tenant_settings.py',
+'apps/web/README.md','apps/web/e2e/private-case.spec.ts',
+'apps/web/src/api.ts','apps/web/src/api.test.ts',
+'apps/web/src/privateCases.tsx','apps/web/src/privateCases.test.tsx',
+'apps/web/src/style.css','apps/web/vite.config.ts',
 }
 COMPANY_LIFECYCLE_REGISTRATION_PATHS={
-    'docs/source-register.json','tasks/APBRA-151-company-lifecycle.json',
-    'scripts/check_bootstrap.py','tests/bootstrap/test_company_lifecycle_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_provider_neutral_sso_scope.py',
-    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+'docs/source-register.json','tasks/APBRA-151-company-lifecycle.json',
+'scripts/check_bootstrap.py','tests/bootstrap/test_company_lifecycle_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_provider_neutral_sso_scope.py',
+'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
 }
 COMPANY_LIFECYCLE_TASK_SHA256='0aac6448de867336932cb2d8dc41dcb79be79d166f98e197e0c14aa501311f97'
 COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256={"requirements":"7168bb73f3b6a3b45f0601810a3c31a7727f46232a019569e6a279af09841e79","acceptance_criteria":"652f822a5e779df287dacc81b40f46c78d28aa859bae00b51feacd912385bd95","dependencies":"b71fe925da09413cead97beb99533d019d1f2544c2b39fb3d89d6507114ff630","escalate_when":"c429b700a5b92b57852de4a32622ef8bc5d5a6092974fa8a91aa93d8df48dfbc"}
@@ -728,7 +729,7 @@ COMPANY_LIFECYCLE_BRANCH='agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
 COMPANY_LIFECYCLE_REGISTRATION_BRANCH=COMPANY_LIFECYCLE_BRANCH + '-registration'
 COMPANY_LIFECYCLE_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
 COMPANY_LIFECYCLE_AMENDMENT_PATHS={
-    'tasks/APBRA-151-company-lifecycle.json',
+'tasks/APBRA-151-company-lifecycle.json',
     'scripts/check_bootstrap.py',
     'tests/bootstrap/test_company_lifecycle_scope.py',
 }
@@ -2238,6 +2239,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         errors += e
         ut,eu=uf['bind'](root,catalog,sources,bound_provider_registration);errors+=eu
         st,es=sc['bind'](root,catalog,sources,bound_provider_registration);errors+=es
+        spt,esp=sp['bind'](root,catalog,sources,bound_provider_registration);errors+=esp
         gt,eg=gp['bind'](root,catalog,sources,bound_provider_registration);errors+=eg
         rt,er=rr['bind'](root,catalog,sources,bound_provider_registration);errors+=er
         w,e=x['bind'](root,catalog,sources,bound_provider_registration);errors+=e
@@ -2833,6 +2835,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
 (gt,gp['P']),
 (ut,uf['P']),
 (st,sc['P']),
+(spt,sp['P']),
  )
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}
@@ -2846,6 +2849,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                 else metadata_observations if active_branch == zz['B']
                 else ut if active_branch==uf['B']
                 else st if active_branch==sc['B']
+                else spt if active_branch==sp['B']
                 else gt if active_branch==gp['B']
                 else rt if active_branch==rr['B']
                 else w if active_branch==x['B']
@@ -3009,6 +3013,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors+=gp['phase_errors'](gt,active_branch,changed_paths)
             errors+=uf['phase_errors'](ut,active_branch,changed_paths)
             errors+=sc['phase_errors'](st,active_branch,changed_paths)
+            errors+=sp['phase_errors'](spt,active_branch,changed_paths)
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_REGISTRATION_BRANCH and changed_paths != LOCAL_RECOVERY_REGISTRATION_PATHS:
                 errors.append('APBRA-160 local rekey registration must change exactly three governance files')
             if active_task_id == 'APBRA-160' and active_branch == LOCAL_RECOVERY_BRANCH and changed_paths.intersection(LOCAL_RECOVERY_REGISTRATION_PATHS):
@@ -3164,7 +3169,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3178,7 +3183,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
