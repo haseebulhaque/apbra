@@ -456,3 +456,195 @@ def test_private_database_failures_are_quiet_and_all_credentials_cleaned(
         assert sdk.calls == []
     output = capsys.readouterr()
     assert CANARY not in output.out + output.err + str(error.value)
+
+
+def _settings_credential(database: Any, company: UUID) -> Any:
+    from apbra_api.model_provider import FoundryMemoryTokenCredential
+    from apbra_api.tenant_settings import current_settings
+
+    with database.session() as db:
+        snapshot = current_settings(db, company)
+
+    def unchanged() -> bool:
+        with database.session() as db:
+            return current_settings(db, company).id == snapshot.id
+
+    token = FoundryMemoryTokenCredential(
+        SimpleNamespace(token=CANARY, expires_on=time.time() + 300),
+        authorization_deadline=time.time() + 300, enabled=lambda: True, binding_digest="a" * 64,
+    )
+    identity = m.BrowserMetadataCredential(snapshot, token, unchanged)
+    return identity, token
+
+
+@pytest.fixture
+def settings_identity(settings: Settings, database: Any) -> Any:
+    from conftest import csrf, sign_in
+    from fastapi.testclient import TestClient
+
+    from apbra_api.api import create_app
+
+    configured = profile(agent_version=None)
+    runtime = settings.model_copy(update={
+        "qualified_provider_profiles_json": json.dumps([configured.model_dump()]),
+        "test_semantic_simulator_enabled": False,
+    })
+    client = TestClient(create_app(settings=runtime, database=database))
+    owner = sign_in(client, "owner")
+    current = client.get("/api/tenant-settings").json()
+    policy = {**current["settings"], "provider_profile": configured.model_dump(mode="json"),
+              "automatic_generation_enabled": False}
+    saved = client.put("/api/tenant-settings", headers=csrf(owner), json={
+        "expected_version": current["version"], "settings": policy,
+    })
+    assert saved.status_code == 200
+    company = UUID(owner["actor"]["company_id"])
+    identity, token = _settings_credential(database, company)
+    private = TestClient(create_app(settings=runtime, database=database,
+                                   foundry_metadata_credentials=identity))
+    session = sign_in(private, "owner")
+    return SimpleNamespace(client=private, session=session, current=saved.json(),
+                           identity=identity, token=token, profile=configured,
+                           company=company, runtime=runtime, database=database)
+
+
+@pytest.mark.parametrize("method", ["patch", "put", "restore"])
+def test_scoped_identity_can_save_generation_policy_without_granting_invocation(
+    settings_identity: Any, method: str, monkeypatch: Any,
+) -> None:
+    from conftest import csrf
+
+    from apbra_api import api as api_module
+
+    s = settings_identity
+    assert s.identity.ready(s.company, s.profile)
+    resolved: list[Any] = []
+
+    def forbidden(*args: Any) -> Any:
+        resolved.append(args)
+        raise AssertionError("Settings readiness cannot export a bearer or dispatch")
+
+    monkeypatch.setattr(s.identity, "resolve", forbidden)
+    before = s.current
+    if method == "restore":
+        # Retain a real enabled historical version, disable, then attach a fresh
+        # identity to that disabled snapshot before exercising restore.
+        enabled = s.client.patch("/api/tenant-settings/sections/ai_models",
+            headers=csrf(s.session), json={"expected_version": before["version"],
+            "changes": {"automatic_generation_enabled": True}})
+        assert enabled.status_code == 200
+        disabled = s.client.patch("/api/tenant-settings/sections/ai_models",
+            headers=csrf(s.session), json={"expected_version": enabled.json()["version"],
+            "changes": {"automatic_generation_enabled": False}})
+        assert disabled.status_code == 200
+        identity, token = _settings_credential(s.database, s.company)
+        monkeypatch.setattr(identity, "resolve", forbidden)
+        from conftest import sign_in
+        from fastapi.testclient import TestClient
+        s.client = TestClient(api_module.create_app(settings=s.runtime, database=s.database,
+                                                   foundry_metadata_credentials=identity))
+        s.session = sign_in(s.client, "owner")
+        before = disabled.json()
+        result = s.client.post("/api/tenant-settings/restore", headers=csrf(s.session), json={
+            "expected_version": before["version"], "source_version": enabled.json()["version"],
+            "confirm_consequences": True})
+    elif method == "put":
+        result = s.client.put("/api/tenant-settings", headers=csrf(s.session), json={
+            "expected_version": before["version"],
+            "settings": {**before["settings"], "automatic_generation_enabled": True}})
+    else:
+        result = s.client.patch("/api/tenant-settings/sections/ai_models",
+            headers=csrf(s.session), json={"expected_version": before["version"],
+            "changes": {"automatic_generation_enabled": True}})
+    assert result.status_code == 200, result.text
+    assert result.json()["version"] == before["version"] + 1
+    assert result.json()["settings"]["automatic_generation_enabled"] is True
+    assert result.json()["credential"]["status"] == "NOT_CONFIGURED"
+    created = s.client.post("/api/cases", headers={**csrf(s.session),
+        "Idempotency-Key": str(uuid4())}, json={"request_text": "Synthetic report request."})
+    assert created.status_code == 201
+    case = created.json()["case"]
+    monkeypatch.setattr(api_module, "FoundryAgentResponsesProvider", forbidden)
+    denied = s.client.post(f"/api/cases/{case['id']}/interpretations",
+        headers=csrf(s.session), json={"expected_context_version": 1})
+    assert denied.status_code == 503  # Enabled policy still grants no paid capability.
+    assert resolved == []
+    if method == "restore":
+        assert not identity.ready(s.company, s.profile)
+        assert not token.ready()
+    assert not s.identity.ready(s.company, s.profile)  # Saved drift still revokes.
+    assert not s.token.ready()
+    assert CANARY not in result.text
+
+
+@pytest.mark.parametrize("fault,expected", [
+    ("closed", 503), ("foreign-company", 503), ("changed-profile", 503),
+    ("unqualified", 503), ("drift", 503), ("ready-error", 503),
+    ("missing", 503), ("truthy", 503), ("member", 403), ("csrf", 401), ("stale", 409),
+])
+def test_settings_identity_preserves_security_and_saved_version_guards(
+    settings_identity: Any, fault: str, expected: int, monkeypatch: Any,
+) -> None:
+    from conftest import csrf, sign_in
+    from fastapi.testclient import TestClient
+
+    from apbra_api.api import create_app
+
+    s = settings_identity
+    body = {"expected_version": s.current["version"],
+            "changes": {"automatic_generation_enabled": True}}
+    if fault == "closed":
+        s.token.close()
+    if fault == "foreign-company":
+        s.identity._snapshot = replace(s.identity._snapshot, company_id=uuid4())
+    if fault == "changed-profile":
+        body["changes"]["provider_profile"] = s.profile.model_copy(
+            update={"configuration_id": "different-config"}).model_dump(mode="json")
+    if fault == "unqualified":
+        s.client = TestClient(create_app(settings=s.runtime.model_copy(
+            update={"qualified_provider_profiles_json": "[]"}), database=s.database,
+            foundry_metadata_credentials=s.identity))
+        s.session = sign_in(s.client, "owner")
+    if fault == "drift":
+        changed = s.client.patch("/api/tenant-settings/sections/ai_models",
+            headers=csrf(s.session), json={"expected_version": s.current["version"],
+            "changes": {"expert_escalation_enabled": not s.current["settings"][
+                "expert_escalation_enabled"]}})
+        assert changed.status_code == 200
+        body["expected_version"] = changed.json()["version"]
+    if fault == "ready-error":
+        def broken(*args: Any) -> bool:
+            raise RuntimeError(CANARY)
+        monkeypatch.setattr(s.identity, "ready", broken)
+    if fault == "truthy":
+        monkeypatch.setattr(s.identity, "ready", lambda *args: 1)
+    if fault == "missing":
+        s.client = TestClient(create_app(settings=s.runtime, database=s.database))
+        s.session = sign_in(s.client, "owner")
+    if fault == "member":
+        s.session = sign_in(s.client, "member")
+    if fault == "stale":
+        body["expected_version"] -= 1
+    result = s.client.patch("/api/tenant-settings/sections/ai_models",
+        headers={} if fault == "csrf" else csrf(s.session), json=body)
+    assert result.status_code == expected, result.text
+    assert CANARY not in result.text
+    sign_in(s.client, "owner")
+    saved = s.client.get("/api/tenant-settings").json()
+    assert saved["version"] == s.current["version"] + (fault == "drift")
+    assert saved["settings"]["automatic_generation_enabled"] is False
+    s.token.close()
+
+
+def test_scoped_identity_settings_adapter_never_delegates_bearer_access() -> None:
+    from apbra_api.api import _SettingsIdentityReadiness
+    from apbra_api.domain import ConfigurationUnavailable
+
+    calls = []
+    identity = SimpleNamespace(ready=lambda *args: True,
+                               resolve=lambda *args: calls.append(args))
+    adapter = _SettingsIdentityReadiness(identity)
+    assert adapter.ready(COMPANY, profile()) is True
+    with pytest.raises(ConfigurationUnavailable):
+        adapter.resolve(COMPANY, profile())
+    assert calls == []
