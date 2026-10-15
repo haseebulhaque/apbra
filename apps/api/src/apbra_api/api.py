@@ -83,11 +83,13 @@ from .knowledge_documents import (
     unavailable as documents_unavailable,
 )
 from .model_provider import (
+    FoundryAccess,
     FoundryAgentResponsesProvider,
     FoundryCredentialProvider,
     ModelProvider,
     OpenAICompatibleProvider,
     ProviderConfigurationError,
+    ProviderProfile,
 )
 from .oidc_adapter import OidcAdapter
 from .persistence import (
@@ -117,6 +119,19 @@ from .tenant_settings import (
 )
 
 logger = logging.getLogger("apbra_api")
+
+
+class _SettingsIdentityReadiness:
+    """Adapt scoped identity for policy validation; never expose invocation access."""
+
+    def __init__(self, identity: AgentMetadataCredentialProvider) -> None:
+        self._identity = identity
+
+    def ready(self, company_id: UUID, profile: ProviderProfile) -> bool:
+        return self._identity.ready(company_id, profile)
+
+    def resolve(self, company_id: UUID, profile: ProviderProfile) -> FoundryAccess:
+        raise ConfigurationUnavailable()
 
 
 class CaseCreate(BaseModel):
@@ -712,9 +727,9 @@ def create_app(
 
     # Saving tenant policy needs scoped identity readiness, not a paid dispatch
     # grant. Keep the invocation dependency unchanged everywhere else.
-    settings_readiness = (
-        foundry_metadata_credentials if foundry_metadata_credentials is not None
-        else foundry_credentials
+    settings_readiness: FoundryCredentialProvider | None = (
+        _SettingsIdentityReadiness(foundry_metadata_credentials)
+        if foundry_metadata_credentials is not None else foundry_credentials
     )
 
     @app.put("/api/tenant-settings")

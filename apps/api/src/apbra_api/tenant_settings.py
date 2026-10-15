@@ -10,7 +10,7 @@ import hashlib
 import json
 import unicodedata
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from .config import GenerationPolicy, Settings, UploadPolicy
 from .domain import Actor, ConfigurationUnavailable, Conflict, Forbidden, Role
-from .model_provider import ProviderProfile
+from .model_provider import FoundryCredentialProvider, ProviderProfile
 from .persistence import (
     CompanyRow,
     TenantSecretRow,
@@ -28,12 +28,6 @@ from .persistence import (
     utcnow,
 )
 from .tenant_secrets import TenantCredentialStore
-
-
-class FoundrySettingsReadiness(Protocol):
-    """Scoped identity readiness for saving policy; grants no invocation access."""
-
-    def ready(self, company_id: UUID, profile: ProviderProfile) -> bool: ...
 
 
 class DeliveryGuidePolicy(BaseModel):
@@ -344,7 +338,7 @@ def _valid_secret(
     profile: ProviderProfile | None,
     reference_id: UUID | None,
     credential_store: TenantCredentialStore | None,
-    foundry_credentials: FoundrySettingsReadiness | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> bool:
     if profile is not None and profile.protocol == "FOUNDRY_AGENT_RESPONSES":
         if reference_id is not None or foundry_credentials is None:
@@ -403,7 +397,7 @@ def _insert_version(
     reason: str | None,
     restored_from: UUID | None,
     qualified_profiles: tuple[ProviderProfile, ...],
-    foundry_credentials: FoundrySettingsReadiness | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     validate_qualified_profile(settings.provider_profile, qualified_profiles)
     if settings.automatic_generation_enabled and not _valid_secret(
@@ -474,7 +468,7 @@ def update_settings(
     secret_reference_id: UUID | None = None,
     credential_store: TenantCredentialStore | None = None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
-    foundry_credentials: FoundrySettingsReadiness | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)
@@ -556,7 +550,7 @@ def update_settings_section(
     reason: str | None = None,
     credential_store: TenantCredentialStore | None = None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
-    foundry_credentials: FoundrySettingsReadiness | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     """Apply one allowlisted section against a locked effective version."""
     _require_admin(actor)
@@ -590,7 +584,7 @@ def restore_settings(
     reason: str | None,
     credential_store: TenantCredentialStore | None,
     qualified_profiles: tuple[ProviderProfile, ...] = (),
-    foundry_credentials: FoundrySettingsReadiness | None = None,
+    foundry_credentials: FoundryCredentialProvider | None = None,
 ) -> TenantSettingsSnapshot:
     _require_admin(actor)
     current = current_settings(db, actor.company_id, lock=True)

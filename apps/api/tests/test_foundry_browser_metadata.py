@@ -580,7 +580,7 @@ def test_scoped_identity_can_save_generation_policy_without_granting_invocation(
 @pytest.mark.parametrize("fault,expected", [
     ("closed", 503), ("foreign-company", 503), ("changed-profile", 503),
     ("unqualified", 503), ("drift", 503), ("ready-error", 503),
-    ("missing", 503), ("member", 403), ("csrf", 401), ("stale", 409),
+    ("missing", 503), ("truthy", 503), ("member", 403), ("csrf", 401), ("stale", 409),
 ])
 def test_settings_identity_preserves_security_and_saved_version_guards(
     settings_identity: Any, fault: str, expected: int, monkeypatch: Any,
@@ -616,6 +616,8 @@ def test_settings_identity_preserves_security_and_saved_version_guards(
         def broken(*args: Any) -> bool:
             raise RuntimeError(CANARY)
         monkeypatch.setattr(s.identity, "ready", broken)
+    if fault == "truthy":
+        monkeypatch.setattr(s.identity, "ready", lambda *args: 1)
     if fault == "missing":
         s.client = TestClient(create_app(settings=s.runtime, database=s.database))
         s.session = sign_in(s.client, "owner")
@@ -632,3 +634,17 @@ def test_settings_identity_preserves_security_and_saved_version_guards(
     assert saved["version"] == s.current["version"] + (fault == "drift")
     assert saved["settings"]["automatic_generation_enabled"] is False
     s.token.close()
+
+
+def test_scoped_identity_settings_adapter_never_delegates_bearer_access() -> None:
+    from apbra_api.api import _SettingsIdentityReadiness
+    from apbra_api.domain import ConfigurationUnavailable
+
+    calls = []
+    identity = SimpleNamespace(ready=lambda *args: True,
+                               resolve=lambda *args: calls.append(args))
+    adapter = _SettingsIdentityReadiness(identity)
+    assert adapter.ready(COMPANY, profile()) is True
+    with pytest.raises(ConfigurationUnavailable):
+        adapter.resolve(COMPANY, profile())
+    assert calls == []
