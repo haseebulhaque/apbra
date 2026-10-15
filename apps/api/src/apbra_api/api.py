@@ -710,6 +710,13 @@ def create_app(
         admin_settings(db, resolve_actor(db, session_token))
         return {"items": [profile.model_dump(mode="json") for profile in qualified_profiles]}
 
+    # Saving tenant policy needs scoped identity readiness, not a paid dispatch
+    # grant. Keep the invocation dependency unchanged everywhere else.
+    settings_readiness = (
+        foundry_metadata_credentials if foundry_metadata_credentials is not None
+        else foundry_credentials
+    )
+
     @app.put("/api/tenant-settings")
     def put_tenant_settings(
         payload: TenantSettingsUpdate,
@@ -727,7 +734,7 @@ def create_app(
             reason=payload.reason,
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
-            foundry_credentials=foundry_credentials,
+            foundry_credentials=settings_readiness,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_UPDATED", "TENANT_SETTINGS_VERSION", snapshot.id)
@@ -751,7 +758,7 @@ def create_app(
                 reason=payload.reason,
                 credential_store=credential_store,
                 qualified_profiles=qualified_profiles,
-                foundry_credentials=foundry_credentials,
+                foundry_credentials=settings_readiness,
             )
         except ValueError as error:
             # Validation exceptions may contain submitted content. The existing
@@ -781,7 +788,7 @@ def create_app(
             reason=payload.reason,
             credential_store=credential_store,
             qualified_profiles=qualified_profiles,
-            foundry_credentials=foundry_credentials,
+            foundry_credentials=settings_readiness,
         )
         assert isinstance(db, ApplicationSession)
         db.add_audit(actor, "TENANT_SETTINGS_RESTORED", "TENANT_SETTINGS_VERSION", snapshot.id)
