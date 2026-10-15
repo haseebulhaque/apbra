@@ -165,7 +165,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
     refreshGeneration.current+=1;
     setBusy(true);setBusyStep('Updating the saved report to current tenant settings');setActionError('');setSettingsNotice('');
     try{
-      const result=await acceptanceApi.refreshSettings(caseId,current,csrfToken);
+      const result=await acceptanceApi.refreshSettings(record,current,csrfToken);
       if(!active())return;
       changed(result.semantic_context_version);
       setAcceptance(result.acceptance);

@@ -141,19 +141,25 @@ export const referenceMaterialApi={
   },
 };
 export const acceptanceApi={
-  refreshSettings:async(caseId:string,expectedContextVersion:number,csrfToken:string)=>{
-    let responseUncertain=false;
+  refreshSettings:async(record:Pick<CaseRecord,'id'|'company_id'|'current_request_version_id'|'version'>,expectedContextVersion:number,csrfToken:string)=>{
+    const caseId=record.id;
+    let responseUncertain=false,returnedContext:number|undefined;
     try{
-      await request<{semantic_context_version:number;refreshed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/settings-context/refresh`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})});
+      const result=await request<{semantic_context_version:number;refreshed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/settings-context/refresh`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})});
+      returnedContext=result.semantic_context_version;
     }catch(error){
       // Reconcile only network uncertainty or optimistic-version conflict.
       // Authentication/access errors remain errors; never retry the POST or prepare.
       if(!(error instanceof TypeError)&&!(error instanceof ApiError&&error.status===409))throw error;
       responseUncertain=true;
     }
+    const currentCase=await casesApi.get(caseId);
     const acceptance=await acceptanceApi.state(caseId);
     const current=acceptance.semantic_context_version;
     if(typeof current!=='number'||!Number.isSafeInteger(current)||current<1)throw new ApiError(503,'SETTINGS_CONTEXT_UNAVAILABLE','Reload the saved report before continuing.');
+    // A semantic-version-only parent update cannot replace a changed goal or
+    // evidence. Pause for the ordinary full report reload on drift/uncertainty.
+    if(currentCase.id!==record.id||currentCase.company_id!==record.company_id||currentCase.current_request_version_id!==record.current_request_version_id||currentCase.version!==record.version||currentCase.semantic_context_version!==current||current!==(responseUncertain?expectedContextVersion:returnedContext))throw new ApiError(409,'SETTINGS_CONTEXT_RELOAD_REQUIRED','The saved report changed. Reload it before continuing; no new understanding was prepared or confirmed.');
     return{acceptance,semantic_context_version:current,response_uncertain:responseUncertain};
   },
   state:(caseId:string)=>request<AcceptanceState>(`/api/cases/${encodeURIComponent(caseId)}/acceptance`),

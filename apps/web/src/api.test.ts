@@ -132,33 +132,52 @@ it('retains redacted original metadata error details for the administration UI',
 });
 
 describe('Nonpaid saved-report settings refresh',()=>{
+  const record={id:'selected/case',company_id:'company',current_request_version_id:'request-3',version:3};
   const state={interpretation:null,confirmed_contract:null,settings_refresh_required:false,semantic_context_version:8};
-  it('refreshes only the selected case with CSRF then reloads actual context without preparing',async()=>{
-    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
-    await expect(acceptanceApi.refreshSettings('selected/case',7,'csrf-value')).resolves.toEqual({acceptance:state,semantic_context_version:8,response_uncertain:false});
-    expect(fetch).toHaveBeenCalledTimes(2);
+  const currentCase={...record,semantic_context_version:8};
+  it('refreshes only the selected case with CSRF then reloads coherent saved context without preparing',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response({case:currentCase})).mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf-value')).resolves.toEqual({acceptance:state,semantic_context_version:8,response_uncertain:false});
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch.mock.calls[0][0]).toBe('/api/cases/selected%2Fcase/settings-context/refresh');
     expect(fetch.mock.calls[0][1]).toMatchObject({method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':'csrf-value'},body:JSON.stringify({expected_context_version:7})});
-    expect(fetch.mock.calls[1][0]).toBe('/api/cases/selected%2Fcase/acceptance');
+    expect(fetch.mock.calls.map(call=>call[0])).toEqual(['/api/cases/selected%2Fcase/settings-context/refresh','/api/cases/selected%2Fcase','/api/cases/selected%2Fcase/acceptance']);
   });
-  it.each(['network','stale'] as const)('reconciles a %s response using GET without automatically retrying or preparing',async kind=>{
+  it.each(['network','stale'] as const)('reconciles a %s response without adopting changed context or retrying/preparing',async kind=>{
     const fetch=vi.fn();
     if(kind==='network')fetch.mockRejectedValueOnce(new TypeError('Synthetic lost response'));
     else fetch.mockResolvedValueOnce(response({error:{code:'STALE_VERSION',message:'Reload'}},409));
-    fetch.mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
-    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).resolves.toEqual({acceptance:state,semantic_context_version:8,response_uncertain:true});
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls.map(call=>call[1].method??'GET')).toEqual(['POST','GET']);
+    fetch.mockResolvedValueOnce(response({case:currentCase})).mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf')).rejects.toMatchObject({code:'SETTINGS_CONTEXT_RELOAD_REQUIRED'});
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls.map(call=>call[1].method??'GET')).toEqual(['POST','GET','GET']);
     expect(fetch.mock.calls.some(call=>String(call[0]).includes('/interpretations'))).toBe(false);
+  });
+  it('can reconcile a lost request only when the selected request and context remain unchanged',async()=>{
+    const unchangedState={...state,settings_refresh_required:true,semantic_context_version:7};
+    const fetch=vi.fn().mockRejectedValueOnce(new TypeError('Synthetic request loss')).mockResolvedValueOnce(response({case:{...currentCase,semantic_context_version:7}})).mockResolvedValueOnce(response(unchangedState));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf')).resolves.toEqual({acceptance:unchangedState,semantic_context_version:7,response_uncertain:true});
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+  it.each([
+    {current_request_version_id:'different-request',version:4},
+    {version:4},
+    {semantic_context_version:9},
+    {id:'another-case'},
+    {company_id:'another-company'},
+  ])('requires full report reload for concurrent selected-case drift %j',async change=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response({case:{...currentCase,...change}})).mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf')).rejects.toMatchObject({code:'SETTINGS_CONTEXT_RELOAD_REQUIRED'});
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
   it.each([401,403,404])('retains authority failure %i without a reconciliation request',async status=>{
     const fetch=vi.fn().mockResolvedValue(response({error:{code:'DENIED',message:'Unavailable'}},status));vi.stubGlobal('fetch',fetch);
-    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).rejects.toMatchObject({status});
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf')).rejects.toMatchObject({status});
     expect(fetch).toHaveBeenCalledTimes(1);
   });
-  it('does not invent a context when reloaded state lacks a supported context version',async()=>{
-    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response({...state,semantic_context_version:undefined}));vi.stubGlobal('fetch',fetch);
-    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).rejects.toMatchObject({code:'SETTINGS_CONTEXT_UNAVAILABLE'});
-    expect(fetch).toHaveBeenCalledTimes(2);
+  it('does not invent context when reloaded state lacks a supported version',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response({case:currentCase})).mockResolvedValueOnce(response({...state,semantic_context_version:undefined}));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings(record,7,'csrf')).rejects.toMatchObject({code:'SETTINGS_CONTEXT_UNAVAILABLE'});
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 });
