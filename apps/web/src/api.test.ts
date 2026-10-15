@@ -130,3 +130,35 @@ it('retains redacted original metadata error details for the administration UI',
  const details=await tenantSettingsApi.agentDetails();
  expect(details.diagnostic).toEqual(diagnostic);expect(details.diagnostic?.message).toContain('403');
 });
+
+describe('Nonpaid saved-report settings refresh',()=>{
+  const state={interpretation:null,confirmed_contract:null,settings_refresh_required:false,semantic_context_version:8};
+  it('refreshes only the selected case with CSRF then reloads actual context without preparing',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings('selected/case',7,'csrf-value')).resolves.toEqual({acceptance:state,semantic_context_version:8,response_uncertain:false});
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][0]).toBe('/api/cases/selected%2Fcase/settings-context/refresh');
+    expect(fetch.mock.calls[0][1]).toMatchObject({method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':'csrf-value'},body:JSON.stringify({expected_context_version:7})});
+    expect(fetch.mock.calls[1][0]).toBe('/api/cases/selected%2Fcase/acceptance');
+  });
+  it.each(['network','stale'] as const)('reconciles a %s response using GET without automatically retrying or preparing',async kind=>{
+    const fetch=vi.fn();
+    if(kind==='network')fetch.mockRejectedValueOnce(new TypeError('Synthetic lost response'));
+    else fetch.mockResolvedValueOnce(response({error:{code:'STALE_VERSION',message:'Reload'}},409));
+    fetch.mockResolvedValueOnce(response(state));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).resolves.toEqual({acceptance:state,semantic_context_version:8,response_uncertain:true});
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.map(call=>call[1].method??'GET')).toEqual(['POST','GET']);
+    expect(fetch.mock.calls.some(call=>String(call[0]).includes('/interpretations'))).toBe(false);
+  });
+  it.each([401,403,404])('retains authority failure %i without a reconciliation request',async status=>{
+    const fetch=vi.fn().mockResolvedValue(response({error:{code:'DENIED',message:'Unavailable'}},status));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).rejects.toMatchObject({status});
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('does not invent a context when reloaded state lacks a supported context version',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({refreshed:true,semantic_context_version:8})).mockResolvedValueOnce(response({...state,semantic_context_version:undefined}));vi.stubGlobal('fetch',fetch);
+    await expect(acceptanceApi.refreshSettings('case',7,'csrf')).rejects.toMatchObject({code:'SETTINGS_CONTEXT_UNAVAILABLE'});
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});

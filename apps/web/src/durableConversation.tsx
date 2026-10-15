@@ -20,6 +20,10 @@ const eventText=(event:ConversationEvent)=>{
 };
 type PendingFile={id:string;file:File;kind:'DATA_SOURCE'|'REFERENCE_MATERIAL';status:'READY'|'UPLOADING'|'FAILED';error?:string};
 
+export function UnderstandingReviewButton({settingsRefreshRequired,stale,disabled,busy,hidden,onRefresh,onPrepare}:{settingsRefreshRequired:boolean;stale:boolean;disabled:boolean;busy:boolean;hidden:boolean;onRefresh:()=>void;onPrepare:()=>void}){
+  return <button hidden={hidden} aria-busy={busy} disabled={disabled} onClick={settingsRefreshRequired?onRefresh:onPrepare}>{busy&&<span className="processing-spinner" aria-hidden="true"/>}{settingsRefreshRequired?'Use current tenant settings':stale?'Review updated requirements':'Review my requirements'}</button>;
+}
+
 export function DurableConversation({record,csrfToken,actorRole='MEMBER',visibleStep,onContextChanged,onReportReady,onError}:{record:CaseRecord;csrfToken:string;actorRole?:string;visibleStep?:'information'|'understanding'|'confirm'|'build'|'report';onContextChanged:(version:number)=>void;onReportReady?:(ready:boolean)=>void;onError:(error:unknown)=>void}){
   const [events,setEvents]=useState<ConversationEvent[]>([]);
   const [evidence,setEvidence]=useState<EvidenceItem[]>([]);
@@ -34,6 +38,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
   const [busy,setBusy]=useState(false);
   const [busyStep,setBusyStep]=useState<string|null>(null);
   const [actionError,setActionError]=useState('');
+  const [settingsNotice,setSettingsNotice]=useState('');
   const [reportReady,setReportReady]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const refreshGeneration=useRef(0);
@@ -58,6 +63,7 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
   };
   useEffect(()=>{
     setPendingFiles([]);
+    setSettingsNotice('');
     setMessage('');
     setAnswer('');
     messageCommand.current=null;
@@ -150,6 +156,24 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
       if(current())changed(version);
     }finally{
       if(uploadLifetime.current===lifetime&&uploadCommand.current===command){uploadCommand.current=null;setBusy(false);setBusyStep(null)}
+    }
+  }
+
+  async function refreshSettings(){
+    const caseId=record.id,current=contextVersionRef.current,lifetime=uploadLifetime.current;
+    const active=()=>uploadLifetime.current===lifetime&&operationIsCurrent(caseId,current);
+    refreshGeneration.current+=1;
+    setBusy(true);setBusyStep('Updating the saved report to current tenant settings');setActionError('');setSettingsNotice('');
+    try{
+      const result=await acceptanceApi.refreshSettings(caseId,current,csrfToken);
+      if(!active())return;
+      changed(result.semantic_context_version);
+      setAcceptance(result.acceptance);
+      setSettingsNotice(result.response_uncertain?'The refresh response was unavailable. Your saved report state has been reloaded; review it before continuing. No new understanding was prepared or confirmed.':'Your saved report has been reloaded using current tenant settings. Its earlier understanding and history remain available. No new understanding was prepared or confirmed.');
+    }catch(error){
+      if(active()){setActionError('The settings refresh could not be verified. Reload the saved report before continuing. No new understanding was prepared or confirmed.');onError(error)}
+    }finally{
+      if(uploadLifetime.current===lifetime&&caseIdRef.current===caseId){setBusy(false);setBusyStep(null)}
     }
   }
 
@@ -262,7 +286,8 @@ export function DurableConversation({record,csrfToken,actorRole='MEMBER',visible
       {summary&&!stale&&Boolean(interpretation?.unresolved_ambiguities?.length)&&<div className="state-callout warning" role="status"><strong>Draft assumptions to inspect</strong><p>These business uncertainties do not prevent an editable first draft.</p><ul>{interpretation?.unresolved_ambiguities.map((item,index)=><li key={index}>{item}</li>)}</ul></div>}
       {question&&!stale&&<div className="clarification-panel"><p><strong>Optional refinement{pendingQuestions.length>1?'s':''}</strong> · You can accept the current understanding without answering.</p><p>{question.question}</p><p>{question.reason}</p>{question.suggestions.length>0&&<div>{question.suggestions.map(option=><button key={option.id} disabled={busy||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:option.label,suggestionId:option.id,decision:'ACCEPT'})}>{option.label}</button>)}</div>}{question.allowFreeText&&<><label htmlFor={'clarification-answer-'+record.id}>Answer in business language</label><textarea id={'clarification-answer-'+record.id} rows={3} maxLength={capabilities?.max_answer_characters} value={answer} onChange={event=>setAnswer(event.target.value)}/><button disabled={busy||!answer.trim()||Boolean(clarification?.overall_limit_reached)} onClick={()=>void submitAnswer(question,{rawAnswer:answer,decision:'FREE_TEXT'})}>Save answer and update understanding</button></>}</div>}
       {clarification&&<p role="status" className="supporting-copy">Clarification cycle {clarification.cycle_number||1}: {clarification.rounds_used_in_cycle} of {clarification.max_rounds_per_cycle??'—'} turns · {clarification.rounds_used_overall} of {clarification.max_rounds_overall??'—'} overall.{clarification.overall_limit_reached?' Further AI clarification is unavailable; you can still accept the current understanding or ask an expert.':clarification.per_cycle_limit_reached?' Start a new cycle to enhance the requirements.':''}</p>}
-      <div className="command-bar"><button hidden={visibleStep==='confirm'} aria-busy={busy} disabled={busy||!evidence.length} onClick={()=>void prepare()}>{busy&&<span className="processing-spinner" aria-hidden="true"/>}{stale?'Review updated requirements':'Review my requirements'}</button>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button hidden={visibleStep==='understanding'} disabled={busy} onClick={()=>void confirm()}>Confirm requirements</button>}{summary&&!stale&&!acceptance.confirmed_contract&&<button hidden={visibleStep==='confirm'} className="subtle" disabled={busy||!canRefine} onClick={()=>void refine()}>Clarify / Enhance Requirements</button>}</div>
+      {settingsNotice&&<p role="status">{settingsNotice}</p>}
+      <div className="command-bar"><UnderstandingReviewButton hidden={visibleStep==='confirm'} busy={busy} disabled={busy||!evidence.length} stale={stale} settingsRefreshRequired={acceptance.settings_refresh_required===true} onRefresh={()=>void refreshSettings()} onPrepare={()=>void prepare()}/>{summary&&!stale&&interpretation?.state==='READY_FOR_CONFIRMATION'&&!acceptance.confirmed_contract&&<button hidden={visibleStep==='understanding'} disabled={busy} onClick={()=>void confirm()}>Confirm requirements</button>}{summary&&!stale&&!acceptance.confirmed_contract&&<button hidden={visibleStep==='confirm'} className="subtle" disabled={busy||!canRefine} onClick={()=>void refine()}>Clarify / Enhance Requirements</button>}</div>
       {acceptance.confirmed_contract?.current&&<div className="confirmed-state" role="status"><strong>Your report requirements are confirmed</strong><p>Confirmed {new Date(acceptance.confirmed_contract.accepted_at).toLocaleString()}. If the request or supporting information changes, you will need to confirm the revised meaning.</p></div>}
     </section>
     <DurableGeneration visibleStep={visibleStep==='report'?'report':visibleStep?'build':undefined} hidden={Boolean(visibleStep&&!['build','report'].includes(visibleStep))} caseId={record.id} contract={acceptance.confirmed_contract} csrfToken={csrfToken} actorRole={actorRole} onReportReady={ready=>{setReportReady(ready);onReportReady?.(ready)}} onError={onError}/>

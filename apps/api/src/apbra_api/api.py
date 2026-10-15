@@ -25,6 +25,7 @@ from .application import (
     InvitationService,
     MembershipService,
     ProfileService,
+    refresh_settings_context,
 )
 from .artifacts import LocalArtifactStore
 from .auth_boundary import (
@@ -384,7 +385,7 @@ def create_app(
         return snapshot.settings.upload_policy
 
     def local_acceptance_service(
-        db: Session, snapshot: TenantSettingsSnapshot
+        db: Session, snapshot: TenantSettingsSnapshot, *, include_provider: bool = True
     ) -> AcceptanceService:
         if settings.semantic_timeout_seconds is None:
             raise ConfigurationUnavailable()
@@ -403,7 +404,7 @@ def create_app(
             ),
             objects,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=tenant_model_provider(db, snapshot),
+            model_provider=tenant_model_provider(db, snapshot) if include_provider else None,
             clarification_policy=clarification_policy,
             generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
             tenant_settings=snapshot,
@@ -1487,6 +1488,23 @@ def create_app(
         db.commit()
         return {"reference_material": result}
 
+    @app.post("/api/cases/{case_id}/settings-context/refresh")
+    def refresh_interpretation_settings(
+        case_id: UUID,
+        payload: InterpretationCreate,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        actor = resolve_actor(db, session_token)
+        result = refresh_settings_context(
+            db, actor, case_id, tenant_snapshot(db, actor),
+            expected_context_version=payload.expected_context_version,
+        )
+        db.commit()
+        return result
+
     @app.post("/api/cases/{case_id}/interpretations")
     def create_interpretation(
         case_id: UUID,
@@ -1558,7 +1576,9 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_acceptance_service(db, tenant_snapshot(db, actor)).state(db, actor, case_id)
+        return local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).state(db, actor, case_id)
 
     @app.post("/api/cases/{case_id}/confirm")
     def confirm_interpretation(

@@ -22,7 +22,7 @@ export type DurableQuestion={id:string;question:string;reason:string;required:bo
 export type DurableInterpretation={id:string;state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION'|'CONFIRMED'|'HUMAN_REVIEW_REQUIRED'|'UNSUPPORTED'|'OUT_OF_SCOPE';current:boolean;context_version:number;confirmation_summary:{objective:string;businessQuestions:string[];kpiDefinitions:string[];scopeAndTime:string[];dimensionsAndFilters:string[];lifecycleDefinitions:string[];materialPolicyDecisions:string[]};interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[];simulation:'LOCAL_DETERMINISTIC_NO_MODEL_CALL'|'QUALIFIED_SERVER_MODEL'};
 export type DurableContract={id:string;interpretation_id:string;schema_version:2;accepted_at:string;contract:Record<string,unknown>;current:boolean};
 export type ClarificationState={cycle_id:string|null;cycle_number:number;rounds_used_in_cycle:number;rounds_used_overall:number;max_rounds_per_cycle:number|null;max_rounds_overall:number|null;clarification_enabled:boolean;per_cycle_limit_reached:boolean;overall_limit_reached:boolean};
-export type AcceptanceState={interpretation:DurableInterpretation|null;confirmed_contract:DurableContract|null;clarification?:ClarificationState};
+export type AcceptanceState={interpretation:DurableInterpretation|null;confirmed_contract:DurableContract|null;clarification?:ClarificationState;settings_refresh_required?:boolean;semantic_context_version?:number};
 export type TenantProviderProfile={profile_id:string;protocol:'OPENAI_CHAT_COMPATIBLE'|'AZURE_OPENAI_CHAT_COMPATIBLE'|'FOUNDRY_AGENT_RESPONSES';endpoint:string;model_or_deployment:string;api_version:string;agent_version?:string|null;region:string;prompt_version:string;configuration_id:string;capabilities:{structured_output:boolean;vision:boolean};max_calls_per_operation:number;max_input_characters:number;max_output_tokens:number;time_budget_seconds:number;request_timeout_seconds:number;retry_limit:number};
 export type TenantGenerationPolicy={organisation:{name:string;displayName:string;locale:string;timezone:string};branding:{primary:string;accent:string;reportNaming:string;pageNaming:string;executiveConvention:string;themeName:string};generation:{enabled:boolean;supportedCapabilities:string[];supportedTrendGrains:Array<'DAY'|'MONTH'|'QUARTER'|'YEAR'>;validationRequired:boolean;policy:string};governance:{requireKnowledge:boolean;requireAccessibility:boolean;requireValidation:boolean;maxVisualsPerPage:number;maxPages:number;humanReviewAtVisuals:number}};
 export type TenantSettingsDocument={clarification_enabled:boolean;max_clarification_rounds_per_cycle:number;max_clarification_rounds_overall:number;expert_escalation_enabled:boolean;automatic_generation_enabled:boolean;invitation_ttl_days:number;upload_policy:{data_extensions:string[];reference_extensions:string[];max_file_bytes:number;max_files_per_selection:number;max_data_items_per_report:number;max_reference_items_per_report:number};clarification_policy:{max_questions_per_round:number;max_answer_characters:number};generation_policy:TenantGenerationPolicy;provider_profile:TenantProviderProfile|null;delivery_guide_policy:{enabled:true;include_handover_instructions:boolean};conventions:{report_naming:string;semantic_modelling:string;accessibility:string;terminology:Record<string,string>}};
@@ -141,6 +141,21 @@ export const referenceMaterialApi={
   },
 };
 export const acceptanceApi={
+  refreshSettings:async(caseId:string,expectedContextVersion:number,csrfToken:string)=>{
+    let responseUncertain=false;
+    try{
+      await request<{semantic_context_version:number;refreshed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/settings-context/refresh`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})});
+    }catch(error){
+      // Reconcile only network uncertainty or optimistic-version conflict.
+      // Authentication/access errors remain errors; never retry the POST or prepare.
+      if(!(error instanceof TypeError)&&!(error instanceof ApiError&&error.status===409))throw error;
+      responseUncertain=true;
+    }
+    const acceptance=await acceptanceApi.state(caseId);
+    const current=acceptance.semantic_context_version;
+    if(typeof current!=='number'||!Number.isSafeInteger(current)||current<1)throw new ApiError(503,'SETTINGS_CONTEXT_UNAVAILABLE','Reload the saved report before continuing.');
+    return{acceptance,semantic_context_version:current,response_uncertain:responseUncertain};
+  },
   state:(caseId:string)=>request<AcceptanceState>(`/api/cases/${encodeURIComponent(caseId)}/acceptance`),
   prepare:(caseId:string,expectedContextVersion:number,csrfToken:string)=>request<{interpretation:DurableInterpretation}>(`/api/cases/${encodeURIComponent(caseId)}/interpretations`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:expectedContextVersion})}).then(value=>value.interpretation),
   confirm:(caseId:string,interpretationId:string,expectedContextVersion:number,csrfToken:string)=>request<{confirmed_contract:DurableContract}>(`/api/cases/${encodeURIComponent(caseId)}/confirm`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({interpretation_id:interpretationId,expected_context_version:expectedContextVersion})}).then(value=>value.confirmed_contract),

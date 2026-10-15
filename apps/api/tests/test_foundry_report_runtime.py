@@ -1580,3 +1580,221 @@ class TestPrivateApproval(unittest.TestCase):
         self.assertEqual(channel.output.count(b"REPORT_APPROVAL_ACCEPTED"), 1)
         self.assertEqual(channel.output.count(b"ACCOUNT_ACCEPTED"), 1)
         self.assertNotIn(peer.frames[-1]["token"].encode(), channel.output)
+
+
+def refresh_settings(s, expected=None, *, client=None, session=None):
+    return (client or s.client).post(
+        f"/api/cases/{s.case['id']}/settings-context/refresh",
+        json={"expected_context_version": (
+            s.upload["semantic_context_version"] if expected is None else expected
+        )},
+        headers=csrf(session or s.session),
+    )
+
+
+def changed_route(s, *, enabled=False):
+    profile = s.profile.model_copy(update={
+        "configuration_id": "synthetic-current-agent-route", "agent_version": None,
+    })
+    with s.database.session() as db:
+        new_settings(db, s.company, {
+            "provider_profile": profile, "automatic_generation_enabled": enabled,
+        })
+    return profile
+
+
+def all_rows(s):
+    from sqlalchemy import select
+
+    from apbra_api.persistence import Base
+
+    with s.database.session() as db:
+        return {
+            name: tuple(db.execute(select(table).order_by(*table.primary_key.columns)).tuples())
+            for name, table in Base.metadata.tables.items()
+        }
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_stale_agent_route_refresh_preserves_history_and_allows_fresh_understanding(
+    saved, confirmed
+):
+    from sqlalchemy import select
+
+    from apbra_api.persistence import AuditEventRow
+
+    s = saved
+    original = interpret(s)
+    if confirmed:
+        confirm(s, original)
+    old_state = s.load()
+    old_grant = bound_approval(s, old_state, "CONFIRMED" if confirmed else "OWNER_CONFIRM_PENDING")
+    profile = changed_route(s)
+    before = all_rows(s)
+    with pytest.raises(m.ReportSettingsRefreshRequired) as caught:
+        s.load()
+    assert str(caught.value) == "FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED"
+    state = s.client.get(f"/api/cases/{s.case['id']}/acceptance")
+    assert state.status_code == 200
+    assert state.json()["settings_refresh_required"] is True
+    assert state.json()["interpretation"]["current"] is False
+    assert s.client.post(
+        f"/api/cases/{s.case['id']}/interpretations",
+        json={"expected_context_version": s.upload["semantic_context_version"]},
+        headers=csrf(s.session),
+    ).status_code == 409
+    assert all_rows(s) == before
+    response = refresh_settings(s)
+    assert response.status_code == 200, response.text
+    current = s.upload["semantic_context_version"] + 1
+    assert response.json() == {"semantic_context_version": current, "refreshed": True}
+    after = all_rows(s)
+    for name, rows in before.items():
+        if name not in {"reporting_cases", "audit_events"}:
+            assert after[name] == rows, name
+    assert len(after["audit_events"]) == len(before["audit_events"]) + 1
+    with s.database.session() as db:
+        event_row = db.scalar(select(AuditEventRow).where(
+            AuditEventRow.resource_id == UUID(s.case["id"]),
+            AuditEventRow.event_type == "SETTINGS_CONTEXT_REFRESHED",
+        ))
+        assert json.loads(event_row.details_json) == {
+            "previous_context_version": current - 1,
+            "semantic_context_version": current,
+            "previous_settings_version_id": str(old_state.settings_id),
+            "settings_version_id": str(current_settings(db, s.company).id),
+        }
+        case = db.get(CaseRow, UUID(s.case["id"]))
+        assert case.current_request_version_id == old_state.request_version_id
+        assert case.version == s.case["version"]
+    fresh = s.load()
+    assert fresh.semantic_context_version == current
+    assert fresh.interpretation_id is None and fresh.confirmed_contract_id is None
+    assert fresh.profile == profile and not m.same_input(old_grant, fresh)
+    state = s.client.get(f"/api/cases/{s.case['id']}/acceptance").json()
+    assert state["settings_refresh_required"] is False
+    assert state["semantic_context_version"] == current
+    assert state["interpretation"]["id"] == original["id"]
+    assert state["interpretation"]["current"] is False
+    if confirmed:
+        assert state["confirmed_contract"]["current"] is False
+    # Replay cannot repeat the transition; read the actual saved context instead.
+    assert refresh_settings(s).status_code == 409
+    assert refresh_settings(s, current).json() == {
+        "semantic_context_version": current, "refreshed": False,
+    }
+    assert all_rows(s) == after
+    s.upload["semantic_context_version"] = current
+    replacement = interpret(s)
+    assert replacement["id"] != original["id"] and replacement["current"] is True
+    assert replacement["context_version"] == current
+    with s.database.session() as db:
+        assert db.get(InterpretationRow, UUID(original["id"])) is not None
+    current_state = s.client.get(f"/api/cases/{s.case['id']}/acceptance").json()
+    assert current_state["confirmed_contract"] is None
+
+
+def test_settings_refresh_noop_without_stale_current_interpretation(saved):
+    s = saved
+    before = all_rows(s)
+    assert refresh_settings(s).json() == {
+        "semantic_context_version": s.upload["semantic_context_version"], "refreshed": False,
+    }
+    assert all_rows(s) == before
+    interpret(s)
+    before = all_rows(s)
+    assert refresh_settings(s).json()["refreshed"] is False
+    assert all_rows(s) == before
+
+
+def test_state_and_refresh_work_without_paid_runtime_or_credential(saved, monkeypatch):
+    import apbra_api.api as api
+
+    s = saved
+    interpret(s)
+    profile = changed_route(s, enabled=True)
+    monkeypatch.setattr(s.settings, "qualified_provider_profiles_json", json.dumps([
+        profile.model_dump(mode="json"),
+    ]))
+    calls = []
+
+    def forbidden_provider(*args, **kwargs):
+        calls.append(True)
+        raise AssertionError("Nonpaid state/refresh must not construct a paid provider")
+
+    monkeypatch.setattr(api, "FoundryAgentResponsesProvider", forbidden_provider)
+    with TestClient(create_app(settings=s.settings, database=s.database)) as client:
+        client.cookies.update(s.client.cookies)
+        url = f"/api/cases/{s.case['id']}/acceptance"
+        assert client.get(url).json()["settings_refresh_required"] is True
+        response = refresh_settings(s, client=client)
+        assert response.status_code == 200
+        assert client.get(url).json()["settings_refresh_required"] is False
+        assert client.post(
+            f"/api/cases/{s.case['id']}/interpretations",
+            json={"expected_context_version": response.json()["semantic_context_version"]},
+            headers=csrf(s.session),
+        ).status_code == 503
+    assert calls == []
+
+
+def test_concurrent_settings_refresh_advances_once_and_reconciles_stale_retry(saved):
+    from sqlalchemy import func, select
+
+    from apbra_api.persistence import AuditEventRow
+
+    s = saved
+    interpret(s)
+    changed_route(s)
+    barrier = threading.Barrier(2)
+
+    def request():
+        with TestClient(create_app(settings=s.settings, database=s.database)) as client:
+            client.cookies.update(s.client.cookies)
+            barrier.wait(timeout=5)
+            response = refresh_settings(s, client=client)
+            return response.status_code
+
+    with concurrent.futures.ThreadPoolExecutor(2) as pool:
+        responses = list(pool.map(lambda _: request(), range(2)))
+    assert sorted(responses) == [200, 409]
+    with s.database.session() as db:
+        assert db.get(CaseRow, UUID(s.case["id"])).semantic_context_version == (
+            s.upload["semantic_context_version"] + 1
+        )
+        assert db.scalar(select(func.count()).select_from(AuditEventRow).where(
+            AuditEventRow.resource_id == UUID(s.case["id"]),
+            AuditEventRow.event_type == "SETTINGS_CONTEXT_REFRESHED",
+        )) == 1
+
+
+def test_settings_refresh_retains_csrf_private_case_and_viewer_boundaries(saved):
+    s = saved
+    interpret(s)
+    changed_route(s)
+    before = all_rows(s)
+    url = f"/api/cases/{s.case['id']}/settings-context/refresh"
+    payload = {"expected_context_version": s.upload["semantic_context_version"]}
+    assert s.client.post(url, json=payload).status_code == 401
+    with TestClient(create_app(settings=s.settings, database=s.database)) as client:
+        assert client.post(url, json=payload).status_code == 401
+        member = sign_in(client, "member")
+        assert client.post(url, json=payload, headers=csrf(member)).status_code == 404
+        granted = s.client.post(
+            f"/api/cases/{s.case['id']}/access",
+            json={"membership_id": member["actor"]["membership_id"], "access_level": "VIEWER"},
+            headers=csrf(s.session),
+        )
+        assert granted.status_code == 200, granted.text
+        assert client.post(url, json=payload, headers=csrf(member)).status_code == 404
+    with s.database.session() as db:
+        assert db.get(CaseRow, UUID(s.case["id"])).semantic_context_version == (
+            s.upload["semantic_context_version"]
+        )
+    after = all_rows(s)
+    for table in before:
+        if table not in {
+            "case_access", "audit_events", "application_sessions", "auth_transactions",
+            "dev_authorization_codes", "authentication_events",
+        }:
+            assert before[table] == after[table], table

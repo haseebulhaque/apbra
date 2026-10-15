@@ -17,3 +17,18 @@ it('labels durable messages and qualified evidence without claiming generated ou
   expect(html).toContain('aria-current="step"');
   expect(html).not.toMatch(/candidate ready|report generated/i);
 });
+
+it('uses the nonpaid settings refresh action before a separate understanding action',async()=>{
+  const {UnderstandingReviewButton}=await import('./durableConversation');
+  const calls:string[]=[];
+  const props={stale:true,disabled:false,busy:false,hidden:false,onRefresh:()=>calls.push('refresh'),onPrepare:()=>calls.push('prepare')};
+  const refresh=UnderstandingReviewButton({...props,settingsRefreshRequired:true});
+  expect(renderToStaticMarkup(refresh)).toContain('Use current tenant settings');
+  refresh.props.onClick();
+  expect(calls).toEqual(['refresh']);
+  const prepared=UnderstandingReviewButton({...props,settingsRefreshRequired:false});
+  expect(renderToStaticMarkup(prepared)).toContain('Review updated requirements');
+  prepared.props.onClick();
+  expect(calls).toEqual(['refresh','prepare']);
+  expect(renderToStaticMarkup(UnderstandingReviewButton({...props,settingsRefreshRequired:true,disabled:true,busy:true}))).toContain('disabled=""');
+});

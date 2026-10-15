@@ -823,6 +823,67 @@ class EvidenceService:
         return result, storage_key
 
 
+def _interpretation_settings_current(
+    db: object,
+    interpretation: InterpretationRecord,
+    company_id: UUID,
+    snapshot: TenantSettingsSnapshot | None,
+) -> bool:
+    if snapshot is None or interpretation.settings_version_id is None:
+        # Historical records without a settings binding remain readable.
+        return True
+    historic = settings_version(db, company_id, interpretation.settings_version_id)
+    return interpretation_material_digest(historic.settings) == interpretation_material_digest(
+        snapshot.settings
+    )
+
+
+def refresh_settings_context(
+    db: object,
+    actor: Actor,
+    case_id: UUID,
+    snapshot: TenantSettingsSnapshot,
+    *,
+    expected_context_version: int,
+) -> dict[str, Any]:
+    """Nonpaid explicit refresh; stale retries reconcile with normal case reads.
+
+    Lock access and the case before reading its version. Preserve all historical
+    inputs/outputs and clarification counters; this is not a business refinement.
+    A fresh private report grant must be prepared after this transition.
+    """
+    store = cast(ApplicationPersistence, db)
+    case, _ = authorized_case_access(store, actor, case_id, require_edit=True, lock=True)
+    if snapshot.company_id != actor.company_id:
+        raise ConfigurationUnavailable()
+    if case.semantic_context_version != expected_context_version:
+        raise StaleVersion()
+    interpretation = store.interpretation_for_context(case_id, case.semantic_context_version)
+    if interpretation is None or _interpretation_settings_current(
+        db, interpretation, actor.company_id, snapshot
+    ):
+        return {"semantic_context_version": case.semantic_context_version, "refreshed": False}
+    previous = case.semantic_context_version
+    store.advance_semantic_context(case)
+    store.add_audit(
+        actor,
+        "SETTINGS_CONTEXT_REFRESHED",
+        "REPORTING_CASE",
+        case_id,
+        json.dumps(
+            {
+                "previous_context_version": previous,
+                "semantic_context_version": case.semantic_context_version,
+                "previous_settings_version_id": str(interpretation.settings_version_id),
+                "settings_version_id": str(snapshot.id),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    )
+    return {"semantic_context_version": case.semantic_context_version, "refreshed": True}
+
+
 class AcceptanceService:
     def __init__(
         self,
@@ -848,13 +909,8 @@ class AcceptanceService:
     def _settings_still_materially_current(
         self, db: object, interpretation: InterpretationRecord, company_id: UUID
     ) -> bool:
-        if self.tenant_settings is None or interpretation.settings_version_id is None:
-            # Pre-APBRA-174 historical records remain readable, but new records
-            # carry an explicit immutable settings version.
-            return True
-        historic = settings_version(db, company_id, interpretation.settings_version_id)
-        return interpretation_material_digest(historic.settings) == interpretation_material_digest(
-            self.tenant_settings.settings
+        return _interpretation_settings_current(
+            db, interpretation, company_id, self.tenant_settings
         )
 
     def clarification_state(self, store: ApplicationPersistence, case_id: UUID) -> dict[str, Any]:
@@ -1094,6 +1150,10 @@ class AcceptanceService:
             raise SemanticValidationFailed()
         existing = store.interpretation_for_context(case_id, case.semantic_context_version)
         if existing is not None:
+            if not self._settings_still_materially_current(db, existing, actor.company_id):
+                # Refresh is an explicit nonpaid transition before paid/grant
+                # preparation, never an overwrite or a post-grant context change.
+                raise StaleVersion()
             # Reuse is safe only while the exact evidence/context originally
             # shown remains current. A reduced eligible set must not revive an
             # interpretation prepared from a different evidence set.
@@ -1349,21 +1409,28 @@ class AcceptanceService:
             return {
                 "interpretation": None,
                 "confirmed_contract": None,
+                "settings_refresh_required": False,
+                "semantic_context_version": case.semantic_context_version,
                 "clarification": self.clarification_state(store, case_id),
             }
         contract = store.confirmed_contract(row.id)
         session = json.loads(row.session_json)
-        current = (
+        same_context = (
             row.context_version == case.semantic_context_version
             and row.request_version_id == case.current_request_version_id
-            and self._settings_still_materially_current(db, row, actor.company_id)
         )
+        settings_refresh_required = same_context and not self._settings_still_materially_current(
+            db, row, actor.company_id
+        )
+        current = same_context and not settings_refresh_required
         if current:
             try:
                 self._validated_interpretation_context(store, case, row)
             except SemanticValidationFailed:
                 current = False
         return {
+            "settings_refresh_required": settings_refresh_required,
+            "semantic_context_version": case.semantic_context_version,
             "interpretation": {
                 "id": str(row.id),
                 "state": "CONFIRMED" if contract is not None and current else row.state,

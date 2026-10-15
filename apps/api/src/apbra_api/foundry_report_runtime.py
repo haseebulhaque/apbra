@@ -28,6 +28,13 @@ from apbra_api.model_provider import (
 )
 
 ERROR = "FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"
+
+
+class ReportSettingsRefreshRequired(ProviderConfigurationError):
+    """An explicit nonpaid settings-context refresh precedes a fresh grant."""
+
+    def __init__(self) -> None:
+        super().__init__("FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED")
 CAP = Decimal("10.00")
 PERIOD = "2026-10"
 BUDGET_END = datetime(2026, 11, 1, tzinfo=UTC).timestamp()
@@ -259,10 +266,11 @@ def load_report_state(
                         and interpretation.company_id == company_id
                         and interpretation.case_id == case_id
                         and interpretation.request_version_id == case.current_request_version_id
-                        and service._settings_still_materially_current(
-                            db, interpretation, company_id
-                        )
                     )
+                    if not service._settings_still_materially_current(
+                        db, interpretation, company_id
+                    ):
+                        raise ReportSettingsRefreshRequired()
                     service._validated_interpretation_context(db, case, interpretation)
                     values.update(
                         interpretation_id=interpretation.id,
@@ -300,6 +308,8 @@ def load_report_state(
                     input_digest=sha256_text(context_binding),
                     **values,
                 )
+        except ReportSettingsRefreshRequired:
+            raise
         except BaseException:
             failed = True
     if failed or state is None:
