@@ -25,11 +25,16 @@ def _redacted_error_details(
 
     For private owner/admin error boundaries. Known sensitive values are removed
     before structural redaction. Trace coordinates include basename/function/line
-    only, never source text or locals. This does not qualify any connection.
+    only, never source text or locals. Continuations/bodies are removed while
+    technical provider codes survive. This is scoped to authored technical and
+    qualified SDK failures, not arbitrary customer-content logging, and does not
+    qualify any connection.
     """
+    rendering_error = None
     try:
-        message = str(error)
-    except BaseException:
+        message = _quiet_call(str, error)
+    except BaseException as failure:
+        rendering_error = type(failure).__module__ + "." + type(failure).__qualname__
         message = "Exception message could not be rendered"
     for value in sorted((v for v in redactions if type(v) is str and v),
                         key=len, reverse=True):
@@ -38,13 +43,25 @@ def _redacted_error_details(
         r"\b(?:AADSTS[0-9]{3,12}|invalid_client|invalid_grant|interaction_required|"
         r"consent_required|authorization_declined|temporarily_unavailable|"
         r"server_error|invalid_scope|unauthorized_client|access_denied)\b", message)))
-    message = re.sub(r"\{.*\}|\[.*\]", "[REDACTED_PAYLOAD]", message, flags=re.S)
+    # SDK continuations can contain raw headers, service bodies or private data.
+    # Keep the original first-line reason and technical codes, never those bodies.
+    lines = message.splitlines()
+    message = lines[0] if lines else ""
+    continuation_lines = max(0, len(lines) - 1)
+    message = re.sub(r"[\{\[].*", "[REDACTED_PAYLOAD]", message)
+    message = re.sub(r"<(?!redacted>)(?:\?xml|!DOCTYPE|/?[A-Za-z][A-Za-z0-9:_-]*[\s>]).*",
+                     "[REDACTED_PAYLOAD]", message)
     message = re.sub(r"(?i)\b(?:https?|postgres(?:ql)?(?:\+\w+)?|file)://\S+",
                      "[REDACTED_URL]", message)
-    message = re.sub(r"(?i)\b(authorization|bearer|token|password|secret|api[_-]?key|"
-                     r"client_secret|access_token|refresh_token)\b(\s*[:=]\s*)\S+",
-                     r"\1\2[REDACTED]", message)
-    message = re.sub(r"(?i)\bBearer\s+\S+", "Bearer <redacted>", message)
+    # Quotes must be removed before matching credential fields: consuming just
+    # their first whitespace-delimited word would expose the remaining words.
+    message = re.sub(r"(['\"])(?:\\.|(?!\1)[^\\\n])*\1", "<redacted>", message)
+    message = re.sub(r"(?i)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key)"
+                     r"(\s*[:=]\s*).*", r"\1\2<redacted>", message)
+    message = re.sub(r"(?i)\b(token|password|secret|api[_-]?key|client[_-]?secret|"
+                     r"client_assertion|access_token|refresh_token|response[_ ]?body|payload)"
+                     r"\b(\s*[:=]\s*).*", r"\1\2<redacted>", message)
+    message = re.sub(r"(?i)\b(Bearer|Basic)\s+\S+", r"\1 <redacted>", message)
     message = re.sub(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b", "[REDACTED_ACCOUNT]", message)
     message = re.sub(r"(?i)\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b",
                      "[REDACTED_ID]", message)
@@ -58,8 +75,11 @@ def _redacted_error_details(
     result: dict[str, Any] = {
         "operation": operation,
         "exception_type": type(error).__module__ + "." + type(error).__qualname__,
-        "message": message[:4096], "message_truncated": len(message) > 4096, "frames": [],
+        "message": message[:4096], "message_truncated": len(message) > 4096,
+        "message_redacted_continuation_lines": continuation_lines, "frames": [],
     }
+    if rendering_error is not None:
+        result["message_rendering_error_type"] = rendering_error
     if codes:
         result["provider_error_codes"] = codes
     tb = BaseException.__getattribute__(error, "__traceback__")
@@ -194,6 +214,7 @@ def agent_details(
                             raw.extend(chunk)
                 operation += "_RESPONSE_JSON_DECODE"
                 document = json.loads(raw, object_pairs_hook=_json_object)
+                operation = operation.removesuffix("_RESPONSE_JSON_DECODE") + "_RESPONSE_VALIDATE"
                 if bearer.expires_at <= time.time():
                     raise ValueError("Bearer expired during metadata read")
                 if type(document) is not dict:
@@ -261,6 +282,7 @@ def agent_details(
                 warnings.append("MODEL_METADATA_UNKNOWN")
             if result["storedInstructionUtf8Bytes"] is None:
                 warnings.append("INSTRUCTION_METADATA_UNKNOWN")
+        operation = "METADATA_FINAL_CAPABILITY_RECHECK"
         if time.monotonic() >= deadline or credentials.ready(company_id, profile) is not True:
             raise ValueError("Capability changed")
         result.update(status="METADATA_OBSERVED_ONLY", warnings=warnings)

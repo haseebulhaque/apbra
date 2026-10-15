@@ -421,3 +421,66 @@ def test_diagnostic_preserves_original_meaning_and_codes_while_redacting_private
                   'Private Company', 'host.invalid', 'raw-response-secret']:
         assert value not in encoded
     assert 'OtherException' not in encoded
+
+
+@pytest.mark.parametrize('private_field', [
+    "password='violet amber mist'", 'client_secret="violet amber mist"',
+    'password: violet amber mist', 'Authorization: Basic dTpw',
+    'Authorization: Bearer violet', 'Proxy-Authorization: Custom violet amber mist',
+    'Cookie: session=violet; owner=amber', 'clientSecret=violet amber mist',
+])
+def test_diagnostic_redacts_complete_sensitive_fields_including_quoted_or_basic_values(
+    private_field: str,
+) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(ValueError('Authentication failed: ' + private_field),
+                                       'BROWSER_AUTHENTICATION')
+    assert details['exception_type'] == 'builtins.ValueError'
+    assert details['message'].startswith('Authentication failed: ')
+    for value in ['violet', 'amber', 'mist', 'dTpw']:
+        assert value not in json.dumps(details)
+
+
+@pytest.mark.parametrize('payload', ['{"private":"violet', '<html>violet amber</html>',
+                                    '["violet",', 'response body: violet amber mist'])
+def test_diagnostic_redacts_unclosed_structured_or_text_payload(payload: str) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(RuntimeError('Server rejected request: ' + payload), 'GET')
+    assert details['message'].startswith('Server rejected request: ')
+    assert 'violet' not in json.dumps(details)
+
+
+def test_diagnostic_keeps_technical_codes_without_private_multiline_body() -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(RuntimeError('Authentication failed\n'
+        'AADSTS700016 invalid_client\nPrivate customer data violet amber mist'), 'AUTH')
+    assert details['message'] == 'Authentication failed'
+    assert details['message_redacted_continuation_lines'] == 2
+    assert details['provider_error_codes'] == ['AADSTS700016', 'invalid_client']
+    assert 'violet' not in json.dumps(details)
+
+
+@pytest.mark.parametrize('fail_rendering', [False, True])
+def test_diagnostic_suppresses_side_effect_output_while_rendering_original_error(
+    capsys: Any, fail_rendering: bool,
+) -> None:
+    import sys
+
+    from apbra_api.foundry_agent_details import _redacted_error_details
+
+    class LoudError(Exception):
+        def __str__(self) -> str:
+            print(CANARY)
+            print(CANARY, file=sys.stderr)
+            if fail_rendering:
+                raise TypeError(CANARY)
+            return 'Useful original failure reason'
+
+    details = _redacted_error_details(LoudError(), 'SDK_CALL')
+    assert details['exception_type'].endswith('.LoudError')
+    if fail_rendering:
+        assert details['message_rendering_error_type'] == 'builtins.TypeError'
+    else:
+        assert details['message'] == 'Useful original failure reason'
+    assert capsys.readouterr() == ('', '')
+    assert CANARY not in json.dumps(details)
