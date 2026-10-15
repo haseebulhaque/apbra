@@ -53,3 +53,5 @@ def released_product_paths(root):
             result.add(name)
         return result
     except (OSError,ValueError,subprocess.SubprocessError):return set()
+
+# Release-transition test uses explicit missing ancestry; authority is unchanged.

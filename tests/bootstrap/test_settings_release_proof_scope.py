@@ -50,9 +50,17 @@ class SettingsReleaseProofScope(unittest.TestCase):
                 for mutation in [source.replace(after,'',1),source+after]:
                     with self.assertRaises(ValueError):strip(mutation)
     def test_registration_does_not_consume_unreleased_candidate_or_allow_edit(self):
-        self.assertEqual(H['released_product_paths'](ROOT),set())
-        uf=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
-        self.assertEqual(uf['qualified_consumption'](ROOT,C),{'apps/api/src/apbra_api/config.py'})
+        # Missing ancestry is an explicit negative fixture, independent of
+        # whether the actual checkout is before or after the product release.
+        actual_run=subprocess.run
+        def without_candidate(command,*args,**kwargs):
+            if command==['git','merge-base','--is-ancestor',H['CANDIDATE'],'HEAD']:
+                return subprocess.CompletedProcess(command,1)
+            return actual_run(command,*args,**kwargs)
+        with patch('subprocess.run',side_effect=without_candidate):
+            self.assertEqual(H['released_product_paths'](ROOT),set())
+            uf=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
+            self.assertEqual(uf['qualified_consumption'](ROOT,C),{'apps/api/src/apbra_api/config.py'})
     def fixture(self,folder):
         root=Path(folder)
         for name in [NAME,'agents/catalog.json','docs/source-register.json','contracts/engineering/task-contract.schema.json']:

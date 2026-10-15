@@ -3578,3 +3578,5 @@ def _memoized_path(function):
 valid_path = _memoized_path(valid_path)
 if __name__ == '__main__':
     raise SystemExit(main())
+
+# Release-transition test uses explicit missing ancestry; authority is unchanged.
