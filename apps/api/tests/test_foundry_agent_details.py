@@ -484,3 +484,23 @@ def test_diagnostic_suppresses_side_effect_output_while_rendering_original_error
         assert details['message'] == 'Useful original failure reason'
     assert capsys.readouterr() == ('', '')
     assert CANARY not in json.dumps(details)
+
+
+@pytest.mark.parametrize('message', ['[Errno 61] Connection refused',
+    '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: '
+    'unable to get local issuer certificate (_ssl.c:1000)'])
+def test_standard_network_error_brackets_preserve_the_original_technical_reason(
+    message: str,
+) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(OSError(message), 'AGENT_METADATA_GET')
+    assert details['message'] == message
+    assert details['exception_type'] == 'builtins.OSError'
+
+
+@pytest.mark.parametrize('code', ['QUALIFIED_PROFILES_INVALID',
+    'FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE', 'FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE'])
+def test_known_authored_technical_error_constants_are_preserved_exactly(code: str) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(ValueError(code), 'PRIVATE_REPORT_QUALIFICATION')
+    assert details['message'] == code

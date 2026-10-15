@@ -48,6 +48,10 @@ def _redacted_error_details(
     lines = message.splitlines()
     message = lines[0] if lines else ""
     continuation_lines = max(0, len(lines) - 1)
+    technical = re.match(r"^(\[(?:Errno [0-9]{1,6}|SSL: [A-Z_]{1,80})\])\s*", message)
+    technical_prefix = technical[1] if technical is not None else ""
+    if technical is not None:
+        message = message[technical.end():]
     message = re.sub(r"[\{\[].*", "[REDACTED_PAYLOAD]", message)
     message = re.sub(r"<(?!redacted>)(?:\?xml|!DOCTYPE|/?[A-Za-z][A-Za-z0-9:_-]*[\s>]).*",
                      "[REDACTED_PAYLOAD]", message)
@@ -69,9 +73,19 @@ def _redacted_error_details(
     message = re.sub(r"(?:/[A-Za-z0-9_.%+~-]+){2,}", "[REDACTED_PATH]", message)
     message = re.sub(r"\b[A-Za-z0-9_./+=:-]{20,}\b",
                      lambda match: match[0] if match[0] in {
-                         "FOUNDRY_QUALIFICATION_UNAVAILABLE", "FOUNDRY_MEMORY_HANDOFF_UNAVAILABLE"
+                         "FOUNDRY_QUALIFICATION_UNAVAILABLE", "FOUNDRY_MEMORY_HANDOFF_UNAVAILABLE",
+                         "FOUNDRY_BROWSER_METADATA_UNAVAILABLE",
+                         "FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE",
+                         "FOUNDRY_SERVER_IDENTITY_REQUIRED", "FOUNDRY_CREDENTIAL_UNAVAILABLE",
+                         "FOUNDRY_QUALIFICATION_INVALID", "FOUNDRY_RUNTIME_IDENTITY_UNAVAILABLE",
+                         "FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE",
+                         "QUALIFIED_PROFILES_INVALID", "QUALIFIED_PROFILES_DUPLICATED",
+                         "MODEL_CREDENTIAL_MISSING", "MODEL_CREDENTIAL_UNAVAILABLE",
+                         "MODEL_OUTPUT_INVALID", "AUTOMATIC_GENERATION_DISABLED"
                      } else "[REDACTED_OPAQUE]", message)
     message = "".join(c if c.isprintable() or c in "\n\t" else "?" for c in message)
+    if technical_prefix:
+        message = technical_prefix + (" " + message if message else "")
     result: dict[str, Any] = {
         "operation": operation,
         "exception_type": type(error).__module__ + "." + type(error).__qualname__,
