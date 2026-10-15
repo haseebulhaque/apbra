@@ -1633,7 +1633,7 @@ def test_stale_agent_route_refresh_preserves_history_and_allows_fresh_understand
     before = all_rows(s)
     with pytest.raises(m.ReportSettingsRefreshRequired) as caught:
         s.load()
-    assert str(caught.value) == "FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED"
+    assert caught.value.code == "FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED"
     state = s.client.get(f"/api/cases/{s.case['id']}/acceptance")
     assert state.status_code == 200
     assert state.json()["settings_refresh_required"] is True
@@ -1798,3 +1798,16 @@ def test_settings_refresh_retains_csrf_private_case_and_viewer_boundaries(saved)
             "dev_authorization_codes", "authentication_events",
         }:
             assert before[table] == after[table], table
+
+
+def test_settings_refresh_reason_survives_the_private_error_boundary():
+    from apbra_api.foundry_agent_details import _redacted_error_details
+
+    error = m.ReportSettingsRefreshRequired()
+    details = _redacted_error_details(error, "READ_ONLY_SAVED_REPORT_STATE")
+    assert details["message"] == (
+        "Refresh the saved report to current tenant settings before preparing "
+        "a new understanding."
+    )
+    assert details["exception_type"].endswith(".ReportSettingsRefreshRequired")
+    assert "[REDACTED" not in details["message"]

@@ -33,8 +33,13 @@ ERROR = "FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"
 class ReportSettingsRefreshRequired(ProviderConfigurationError):
     """An explicit nonpaid settings-context refresh precedes a fresh grant."""
 
+    code = "FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED"
+
     def __init__(self) -> None:
-        super().__init__("FOUNDRY_REPORT_SETTINGS_REFRESH_REQUIRED")
+        super().__init__(
+            "Refresh the saved report to current tenant settings before preparing "
+            "a new understanding."
+        )
 CAP = Decimal("10.00")
 PERIOD = "2026-10"
 BUDGET_END = datetime(2026, 11, 1, tzinfo=UTC).timestamp()
