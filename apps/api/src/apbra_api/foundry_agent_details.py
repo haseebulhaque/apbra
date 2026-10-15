@@ -58,6 +58,7 @@ def agent_details(
     """Read only configured agent metadata. No retries, discovery or paid calls."""
     result: dict[str, Any] = {
         "status": "METADATA_UNAVAILABLE", "agent": None, "configuredVersion": None,
+        "observedVersion": None, "metadataSource": None,
         "modelDeployment": None, "storedInstructionUtf8Bytes": None,
         "toolTypes": [], "warnings": [],
     }
@@ -146,11 +147,28 @@ def agent_details(
         elif any(type(rule) is not dict or _identifier(rule.get("agent_version")) is None
                  for rule in rules):
             warnings.append("ENDPOINT_SELECTOR_UNKNOWN")
+        version = None
         if len(records) == 2:
             version = records[1]
             if (version.get("object") != "agent.version" or version.get("name") != agent
                     or version.get("version") != profile.agent_version):
                 raise ValueError("Version identity differs")
+            result.update(observedVersion=profile.agent_version,
+                          metadataSource="CONFIGURED_VERSION")
+        else:
+            warnings.append("AGENT_VERSION_NOT_CONFIGURED")
+            versions = properties.get("versions")
+            latest = versions.get("latest") if type(versions) is dict else None
+            # Azure includes the latest definition in this same saved-agent GET.
+            # Observe it only; never choose a URL, pin or invocation target from it.
+            if (type(latest) is dict and latest.get("object") == "agent.version"
+                    and latest.get("name") == agent):
+                version = latest
+                result.update(observedVersion=_identifier(latest.get("version")),
+                              metadataSource="AZURE_LATEST")
+            elif latest is not None:
+                warnings.append("LATEST_METADATA_UNKNOWN")
+        if version is not None:
             definition = version.get("definition")
             if type(definition) is dict:
                 result["modelDeployment"] = _identifier(definition.get("model"))
@@ -173,14 +191,13 @@ def agent_details(
                 warnings.append("MODEL_METADATA_UNKNOWN")
             if result["storedInstructionUtf8Bytes"] is None:
                 warnings.append("INSTRUCTION_METADATA_UNKNOWN")
-        else:
-            warnings.append("AGENT_VERSION_NOT_CONFIGURED")
         if time.monotonic() >= deadline or credentials.ready(company_id, profile) is not True:
             raise ValueError("Capability changed")
         result.update(status="METADATA_OBSERVED_ONLY", warnings=warnings)
         return result
     except Exception:
         # Do not expose response bodies, URLs, identities, bearer or exception text.
-        result.update(modelDeployment=None, storedInstructionUtf8Bytes=None, toolTypes=[],
+        result.update(observedVersion=None, metadataSource=None,
+                      modelDeployment=None, storedInstructionUtf8Bytes=None, toolTypes=[],
                       warnings=["METADATA_READ_UNAVAILABLE"])
         return result

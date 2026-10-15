@@ -265,3 +265,109 @@ def test_one_paid_dispatch_limit_does_not_reject_two_approved_metadata_gets():
     assert len(seen)==2
     assert result['status']=='METADATA_OBSERVED_ONLY'
     assert configured.max_calls_per_operation==1 and configured.retry_limit==0
+
+
+def test_unpinned_agent_observes_inline_latest_without_any_new_get_or_routing_change() -> None:
+    configured = profile()
+    original = configured.model_dump_json()
+    body = records()[0]
+    body['versions'] = {'latest': records()[1]}
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert [(r.method, str(r.url)) for r in seen] == [('GET',
+        'https://provider.invalid/api/projects/project/agents/configured?api-version=v1')]
+    assert result['status'] == 'METADATA_OBSERVED_ONLY'
+    assert result['configuredVersion'] is None
+    assert result['observedVersion'] == 'configured-version'
+    assert result['metadataSource'] == 'AZURE_LATEST'
+    assert result['modelDeployment'] == 'configured-model'
+    assert result['storedInstructionUtf8Bytes'] == len(CANARY)
+    assert result['toolTypes'] == ['mcp']
+    assert result['warnings'] == ['ENDPOINT_SELECTOR_UNKNOWN', 'AGENT_VERSION_NOT_CONFIGURED']
+    assert CANARY not in json.dumps(result)
+    assert configured.model_dump_json() == original
+
+
+@pytest.mark.parametrize('latest', [None, [], 'unknown', {},
+    {'object': 'agent.version', 'name': 'another-agent', 'version': 'other',
+     'definition': {'model': CANARY, 'instructions': CANARY, 'tools': [{'type': CANARY}]}},
+    {'object': 'different-object', 'name': 'configured', 'version': 'other',
+     'definition': {'model': CANARY}}])
+def test_optional_latest_shape_or_identity_never_rejects_connection_or_leaks(latest: Any) -> None:
+    configured = profile()
+    body = records()[0]
+    body['versions'] = {'latest': latest}
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert result['status'] == 'METADATA_OBSERVED_ONLY' and len(seen) == 1
+    assert result['configuredVersion'] is None and result['observedVersion'] is None
+    assert result['metadataSource'] is None and result['modelDeployment'] is None
+    assert result['storedInstructionUtf8Bytes'] is None and result['toolTypes'] == []
+    assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize('version', [None, True, ['latest'], 'unsupported version', CANARY + '\n'])
+def test_optional_latest_version_format_does_not_gate_other_same_agent_observations(
+    version: Any,
+) -> None:
+    configured = profile()
+    latest = records()[1]
+    latest['version'] = version
+    body = records()[0]
+    body['versions'] = {'latest': latest}
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=body)))
+    assert result['status'] == 'METADATA_OBSERVED_ONLY'
+    assert result['configuredVersion'] is None and result['observedVersion'] is None
+    assert result['metadataSource'] == 'AZURE_LATEST'
+    assert result['modelDeployment'] == 'configured-model'
+    assert CANARY not in json.dumps(result)
+
+
+def test_explicit_saved_version_observation_ignores_conflicting_inline_latest() -> None:
+    configured = profile(agent_version='configured-version')
+    bodies = records()
+    bodies[0]['versions'] = {'latest': {'object': 'agent.version', 'name': 'configured',
+        'version': 'other', 'definition': {'model': CANARY, 'instructions': CANARY}}}
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=bodies[len(seen) - 1])
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert len(seen) == 2 and seen[1].url.path.endswith('/versions/configured-version')
+    assert result['configuredVersion'] == result['observedVersion'] == 'configured-version'
+    assert result['metadataSource'] == 'CONFIGURED_VERSION'
+    assert result['modelDeployment'] == 'configured-model'
+    assert CANARY not in json.dumps(result)
+
+
+def test_late_capability_change_clears_inline_observations() -> None:
+    configured = profile()
+    credential = Credentials(configured)
+    body = records()[0]
+    body['versions'] = {'latest': records()[1]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        credential.enabled = False
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, credential, transport=httpx.MockTransport(handler))
+    assert result['status'] == 'METADATA_UNAVAILABLE'
+    assert result['observedVersion'] is None and result['metadataSource'] is None
+    assert result['modelDeployment'] is None and result['storedInstructionUtf8Bytes'] is None
+    assert CANARY not in json.dumps(result)
