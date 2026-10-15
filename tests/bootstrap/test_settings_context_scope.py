@@ -68,6 +68,16 @@ class SettingsContextScope(unittest.TestCase):
         self.assertEqual(H['qualified_product_paths'](ROOT,{}),set())
         with patch.dict(H['qualified_product_paths'].__globals__,{'bind':lambda *a:(None,['WITHDRAWN'])}):
             self.assertEqual(H['qualified_product_paths'](ROOT,checker),set())
+    def test_product_witness_keeps_separately_proven_released_configuration(self):
+        context=('APBRA-160',H['B'],{'apps/api/src/apbra_api/application.py'})
+        actual={**C,'delivery_context':lambda root:context}
+        guided=runpy.run_path(str(ROOT/'scripts/check_gp.py'))
+        original=runpy.run_path
+        def load(path,*args,**kwargs):
+            return actual if Path(path).name=='check_bootstrap.py' else original(path,*args,**kwargs)
+        with patch('runpy.run_path',side_effect=load):
+            self.assertEqual(guided['qualified_product_paths'](ROOT,actual),H['PRODUCT']|{'apps/api/src/apbra_api/config.py'})
+        self.assertNotIn('apps/api/src/apbra_api/config.py',H['PRODUCT'])
     def test_registration_preserves_every_existing_non_governance_blob(self):
         _,branch,paths=C['delivery_context'](ROOT)
         # Audit the registration candidate itself; future product phase is separate.
