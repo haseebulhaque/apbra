@@ -7,12 +7,13 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-    "objective": "Consume only the exact reviewed material-settings application correction after its literal candidate ancestor is released; preserve historical source pins and finite edit authority.",
+  "objective": "Consume only the exact reviewed material-settings application correction after its literal candidate ancestor is released; preserve historical source pins and finite edit authority.",
   "requirements": [
     "Owner renewed continued MVP fixes/review/tests/normal merges until2026-10-15T12:59:37Z. APBRA-160 implementation10907 records actual bounded product correction and requires exact immutable protected-source consumption before release. This is governance only, no product edit or runtime/paid authority.",
     "Consume only application.py byte-identical to literal source candidatec92d488793fb541f79b1fc8ab7637244d96c477b with SHA2560fcd6ede465a37e3bbb3c9bd4ffc0d5e2825293135f3c0ecec5b4db1e7f7a6d4, and only if that literal candidate is an ancestor of actual HEAD, its Git blob matches and the current file matches. Do not repin historical baseline hashes or trust arbitrary current HEAD/branch.",
     "Full actual existing checker context/task/source validation plus exact bound new task precedes qualified consumption. Preserve independently proven exact published config.py consumption; consuming either path never grants edits on a foreign branch.",
-    "Exactly six governance files first; all prior product/task/source bytes and accepted security/tenant/private-case/budget/provider controls remain. Candidate product changes retain existing finite settings-context task authority and require separate exact-head review and required CI before release."
+    "Exactly seven governance files first; all prior product/task/source bytes and accepted security/tenant/private-case/budget/provider controls remain. Candidate product changes retain existing finite settings-context task authority and require separate exact-head review and required CI before release.",
+    "APBRA-160 PLAN10910 registers exactly the seventh historical released-runtime test path. Isolate only additive SP source consumption in the original configuration-only test, retaining its real current context/task/source checks and all historical negatives. Separate combined-consumption tests must verify exact source union and reject invalid delivery context on both prerelease and postrelease main."
   ],
   "adrs": [
     "Reuse strict released-runtime consumption chain. New helper admits only one immutable application blob, with literal ancestor/task/source/hash proof; no broad main/branch exemption.",
@@ -28,7 +29,8 @@
     "scripts/check_sc.py",
     "scripts/check_sp.py",
     "tasks/APBRA-160-settings-release-proof-20261015.json",
-    "tests/bootstrap/test_settings_release_proof_scope.py"
+    "tests/bootstrap/test_settings_release_proof_scope.py",
+    "tests/bootstrap/test_released_runtime_fixture_scope.py"
   ],
   "restricted_paths": [
     "apps/**",
@@ -43,10 +45,11 @@
     "packages/**"
   ],
   "acceptance_criteria": [
-    "Exactly six governance paths on literal branch; no partial/mixed/product/unregistered admission.",
+    "Exactly seven governance paths on literal branch; no partial/mixed/product/unregistered admission.",
     "Only literal candidate ancestor and both immutable Git/current application blob hashes qualify; missing/changed candidate, current bytes, symlinks, withdrawn task/source or rejected actual scope fail closed.",
     "Every historical baseline is still checked against original Git snapshots. Exact additive inverses retain whole previous bootstrap/UF/SC AST and existing negative tests.",
-    "Current registration keeps all product bytes unchanged. Candidate product release separately meets full checks, independent review, required CI and authorized normal merge."
+    "Current registration keeps all product bytes unchanged. Candidate product release separately meets full checks, independent review, required CI and authorized normal merge.",
+    "Historical config-only tests retain their original assertion and real validation with only the additive SP consumption isolated. Actual combined consumption is proven separately; no broader test suppression, callback replacement or historical source-pin change."
   ],
   "verification_required": [
     "Focused exact candidate/current blob, ancestor, task/source/symlink/error/phase/foreign path negatives; inverse mutation tests and product-byte preservation. Full bootstrap/checker/CI policy, exact-tree/history scans, independent exact-head review and required hosted CI before normal merge.",
@@ -70,7 +73,7 @@
     "apbra-160-editable-first-draft-delivery"
   ],
   "owner_acceptance": "RECORDED",
-  "effective_release": "Six governance files admit one exact immutable reviewed application blob as consumed source, never edit authority or a rewrite of historical pins.",
+  "effective_release": "Seven governance files admit one exact immutable reviewed application blob as consumed source, never edit authority or a rewrite of historical pins.",
   "task_mode": "IMPLEMENTATION",
   "readiness": "READY_FOR_IMPLEMENTATION"
 }
