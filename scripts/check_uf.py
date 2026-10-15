@@ -48,7 +48,9 @@ def released_runtime_paths(root):
         if result.returncode!=0:return set()
         original=subprocess.check_output(['git','show',BASE+':'+CONFIG],cwd=root,stderr=subprocess.DEVNULL,timeout=10)
         if hashlib.sha256(original).hexdigest()!=CONFIG_SHA:return set()
-        return {CONFIG}
+        import runpy
+        from pathlib import Path
+        return {CONFIG}|runpy.run_path(Path(__file__).with_name('check_sp.py'))['released_product_paths'](root)
     except (OSError,subprocess.SubprocessError):return set()
 
 GP_EDITS = [('def strip_current_hooks(source):\n', 'def strip_current_hooks(source):\n    if "uf=runpy.run_path(" in source:\n        import runpy\n        from pathlib import Path\n        source=runpy.run_path(Path(__file__).with_name(\'check_uf.py\'))[\'strip_hooks\'](source)\n'), ("    if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:\n        return set()\n", "    if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:\n        import runpy\n        from pathlib import Path\n        return runpy.run_path(Path(__file__).with_name('check_uf.py'))['qualified_consumption'](root,checker)\n")]

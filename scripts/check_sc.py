@@ -27,8 +27,13 @@ def inverse(source,edits):
         source=source.replace(after,before)
     return source
 def strip_gp_changes(source):return inverse(source,GP_EDITS)
-def strip_uf_changes(source):return inverse(source,UF_EDITS)
+def strip_uf_changes(source):
+    if "check_sp.py" in source:
+        source=runpy.run_path(Path(__file__).with_name('check_sp.py'))['strip_uf_changes'](source)
+    return inverse(source,UF_EDITS)
 def strip_hooks(source):
+    if "sp=runpy.run_path(" in source:
+        source=runpy.run_path(Path(__file__).with_name('check_sp.py'))['strip_hooks'](source)
     for count,hook in HOOKS:
         if source.count(hook)!=count:raise ValueError('Settings context hook differs')
         source=source.replace(hook,'')
