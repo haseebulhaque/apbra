@@ -301,3 +301,56 @@ assert not any(k in sys.modules for k in blocked)
         [sys.executable, "-I", "-B", "-c", code, str(source)], capture_output=True, check=False
     )
     assert result.returncode == 0, result.stderr.decode()
+
+
+@pytest.mark.parametrize('fault,operation', [
+    ('auth', 'BROWSER_AUTHENTICATION'), ('peer', 'OWNED_PEER_IDENTITY_CHECK'),
+    ('write', 'HANDOFF_HELLO_WRITE'), ('token', 'BEARER_TOKEN_ACQUISITION'),
+])
+def test_original_handoff_failure_operation_type_and_trace_are_retained_safely(
+    monkeypatch: Any, fault: str, operation: str,
+) -> None:
+    c = setup(monkeypatch)
+    with pytest.raises(m.BrowserHandoffError) as caught:
+        execute(c, Browser(fault), Peer(fault))
+    diagnostic = caught.value.diagnostic
+    assert diagnostic['operation'] == operation
+    assert diagnostic['exception_type'] == 'builtins.RuntimeError'
+    assert diagnostic['frames']
+    assert CANARY not in json.dumps(diagnostic)
+    assert 'OtherException' not in json.dumps(diagnostic)
+
+
+def test_original_terminal_guard_failure_has_its_actual_operation_and_source(
+    monkeypatch: Any,
+) -> None:
+    from apbra_api import foundry_owner_metadata as metadata
+    c = setup(monkeypatch)
+    peer = Peer()
+    monkeypatch.setattr(metadata, '_owner_terminal_provenance', lambda plan: None)
+    with pytest.raises(m.BrowserHandoffError) as caught:
+        m.run_handoff(c.plan, peer, credential_factory=lambda **kw: pytest.fail('No SDK'))
+    details = caught.value.diagnostic
+    assert details['operation'] == 'PRIVATE_TERMINAL_QUALIFICATION'
+    assert details['exception_type'] == 'apbra_api.model_provider.ProviderConfigurationError'
+    assert details['message'] == 'FOUNDRY_QUALIFICATION_UNAVAILABLE'
+    assert any(f['function'] == '_qualification_terminal' for f in details['frames'])
+    assert peer.closed
+
+
+def test_close_failure_does_not_overwrite_original_authentication_failure(monkeypatch: Any) -> None:
+    c = setup(monkeypatch)
+    sdk = Browser('auth')
+    def close() -> None:
+        raise OSError('Synthetic close failed')
+    sdk.close = close
+    peer = Peer()
+    with pytest.raises(m.BrowserHandoffError) as caught:
+        execute(c, sdk, peer)
+    diagnostic = caught.value.diagnostic
+    assert diagnostic['operation'] == 'BROWSER_AUTHENTICATION'
+    assert diagnostic['exception_type'] == 'builtins.RuntimeError'
+    assert diagnostic['cleanup_errors'][0]['operation'] == 'BROWSER_CREDENTIAL_CLEANUP'
+    assert diagnostic['cleanup_errors'][0]['exception_type'] == 'builtins.OSError'
+    assert diagnostic['cleanup_errors'][0]['message'] == 'Synthetic close failed'
+    assert peer.closed and CANARY not in json.dumps(diagnostic)

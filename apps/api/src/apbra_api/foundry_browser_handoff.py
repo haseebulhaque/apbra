@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, TextIO
 from uuid import UUID
 
+from .foundry_agent_details import _redacted_error_details
 from .foundry_memory_handoff import (
     CONTAINER_LISTEN,
     ERROR,
@@ -60,6 +61,14 @@ def _private_report_frame(plan: HandoffPlan, approval: Any, nonce: str) -> tuple
                      separators=(",", ":"), allow_nan=False).encode()
     require(0 < len(raw) <= MAX_FRAME)
     return len(raw).to_bytes(4, "big") + raw, account
+
+
+class BrowserHandoffError(HandoffError):
+    """Fixed exception string plus original redacted diagnostic for owner output."""
+
+    def __init__(self, diagnostic: dict[str, Any]) -> None:
+        super().__init__(ERROR)
+        self.diagnostic = diagnostic
 
 
 class DockerAttach:
@@ -292,6 +301,10 @@ def run_handoff(
     record = None
     frame = None
     failed = False
+    operation = "PLAN_VALIDATE"
+    diagnostic: dict[str, Any] | None = None
+    cleanup_errors: list[dict[str, Any]] = []
+    private_values: list[str] = []
     try:
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             plan.validate()
@@ -307,13 +320,19 @@ def run_handoff(
                 preparation.preflight()
 
             def check() -> None:
+                nonlocal operation
+                previous = operation
+                operation = "OWNED_PEER_IDENTITY_CHECK"
                 require(time.time() < plan.authorization_deadline)
                 peer.check()
+                operation = previous
 
             terminal_plan = OwnerMetadataPlan(
                 tenant_id=str(plan.tenant_id), client_id=str(plan.client_id)
             )
+            operation = "PRIVATE_TERMINAL_QUALIFICATION"
             with (terminal_factory or _qualification_terminal)(terminal_plan) as terminal:
+                operation = "PRIVATE_MEMORY_HANDOFF_CONFIRMATION"
                 approval = confirm or _confirm_private
                 approval(
                     terminal,
@@ -325,8 +344,11 @@ def run_handoff(
                     "YES" if preparation is not None else "CONFIRM PRIVATE MEMORY HANDOFF",
                 )
                 check()
+                operation = "OWNED_PEER_ATTACH"
                 peer.attach()
+                operation = "HANDOFF_HELLO_WRITE"
                 peer.write(HELLO)
+                operation = "RECEIVER_CHALLENGE_READ_AND_VALIDATE"
                 challenge = json.loads(
                     line(peer, plan.authorization_deadline), object_pairs_hook=pairs
                 )
@@ -340,8 +362,10 @@ def run_handoff(
                     and type(challenge["nonce"]) is str
                     and re.fullmatch(r"[a-f0-9]{64}", challenge["nonce"])
                 )
+                private_values.append(challenge["nonce"])
                 check()
                 if report_mode:
+                    operation = "OWNER_REPORT_SCOPE_CONFIRMATION"
                     approval(
                         terminal,
                         terminal_plan,
@@ -352,6 +376,7 @@ def run_handoff(
                     )
                     check()
                 if report_approval is not None:
+                    operation = "REPORT_APPROVAL_FRAME_AND_ACK"
                     private_frame, expected_account = _private_report_frame(
                         plan, report_approval, challenge["nonce"]
                     )
@@ -363,6 +388,7 @@ def run_handoff(
                     check()
                 timeout = min(300, plan.authorization_deadline - time.time())
                 require(timeout > 0)
+                operation = "BROWSER_CREDENTIAL_CONSTRUCTION"
                 sdk = (credential_factory or _browser_credential)(
                     tenant_id=str(plan.tenant_id),
                     client_id=str(plan.client_id),
@@ -378,9 +404,14 @@ def run_handoff(
                     retry_total=0,
                 )
                 check()
+                operation = "BROWSER_AUTHENTICATION"
                 record = sdk.authenticate(scopes=[_SCOPE])
+                operation = "AUTHENTICATION_RECORD_VALIDATE"
                 account = (record.tenant_id, record.client_id, record.home_account_id)
                 label = getattr(record, "username", None)
+                private_values.extend(account)
+                if type(label) is str:
+                    private_values.append(label)
                 require(
                     account[:2] == (str(plan.tenant_id), str(plan.client_id))
                     and type(account[2]) is str
@@ -393,6 +424,7 @@ def run_handoff(
                 if report_approval is not None:
                     require(account[2] == expected_account)
                 assert isinstance(label, str)
+                operation = "OWNER_ACCOUNT_CONFIRMATION"
                 approval(
                     terminal,
                     terminal_plan,
@@ -404,6 +436,7 @@ def run_handoff(
                 if preparation is not None:
                     # The confirmed SDK record and private verified reads derive
                     # the grant; no owner-supplied account ID or technical JSON.
+                    operation = "PRIVATE_REPORT_QUALIFICATION"
                     report_approval = preparation.qualify(record, sdk)
                     require(account == (record.tenant_id, record.client_id, record.home_account_id))
                     check()
@@ -411,6 +444,7 @@ def run_handoff(
                         plan, report_approval, challenge["nonce"]
                     )
                     require(account[2] == expected_account)
+                    operation = "OWNER_RESERVED_REPORT_CONFIRMATION"
                     approval(
                         terminal, terminal_plan,
                         "Selected saved report only. Estimated reservation A$"
@@ -443,12 +477,16 @@ def run_handoff(
                     separators=(",", ":"),
                 ).encode()
                 require(len(claim) <= 2048)
+                operation = "ACCOUNT_CLAIM_WRITE_AND_ACK"
                 peer.write(len(claim).to_bytes(4, "big") + claim)
                 del claim
                 require(line(peer, plan.authorization_deadline) == b"ACCOUNT_ACCEPTED")
                 check()
                 require(account == (record.tenant_id, record.client_id, record.home_account_id))
+                operation = "BEARER_TOKEN_ACQUISITION"
                 acquired = sdk.get_token(_SCOPE)
+                private_values.append(acquired.token)
+                operation = "BEARER_TOKEN_VALIDATE"
                 require(account == (record.tenant_id, record.client_id, record.home_account_id))
                 check()
                 require(
@@ -460,6 +498,7 @@ def run_handoff(
                     and acquired.token.isascii()
                     and all(33 <= ord(c) <= 126 for c in acquired.token)
                 )
+                operation = "BROWSER_CREDENTIAL_CLOSE"
                 sdk.close()
                 sdk = None
                 check()
@@ -478,10 +517,12 @@ def run_handoff(
                     separators=(",", ":"),
                 ).encode()
                 require(len(frame) <= MAX_FRAME)
+                operation = "MEMORY_FRAME_WRITE"
                 peer.write(len(frame).to_bytes(4, "big") + frame)
                 frame = acquired = record = None
                 del account, label, challenge
                 check()
+                operation = "RECEIVER_READY_ACK"
                 require(
                     line(peer, plan.authorization_deadline) == b"HANDOFF_READY_INVOCATION_GATED"
                 )
@@ -491,6 +532,7 @@ def run_handoff(
                     "Stop with Ctrl+C.\n"
                 )
                 terminal.flush()
+                operation = "OWNER_MEMORY_LEASE_HOLD"
                 if hold is not None:
                     hold()
                 else:
@@ -498,19 +540,30 @@ def run_handoff(
                         require(peer.connected(0.25))
     except KeyboardInterrupt:
         pass
-    except BaseException:
+    except BaseException as error:
         failed = True
+        diagnostic = _redacted_error_details(error, operation, redactions=tuple(private_values))
     finally:
         frame = acquired = record = None
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
-            for close in (sdk.close if sdk is not None else None, peer.close):
+            for close_operation, close in (
+                ("BROWSER_CREDENTIAL_CLEANUP", sdk.close if sdk is not None else None),
+                ("OWNED_PEER_CLOSE", peer.close),
+            ):
                 if close is not None:
                     try:
                         close()
-                    except BaseException:
+                    except BaseException as error:
                         failed = True
+                        cleanup_errors.append(_redacted_error_details(
+                            error, close_operation, redactions=tuple(private_values)))
+    private_values.clear()
     if failed:
-        raise HandoffError(ERROR) from None
+        if diagnostic is None:
+            diagnostic = cleanup_errors.pop(0)
+        if cleanup_errors:
+            diagnostic["cleanup_errors"] = cleanup_errors
+        raise BrowserHandoffError(diagnostic) from None
 
 
 def main() -> None:
@@ -535,8 +588,11 @@ def main() -> None:
     )
     try:
         run_handoff(plan, DockerAttach(plan, **args))
-    except BaseException:
-        raise SystemExit(ERROR) from None
+    except BrowserHandoffError as error:
+        raise SystemExit(json.dumps(error.diagnostic, sort_keys=True)) from None
+    except BaseException as error:
+        raise SystemExit(json.dumps(_redacted_error_details(
+            error, "BROWSER_HANDOFF_LAUNCHER"), sort_keys=True)) from None
 
 
 if __name__ == "__main__":

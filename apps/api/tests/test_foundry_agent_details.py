@@ -265,3 +265,242 @@ def test_one_paid_dispatch_limit_does_not_reject_two_approved_metadata_gets():
     assert len(seen)==2
     assert result['status']=='METADATA_OBSERVED_ONLY'
     assert configured.max_calls_per_operation==1 and configured.retry_limit==0
+
+
+def test_unpinned_agent_observes_inline_latest_without_any_new_get_or_routing_change() -> None:
+    configured = profile()
+    original = configured.model_dump_json()
+    body = records()[0]
+    body['versions'] = {'latest': records()[1]}
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert [(r.method, str(r.url)) for r in seen] == [('GET',
+        'https://provider.invalid/api/projects/project/agents/configured?api-version=v1')]
+    assert result['status'] == 'METADATA_OBSERVED_ONLY'
+    assert result['configuredVersion'] is None
+    assert result['observedVersion'] == 'configured-version'
+    assert result['metadataSource'] == 'AZURE_LATEST'
+    assert result['modelDeployment'] == 'configured-model'
+    assert result['storedInstructionUtf8Bytes'] == len(CANARY)
+    assert result['toolTypes'] == ['mcp']
+    assert result['warnings'] == ['ENDPOINT_SELECTOR_UNKNOWN', 'AGENT_VERSION_NOT_CONFIGURED']
+    assert CANARY not in json.dumps(result)
+    assert configured.model_dump_json() == original
+
+
+@pytest.mark.parametrize('latest', [None, [], 'unknown', {},
+    {'object': 'agent.version', 'name': 'another-agent', 'version': 'other',
+     'definition': {'model': CANARY, 'instructions': CANARY, 'tools': [{'type': CANARY}]}},
+    {'object': 'different-object', 'name': 'configured', 'version': 'other',
+     'definition': {'model': CANARY}}])
+def test_optional_latest_shape_or_identity_never_rejects_connection_or_leaks(latest: Any) -> None:
+    configured = profile()
+    body = records()[0]
+    body['versions'] = {'latest': latest}
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert result['status'] == 'METADATA_OBSERVED_ONLY' and len(seen) == 1
+    assert result['configuredVersion'] is None and result['observedVersion'] is None
+    assert result['metadataSource'] is None and result['modelDeployment'] is None
+    assert result['storedInstructionUtf8Bytes'] is None and result['toolTypes'] == []
+    assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize('version', [None, True, ['latest'], 'unsupported version', CANARY + '\n'])
+def test_optional_latest_version_format_does_not_gate_other_same_agent_observations(
+    version: Any,
+) -> None:
+    configured = profile()
+    latest = records()[1]
+    latest['version'] = version
+    body = records()[0]
+    body['versions'] = {'latest': latest}
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json=body)))
+    assert result['status'] == 'METADATA_OBSERVED_ONLY'
+    assert result['configuredVersion'] is None and result['observedVersion'] is None
+    assert result['metadataSource'] == 'AZURE_LATEST'
+    assert result['modelDeployment'] == 'configured-model'
+    assert CANARY not in json.dumps(result)
+
+
+def test_explicit_saved_version_observation_ignores_conflicting_inline_latest() -> None:
+    configured = profile(agent_version='configured-version')
+    bodies = records()
+    bodies[0]['versions'] = {'latest': {'object': 'agent.version', 'name': 'configured',
+        'version': 'other', 'definition': {'model': CANARY, 'instructions': CANARY}}}
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=bodies[len(seen) - 1])
+
+    result = agent_details(COMPANY, configured, Credentials(configured),
+                           transport=httpx.MockTransport(handler))
+    assert len(seen) == 2 and seen[1].url.path.endswith('/versions/configured-version')
+    assert result['configuredVersion'] == result['observedVersion'] == 'configured-version'
+    assert result['metadataSource'] == 'CONFIGURED_VERSION'
+    assert result['modelDeployment'] == 'configured-model'
+    assert CANARY not in json.dumps(result)
+
+
+def test_late_capability_change_clears_inline_observations() -> None:
+    configured = profile()
+    credential = Credentials(configured)
+    body = records()[0]
+    body['versions'] = {'latest': records()[1]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        credential.enabled = False
+        return httpx.Response(200, json=body)
+
+    result = agent_details(COMPANY, configured, credential, transport=httpx.MockTransport(handler))
+    assert result['status'] == 'METADATA_UNAVAILABLE'
+    assert result['observedVersion'] is None and result['metadataSource'] is None
+    assert result['modelDeployment'] is None and result['storedInstructionUtf8Bytes'] is None
+    assert CANARY not in json.dumps(result)
+
+
+@pytest.mark.parametrize('status', [401, 403, 429, 503])
+def test_http_failure_preserves_exact_operation_status_type_and_trace_without_body(
+    status: int,
+) -> None:
+    configured = profile()
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(status, text=CANARY)))
+    details = result['diagnostic']
+    assert details['operation'] == 'AGENT_METADATA_GET'
+    assert details['exception_type'] == 'builtins.ValueError'
+    assert details['message'] == f'Agent metadata HTTP status {status}'
+    assert any(f['file'] == 'foundry_agent_details.py' and f['function'] == 'read'
+               for f in details['frames'])
+    assert CANARY not in json.dumps(result)
+
+
+def test_json_error_keeps_original_decoder_message_and_actual_type_without_payload() -> None:
+    configured = profile()
+    result = agent_details(COMPANY, configured, Credentials(configured),
+        transport=httpx.MockTransport(lambda request: httpx.Response(200,
+            content=b'{', headers={'content-type': 'application/json'})))
+    details = result['diagnostic']
+    assert details['operation'] == 'AGENT_METADATA_GET_RESPONSE_JSON_DECODE'
+    assert details['exception_type'] == 'json.decoder.JSONDecodeError'
+    assert 'Expecting property name enclosed in double quotes' in details['message']
+    assert details['frames'] and details['frames'][-1]['file'] == 'decoder.py'
+
+def test_diagnostic_preserves_original_meaning_and_codes_while_redacting_private_values():
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    private = 'opaque-private-authentication-value'
+    try:
+        raise RuntimeError('Authentication failed AADSTS700016: invalid_client; '
+            'Bearer ' + private + '; account person@example.invalid; '
+            'tenant 00000000-0000-0000-0000-000000000001; '
+            "directory 'Private Company'; https://host.invalid/secret/path; "
+            '{"error":"invalid_client","private":"raw-response-secret"}')
+    except RuntimeError as error:
+        details = _redacted_error_details(error, 'BROWSER_AUTHENTICATION', redactions=(private,))
+    encoded = json.dumps(details)
+    assert details['exception_type'] == 'builtins.RuntimeError'
+    assert 'Authentication failed AADSTS700016' in details['message']
+    assert details['provider_error_codes'] == ['AADSTS700016', 'invalid_client']
+    assert details['frames'][-1]['function'] == \
+        'test_diagnostic_preserves_original_meaning_and_codes_while_redacting_private_values'
+    for value in [private, 'person@example.invalid', '00000000-0000-0000-0000-000000000001',
+                  'Private Company', 'host.invalid', 'raw-response-secret']:
+        assert value not in encoded
+    assert 'OtherException' not in encoded
+
+
+@pytest.mark.parametrize('private_field', [
+    "password='violet amber mist'", 'client_secret="violet amber mist"',
+    'password: violet amber mist', 'Authorization: Basic dTpw',
+    'Authorization: Bearer violet', 'Proxy-Authorization: Custom violet amber mist',
+    'Cookie: session=violet; owner=amber', 'clientSecret=violet amber mist',
+])
+def test_diagnostic_redacts_complete_sensitive_fields_including_quoted_or_basic_values(
+    private_field: str,
+) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(ValueError('Authentication failed: ' + private_field),
+                                       'BROWSER_AUTHENTICATION')
+    assert details['exception_type'] == 'builtins.ValueError'
+    assert details['message'].startswith('Authentication failed: ')
+    for value in ['violet', 'amber', 'mist', 'dTpw']:
+        assert value not in json.dumps(details)
+
+
+@pytest.mark.parametrize('payload', ['{"private":"violet', '<html>violet amber</html>',
+                                    '["violet",', 'response body: violet amber mist'])
+def test_diagnostic_redacts_unclosed_structured_or_text_payload(payload: str) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(RuntimeError('Server rejected request: ' + payload), 'GET')
+    assert details['message'].startswith('Server rejected request: ')
+    assert 'violet' not in json.dumps(details)
+
+
+def test_diagnostic_keeps_technical_codes_without_private_multiline_body() -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(RuntimeError('Authentication failed\n'
+        'AADSTS700016 invalid_client\nPrivate customer data violet amber mist'), 'AUTH')
+    assert details['message'] == 'Authentication failed'
+    assert details['message_redacted_continuation_lines'] == 2
+    assert details['provider_error_codes'] == ['AADSTS700016', 'invalid_client']
+    assert 'violet' not in json.dumps(details)
+
+
+@pytest.mark.parametrize('fail_rendering', [False, True])
+def test_diagnostic_suppresses_side_effect_output_while_rendering_original_error(
+    capsys: Any, fail_rendering: bool,
+) -> None:
+    import sys
+
+    from apbra_api.foundry_agent_details import _redacted_error_details
+
+    class LoudError(Exception):
+        def __str__(self) -> str:
+            print(CANARY)
+            print(CANARY, file=sys.stderr)
+            if fail_rendering:
+                raise TypeError(CANARY)
+            return 'Useful original failure reason'
+
+    details = _redacted_error_details(LoudError(), 'SDK_CALL')
+    assert details['exception_type'].endswith('.LoudError')
+    if fail_rendering:
+        assert details['message_rendering_error_type'] == 'builtins.TypeError'
+    else:
+        assert details['message'] == 'Useful original failure reason'
+    assert capsys.readouterr() == ('', '')
+    assert CANARY not in json.dumps(details)
+
+
+@pytest.mark.parametrize('message', ['[Errno 61] Connection refused',
+    '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: '
+    'unable to get local issuer certificate (_ssl.c:1000)'])
+def test_standard_network_error_brackets_preserve_the_original_technical_reason(
+    message: str,
+) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(OSError(message), 'AGENT_METADATA_GET')
+    assert details['message'] == message
+    assert details['exception_type'] == 'builtins.OSError'
+
+
+@pytest.mark.parametrize('code', ['QUALIFIED_PROFILES_INVALID',
+    'FOUNDRY_HOST_CONFIGURATION_UNAVAILABLE', 'FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE'])
+def test_known_authored_technical_error_constants_are_preserved_exactly(code: str) -> None:
+    from apbra_api.foundry_agent_details import _redacted_error_details
+    details = _redacted_error_details(ValueError(code), 'PRIVATE_REPORT_QUALIFICATION')
+    assert details['message'] == code

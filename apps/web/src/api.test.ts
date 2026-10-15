@@ -113,3 +113,20 @@ it('reads agent metadata only through the selected tenant settings endpoint',asy
  expect(calls[0][0]).toBe('/api/tenant-settings/agent-details');
  expect(calls[0][1].credentials).toBe('same-origin');expect(calls[0][1].body).toBeUndefined();
 });
+
+
+it('keeps latest Azure metadata distinct from an unpinned saved invocation route',async()=>{
+ const observed={status:'METADATA_OBSERVED_ONLY',settings_version:23,agent:'configured',configuredVersion:null,observedVersion:'observed-version',metadataSource:'AZURE_LATEST',modelDeployment:'configured-model',storedInstructionUtf8Bytes:42,toolTypes:['mcp'],warnings:['AGENT_VERSION_NOT_CONFIGURED']};
+ const fetch=vi.fn(async()=>response(observed));vi.stubGlobal('fetch',fetch);
+ const details=await tenantSettingsApi.agentDetails();
+ expect(details.configuredVersion).toBeNull();expect(details.observedVersion).toBe('observed-version');expect(details.metadataSource).toBe('AZURE_LATEST');
+ const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+ expect(calls).toHaveLength(1);expect(calls[0][0]).toBe('/api/tenant-settings/agent-details');expect(calls[0][1].body).toBeUndefined();
+});
+
+it('retains redacted original metadata error details for the administration UI',async()=>{
+ const diagnostic={operation:'AGENT_METADATA_GET',exception_type:'builtins.ValueError',message:'Agent metadata HTTP status 403',message_truncated:false,frames:[{file:'foundry_agent_details.py',function:'read',line:120}]};
+ vi.stubGlobal('fetch',vi.fn(async()=>response({status:'METADATA_UNAVAILABLE',settings_version:23,warnings:['METADATA_READ_UNAVAILABLE'],diagnostic})));
+ const details=await tenantSettingsApi.agentDetails();
+ expect(details.diagnostic).toEqual(diagnostic);expect(details.diagnostic?.message).toContain('403');
+});

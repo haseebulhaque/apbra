@@ -166,4 +166,5 @@ export const generationApi={
   },
 };
 
-export type AgentDetails={status:string;settings_version:number;agent:string|null;configuredVersion:string|null;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
+export type RedactedDiagnostic={operation:string;exception_type:string;message:string;message_truncated:boolean;frames:Array<{file:string;function:string;line:number}>};
+export type AgentDetails={status:string;settings_version:number;agent:string|null;configuredVersion:string|null;observedVersion?:string|null;metadataSource?:'CONFIGURED_VERSION'|'AZURE_LATEST'|null;diagnostic?:RedactedDiagnostic;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
