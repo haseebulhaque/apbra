@@ -7,7 +7,7 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Consume only the exact reviewed material-settings application correction after its literal candidate ancestor is released; preserve historical source pins and finite edit authority.",
+    "objective": "Consume only the exact reviewed material-settings application correction after its literal candidate ancestor is released; preserve historical source pins and finite edit authority.",
   "requirements": [
     "Owner renewed continued MVP fixes/review/tests/normal merges until2026-10-15T12:59:37Z. APBRA-160 implementation10907 records actual bounded product correction and requires exact immutable protected-source consumption before release. This is governance only, no product edit or runtime/paid authority.",
     "Consume only application.py byte-identical to literal source candidatec92d488793fb541f79b1fc8ab7637244d96c477b with SHA2560fcd6ede465a37e3bbb3c9bd4ffc0d5e2825293135f3c0ecec5b4db1e7f7a6d4, and only if that literal candidate is an ancestor of actual HEAD, its Git blob matches and the current file matches. Do not repin historical baseline hashes or trust arbitrary current HEAD/branch.",
@@ -74,4 +74,3 @@
   "task_mode": "IMPLEMENTATION",
   "readiness": "READY_FOR_IMPLEMENTATION"
 }
-
