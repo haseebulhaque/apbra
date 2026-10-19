@@ -28,10 +28,7 @@ def inverse(source,edits):
         if source.count(after)!=1:raise ValueError('Settings release proof inverse differs')
         source=source.replace(after,before)
     return source
-def strip_uf_changes(source):
-    if 'check_nv.py' in source:
-        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_uf_changes'](source)
-    return inverse(source,UF_EDITS)
+def strip_uf_changes(source):return inverse(source,UF_EDITS)
 def strip_sc_changes(source):
     if 'check_nv.py' in source:
         source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_sc_changes'](source)
