@@ -265,6 +265,19 @@ class TestReservations(unittest.TestCase):
                 g.claim(a.binding.company_id, a.binding.provider_profile)
             self.assertEqual(g.receipt()["attempts_consumed"], 0)
 
+    def test_single_analysis_grant_is_consumed_once_without_design_authority(self):
+        a = approval(stages=("REQUIREMENT_ANALYSIS",))
+        g = self.gate(a)
+        with g.operation(a.case_id, "REQUIREMENT_ANALYSIS"):
+            g.claim(a.binding.company_id, a.binding.provider_profile)
+        self.assertEqual(g.receipt()["attempts_consumed"], 1)
+        self.assertEqual(g.receipt()["operations_consumed"], 1)
+        for stage in ["REQUIREMENT_ANALYSIS", "REPORT_DESIGN"]:
+            with g.operation(a.case_id, stage), self.assertRaises(ProviderConfigurationError):
+                g.claim(a.binding.company_id, a.binding.provider_profile)
+        self.assertEqual(g.receipt()["attempts_consumed"], 1)
+        self.assertFalse(g.receipt()["automatic_refund"])
+
     def test_explicit_stage_order(self):
         a = approval(stages=("REQUIREMENT_ANALYSIS", "REPORT_DESIGN"))
         state = [self.state(a)]

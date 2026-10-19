@@ -118,6 +118,7 @@ from .persistence import (
     TenantSecretRow,
 )
 from .reference_material import ReferenceMaterialService
+from .request_outputs import register_request_output_routes
 from .semantic_bridge import SemanticBridge
 from .tenant_secrets import AesGcmTenantCredentialStore, credential_status
 from .tenant_settings import (
@@ -2331,6 +2332,29 @@ def create_app(
             reservations=(foundry_credentials.reservations
                           if isinstance(foundry_credentials, ReservedCredentials) else None),
         )
+
+    def artifact_access(db: Session, company_id: UUID, case_id: UUID) -> tuple[
+        ProviderProfile, FoundryAccess, Callable[[], bool]
+    ]:
+        snapshot = current_settings(db, company_id)
+        profile = snapshot.settings.provider_profile
+        if (profile is None or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or snapshot.secret_reference_id is not None or foundry_credentials is None):
+            raise ConfigurationUnavailable()
+        validate_qualified_profile(profile, qualified_profiles)
+        credentials = foundry_credentials
+        if credentials.ready(company_id, profile) is not True:
+            raise ConfigurationUnavailable()
+        access = (credentials.resolve_readonly(company_id, profile, case_id=case_id)
+                  if isinstance(credentials, ReservedCredentials)
+                  else credentials.resolve(company_id, profile))
+        return profile, access, lambda: credentials.ready(company_id, profile)
+
+    register_request_output_routes(
+        app, database, require_csrf=require_csrf, objects=artifact_store,
+        native_objects=evidence_store,
+        artifact_access_for=artifact_access if foundry_credentials is not None else None,
+    )
 
     app.state.settings = settings
     app.state.database = database

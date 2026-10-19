@@ -95,7 +95,10 @@ class ReportApproval(BaseModel):
             require(self.ledger_period == PERIOD == time.strftime("%Y-%m", time.gmtime()))
             require(self.binding.authorization_deadline <= BUDGET_END)
             sequence = tuple(s.stage for s in self.slots)
-            require(sequence in (("REPORT_DESIGN",), ("REQUIREMENT_ANALYSIS", "REPORT_DESIGN")))
+            require(sequence in (
+                ("REQUIREMENT_ANALYSIS",), ("REPORT_DESIGN",),
+                ("REQUIREMENT_ANALYSIS", "REPORT_DESIGN"),
+            ))
             if sequence == ("REPORT_DESIGN",):
                 require(
                     self.expected_interpretation_id is not None
@@ -494,6 +497,26 @@ class ReservedCredentials:
             and self.credentials.ready(company_id, profile) is True
         )
 
+    def resolve_readonly(self, company_id: UUID, profile: ProviderProfile,
+                         *, case_id: UUID) -> FoundryAccess:
+        """Existing connected identity for fixed project file GETs, never dispatch authority.
+
+        Only the artifact retriever receives this capability. Paid provider resolution
+        below remains reservation-claiming; reads cannot refund or create stage slots.
+        """
+        require(case_id == self.reservations.approval.case_id)
+        require(self.ready(company_id, profile))
+        access = self.credentials.resolve(company_id, profile)
+
+        def bearer() -> FoundryBearer:
+            require(case_id == self.reservations.approval.case_id)
+            require(self.ready(company_id, profile))
+            result = access.credential()
+            require(self.ready(company_id, profile))
+            return result
+
+        return dataclasses.replace(access, credential=bearer)
+
     def resolve(self, company_id: UUID, profile: ProviderProfile) -> FoundryAccess:
         require(self.ready(company_id, profile))
         access = self.credentials.resolve(company_id, profile)
@@ -548,6 +571,7 @@ def run_report_receiver(
     listener: tuple[str, int] | None = None,
     published_port: int | None = None,
     nonce_factory: Callable[[], str] | None = None,
+    native_receive_only: bool = False,
 ) -> dict[str, Any]:
     """Trusted bootstrap only; all private construction/errors/cleanup stay quiet."""
     from contextlib import redirect_stderr, redirect_stdout
@@ -602,6 +626,12 @@ def run_report_receiver(
                 return same_input(approval, state_loader())
 
             reservations = Reservations(approval, valid, state_loader)
+            if native_receive_only:
+                from apbra_api.native_response_runtime import native_application_factory
+
+                selected_factory = native_application_factory(approval, reservations, create_app)
+            else:
+                selected_factory = application_factory(approval, reservations, create_app)
             run_receiver(
                 plan,
                 channel,
@@ -610,7 +640,7 @@ def run_report_receiver(
                 serve=serve,
                 runtime=True,
                 invocation_gate=reservations.connected,
-                application_factory=application_factory(approval, reservations, create_app),
+                application_factory=selected_factory,
                 listener=listener,
                 published_port=published_port,
                 nonce_factory=nonce_factory,
@@ -789,6 +819,7 @@ def run_private_report_receiver(
     serve: Callable[..., None] | None = None,
     listener: tuple[str, int] | None = None,
     published_port: int | None = None,
+    native_receive_only: bool = False,
 ) -> dict[str, Any]:
     """PID1 owner's optional runtime mode: authority comes only from private frame."""
     import json
@@ -881,6 +912,7 @@ def run_private_report_receiver(
                 listener=listener,
                 published_port=published_port,
                 nonce_factory=lambda: nonce,
+                native_receive_only=native_receive_only,
             )
         except BaseException:
             failed = True

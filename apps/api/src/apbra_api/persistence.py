@@ -966,6 +966,46 @@ class GenerationAttemptRow(Base):
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class RequestOutputRow(Base):
+    """Immutable opaque output; no report-content validation status is asserted."""
+    __tablename__ = "request_outputs"
+    __table_args__ = (
+        ForeignKeyConstraint(["request_version_id", "case_id", "company_id"],
+                             ["case_request_versions.id", "case_request_versions.case_id",
+                              "case_request_versions.company_id"], name="fk_output_request"),
+        ForeignKeyConstraint(["actor_membership_id", "company_id"],
+                             ["memberships.id", "memberships.company_id"], name="fk_output_actor"),
+        ForeignKeyConstraint(["native_receipt_id", "case_id", "company_id"],
+                             ["native_response_receipts.id", "native_response_receipts.case_id",
+                              "native_response_receipts.company_id"], name="fk_output_native"),
+        UniqueConstraint("company_id", "case_id", "actor_membership_id", "command_key",
+                         name="uq_request_output_command"),
+        CheckConstraint("byte_size BETWEEN 1 AND 25000000", name="ck_request_output_bytes"),
+        CheckConstraint("context_version >= 1", name="ck_request_output_context"),
+        CheckConstraint("length(content_digest)=64 AND length(payload_digest)=64",
+                        name="ck_request_output_digest"),
+        CheckConstraint("(origin='IMPORTED_OUTPUT' AND native_receipt_id IS NULL) OR "
+                        "(origin IN ('NATIVE_FILE_TREE','NATIVE_OUTPUT') "
+                        "AND native_receipt_id IS NOT NULL)", name="ck_request_output_origin"),
+        Index("ix_request_outputs_case_created", "case_id", "created_at"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID] = mapped_column(nullable=False)
+    request_version_id: Mapped[UUID] = mapped_column(nullable=False)
+    context_version: Mapped[int] = mapped_column(nullable=False)
+    actor_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_key: Mapped[UUID] = mapped_column(nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    native_receipt_id: Mapped[UUID | None] = mapped_column()
+    origin: Mapped[str] = mapped_column(String(24), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(600), nullable=False, unique=True)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class GeneratedArtifactRow(Base):
     __tablename__ = "generated_artifacts"
     __table_args__ = (
