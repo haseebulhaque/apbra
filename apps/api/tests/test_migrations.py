@@ -29,9 +29,7 @@ def historical_migration_checkpoint(
     request: pytest.FixtureRequest, settings: Settings, database: Database
 ) -> None:
     # Original migration assertions remain at their reviewed08 checkpoint.
-    # Original09 draft assertions retain their checkpoint; clean-head/dispatch tests prove10.
-    if request.node.name.startswith("test_knowledge_drafts_"):
-        command.downgrade(disposable_alembic_config(settings.database_url), "20261013_09")
+    # Draft retention/round-trip checks use current10; isolated09 guard tests stay unchanged.
     if (
         request.node.name != "test_clean_upgrade_head_and_recovery"
         and not request.node.name.startswith("test_knowledge_drafts_")
@@ -599,7 +597,7 @@ def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
     assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
         assert {table: db.scalar(query) for table, query in queries.items()} == before
 
 
@@ -630,7 +628,7 @@ def test_knowledge_drafts_populated_downgrade_preserves_original_history(
     with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
         assert (
             db.execute(
                 text(
