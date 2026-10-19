@@ -25,7 +25,7 @@ HOOK_ADDITIONS = ['d=runpy.run_path(str(Path(__file__).with_name("check_tenant_d
 
 class TenantDocumentDraftScopeTests(unittest.TestCase):
     def copy(self, root):
-        for name in {p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']:
+        for name in c.da['historical_document_fixture_names'](ROOT, h['G']):
             path = ROOT / name
             if path.is_file():
                 target = root / name
