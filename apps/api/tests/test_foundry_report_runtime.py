@@ -1593,3 +1593,104 @@ class TestPrivateApproval(unittest.TestCase):
         self.assertEqual(channel.output.count(b"REPORT_APPROVAL_ACCEPTED"), 1)
         self.assertEqual(channel.output.count(b"ACCOUNT_ACCEPTED"), 1)
         self.assertNotIn(peer.frames[-1]["token"].encode(), channel.output)
+
+
+@pytest.mark.parametrize("capability", ["absent", "not_ready", "resolve_failed"])
+def test_saved_report_reads_do_not_require_live_foundry_capability(
+    settings, database, client, capability
+):
+    """Persisted report reads survive lease loss; new model work remains gated."""
+    from test_generation import confirmed_case
+
+    session = sign_in(client, "member")
+    case, contract = confirmed_case(
+        client, session, "Compare approved applications by region.", "applications.csv",
+        b"Region,Approved\nEast,17\nWest,22\n",
+    )
+    generated = client.post(
+        f"/api/cases/{case['id']}/generation",
+        json={
+            "confirmed_contract_id": contract["id"],
+            "reviewed_design_id": contract["reviewed_design_id"],
+            "command_key": str(uuid4()),
+        },
+        headers=csrf(session),
+    )
+    assert generated.status_code == 201, generated.text
+    attempt = generated.json()["attempt"]
+    assert attempt["status"] == "SUCCEEDED"
+    p = approval().binding.provider_profile
+    with database.session() as db:
+        new_settings(db, UUID(session["actor"]["company_id"]), {
+            "automatic_generation_enabled": True, "provider_profile": p,
+        })
+    configured = settings.model_copy(update={
+        "qualified_provider_profiles_json": json.dumps([p.model_dump()]),
+        "test_semantic_simulator_enabled": False,
+    })
+
+    class UnavailableCredentials:
+        def __init__(self):
+            self.calls = []
+
+        def ready(self, company, profile):
+            self.calls.append("ready")
+            return capability == "resolve_failed"
+
+        def resolve(self, company, profile):
+            self.calls.append("resolve")
+            raise ProviderConfigurationError("SYNTHETIC_CAPABILITY_UNAVAILABLE")
+
+    credentials = UnavailableCredentials()
+    with TestClient(create_app(
+        settings=configured, database=database,
+        foundry_credentials=None if capability == "absent" else credentials,
+    )) as restarted:
+        restarted.cookies.update(client.cookies)
+        root = f"/api/cases/{case['id']}"
+        paths = [
+            f"{root}/generation",
+            f"{root}/generation/{attempt['id']}",
+            f"{root}/generation/{attempt['id']}/artifact",
+            f"{root}/reviewed-designs?confirmed_contract_id={contract['id']}",
+            f"{root}/automatic-designs?confirmed_contract_id={contract['id']}",
+        ]
+        responses = [restarted.get(path) for path in paths]
+        # The settings transition preserves saved artifacts, but correctly makes
+        # the old confirmation ineligible for design selection.
+        assert [r.status_code for r in responses] == [200, 200, 200, 409, 409]
+        assert responses[0].json()["items"][0]["id"] == attempt["id"]
+        assert responses[1].json()["attempt"]["id"] == attempt["id"]
+        assert hashlib.sha256(responses[2].content).hexdigest() == (
+            attempt["artifact"]["content_digest"]
+        )
+        for response in responses[3:]:
+            assert response.json()["error"]["code"] == "STALE_VERSION"
+        assert credentials.calls == []
+        for identity in ("owner", "foreign"):
+            sign_in(restarted, identity)
+            assert [restarted.get(path).status_code for path in paths] == [404] * len(paths)
+        restarted.cookies.clear()
+        assert [restarted.get(path).status_code for path in paths] == [401] * len(paths)
+        assert credentials.calls == []
+        session = sign_in(restarted, "member")
+        blocked = restarted.post(
+            f"{root}/automatic-designs",
+            json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
+            headers=csrf(session),
+        )
+        assert blocked.status_code == 503
+        assert blocked.json()["error"]["code"] == "CONFIGURATION_UNAVAILABLE"
+        # Local compilation reaches its saved-state guard without credentials.
+        stale = restarted.post(
+            f"{root}/generation",
+            json={"confirmed_contract_id": contract["id"], "command_key": str(uuid4())},
+            headers=csrf(session),
+        )
+        assert stale.status_code == 409
+        assert stale.json()["error"]["code"] == "STALE_VERSION"
+        assert credentials.calls == {
+            "absent": [], "not_ready": ["ready"],
+            "resolve_failed": ["ready", "resolve"],
+        }[capability]
+

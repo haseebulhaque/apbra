@@ -1944,7 +1944,9 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
-        result = local_acceptance_service(db, tenant_snapshot(db, actor)).start_refinement_cycle(
+        result = local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).start_refinement_cycle(
             db,
             actor,
             case_id,
@@ -1962,7 +1964,9 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_acceptance_service(db, tenant_snapshot(db, actor)).state(db, actor, case_id)
+        return local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).state(db, actor, case_id)
 
     @app.post("/api/cases/{case_id}/confirm")
     def confirm_interpretation(
@@ -1974,7 +1978,9 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
-        result = local_acceptance_service(db, tenant_snapshot(db, actor)).confirm(
+        result = local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).confirm(
             db,
             actor,
             case_id,
@@ -2011,7 +2017,7 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "items": local_generation_service(db, tenant_snapshot(db, actor)).history(
+            "items": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).history(
                 db, actor, case_id
             )
         }
@@ -2024,7 +2030,7 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_generation_service(db, tenant_snapshot(db, actor)).list_reviewed_designs(
+        return local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).list_reviewed_designs(
             db, actor, case_id, confirmed_contract_id
         )
 
@@ -2068,7 +2074,7 @@ def create_app(
         actor = resolve_actor(db, session_token)
         return {
             "items": local_generation_service(
-                db, tenant_snapshot(db, actor)
+                db, tenant_snapshot(db, actor), resolve_provider=False
             ).automatic_design_history(
                 db,
                 actor,
@@ -2112,7 +2118,7 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         actor = resolve_actor(db, session_token)
         result, created = local_generation_service(
-            db, tenant_snapshot(db, actor), require_bridge=True
+            db, tenant_snapshot(db, actor), resolve_provider=False, require_bridge=True
         ).start(
             db,
             actor,
@@ -2135,7 +2141,7 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).get(
+            "attempt": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).get(
                 db, actor, case_id, attempt_id
             )
         }
@@ -2151,7 +2157,7 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).cancel(
+            "attempt": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).cancel(
                 db, actor, case_id, attempt_id
             )
         }
@@ -2165,7 +2171,7 @@ def create_app(
     ) -> Response:
         actor = resolve_actor(db, session_token)
         content, filename, digest_value = local_generation_service(
-            db, tenant_snapshot(db, actor)
+            db, tenant_snapshot(db, actor), resolve_provider=False
         ).artifact(db, actor, case_id, attempt_id)
         safe_filename = "".join(
             character for character in filename if character.isalnum() or character in "._-"
