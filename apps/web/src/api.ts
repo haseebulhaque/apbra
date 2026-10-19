@@ -36,18 +36,19 @@ export type ProviderUsage={prompt_tokens?:number|null;completion_tokens?:number|
 export type AutomaticDesignAttempt={id:string;confirmed_contract_id:string;status:'RUNNING'|'ELIGIBLE'|'FAILED'|'CANCELLED';provider_profile_id:string|null;model_or_deployment:string|null;prompt_version:string|null;configuration_id:string|null;capability_profile:Record<string,boolean>;usage:ProviderUsage;failure:{code:string;message:string}|null;validation:Record<string,unknown>|null;created_at:string;completed_at:string|null};
 export type UploadCapabilities={data_extensions:string[];reference_extensions:string[];max_file_bytes:number;max_files_per_selection:number;max_answer_characters:number};
 export type GenerationAttempt={id:string;case_id:string;confirmed_contract_id:string;reviewed_design_id:string|null;interpretation_id:string;request_version_id:string;status:'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED';attempt_number:number;retry_of_attempt_id:string|null;supersedes_attempt_id:string|null;provenance:{mode:string;pipeline:string;runtimeEvidence:Record<string,string>;providerGrounding?:ProviderGrounding};validation:Record<string,unknown>|null;failure:{code:string;message:string}|null;created_at:string;started_at:string|null;completed_at:string|null;cancelled_at:string|null;artifact:{id:string;filename:string;content_digest:string;guide_digest?:string|null;byte_size:number;validation_status:'PASS';created_at:string}|null};
-export type ApiErrorBody={error?:{code?:string;message?:string}};
+export type ErrorReference={support_reference?:string;recorded?:boolean;correlation_id?:string};
+export type ApiErrorBody={error?:{code?:string;message?:string}&ErrorReference};
 
 export class ApiError extends Error{
-  readonly status:number;readonly code:string;
-  constructor(status:number,code:string,message:string){super(message);this.name='ApiError';this.status=status;this.code=code}
+  readonly status:number;readonly code:string;readonly support_reference?:string;readonly recorded?:boolean;readonly correlation_id?:string;
+  constructor(status:number,code:string,message:string,reference:ErrorReference={}){super(message);this.name='ApiError';this.status=status;this.code=code;this.support_reference=reference?.support_reference;this.recorded=reference?.recorded;this.correlation_id=reference?.correlation_id}
 }
 
 const jsonHeaders={'Accept':'application/json','Content-Type':'application/json'};
 async function request<T>(path:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(path,{credentials:'same-origin',...init,headers:{...jsonHeaders,...init.headers}});
   const body=await response.json().catch(()=>({})) as T&ApiErrorBody;
-  if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The request could not be completed.');
+  if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The request could not be completed.',body.error);
   return body;
 }
 
@@ -168,3 +169,20 @@ export const generationApi={
 
 export type RedactedDiagnostic={operation:string;exception_type:string;message:string;message_truncated:boolean;frames:Array<{file:string;function:string;line:number}>};
 export type AgentDetails={status:string;settings_version:number;agent:string|null;configuredVersion:string|null;observedVersion?:string|null;metadataSource?:'CONFIGURED_VERSION'|'AZURE_LATEST'|null;diagnostic?:RedactedDiagnostic;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
+
+export type HistoryFilters={from?:string;to?:string;module?:string;actor_id?:string;operation?:string;outcome?:string;support_reference?:string;cursor?:string};
+export type AuditEvent={id:string;occurred_at:string;module:string;operation:string;outcome:string;actor_id:string|null;target_type:string|null;target_id:string|null;details?:Record<string,string|number|boolean|null>;details_withheld?:boolean};
+export type ProviderFailureFacts={http_status?:number;http_reason?:string;request_id?:string;provider_code?:string;provider_type?:string;provider_message?:string;provider_message_redacted?:boolean;provider_param?:string;provider_target?:string;provider_code_redacted?:boolean;provider_type_redacted?:boolean;provider_param_redacted?:boolean;provider_target_redacted?:boolean;transport_attempted?:boolean;response_received?:boolean;exception_type?:string;cause_type?:string};
+export type DiagnosticStack={exception_type:string;frames:Array<{module:string;function:string;line:number}>};
+export type ProcessingError=AuditEvent&{support_reference:string;category:string;message:string;correlation_id:string;case_id:string|null;source_kind:string|null;source_id:string|null;technical?:{diagnostic:DiagnosticStack&{provider?:ProviderFailureFacts;causes?:DiagnosticStack[]};truncated:boolean}|null};
+export type HistoryPage<T>={company_id:string;case_id?:string;items:T[];next_cursor:string|null};
+function historyQuery(filters:HistoryFilters){const query=new URLSearchParams();for(const name of ['from','to','module','actor_id','operation','outcome','support_reference','cursor'] as const){const value=filters[name];if(value)query.set(name,value)}return query.size?`?${query}`:''}
+const historyPath='/api/tenant-settings';
+export const observabilityApi={
+  audit:(membershipId:string,filters:HistoryFilters={})=>request<HistoryPage<AuditEvent>>(`${historyPath}/audit-events${historyQuery(filters)}`,{headers:knowledgeHeaders(membershipId)}),
+  auditDetail:(membershipId:string,id:string)=>request<AuditEvent>(`${historyPath}/audit-events/${encodeURIComponent(id)}`,{headers:knowledgeHeaders(membershipId)}),
+  errors:(membershipId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`${historyPath}/errors${historyQuery(filters)}`,{headers:knowledgeHeaders(membershipId)}),
+  errorDetail:(membershipId:string,id:string)=>request<ProcessingError>(`${historyPath}/errors/${encodeURIComponent(id)}`,{headers:knowledgeHeaders(membershipId)}),
+  caseErrors:(caseId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`/api/cases/${encodeURIComponent(caseId)}/errors${historyQuery(filters)}`),
+};
+

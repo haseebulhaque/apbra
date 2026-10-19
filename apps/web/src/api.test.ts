@@ -1,10 +1,32 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi,knowledgeDocumentsApi} from './api';
+import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi,knowledgeDocumentsApi,observabilityApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
+
+describe('Protected history read transport',()=>{
+  it('encodes filters and record identities and asserts membership without selecting a company',async()=>{
+    const fetch=vi.fn(async()=>response({company_id:'server-company',items:[],next_cursor:null}));vi.stubGlobal('fetch',fetch);
+    await observabilityApi.audit('member-1',{operation:'A&B',from:'2026-10-19T00:00:00Z',cursor:'a+b/c='});
+    await observabilityApi.errorDetail('member-1','record/other?x');
+    await observabilityApi.caseErrors('report/other?x',{support_reference:'reference-1'});
+    const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+    const query=new URL(calls[0][0],'https://synthetic.invalid').searchParams;
+    expect(query.get('operation')).toBe('A&B');expect(query.get('cursor')).toBe('a+b/c=');
+    expect(query.has('company_id')).toBe(false);expect(calls[0][1].headers).toMatchObject({'X-Expected-Membership-Id':'member-1'});
+    expect(calls[1][0]).toBe('/api/tenant-settings/errors/record%2Fother%3Fx');
+    expect(calls[2][0]).toBe('/api/cases/report%2Fother%3Fx/errors?support_reference=reference-1');
+    for(const [,init] of calls){expect(init.credentials).toBe('same-origin');expect(init.body).toBeUndefined();expect(init.headers).not.toHaveProperty('X-CSRF-Token')}
+  });
+  it('retains truthful support metadata and handles an absent or null error object',async()=>{
+    const reference={support_reference:'11111111-1111-4111-8111-111111111111',recorded:false,correlation_id:'22222222-2222-4222-8222-222222222222'};
+    const fetch=vi.fn().mockResolvedValueOnce(response({error:{code:'SYSTEM_ERROR',message:'Safe failure',...reference}},503)).mockResolvedValueOnce(response({error:null},503));vi.stubGlobal('fetch',fetch);
+    await expect(observabilityApi.errors('member-1')).rejects.toMatchObject({status:503,code:'SYSTEM_ERROR',...reference});
+    await expect(observabilityApi.errors('member-1')).rejects.toMatchObject({status:503,code:'REQUEST_FAILED',support_reference:undefined});
+  });
+});
 const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
 const inspectPlaywrightConfig=(databaseUrl:string,environment:Record<string,string|undefined>={})=>spawnSync(process.execPath,[playwrightCli,'test','--list'],{
   cwd:fileURLToPath(new URL('..',import.meta.url)),
