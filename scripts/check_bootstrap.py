@@ -34,6 +34,7 @@ f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_
 k=runpy.run_path(str(Path(__file__).with_name("check_knowledge_lifecycle_20261012.py")))
 d=runpy.run_path(str(Path(__file__).with_name("check_tenant_document_drafts_20261013.py")))
 da=runpy.run_path(Path(__file__).parent/'check_dispatch_audit_20261019.py')
+nv=runpy.run_path(Path(__file__).parent/'check_nv.py')
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 CAPSTONE_REQUIREMENTS_PATHS={'apps/web/src/App.test.tsx','apps/web/src/requirements.test.ts','apps/web/README.md','apps/web/src/requirements.ts','apps/web/src/App.tsx'}
 CAPSTONE_KNOWLEDGE_PATHS={'apps/web/src/knowledge.test.tsx','apps/web/src/App.tsx','apps/web/src/knowledge.ts','apps/web/src/KnowledgePanel.tsx','apps/web/README.md'}
@@ -1274,7 +1275,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  not workflow_path.is_symlink() and
  hashlib.sha256(workflow_bytes).hexdigest() ==
  DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_WORKFLOW_SHA256
- )
+)
         workflow_text = workflow_bytes.decode('utf-8')
         if historical_capacity_fixture:
             workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
@@ -2256,6 +2257,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         document_drafts, e = d['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
         dat,de=da['bind'](root,catalog,sources,bound_provider_registration);errors+=de
+        nvt,ne=nv['bind'](root,catalog,sources,bound_provider_registration);errors+=ne
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2263,7 +2265,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
  foundry_schema_task,
- )
+)
             if not extension_errors:
                 extension_errors += task_errors(foundry_schema_task, catalog, sources)
                 canonical_task = json.dumps(
@@ -2325,7 +2327,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
  demo_ux_task,
- )
+)
             if not extension_errors:
                 extension_errors += task_errors(demo_ux_task, catalog, sources)
                 canonical_task = json.dumps(
@@ -2395,7 +2397,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
  private_content_storage_task,
- )
+)
             if not extension_errors:
                 extension_errors += task_errors(private_content_storage_task, catalog, sources)
                 canonical_task = json.dumps(
@@ -2439,8 +2441,8 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     row.get('id') for row in source_rows[
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT:
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
- ]
- ]
+]
+]
                 if new_source_ids != [row[0] for row in PRIVATE_CONTENT_STORAGE_SOURCES]:
                     extension_errors.append('APBRA-173A new source ordering differs')
                 if (
@@ -2448,15 +2450,14 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  and len(source_rows) !=
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT + len(PRIVATE_CONTENT_STORAGE_SOURCES)
  ):
-# Pinned append-only APBRA-177 source.
                     later_rows = source_rows[
  PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT
  + len(PRIVATE_CONTENT_STORAGE_SOURCES):
- ]
+]
                     expected_later = (
  CURRENT_STATE_DOCS_SOURCES + HOSTED_WEB_RELEASE_SOURCES +
  CURRENT_DEMO_SOURCES
- )
+)
                     if (
  len(later_rows) != len(expected_later)
  or any(
@@ -2465,7 +2466,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  ).hexdigest()) != (source_id, expected_sha)
  for row, (source_id, _content_id, _version, expected_sha)
  in zip(later_rows, expected_later)
- )
+)
  ):
                         extension_errors.append('APBRA-173A registration added unrelated source rows')
                 for historical_test, expected_sha in PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256.items():
@@ -2486,7 +2487,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     package_source = next(
                         (source for source in sources['sources'] if source['id'] == source_id),
  None,
- )
+)
                     if package_source is None:
                         extension_errors.append('APBRA-173A accepted source is missing: ' + source_id)
                     else:
@@ -2496,7 +2497,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                         if hashlib.sha256(canonical_source).hexdigest() != expected_sha:
                             extension_errors.append(
                                 'APBRA-173A source differs from accepted provenance: ' + source_id
- )
+)
                         if (
                             package_source.get('content_id'),
                             package_source.get('version'),
@@ -2513,7 +2514,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
  current_state_docs_task,
- )
+)
             if not extension_errors:
                 extension_errors += task_errors(current_state_docs_task, catalog, sources)
                 canonical_task = json.dumps(
@@ -2554,7 +2555,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                 registered_rows = source_rows[
  CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT:
  CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT + len(CURRENT_STATE_DOCS_SOURCES)
- ]
+]
                 if [row.get('id') for row in registered_rows] != [row[0] for row in CURRENT_STATE_DOCS_SOURCES]:
                     extension_errors.append('APBRA-177 source ordering differs')
                 if (
@@ -2565,7 +2566,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     later_rows = source_rows[
  CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT
  + len(CURRENT_STATE_DOCS_SOURCES):
- ]
+]
                     if (
  len(later_rows) != len(HOSTED_WEB_RELEASE_SOURCES + CURRENT_DEMO_SOURCES)
  or any(
@@ -2574,7 +2575,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  ).encode()).hexdigest()) != (source_id, expected_sha)
  for row, (source_id, _content_id, _version, expected_sha)
  in zip(later_rows, HOSTED_WEB_RELEASE_SOURCES + CURRENT_DEMO_SOURCES)
- )
+)
  ):
                         extension_errors.append('APBRA-177 registration added unrelated source rows')
                 for section, expected in CURRENT_STATE_DOCS_GATE_SHA256.items():
@@ -2608,7 +2609,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             extension_errors = schema_errors(
                 load_json(root / 'contracts/engineering/task-contract.schema.json'),
  hosted_web_release_task,
- )
+)
             if not extension_errors:
                 extension_errors += task_errors(hosted_web_release_task, catalog, sources)
                 if hashlib.sha256(json.dumps(
@@ -2645,13 +2646,13 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                 registered_rows = source_rows[
  HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT:
  HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES)
- ]
+]
                 if [row.get('id') for row in registered_rows] != [row[0] for row in HOSTED_WEB_RELEASE_SOURCES]:
                     extension_errors.append('APBRA-173B source ordering differs')
                 if active_branch == HOSTED_WEB_RELEASE_REGISTRATION_BRANCH:
                     later_rows = source_rows[
  HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT + len(HOSTED_WEB_RELEASE_SOURCES):
- ]
+]
                     if (len(later_rows) != len(CURRENT_DEMO_SOURCES) or any(
                         (row.get('id'), hashlib.sha256(json.dumps(
                             row, sort_keys=True, separators=(',', ':'),
@@ -2772,7 +2773,6 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += extension_errors
             if extension_errors:
                 company_lifecycle_task = None
-# New scopes cannot rescue old ones.
         legacy_authorities = (
  (shell_task, CAPSTONE_SHELL_PATHS),
  (requirements_task, CAPSTONE_REQUIREMENTS_PATHS),
@@ -2797,7 +2797,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  (post_capstone_product_reconciliation_task, POST_CAPSTONE_PRODUCT_RECONCILIATION_PATHS),
  (data_model_documentation_reconciliation_task, DATA_MODEL_DOCUMENTATION_RECONCILIATION_PATHS),
  (confirmation_readiness_integrity_task, CONFIRMATION_READINESS_INTEGRITY_PATHS),
- )
+)
         bound_authorities = (
  (invited_private_case_foundation_task, INVITED_PRIVATE_CASE_FOUNDATION_PATHS),
  (durable_conversation_evidence_acceptance_task, DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_PATHS),
@@ -2835,11 +2835,12 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             (knowledge_lifecycle, k['P']),
             (document_drafts, d['P']),
 (dat,da['P']),
+(nvt,nv['P']),
 (gt,gp['P']),
 (ut,uf['P']),
 (st,sc['P']),
 (spt,sp['P']),
- )
+)
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
@@ -2847,7 +2848,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             registered_tasks['APBRA-160'] = (
  task if active_branch in {
  CURRENT_DEMO_SOURCE_BRANCH, APBRA160_CI_CAPACITY_BRANCH,
- }
+}
                 else agent_details if active_branch == n['B']
                 else metadata_observations if active_branch == zz['B']
                 else ut if active_branch==uf['B']
@@ -2858,6 +2859,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                 else w if active_branch==x['B']
                 else v if active_branch==q['B']
                 else document_drafts if active_branch in {d['B'], d['R']}
+                else nvt if active_branch==nv['B']
                 else dat if active_branch in {da['B'],da['R']}
                 else knowledge_lifecycle if active_branch in {k['B'], k['R']}
                 else fixture_staging if active_branch in {f['B'], f['R']}
@@ -2875,13 +2877,13 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
  } else provider_retrieval_task if active_branch in {
  PROVIDER_RETRIEVAL_BRANCH, PROVIDER_RETRIEVAL_REGISTRATION_BRANCH,
  } else foundry_schema_task
- )
+)
         if active_task_id == 'APBRA-173':
             registered_tasks['APBRA-173'] = (
  private_content_storage_task if active_branch in {
  PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
  } else hosted_web_release_task
- )
+)
         if changed_paths is not None and changed_paths:
             active_task = registered_tasks.get(active_task_id or '')
             if active_task_id is None:
@@ -3016,6 +3018,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += k['errors'](active_task_id, active_branch, changed_paths)
             errors += d['errors'](active_task_id, active_branch, changed_paths)
             errors+=da['errors'](dat,active_branch,changed_paths)
+            errors+=nv['errors'](nvt,active_branch,changed_paths)
             errors+=gp['phase_errors'](gt,active_branch,changed_paths)
             errors+=uf['phase_errors'](ut,active_branch,changed_paths)
             errors+=sc['phase_errors'](st,active_branch,changed_paths)
@@ -3175,7 +3178,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths) and not nv['ok'](nvt,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3189,7 +3192,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths) and not nv['ok'](nvt,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
@@ -3481,7 +3484,6 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         return errors, manifest
     except (ValueError, KeyError, TypeError, OSError, subprocess.SubprocessError) as exc:
         return ['Checker failure: ' + type(exc).__name__ + ': ' + str(exc)], {}
-# Checked delivery context.
 def delivery_context(root: Path = ROOT) -> tuple[str | None, str | None, set[str]]:
     """Resolve the current branch task and exact Git changes without cumulative authority."""
     branch = os.getenv('GITHUB_HEAD_REF')
@@ -3498,7 +3500,7 @@ def delivery_context(root: Path = ROOT) -> tuple[str | None, str | None, set[str
         ['git', '-C', str(root), 'diff', '--name-only', '--diff-filter=ACDMRTUXB', 'HEAD'],
         ['git', '-C', str(root), 'diff', '--cached', '--name-only', '--diff-filter=ACDMRTUXB'],
         ['git', '-C', str(root), 'ls-files', '--others', '--exclude-standard'],
-    )
+)
     changed = set()
     for command in commands:
         result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=10)
@@ -3510,7 +3512,6 @@ def write_report(root: Path, name: str, report: dict) -> None:
         raise ValueError('Report must be a safe relative path under artifacts/')
     root = root.resolve(strict=True)
     parts = name.split('/')
-# Validate before mkdir.
     candidate = root
     for index, part in enumerate(parts):
         candidate = candidate / part
@@ -3526,7 +3527,6 @@ def write_report(root: Path, name: str, report: dict) -> None:
             raise ValueError('Report parent must be a directory')
     if not candidate.resolve().is_relative_to(root / 'artifacts'):
         raise ValueError('Report escaped artifacts/')
-# Descriptor traversal; no symlinks.
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     directory = os.open(root, flags)
     try:
@@ -3575,7 +3575,6 @@ def main() -> int:
     for error in errors:
         print(error, file=sys.stderr)
     return 1 if errors else 0
-# Cache exact strings only.
 def _memoized_path(function):
     memo = cache(function)
     def call(*args, **kwargs):
@@ -3587,4 +3586,3 @@ valid_path = _memoized_path(valid_path)
 if __name__ == '__main__':
     raise SystemExit(main())
 
-# Release-transition test uses explicit missing ancestry; authority is unchanged.

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-NATIVE-OUTPUT-VERIFICATION-20261019",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register a finite four-file current-source witness for the existing P62 native-output delivery and exact released-source consumption, preserving all historical verification.",
+  "requirements": [
+    "Owner-approved APBRA-160 MVP release continuation2026-10-19: fix bounded required-check failures for the already reviewed sixty-two-path native output and audit increment; register phase-aware historical-source verification only. Preserve all original task/source/card/history bytes, hashes, assertions and negative checks. No product scope expansion, policy waiver, paid AI, credential/settings change or production deployment.",
+    "Actual full integrated bootstrap on15336b8c againstmain93f1453 ran633tests and failed eight current-source assertions across exactly four existing authorized product paths. Historical Git blob assertions passed. This correction preserves every original historical expected hash and assertion.",
+    "The prospective witness requires both the original dispatch task and this separate governance task to bind completely, actual APBRA-160 product branch, nonempty literal P62 subset and successful actual full checker. It returns only the four literal overlap paths.",
+    "Released consumption requires actual candidate15336b8c ancestry in both HEAD and origin/main and independently pinned candidate/current file hashes; no guessed future release SHA, pending-candidate release claim or current-head repinning.",
+    "Registration changes exactly seven governance paths, no apps/dependencies/workflows/source register/cards or old tasks. Exact hook inverses retain complete old checker/helper AST; checker byte cap remains unchanged.",
+    "Withdrawal, source/history drift, false context, checker failure, unknown/empty/mixed scope, stale main, wrong candidate/current bytes and malformed/symlink task must fail closed.",
+    "The owner has separately authorized reviewed publication, required-check normal merges and passive local installation; this contract supplies only bounded bootstrap verification authority and grants no provider invocation, authentication or paid capability.",
+    "Historical prospective document fixtures retain their exact pinned old universe plus the two required checker helper dependencies. Only the dispatch fixture expected-dependency assertion gains the new helper; an exact inverse preserves the complete old test AST and every assertion."
+  ],
+  "adrs": [
+    "Existing FastAPI/PostgreSQL architecture and provider-neutral boundaries; no dependencies, platform or paid-service changes."
+  ],
+  "architecture_refs": [
+    "Existing checked architecture/source bindings unchanged; no runtime/framework/dependency selection.",
+    "Actualbase93f145300f4002883cf48b8d5c6b0b28053489cb merged governance PR175; exact existing product candidate15336b8c0ce628511b1dafef0aac9356ae7aeb89."
+  ],
+  "allowed_paths": [
+    "scripts/check_bootstrap.py",
+    "scripts/check_dispatch_audit_20261019.py",
+    "scripts/check_nv.py",
+    "scripts/check_sp.py",
+    "tasks/APBRA-160-native-output-verification-20261019.json",
+    "tests/bootstrap/test_dispatch_audit_20261019_scope.py",
+    "tests/bootstrap/test_native_output_verification_20261019_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    ".github/**",
+    "agents/**",
+    "contracts/**",
+    "docs/**",
+    "infrastructure/**",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "All original historical expected hashes/assertions,65old task bytes, source/card bytes and complete helper/checker AST after only exact inverse hooks retained.",
+    "Exactly seven governance paths; prospective and released overlap witness is exactly four literal already-authorized API paths, with independent binding and branch/check/ancestry/blob guards.",
+    "Positive and negative tests plus full integrated bootstrap, independent exact-head review and required hosted checks; retain every failure and do not waive native release protection."
+  ],
+  "verification_required": [
+    "CI policy, scope and complete bootstrap tests; canonical source/history secret scan and independent source/evidence review.",
+    "Four prospective current-source tests and released source witnesses; reject withdrawal, context/check failures, branch/scope changes, stale origin/main, mutated candidate/current source, missing history and symlink tasks.",
+    "Preserve P62 runtime/test/migration bytes exactly, no business or reporting policy change."
+  ],
+  "out_of_scope": [
+    "Product, dependencies, workflows, old task/source/card pin changes and global source enumeration filtering.",
+    "Credential access, owner configuration/database inspection, model invocation, new paid capability, settings changes and production deployment."
+  ],
+  "escalate_when": [
+    "Required validation fails, binding/ancestry cannot be established, source scope broadens or data/secrets cannot be preserved.",
+    "Substantive action denial or unverified paid requirement; service-capacity retry only through normal expressly approved route."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex/root owner delegated; local CLI Git uses existing host identity, no new remote identity asserted",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "93f145300f4002883cf48b8d5c6b0b28053489cb",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-native-output-verification",
+  "source_ids": [
+    "apbra-160-editable-first-draft-direction",
+    "apbra-160-editable-first-draft-delivery"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Governance verification correction only; independent review and passing required checks precede an explicitly owner-authorized normal merge. No automatic merge or runtime grant.",
+  "dependencies": [
+    "Retain exact original dispatch/audit registration from merged PR175 and all original65task files.",
+    "Only existing P62 product candidate15336b8c0ce628511b1dafef0aac9356ae7aeb89; retain original fullAPI2205/fullbrowser120/web512+3 evidence without claiming new runs."
+  ]
+}

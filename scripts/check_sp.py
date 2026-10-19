@@ -38,6 +38,8 @@ def strip_hooks(source):
         source=source.replace(hook,'')
     return source
 def released_product_paths(root):
+    qualified=runpy.run_path(Path(__file__).with_name('check_nv.py'))['qualified_current_paths'](root)
+    if qualified:return qualified
     try:
         checker=runpy.run_path(Path(__file__).with_name('check_bootstrap.py'))
         own,errors=bind(root,json.loads((root/'agents/catalog.json').read_text()),json.loads((root/'docs/source-register.json').read_text()),checker['bound_provider_registration'])
