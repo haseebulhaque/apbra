@@ -115,6 +115,11 @@ def qualified_product_paths(root,checker):
     """Supersede current pins only with actual bound, checked product delivery."""
     import json
     task_id,branch,paths=checker['delivery_context'](root)
+    if not (task_id=='APBRA-160' and branch==B and paths and paths<=PRODUCT):
+        import runpy
+        from pathlib import Path
+        witness=runpy.run_path(Path(__file__).with_name('check_nv.py'))['qualified_for_checker'](root,checker)
+        if witness:return witness|runpy.run_path(Path(__file__).with_name('check_uf.py'))['qualified_consumption'](root,checker)
     if task_id!='APBRA-160' or branch!=B or not paths or not paths<=PRODUCT:
         import runpy
         from pathlib import Path
