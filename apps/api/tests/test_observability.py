@@ -752,15 +752,19 @@ def test_offline_native_output_operations_use_exact_reports_mapping_before_limit
 ) -> None:
     operations = ["NATIVE_ANALYSIS_INTAKE", "REQUEST_OUTPUT_SAVED",
                   "NATIVE_ANALYSIS_INTAKE_PRIVATE", "REQUEST_OUTPUT_PRIVATE"]
+    # SQLite does not round-trip timezone offsets; retain the aware fixture rows.
+    rows = []
     for index, operation in enumerate(operations):
-        offline_db.add(AuditEventRow(
+        row = AuditEventRow(
             id=uuid4(), company_id=offline_actor.company_id,
             actor_membership_id=offline_actor.membership_id, event_type=operation,
             resource_type="REQUEST_OUTPUT", resource_id=uuid4(),
             created_at=datetime.now(UTC) + timedelta(seconds=index),
             details_json=json.dumps({"sha256": "a" * 64, "byte_size": 42,
                                      "outcome": "SUCCEEDED", "filename": "PRIVATE-CANARY"}),
-        ))
+        )
+        rows.append(row)
+        offline_db.add(row)
     offline_db.flush()
     result = list_audit(offline_db, offline_actor,
                         HistoryFilters(module="Reports", limit=1),
