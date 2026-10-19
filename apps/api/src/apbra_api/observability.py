@@ -31,6 +31,7 @@ from .provider_diagnostics import safe_provider_diagnostic
 
 CURRENT_CORRELATION: ContextVar[UUID | None] = ContextVar("apbra_correlation", default=None)
 MODULES = frozenset({"Identity", "Company", "Reports", "Settings", "Documents", "API", "Other"})
+_NATIVE_REPORT_OPERATIONS = frozenset({"NATIVE_ANALYSIS_INTAKE", "REQUEST_OUTPUT_SAVED"})
 MESSAGES = {
     "VALIDATION": (
         "The request could not be processed. Review its inputs or contact your administrator."
@@ -57,7 +58,7 @@ _UUID_DETAILS = frozenset(
         "correlation_id",
     }
 )
-_HASH_DETAILS = frozenset({"digest", "content_digest", "payload_digest"})
+_HASH_DETAILS = frozenset({"digest", "content_digest", "payload_digest", "sha256"})
 _INT_DETAILS = frozenset({"version", "settings_version", "revision", "byte_size"})
 
 
@@ -282,6 +283,8 @@ def _authorize(db: ApplicationSession, actor: Actor, case_id: UUID | None = None
 
 
 def _audit_module(operation: str) -> str:
+    if operation in _NATIVE_REPORT_OPERATIONS:
+        return "Reports"
     if operation.startswith(("MEMBERSHIP", "INVITATION", "COMPANY", "PROFILE")):
         return "Company"
     if operation.startswith(("TENANT_SETTINGS", "SETTINGS", "SECRET")):
@@ -510,6 +513,7 @@ def list_audit(
 
         conditions.append(
             case(
+                (AuditEventRow.event_type.in_(_NATIVE_REPORT_OPERATIONS), "Reports"),
                 *[
                     (AuditEventRow.event_type.like(prefix + "%"), _audit_module(prefix))
                     for prefix in (

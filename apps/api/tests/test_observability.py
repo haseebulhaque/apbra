@@ -746,3 +746,61 @@ def test_postgresql_recording_failure_does_not_claim_durable_history(
     assert error["recorded"] is False
     assert UUID(error["support_reference"])
     assert "synthetic-private-connection-string" not in response.text
+
+def test_offline_native_output_operations_use_exact_reports_mapping_before_limit(
+    offline_db: ApplicationSession, offline_actor: Actor,
+) -> None:
+    operations = ["NATIVE_ANALYSIS_INTAKE", "REQUEST_OUTPUT_SAVED",
+                  "NATIVE_ANALYSIS_INTAKE_PRIVATE", "REQUEST_OUTPUT_PRIVATE"]
+    for index, operation in enumerate(operations):
+        offline_db.add(AuditEventRow(
+            id=uuid4(), company_id=offline_actor.company_id,
+            actor_membership_id=offline_actor.membership_id, event_type=operation,
+            resource_type="REQUEST_OUTPUT", resource_id=uuid4(),
+            created_at=datetime.now(UTC) + timedelta(seconds=index),
+            details_json=json.dumps({"sha256": "a" * 64, "byte_size": 42,
+                                     "outcome": "SUCCEEDED", "filename": "PRIVATE-CANARY"}),
+        ))
+    offline_db.flush()
+    result = list_audit(offline_db, offline_actor,
+                        HistoryFilters(module="Reports", limit=1),
+                        cursor_secret=offline_actor.identity_id.hex)
+    item = result["items"][0]
+    assert item["operation"] == "REQUEST_OUTPUT_SAVED"
+    assert item["module"] == "Reports" and item["outcome"] == "SUCCEEDED"
+    assert item["details"] == {"sha256": "a" * 64, "byte_size": 42, "outcome": "SUCCEEDED"}
+    assert result["next_cursor"]
+    second = list_audit(offline_db, offline_actor,
+                        HistoryFilters(module="Reports", cursor=result["next_cursor"]),
+                        cursor_secret=offline_actor.identity_id.hex)
+    assert [row["operation"] for row in second["items"]] == ["NATIVE_ANALYSIS_INTAKE"]
+    other = list_audit(offline_db, offline_actor, HistoryFilters(module="Other"),
+                       cursor_secret=offline_actor.identity_id.hex)
+    assert {row["operation"] for row in other["items"]} == set(operations[2:])
+    assert "PRIVATE-CANARY" not in json.dumps([result, second, other])
+
+
+def test_output_storage_audit_appears_in_protected_reports_history(client: Any) -> None:
+    from conftest import csrf, sign_in
+
+    session = sign_in(client)
+    created = client.post("/api/cases", json={"request_text": "Synthetic opaque history"},
+                          headers={**csrf(session), "Idempotency-Key": str(uuid4())})
+    assert created.status_code == 201
+    case = created.json()["case"]
+    saved = client.post(f"/api/cases/{case['id']}/outputs", content=b"Opaque original content",
+                        params={"filename": "PRIVATE-FILENAME-CANARY.zip",
+                                "expected_context_version": 1, "command_key": str(uuid4())},
+                        headers={**csrf(session), "Content-Type": "application/octet-stream"})
+    assert saved.status_code == 200
+    output = saved.json()["output"]
+    assert output["content_verification"] == "NOT_RUN"
+    history = client.get("/api/tenant-settings/audit-events",
+                         params={"module": "Reports", "operation": "REQUEST_OUTPUT_SAVED"},
+                         headers={"X-Expected-Membership-Id": session["actor"]["membership_id"]})
+    assert history.status_code == 200
+    row = history.json()["items"][0]
+    assert row["target_id"] == output["id"] and row["outcome"] == "SUCCEEDED"
+    assert row["details"] == {"sha256": output["sha256"], "byte_size": output["bytes"],
+                              "outcome": "SUCCEEDED"}
+    assert "PRIVATE-FILENAME-CANARY" not in history.text

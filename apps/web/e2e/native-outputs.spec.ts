@@ -40,3 +40,15 @@ test('owner passive native inspection cannot acquire a send grant',async({page})
  await expect(page.getByText('No saved Azure responses.',{exact:true})).toBeVisible();
  expect(sends).toEqual([]);
 });
+
+test('same-report navigation retains a queued generated output without saving',async({page})=>{
+ await openNew(page,'member');
+ const saves:string[]=[];page.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname.endsWith('/outputs'))saves.push(r.url())});
+ await page.getByLabel('Generated output file').setInputFiles({name:'Queued-original.bin',mimeType:'application/octet-stream',buffer:Buffer.from('SYNTHETIC-NOT-SENT')});
+ await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name:'Home',exact:true}).click();
+ await expect(page.getByLabel('Generated output file')).toBeHidden();
+ await page.getByRole('button',{name:'Current report',exact:true}).click();
+ await expect(page.getByLabel('Generated output file')).toBeVisible();
+ expect(await page.getByLabel('Generated output file').evaluate((element:HTMLInputElement)=>element.files?.[0]?.name)).toBe('Queued-original.bin');
+ expect(saves).toEqual([]);
+});

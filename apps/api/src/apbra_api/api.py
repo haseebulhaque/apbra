@@ -2017,7 +2017,9 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "items": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).history(
+            "items": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).history(
                 db, actor, case_id
             )
         }
@@ -2030,7 +2032,9 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).list_reviewed_designs(
+        return local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).list_reviewed_designs(
             db, actor, case_id, confirmed_contract_id
         )
 
@@ -2141,7 +2145,9 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).get(
+            "attempt": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).get(
                 db, actor, case_id, attempt_id
             )
         }
@@ -2157,7 +2163,9 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor), resolve_provider=False).cancel(
+            "attempt": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).cancel(
                 db, actor, case_id, attempt_id
             )
         }
