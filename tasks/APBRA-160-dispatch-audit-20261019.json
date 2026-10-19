@@ -7,14 +7,14 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Register the exact combined local dispatch, audit/history, native receipt/contract and opaque output/artifact transport/UI increment: fifty-four distinct literal product paths; preserve historical authority and external-action gates.",
+  "objective": "Register the exact combined local dispatch, audit/history, native receipt/contract and opaque output/artifact transport/UI increment: fifty-seven distinct literal product paths; preserve historical authority and external-action gates.",
   "requirements": [
     "Direct owner-delegated local MVP continuation2026-10-19: integrate the reviewed dispatch/audit checkpoint with dependent native receipts and contract bindings, opaque request outputs and artifact transport/UI; preserve original model output and the separate compiler. Prepare combined release/adoption plan. No publication/merge, live preview change, credential change, owner configuration/database inspection, paid service invocation or WhatsApp access is authorized.",
     "Current source context: Confluence8519682v106 and9404417v23, JiraAPBRA-160 InProgress updated2026-10-19T03:18:57.255+1100. Historical accepted source rows28/9 remain byte-identical and do not assert live qualification.",
     "Dispatch scope: immutable tenant/document/revision/settings-bound preparation, SEND claim before IO, no blind UNKNOWN retry, current membership/CSRF/tenant binding, test-profile provider injection only. Indexing/removal/AI availability remain unverified.",
     "Audit scope: additive11schema parent10, immutable tenant-bound error/technical rows; admin audit/error history plus private report-safe views, bounded cursor pagination, server support/correlation UUIDs, truthful recorded flag and closed technical grammar. No raw provider/request/exception text or new business/reporting policy.",
     "Preserve merged OIDC, current Tenant Settings routing, authentication, tenant/private-resource isolation, original data/history, budget controls and rollback guard. Do not modify source/card/workflow/historicaltask pins.",
-    "Registration-only branch changes exactly six governance paths; final product branch changes a nonempty subset of fifty-four literal source/test/migration/fixture/browser-test paths and no governance files. This local proposal does not establish release, hosted CI or live qualification.",
+    "Registration-only branch changes exactly six governance paths; final product branch changes a nonempty subset of fifty-seven literal source/test/migration/fixture/browser-test paths and no governance files. This local proposal does not establish release, hosted CI or live qualification.",
     "Companion UI: admin-only history navigation/filter/detail reads with expected-membership and response-context binding; safe report disclosure and canonical support reference with truthful recorded status. Escape all content; reject stale async replies; no new provider/workflow/report decisions.",
     "Native receipts: original protected immutable bytes, exact tenant/case/context/settings/stage/input bindings, passive default and one fresh finite explicitly granted native stage; explicit offline contract intake and confirmation retain all authorization and integrity guards.",
     "Opaque outputs: unchanged original model text/files/tree/archive under exact request ownership with protected storage/download, no mandatory ReportDesign conversion or report-completeness gate. Fixed same-project bounded annotation-derived GET uses existing case-bound Entra capability, no arbitrary model URLs, redirects or automatic retries. Preserve the old compiler separately.",
@@ -69,7 +69,10 @@
     "apps/api/tests/test_provider_diagnostics.py",
     "apps/api/tests/test_request_outputs.py",
     "apps/web/e2e/audit-history.spec.ts",
+    "apps/web/e2e/durable-conversation.spec.ts",
     "apps/web/e2e/native-outputs.spec.ts",
+    "apps/web/e2e/private-case.spec.ts",
+    "apps/web/e2e/protected-generation.spec.ts",
     "apps/web/src/NativeAgentCheck.test.tsx",
     "apps/web/src/NativeAgentCheck.tsx",
     "apps/web/src/RequestOutputs.test.tsx",
@@ -115,7 +118,8 @@
     "Full API tests on isolated synthetic PostgreSQL; frozen dependencies, full Ruff/mypy, source pre/post vectors, sentinel and owned-resource cleanup.",
     "Full bootstrap unit suite, exact registration/product scope witnesses and failures for missing/malformed/withdrawn task, source/history edits, actor/card/base/branch mismatch, duplicate/extra/omitted paths, mutated hooks/repinned sections.",
     "Independent exact-head source and evidence review; local secret scan and required hosted CI before any future separately approved publication.",
-    "TypeScript, production web build, full web tests and full headless Playwright suite against owned isolated loopback stack; current owner preview/browser profile never reused."
+    "TypeScript, production web build, full web tests and full headless Playwright suite against owned isolated loopback stack; current owner preview/browser profile never reused.",
+    "Three pre-existing E2E files change only14generic file-input selectors to the exact existing Browse files label; full inverse restores every original assertion/test. Verify queued native output survives same-report navigation without saving."
   ],
   "out_of_scope": [
     "Settings-refresh context changes and unrelated compiler/table/provenance corrections.",
