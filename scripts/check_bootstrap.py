@@ -33,6 +33,7 @@ u=runpy.run_path(str(Path(__file__).with_name("check_ai_authored_layout_raw_ingr
 f=runpy.run_path(str(Path(__file__).with_name("check_historical_fixture_staging_20261012.py")))
 k=runpy.run_path(str(Path(__file__).with_name("check_knowledge_lifecycle_20261012.py")))
 d=runpy.run_path(str(Path(__file__).with_name("check_tenant_document_drafts_20261013.py")))
+da=runpy.run_path(Path(__file__).parent/'check_dispatch_audit_20261019.py')
 CAPSTONE_SHELL_PATHS={'apps/web/src/style.css','apps/web/README.md','apps/web/src/workflow.test.ts','apps/web/src/App.tsx','apps/web/tsconfig.json','apps/web/package.json','apps/web/src/workflow.ts','apps/web/package-lock.json','apps/web/index.html','apps/web/src/App.test.tsx','apps/web/src/main.tsx'}
 CAPSTONE_REQUIREMENTS_PATHS={'apps/web/src/App.test.tsx','apps/web/src/requirements.test.ts','apps/web/README.md','apps/web/src/requirements.ts','apps/web/src/App.tsx'}
 CAPSTONE_KNOWLEDGE_PATHS={'apps/web/src/knowledge.test.tsx','apps/web/src/App.tsx','apps/web/src/knowledge.ts','apps/web/src/KnowledgePanel.tsx','apps/web/README.md'}
@@ -314,9 +315,9 @@ DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS={
 }
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_CAPACITY_AMENDMENT_PATHS=(
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_AMENDMENT_PATHS | {
-        '.github/workflows/bootstrap.yml',
-        'scripts/check_ci_policy.py',
-        'tests/bootstrap/test_ci_policy.py',
+'.github/workflows/bootstrap.yml',
+'scripts/check_ci_policy.py',
+'tests/bootstrap/test_ci_policy.py',
 }
 )
 DURABLE_CONVERSATION_EVIDENCE_ACCEPTANCE_TASK_SHA256='613490d5ecf7eca776b89c340bbe657dda3d64ad6b37dcd0d7ed7f16b834ecf1'
@@ -682,11 +683,11 @@ PROVIDER_NEUTRAL_SSO_REGISTRATION_PATHS={
 }
 PROVIDER_NEUTRAL_SSO_TASK_SHA256='8edb604b7e9a33c3a7249a71a17b50e8578ad86cf00139f2a9bdfedc9f07a210'
 PROVIDER_NEUTRAL_SSO_SOURCES=(
-    ('apbra-172-identity-rbac','4030847',4,'a0360420eda28492d9cacfba0c5617a4bfd884034e9397c5de984edf4e1eed00'),
-    ('apbra-172-data-integration-identity-audit','4063348',4,'cb3c6716e6784717f5d578614179c257b75364b0087a9f3ca359d20a6a9ccea9'),
-    ('apbra-172-business-functional-requirements','3932362',7,'aa7b6f22711923856d302cd9751baff6a508f9031bced9f0c56585400242232b'),
-    ('apbra-172-multi-tenancy-isolation','4063408',5,'5bdeb6e7532139b3759a80bf9e23462b8f8c3e8bc0f0d1b88dbf8ce72f37b0e1'),
-    ('apbra-172-platform-identity-deployment-adrs','3932483',4,'81601b05483ced7d44add3cdea5791f6294c7aa5ece0430b249f000a87bf1a8f'),
+('apbra-172-identity-rbac','4030847',4,'a0360420eda28492d9cacfba0c5617a4bfd884034e9397c5de984edf4e1eed00'),
+('apbra-172-data-integration-identity-audit','4063348',4,'cb3c6716e6784717f5d578614179c257b75364b0087a9f3ca359d20a6a9ccea9'),
+('apbra-172-business-functional-requirements','3932362',7,'aa7b6f22711923856d302cd9751baff6a508f9031bced9f0c56585400242232b'),
+('apbra-172-multi-tenancy-isolation','4063408',5,'5bdeb6e7532139b3759a80bf9e23462b8f8c3e8bc0f0d1b88dbf8ce72f37b0e1'),
+('apbra-172-platform-identity-deployment-adrs','3932483',4,'81601b05483ced7d44add3cdea5791f6294c7aa5ece0430b249f000a87bf1a8f'),
 )
 PROVIDER_NEUTRAL_SSO_BRANCH='agent/APBRA-DEVOPS/APBRA-172-provider-neutral-sso'
 PROVIDER_NEUTRAL_SSO_REGISTRATION_BRANCH=PROVIDER_NEUTRAL_SSO_BRANCH + '-registration'
@@ -717,31 +718,31 @@ COMPANY_LIFECYCLE_INITIAL_SETTINGS_GATE_SHA256={"requirements":"7168bb73f3b6a3b4
 COMPANY_LIFECYCLE_AMENDMENT_GATE_SHA256={"verification_required":"37d0265303bfaeca483ebd5bdf8ffa9c883f8268ff15aef638b2aefdf13a1407","dependencies":"92e34110071c7cd3deeb2eda633da846e6b96fbab7ff9814a94168f0bf08fec5"}
 COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_GATE_SHA256={"verification_required":"0126b2fab3962f85061f9c31483e9f9fbfba2ea90f35ecc142c7ce529bed26c9","dependencies":"ef61b89278b2a1e3dc9a7c021156aec094a673cae4206e7d90fc8e9a097820db"}
 COMPANY_LIFECYCLE_SOURCES=(
-    ('apbra-151-mvp-scope','4063307',6,'8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
-    ('apbra-151-business-functional-requirements','3932362',8,'002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
-    ('apbra-151-data-identity-audit','4063348',5,'ce65429bcb00e2421f05f8909d95d1813909ac4d72066fcf224b01336cc3d5b1'),
-    ('apbra-151-self-service-direction','8519682',12,'7533cb4e801480cd7cb40c41c5c36733f8f2ff16fd2d227199d42eae6845ee4e'),
-    ('apbra-151-multi-tenancy-isolation','4063408',5,'5a614a1f802d306f766d28b3a98c81c39c11a169759f7ec6e834c583fdd2f1ec'),
-    ('apbra-151-platform-identity-adrs','3932483',4,'69ec3923199b0d0f9b0796002ce2897ef20ddd5b8d9154d19f7a4564b2241ec3'),
-    ('apbra-151-identity-rbac','4030847',5,'57c91915719f98df0cdfd7d5d2aca8c463ea89dbaf9808b3791c258c27c3c7b0'),
+('apbra-151-mvp-scope','4063307',6,'8702d2eac2bd58320719074b13b8584ced35c61d6c7ea93573e373a6c9bfb166'),
+('apbra-151-business-functional-requirements','3932362',8,'002f6d7243680ea72dc0885883bc93ff9efd979a5a4e603f7eacbc5187340aef'),
+('apbra-151-data-identity-audit','4063348',5,'ce65429bcb00e2421f05f8909d95d1813909ac4d72066fcf224b01336cc3d5b1'),
+('apbra-151-self-service-direction','8519682',12,'7533cb4e801480cd7cb40c41c5c36733f8f2ff16fd2d227199d42eae6845ee4e'),
+('apbra-151-multi-tenancy-isolation','4063408',5,'5a614a1f802d306f766d28b3a98c81c39c11a169759f7ec6e834c583fdd2f1ec'),
+('apbra-151-platform-identity-adrs','3932483',4,'69ec3923199b0d0f9b0796002ce2897ef20ddd5b8d9154d19f7a4564b2241ec3'),
+('apbra-151-identity-rbac','4030847',5,'57c91915719f98df0cdfd7d5d2aca8c463ea89dbaf9808b3791c258c27c3c7b0'),
 )
 COMPANY_LIFECYCLE_BRANCH='agent/APBRA-DEVOPS/APBRA-151-company-lifecycle'
 COMPANY_LIFECYCLE_REGISTRATION_BRANCH=COMPANY_LIFECYCLE_BRANCH + '-registration'
 COMPANY_LIFECYCLE_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-151-vite-authority-amendment'
 COMPANY_LIFECYCLE_AMENDMENT_PATHS={
 'tasks/APBRA-151-company-lifecycle.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_company_lifecycle_scope.py',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_company_lifecycle_scope.py',
 }
 COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_BRANCH='agent/APBRA-DEVOPS/APBRA-151-invitation-test-authority-amendment'
 COMPANY_LIFECYCLE_INVITATION_TEST_AMENDMENT_PATHS=COMPANY_LIFECYCLE_AMENDMENT_PATHS
 CANDIDATE_SOURCE_SAFETY_PATHS={'apps/web/src/genericPowerBI.test.ts','apps/web/src/genericPowerBI.ts','apps/api/tests/test_generation.py'}
 CANDIDATE_SOURCE_SAFETY_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'tasks/APBRA-108-candidate-source-safety.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_candidate_source_safety_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'docs/source-register.json',
+'tasks/APBRA-108-candidate-source-safety.json',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_candidate_source_safety_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
 CANDIDATE_SOURCE_SAFETY_TASK_SHA256='e4b2bf150019db34f848a9e94105ac9497a71ee67694348dffe8f3ad0ce17b46'
 CANDIDATE_SOURCE_SAFETY_SOURCES=(('apbra-108-pbip-pbir-structure','3965362',3,'3dfd8a68066547944885370e7091c0605b6db155c171b74bedbe0b181f78b2d2'),('apbra-108-connections-source-boundary','4063608',3,'c517844c225c801e8a6653a02fa334ce0e925a0915bfdee47ce5036f4034f9d5'),('apbra-108-candidate-validation','4063628',4,'ec89a4c144e52de5bf0ee122cf630005a3a57c51de71b14a893b97cfb57c1efe'))
@@ -749,151 +750,151 @@ CANDIDATE_SOURCE_SAFETY_GATE_SHA256={"requirements":"4f5ddef9ea03936295604fe8eff
 CANDIDATE_SOURCE_SAFETY_BRANCH='agent/APBRA-DEVOPS/APBRA-108-candidate-source-safety'
 CANDIDATE_SOURCE_SAFETY_REGISTRATION_BRANCH=CANDIDATE_SOURCE_SAFETY_BRANCH + '-registration'
 PRIVATE_CONTENT_STORAGE_PATHS={
-    'apps/api/README.md',
-    'apps/api/src/apbra_api/content_storage.py',
-    'apps/api/src/apbra_api/evidence.py',
-    'apps/api/src/apbra_api/artifacts.py',
-    'apps/api/src/apbra_api/reference_material.py',
-    'apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/generation.py',
-    'apps/api/src/apbra_api/api.py',
-    'apps/api/tests/test_content_storage.py',
-    'apps/api/tests/test_evidence.py',
-    'apps/api/tests/test_artifacts.py',
-    'apps/api/tests/test_reference_material.py',
-    'apps/api/tests/test_generation.py',
+'apps/api/README.md',
+'apps/api/src/apbra_api/content_storage.py',
+'apps/api/src/apbra_api/evidence.py',
+'apps/api/src/apbra_api/artifacts.py',
+'apps/api/src/apbra_api/reference_material.py',
+'apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/generation.py',
+'apps/api/src/apbra_api/api.py',
+'apps/api/tests/test_content_storage.py',
+'apps/api/tests/test_evidence.py',
+'apps/api/tests/test_artifacts.py',
+'apps/api/tests/test_reference_material.py',
+'apps/api/tests/test_generation.py',
 }
 PRIVATE_CONTENT_STORAGE_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'tasks/APBRA-173-private-content-storage.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_private_content_storage_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
-    'tests/bootstrap/test_company_lifecycle_scope.py',
-    'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
-    'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
-    'tests/bootstrap/test_provider_neutral_sso_scope.py',
+'docs/source-register.json',
+'tasks/APBRA-173-private-content-storage.json',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_private_content_storage_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'tests/bootstrap/test_company_lifecycle_scope.py',
+'tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py',
+'tests/bootstrap/test_owner_onboarding_identity_docs_scope.py',
+'tests/bootstrap/test_provider_neutral_sso_scope.py',
 }
 PRIVATE_CONTENT_STORAGE_TASK_SHA256='7f42a825c59e29f6e29bd4c3f1b24115dd27fd80b670433be45f3751a8c15d72'
 PRIVATE_CONTENT_STORAGE_HISTORICAL_TEST_SHA256={"tests/bootstrap/test_company_lifecycle_scope.py":"96d16ce98256a66cacc35d830731fe4598d493d74a4a75352e1b69053b265b6e","tests/bootstrap/test_deployment_portability_entitlement_docs_scope.py":"258b837f7de4c124bc9de90eafbaac9f61f76cfb943649765d3cd1ea0205aab4","tests/bootstrap/test_owner_onboarding_identity_docs_scope.py":"816a6c530f73918663b48b4a361f007c245b02d22034ade11421f9432d7ec6a1","tests/bootstrap/test_provider_neutral_sso_scope.py":"05551d3e13ef3358249c9c7b7d5a995878d15db9fedd513f6d510364e2e1d2ea"}
 PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCE_COUNT=53
 PRIVATE_CONTENT_STORAGE_HISTORICAL_SOURCES_SHA256='09ff501f7956cc6945dc285d0eaface788b530312212447b690f3482118ec8be'
 PRIVATE_CONTENT_STORAGE_SOURCES=(
-    ('apbra-173a-self-service-hosted-preview','8519682',18,'f27aff74da373a75991b0cc3745f5d38a692aa00323d6e3cfecfbd1ebd9f6153'),
-    ('apbra-173a-deployment-portability','9568258',2,'35af4064b38c2aea645cba33b5533cb76a18601b5858c0115f223a5bcd11acc6'),
-    ('apbra-173a-entitlement-separation','9535525',2,'b441ac7175311d0a83c18bdc57b7f0869dd0c94d85f5e405955e5c029daddefd'),
-    ('apbra-173a-data-integrity','4063348',6,'bef3d94e8eb6a8743fd4e015205b62360e46834d700175783d07423f06e4050c'),
-    ('apbra-173a-mvp-scope','4063307',9,'d39334d670c024feb8f4e608dc008a2d89a69288e53f831fc02c59055618245b'),
-    ('apbra-173a-owner-reference-decision','APBRA-173','Jira owner comment 10471, 2026-10-04','fdc426f778358c07814273c432f689e6de691a754e75997a11a38eaf335c9db8'),
+('apbra-173a-self-service-hosted-preview','8519682',18,'f27aff74da373a75991b0cc3745f5d38a692aa00323d6e3cfecfbd1ebd9f6153'),
+('apbra-173a-deployment-portability','9568258',2,'35af4064b38c2aea645cba33b5533cb76a18601b5858c0115f223a5bcd11acc6'),
+('apbra-173a-entitlement-separation','9535525',2,'b441ac7175311d0a83c18bdc57b7f0869dd0c94d85f5e405955e5c029daddefd'),
+('apbra-173a-data-integrity','4063348',6,'bef3d94e8eb6a8743fd4e015205b62360e46834d700175783d07423f06e4050c'),
+('apbra-173a-mvp-scope','4063307',9,'d39334d670c024feb8f4e608dc008a2d89a69288e53f831fc02c59055618245b'),
+('apbra-173a-owner-reference-decision','APBRA-173','Jira owner comment 10471, 2026-10-04','fdc426f778358c07814273c432f689e6de691a754e75997a11a38eaf335c9db8'),
 )
 PRIVATE_CONTENT_STORAGE_GATE_SHA256={"adrs":"9a14402c969227774c249adb8b6a1830f5a000fff43a6a1b6e7cb2f2a46c3d33","architecture_refs":"d6bd87b5bbe2a6ff878ec4ecbd4b7a91423085570d8ac8eee88ce2112a04540a","restricted_paths":"f9167fc397a38b89184daf286743ae3ef45ec4dad8b95e7e0ca09bd3ab064f30","requirements":"eae5c7c141786020c6b894bba2b5290031dcfe9887341d541ab8e7f78ff808e6","acceptance_criteria":"52b418c47b6d23163ba9be33a8fc57875f0c10e1b3e291779daa35c18592f0f7","verification_required":"aa1cd0dbf831302043388db6524133de163954dbae72ec6c859f0ecd019ce524","dependencies":"b016d9a7b52e9b552da33a3b96437d8062b66722e62ea6a35c81be7bf0f00a4a","out_of_scope":"1bf6bd8ea3af84cef1f5e7fe3434f0492f43c07e6083f3d796223866ed9f4f91","escalate_when":"3fc83a16b22286990df413c25806f046e85cba8e8110704cbc7904d6ea4c3df2"}
 PRIVATE_CONTENT_STORAGE_BRANCH='agent/APBRA-DEVOPS/APBRA-173-private-content-storage'
 PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH='agent/APBRA-DEVOPS/APBRA-173-private-content-storage-registration'
 CURRENT_STATE_DOCS_PATHS={
-    'ARCHITECTURE.md',
-    'DATA-MODEL.md',
-    'MVP-ACCEPTANCE-CRITERIA.md',
-    'README.md',
-    'REQUIREMENTS.md',
-    'SECURITY.md',
-    'apps/web/README.md',
-    'docs/decisions/implementation-baseline.md',
-    'docs/engineering/codex-handoff.md',
+'ARCHITECTURE.md',
+'DATA-MODEL.md',
+'MVP-ACCEPTANCE-CRITERIA.md',
+'README.md',
+'REQUIREMENTS.md',
+'SECURITY.md',
+'apps/web/README.md',
+'docs/decisions/implementation-baseline.md',
+'docs/engineering/codex-handoff.md',
 }
 CURRENT_STATE_DOCS_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-177-current-state-docs.json',
-    'tests/bootstrap/test_current_state_docs_scope.py',
-    'tests/bootstrap/test_invited_private_case_foundation_scope.py',
+'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-177-current-state-docs.json',
+'tests/bootstrap/test_current_state_docs_scope.py',
+'tests/bootstrap/test_invited_private_case_foundation_scope.py',
 }
 CURRENT_STATE_DOCS_TASK_SHA256='987a8bbf4bfec6e8897fc97cdda6c0739c079d481c876f133cb65490d5ca062a'
 CURRENT_STATE_DOCS_HISTORICAL_SOURCE_COUNT=59
 CURRENT_STATE_DOCS_HISTORICAL_SOURCES_SHA256='2b82ef1b9074116bdf2939b89e7a47dc7ceddc2ca5e17836eaf4c8d8aa9956d5'
 CURRENT_STATE_DOCS_SOURCES=(
-    ('apbra-177-mvp-scope','4063307',12,'b57a5f862983532c9424893168c9b38b20935d3714d9da0d7cab90c60654f227'),
-    ('apbra-177-preview-direction','8519682',21,'9ba429a6e15118994f749fffaa2fbdf1209bffc0181dd2a6033e10d0073c10e3'),
-    ('apbra-177-deployment-portability','9568258',2,'e06c67fee11d6e0fa6a223c193f0087944aed092214d4e85c92ce28e0656eb4c'),
-    ('apbra-177-identity-rbac','4030847',7,'72b866668380680da72719d6cd0bfca176c2066988c95dd56069aa61054e3285'),
-    ('apbra-177-entitlement-boundary','9535525',2,'5a7f0592d93de23f5ed2c658e25086071bc40f411a83725ac581619a16302e96'),
-    ('apbra-177-data-identity','4063348',6,'6162d535670ac8b1cb096f1c7062fdf96441d32638103253790ffa70f25daadd'),
-    ('apbra-177-owner-doc-clarification','APBRA-177','Jira owner clarification and controller comment 10481, 2026-10-04','dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
+('apbra-177-mvp-scope','4063307',12,'b57a5f862983532c9424893168c9b38b20935d3714d9da0d7cab90c60654f227'),
+('apbra-177-preview-direction','8519682',21,'9ba429a6e15118994f749fffaa2fbdf1209bffc0181dd2a6033e10d0073c10e3'),
+('apbra-177-deployment-portability','9568258',2,'e06c67fee11d6e0fa6a223c193f0087944aed092214d4e85c92ce28e0656eb4c'),
+('apbra-177-identity-rbac','4030847',7,'72b866668380680da72719d6cd0bfca176c2066988c95dd56069aa61054e3285'),
+('apbra-177-entitlement-boundary','9535525',2,'5a7f0592d93de23f5ed2c658e25086071bc40f411a83725ac581619a16302e96'),
+('apbra-177-data-identity','4063348',6,'6162d535670ac8b1cb096f1c7062fdf96441d32638103253790ffa70f25daadd'),
+('apbra-177-owner-doc-clarification','APBRA-177','Jira owner clarification and controller comment 10481, 2026-10-04','dfbc6ba8b83043f24ce9cbdb3b17e609e6dfd611c771c7f98ba2977264f54a48'),
 )
 CURRENT_STATE_DOCS_GATE_SHA256={"requirements":"ae5397a3b7afd81a9a82bd1f8799a263f0b49d30733c883edcf46a89f4d67c22","adrs":"07ad29ec27339ad19f83e47665e71e26ee82447fc9ecd83d2912473c8d90c318","architecture_refs":"ebb3dd1f8fc3fc8f6e05b2dde0a1cd4b158d0d8d80ef1e12eea5fc88d15c4428","restricted_paths":"34515f1a6ec9922b5544ff0d479b18f14351c1fe892fbd3ceb89569bf05e553e","acceptance_criteria":"56565fb2e88808ec297159f13a666f917dfb921a8095f7bea11179e71003f0f9","verification_required":"00ec41d44c8174a6650758873d56fc8334b3718cae8effef0c742d813854c631","out_of_scope":"ba7a46e4db326a255fe0c5263204f9c315bb64603c36f8c83f7e6a9efb6bfa4c","escalate_when":"b122afb2b22af125609b2bf95092a2963dc21080b6c3a536e8abca7dc70fa13c","dependencies":"9c565dd2de061b8cb5cc13341268d5eb5cd615d85e391a7d0166f57529a2df74"}
 CURRENT_STATE_DOCS_BRANCH='agent/APBRA-DOCS/APBRA-177-current-state-docs'
 CURRENT_STATE_DOCS_REGISTRATION_BRANCH=CURRENT_STATE_DOCS_BRANCH + '-registration'
 HOSTED_WEB_RELEASE_PATHS={
-    'apps/api/Dockerfile',
-    'apps/api/Dockerfile.dockerignore',
-    'apps/api/src/apbra_api/api.py',
-    'apps/api/src/apbra_api/web_static.py',
-    'apps/api/alembic/env.py',
-    'apps/api/tests/test_hosted_web.py',
-    'apps/api/tests/test_migrations.py',
-    'apps/api/README.md',
-    '.github/workflows/bootstrap.yml',
-    'scripts/check_ci_policy.py',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_ci_policy.py',
-    'scripts/smoke_hosted_image.sh',
+'apps/api/Dockerfile',
+'apps/api/Dockerfile.dockerignore',
+'apps/api/src/apbra_api/api.py',
+'apps/api/src/apbra_api/web_static.py',
+'apps/api/alembic/env.py',
+'apps/api/tests/test_hosted_web.py',
+'apps/api/tests/test_migrations.py',
+'apps/api/README.md',
+'.github/workflows/bootstrap.yml',
+'scripts/check_ci_policy.py',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_ci_policy.py',
+'scripts/smoke_hosted_image.sh',
 }
 HOSTED_WEB_RELEASE_REGISTRATION_PATHS={
-    'docs/source-register.json',
-    'scripts/check_bootstrap.py',
-    'tasks/APBRA-173-production-web-release.json',
-    'tests/bootstrap/test_hosted_web_release_scope.py',
-    'tests/bootstrap/test_current_state_docs_scope.py',
+'docs/source-register.json',
+'scripts/check_bootstrap.py',
+'tasks/APBRA-173-production-web-release.json',
+'tests/bootstrap/test_hosted_web_release_scope.py',
+'tests/bootstrap/test_current_state_docs_scope.py',
 }
 HOSTED_WEB_RELEASE_TASK_SHA256='fcf8ffdd388616c27fdf42f3687801df86ccd4f373d3c02b429608460aea2d57'
 HOSTED_WEB_RELEASE_HISTORICAL_SOURCE_COUNT= 66
 HOSTED_WEB_RELEASE_HISTORICAL_SOURCES_SHA256 = '634e0fc2ab98cf546f93cbae5382d80f5d7f724b9589b4c812606cb702d6b17f'
 HOSTED_WEB_RELEASE_SOURCES = (
-    ('apbra-173b-preview-direction','8519682',23,'8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
-    ('apbra-173b-mvp-scope','4063307',14,'3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
-    ('apbra-173b-deployment-portability','9568258',2,'e77c9ce09f9a6b76d36670e6452e289461d86162d019e6d132d280cafcab4d79'),
-    ('apbra-173b-entitlement-boundary','9535525',2,'08b8d7b79af6c28f1e944ce61cb61e0ba76044beff7f158a0ea7d0c74614e593'),
-    ('apbra-173b-data-identity','4063348',6,'b8a8d4773c5d65d24822e3eba1a9ce29ddb37b301bd0726b2d7ffefcb0127ce3'),
-    ('apbra-173b-traceability','3932382',18,'52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
-    ('apbra-173b-reconciliation','6422580',62,'5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
-    ('apbra-173b-owner-architecture-acceptance','APBRA-173','Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100','f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
+('apbra-173b-preview-direction','8519682',23,'8cfc9afefd415ebf632222847183f33b8ac5a364c9cb78d3d8d15957acda10fd'),
+('apbra-173b-mvp-scope','4063307',14,'3f3ff070494b5f529107cdd46562f4fb8276bffbeab53c5598bd13e6c763c633'),
+('apbra-173b-deployment-portability','9568258',2,'e77c9ce09f9a6b76d36670e6452e289461d86162d019e6d132d280cafcab4d79'),
+('apbra-173b-entitlement-boundary','9535525',2,'08b8d7b79af6c28f1e944ce61cb61e0ba76044beff7f158a0ea7d0c74614e593'),
+('apbra-173b-data-identity','4063348',6,'b8a8d4773c5d65d24822e3eba1a9ce29ddb37b301bd0726b2d7ffefcb0127ce3'),
+('apbra-173b-traceability','3932382',18,'52e655a7622d425fbc16a0dae6cad0a84c2a3155eba18e6bd6e200fc2d1409d6'),
+('apbra-173b-reconciliation','6422580',62,'5e1e2d49bf682bdb4f44b22a6bb86fec3b1da5cf0d83d495ef999b72abd4fd69'),
+('apbra-173b-owner-architecture-acceptance','APBRA-173','Haseeb owner acceptance recorded in APBRA-173 comment 10526, 2026-10-05T15:25:40+1100','f2d6f13c02d0661bfd9bcd75ff53e914209cdd7ecc3df593e4ec2dd6085ee58e'),
 )
 HOSTED_WEB_RELEASE_GATE_SHA256={"requirements":"09106aa3f2dc3ea4988c6503b2c6ebfd1346a0ad03e5606e5a9401682755ca30","adrs":"e3858784981e8d32b2b91a16e29f7a13c39a4d7fd65cbb439a1a014e09cdd650","architecture_refs":"9a9c7edc7d0f24ffcf3d1f5500ad9d7c3fc5ca291ba72686678618c7ae28901f","restricted_paths":"cad1e754c16c18eb51b61061d557b25b9f773eb02a864f494f70c8b86eaac672","acceptance_criteria":"b399709da52a49a49069897418f05db37028ab003bfd5f715c85df993acd5d2e","verification_required":"ec602d07d7e6d72d2bc84f716026eec8ad71cb39176b8ab5ad3a9396bfe82356","out_of_scope":"052afe99bea1bdb45f2ac3a0fee686b6860deea70c0f170f7f772bb1f43cd512","escalate_when":"4cb73fd5d33851eea58cbc6b61a5aa9380ecfa2461b5c3cc790fd9b66cc7cb81","dependencies":"6e33e5167238ee9fe43c66c6ec4b8de2ad89888caa36c1d11feb7c237cbd59b1"}
 HOSTED_WEB_RELEASE_BRANCH = 'agent/APBRA-DEVOPS/APBRA-173-production-web-release'
 HOSTED_WEB_RELEASE_REGISTRATION_BRANCH = HOSTED_WEB_RELEASE_BRANCH + '-registration'
 FOUNDRY_SCHEMA_PATHS = {
-    'apps/api/src/apbra_api/application.py',
-    'apps/api/src/apbra_api/model_provider.py',
-    'apps/api/src/apbra_api/generation.py',
-    'apps/api/tests/test_conversations.py',
-    'apps/api/tests/test_model_provider.py',
-    'apps/api/tests/test_generation.py',
-    'apps/api/tests/test_semantic_bridge.py',
-    'apps/web/scripts/semantic-bridge.ts',
-    'apps/web/scripts/generation-bridge.ts',
-    'apps/web/src/clarification.ts',
-    'apps/web/src/clarification.test.ts',
-    'apps/web/src/confirmedRequirements.ts',
-    'apps/web/src/confirmedRequirements.test.ts',
-    'apps/web/src/foundry.ts',
-    'apps/web/src/foundry.test.ts',
-    'apps/web/src/guardrail.ts',
-    'apps/web/src/guardrail.test.ts',
-    'apps/web/src/genericPowerBI.test.ts',
-    'apps/web/src/durableConversation.tsx',
-    'apps/web/src/durableConversation.test.tsx',
-    'apps/web/src/durableGeneration.tsx',
-    'apps/web/src/durableGeneration.test.tsx',
-    'apps/web/src/deploymentGuide.ts',
-    'apps/web/src/deploymentGuide.test.ts',
-    'apps/web/e2e/durable-conversation.spec.ts',
-    'apps/web/e2e/protected-generation.spec.ts',
+'apps/api/src/apbra_api/application.py',
+'apps/api/src/apbra_api/model_provider.py',
+'apps/api/src/apbra_api/generation.py',
+'apps/api/tests/test_conversations.py',
+'apps/api/tests/test_model_provider.py',
+'apps/api/tests/test_generation.py',
+'apps/api/tests/test_semantic_bridge.py',
+'apps/web/scripts/semantic-bridge.ts',
+'apps/web/scripts/generation-bridge.ts',
+'apps/web/src/clarification.ts',
+'apps/web/src/clarification.test.ts',
+'apps/web/src/confirmedRequirements.ts',
+'apps/web/src/confirmedRequirements.test.ts',
+'apps/web/src/foundry.ts',
+'apps/web/src/foundry.test.ts',
+'apps/web/src/guardrail.ts',
+'apps/web/src/guardrail.test.ts',
+'apps/web/src/genericPowerBI.test.ts',
+'apps/web/src/durableConversation.tsx',
+'apps/web/src/durableConversation.test.tsx',
+'apps/web/src/durableGeneration.tsx',
+'apps/web/src/durableGeneration.test.tsx',
+'apps/web/src/deploymentGuide.ts',
+'apps/web/src/deploymentGuide.test.ts',
+'apps/web/e2e/durable-conversation.spec.ts',
+'apps/web/e2e/protected-generation.spec.ts',
 }
 FOUNDRY_SCHEMA_REGISTRATION_PATHS = {
-    'docs/source-register.json',
-    'tasks/APBRA-160-foundry-structured-output.json',
-    'scripts/check_bootstrap.py',
-    'tests/bootstrap/test_foundry_schema_scope.py',
-    'tests/bootstrap/test_current_demo_source_alignment_scope.py',
+'docs/source-register.json',
+'tasks/APBRA-160-foundry-structured-output.json',
+'scripts/check_bootstrap.py',
+'tests/bootstrap/test_foundry_schema_scope.py',
+'tests/bootstrap/test_current_demo_source_alignment_scope.py',
 }
 FOUNDRY_SCHEMA_TASK_SHA256 = '88a9577c08461a274f04c7a64c920e032f0c07e5b3baffdfa5ea63aa3318857d'
 FOUNDRY_SCHEMA_SOURCES = (
@@ -2254,6 +2255,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
         errors += e
         document_drafts, e = d['bind'](root, catalog, sources, bound_provider_registration)
         errors += e
+        dat,de=da['bind'](root,catalog,sources,bound_provider_registration);errors+=de
         foundry_schema_task = None
         foundry_schema_path = root / 'tasks/APBRA-160-foundry-structured-output.json'
         if foundry_schema_path.exists():
@@ -2832,6 +2834,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             (fixture_staging, f['P']),
             (knowledge_lifecycle, k['P']),
             (document_drafts, d['P']),
+(dat,da['P']),
 (gt,gp['P']),
 (ut,uf['P']),
 (st,sc['P']),
@@ -2855,6 +2858,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                 else w if active_branch==x['B']
                 else v if active_branch==q['B']
                 else document_drafts if active_branch in {d['B'], d['R']}
+                else dat if active_branch in {da['B'],da['R']}
                 else knowledge_lifecycle if active_branch in {k['B'], k['R']}
                 else fixture_staging if active_branch in {f['B'], f['R']}
                 else raw_ingress if active_branch in {u['B'], u['R']}
@@ -2898,6 +2902,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not f['stage'](active_task_id, active_branch, changed_paths) and
                     not k['stage'](active_task_id, active_branch, changed_paths) and
                     not d['stage'](active_task_id, active_branch, changed_paths) and
+                    not da['stage'](active_task_id, active_branch, changed_paths) and
                     not (active_task_id == 'APBRA-164' and
  active_branch == PROTECTED_GENERATION_OUTPUT_HISTORY_AMENDMENT_BRANCH and
  changed_paths == PROTECTED_GENERATION_OUTPUT_HISTORY_REGISTRATION_PATHS) and
@@ -3010,6 +3015,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
             errors += f['errors'](active_task_id, active_branch, changed_paths)
             errors += k['errors'](active_task_id, active_branch, changed_paths)
             errors += d['errors'](active_task_id, active_branch, changed_paths)
+            errors+=da['errors'](dat,active_branch,changed_paths)
             errors+=gp['phase_errors'](gt,active_branch,changed_paths)
             errors+=uf['phase_errors'](ut,active_branch,changed_paths)
             errors+=sc['phase_errors'](st,active_branch,changed_paths)
@@ -3169,7 +3175,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     not (renewal11 is not None and active_branch == r['N_BRANCH'] and
                          changed_paths == r['N_PATHS']) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths)):
                 errors.append('APBRA-160 Foundry registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == FOUNDRY_SCHEMA_REGISTRATION_BRANCH and
@@ -3183,7 +3189,7 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                     changed_paths.intersection(DEMO_UX_REGISTRATION_PATHS) and
                     changed_paths.intersection(DEMO_UX_PATHS) and
                     not (agent_details is not None and active_branch == n['B'] and changed_paths <= n['P']) and
-                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths)):
+                    not (metadata_observations is not None and active_branch == zz['B'] and changed_paths <= zz['P']) and not q['ok'](v,active_branch,changed_paths) and not x['ok'](w,active_branch,changed_paths) and not rr['ok'](rt,active_branch,changed_paths) and not gp['ok'](gt,active_branch,changed_paths) and not uf['ok'](ut,active_branch,changed_paths) and not sc['ok'](st,active_branch,changed_paths) and not sp['ok'](spt,active_branch,changed_paths) and not da['ok'](dat,active_branch,changed_paths)):
                 errors.append('APBRA-160 demo UX registration and implementation must remain separate')
             if (active_task_id == 'APBRA-160' and
                     active_branch == DEMO_UX_REGISTRATION_BRANCH and
@@ -3377,6 +3383,8 @@ def check(root:Path=ROOT,*,active_task_id:str|None=None,
                      and name in k['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and d['stage'](active_task_id, active_branch, changed_paths)
                      and name in d['G'] and path_allowed(name, task, card)) or
+                    (active_task is not None and da['stage'](active_task_id, active_branch, changed_paths)
+                     and name in da['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and f['stage'](active_task_id, active_branch, changed_paths)
                      and name in f['G'] and path_allowed(name, task, card)) or
                     (active_task is not None and g['stage'](active_task_id, active_branch, changed_paths)
