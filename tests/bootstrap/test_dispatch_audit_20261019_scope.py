@@ -35,7 +35,7 @@ class DispatchAuditScopeTests(unittest.TestCase):
 
     def test_exact_scope_and_unchanged_history(self):
         task = json.loads((ROOT / TASK).read_text())
-        self.assertEqual(len(H['P']), 57)
+        self.assertEqual(len(H['P']), 62)
         self.assertEqual(len(H['G']), 6)
         self.assertFalse(H['P'] & H['G'])
         self.assertEqual(set(task['allowed_paths']), H['P'])

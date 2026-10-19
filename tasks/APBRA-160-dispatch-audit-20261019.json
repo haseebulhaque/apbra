@@ -9,16 +9,17 @@
   "risk_class": "R4",
   "objective": "Register the exact combined local dispatch, audit/history, native receipt/contract and opaque output/artifact transport/UI increment: fifty-seven distinct literal product paths; preserve historical authority and external-action gates.",
   "requirements": [
-    "Direct owner-delegated local MVP continuation2026-10-19: integrate the reviewed dispatch/audit checkpoint with dependent native receipts and contract bindings, opaque request outputs and artifact transport/UI; preserve original model output and the separate compiler. Prepare combined release/adoption plan. No publication/merge, live preview change, credential change, owner configuration/database inspection, paid service invocation or WhatsApp access is authorized.",
+    "Direct owner-delegated local MVP continuation2026-10-19: integrate the reviewed dispatch/audit checkpoint with dependent native receipts and contract bindings, opaque request outputs and artifact transport/UI; preserve original model output and the separate compiler. Prepare combined release/adoption plan. No publication/merge, live preview change, credential change, owner configuration/database inspection, paid service invocation or WhatsApp access is authorized. Direct continuation selects a finite local optional compiler citation-provenance correction and tests; preserve unchanged model-output delivery independent of compiler validation, retain prior compiler artifacts, run complete final API and independent review. No publication, preview activation or paid calls.",
     "Current source context: Confluence8519682v106 and9404417v23, JiraAPBRA-160 InProgress updated2026-10-19T03:18:57.255+1100. Historical accepted source rows28/9 remain byte-identical and do not assert live qualification.",
     "Dispatch scope: immutable tenant/document/revision/settings-bound preparation, SEND claim before IO, no blind UNKNOWN retry, current membership/CSRF/tenant binding, test-profile provider injection only. Indexing/removal/AI availability remain unverified.",
     "Audit scope: additive11schema parent10, immutable tenant-bound error/technical rows; admin audit/error history plus private report-safe views, bounded cursor pagination, server support/correlation UUIDs, truthful recorded flag and closed technical grammar. No raw provider/request/exception text or new business/reporting policy.",
     "Preserve merged OIDC, current Tenant Settings routing, authentication, tenant/private-resource isolation, original data/history, budget controls and rollback guard. Do not modify source/card/workflow/historicaltask pins.",
-    "Registration-only branch changes exactly six governance paths; final product branch changes a nonempty subset of fifty-seven literal source/test/migration/fixture/browser-test paths and no governance files. This local proposal does not establish release, hosted CI or live qualification.",
+    "Registration-only branch changes exactly six governance paths; final product branch changes a nonempty subset of sixty-two literal source/test/migration/fixture/browser-test paths and no governance files. This local proposal does not establish release, hosted CI or live qualification.",
     "Companion UI: admin-only history navigation/filter/detail reads with expected-membership and response-context binding; safe report disclosure and canonical support reference with truthful recorded status. Escape all content; reject stale async replies; no new provider/workflow/report decisions.",
     "Native receipts: original protected immutable bytes, exact tenant/case/context/settings/stage/input bindings, passive default and one fresh finite explicitly granted native stage; explicit offline contract intake and confirmation retain all authorization and integrity guards.",
     "Opaque outputs: unchanged original model text/files/tree/archive under exact request ownership with protected storage/download, no mandatory ReportDesign conversion or report-completeness gate. Fixed same-project bounded annotation-derived GET uses existing case-bound Entra capability, no arbitrary model URLs, redirects or automatic retries. Preserve the old compiler separately.",
-    "Saved read/intake/confirmation/local compiler paths do not require live model credentials; actual model routes retain provider resolution and reservation claims. Native/output audit projection maps only fixed emitted events; storage success is distinct from content verification."
+    "Saved read/intake/confirmation/local compiler paths do not require live model credentials; actual model routes retain provider resolution and reservation claims. Native/output audit projection maps only fixed emitted events; storage success is distinct from content verification.",
+    "Optional compiler provenance: explicitly indexed unverified model claims remain unchanged and informational; observed references stay exact and strict. No fabricated references or promotion of claims to evidence, safe inert guide rendering, no model retry. Preserve prior compiler bundle separately; opaque output delivery has no compiler gate."
   ],
   "adrs": [
     "Existing FastAPI/PostgreSQL architecture and provider-neutral boundaries; no dependencies, platform or paid-service changes."
@@ -73,6 +74,7 @@
     "apps/web/e2e/native-outputs.spec.ts",
     "apps/web/e2e/private-case.spec.ts",
     "apps/web/e2e/protected-generation.spec.ts",
+    "apps/web/scripts/generation-bridge.ts",
     "apps/web/src/NativeAgentCheck.test.tsx",
     "apps/web/src/NativeAgentCheck.tsx",
     "apps/web/src/RequestOutputs.test.tsx",
@@ -83,6 +85,10 @@
     "apps/web/src/TenantObservability.tsx",
     "apps/web/src/api.test.ts",
     "apps/web/src/api.ts",
+    "apps/web/src/deploymentGuide.ts",
+    "apps/web/src/foundry.ts",
+    "apps/web/src/guardrail.ts",
+    "apps/web/src/nativeCitationProvenance.test.ts",
     "apps/web/src/privateCases.test.tsx",
     "apps/web/src/privateCases.tsx"
   ],
