@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 import logging
+import math
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -115,7 +116,13 @@ class OidcAdapter:
             metadata: dict[str, str] = {}
             for key in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
                 value = raw.get(key)
-                if not isinstance(value, str) or not profile.permits_endpoint(value):
+                if not isinstance(value, str):
+                    raise OidcValidationError()
+                try:
+                    permitted = profile.permits_endpoint(value)
+                except ValueError as exc:
+                    raise OidcValidationError() from exc
+                if not permitted:
                     raise OidcValidationError()
                 metadata[key] = value
             supported = raw.get("id_token_signing_alg_values_supported")
@@ -280,10 +287,13 @@ class OidcAdapter:
             response.raise_for_status()
             if len(response.content) > 32_000:
                 raise OidcValidationError()
-            token = response.json().get("id_token")
-            if not isinstance(token, str):
+            body = response.json()
+            if not isinstance(body, dict):
                 raise OidcValidationError()
-            return self.validate_id_token(token, expected_nonce, profile=profile)
+            hosted_token = body.get("id_token")
+            if not isinstance(hosted_token, str):
+                raise OidcValidationError()
+            return self.validate_id_token(hosted_token, expected_nonce, profile=profile)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code < 500:
                 raise OidcValidationError() from exc
@@ -335,10 +345,14 @@ class OidcAdapter:
                     "aud": {"essential": True, "value": audience_id},
                     "iat": {"essential": True},
                     "exp": {"essential": True},
-                    "nbf": {"essential": True},
                     "nonce": {"essential": True, "value": expected_nonce},
                 },
             )
+            # RFC 7519 nbf is optional. If supplied, it must remain a finite NumericDate.
+            if "nbf" in claims:
+                not_before = claims["nbf"]
+                if type(not_before) not in {int, float} or not math.isfinite(not_before):
+                    raise OidcValidationError()
             claims.validate(leeway=5)
             audience = claims["aud"]
             authorized_party = claims.get("azp")
@@ -363,5 +377,5 @@ class OidcAdapter:
                 expires_at=datetime.fromtimestamp(int(claims["exp"]), UTC),
                 display_name=str(claims.get("name") or claims["sub"]),
             )
-        except (JoseError, KeyError, TypeError, ValueError) as exc:
+        except (JoseError, KeyError, TypeError, ValueError, OverflowError) as exc:
             raise OidcValidationError() from exc
