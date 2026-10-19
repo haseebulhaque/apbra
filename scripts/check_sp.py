@@ -28,7 +28,10 @@ def inverse(source,edits):
         if source.count(after)!=1:raise ValueError('Settings release proof inverse differs')
         source=source.replace(after,before)
     return source
-def strip_uf_changes(source):return inverse(source,UF_EDITS)
+def strip_uf_changes(source):
+    if 'check_nv.py' in source:
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_uf_changes'](source)
+    return inverse(source,UF_EDITS)
 def strip_sc_changes(source):return inverse(source,SC_EDITS)
 def strip_hooks(source):
     if "da=runpy.run_path(" in source:
@@ -44,8 +47,6 @@ def released_product_paths(root):
         if own is None or errors:return set()
         result=subprocess.run(['git','merge-base','--is-ancestor',CANDIDATE,'HEAD'],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
         if result.returncode!=0:return set()
-        qualified=runpy.run_path(Path(__file__).with_name('check_nv.py'))['qualified_current_paths'](root)
-        if qualified:return qualified
         result=set()
         for name,expected in zip(PIN_PATHS,PIN_HASHES,strict=True):
             target=root/name

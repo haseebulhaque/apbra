@@ -57,6 +57,10 @@ GP_EDITS = [('def strip_current_hooks(source):\n', 'def strip_current_hooks(sour
 
 
 def strip_gp_changes(source):
+    if 'check_nv.py' in source:
+        import runpy
+        from pathlib import Path
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_gp_changes'](source)
     import runpy
     from pathlib import Path
     source=runpy.run_path(Path(__file__).with_name('check_sc.py'))['strip_gp_changes'](source)
