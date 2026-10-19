@@ -58,6 +58,7 @@ from .domain import (
 )
 from .evidence import LocalEvidenceStore
 from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
+from .foundry_report_runtime import ReservedCredentials
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
 from .knowledge_dispatch import KnowledgeDispatchService, KnowledgeProvider, parse_request
@@ -93,6 +94,7 @@ from .model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
 )
+from .native_response_api import register_native_response_routes
 from .observability import (
     CURRENT_CORRELATION,
     HistoryFilters,
@@ -297,9 +299,12 @@ def create_app(
     foundry_credentials: FoundryCredentialProvider | None = None,
     foundry_metadata_credentials: AgentMetadataCredentialProvider | None = None,
     knowledge_provider: KnowledgeProvider | None = None,
+    native_receive_enabled: bool = False,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
+    if native_receive_enabled and settings.profile not in {"development", "test"}:
+        raise ValueError("Native receive inspection is qualified only for local development/test.")
     if knowledge_provider is not None and settings.profile != "test":
         raise ValueError("Document provider injection requires the test profile.")
     qualified_profiles = settings.qualified_provider_profiles()
@@ -415,7 +420,7 @@ def create_app(
         return snapshot.settings.upload_policy
 
     def local_acceptance_service(
-        db: Session, snapshot: TenantSettingsSnapshot
+        db: Session, snapshot: TenantSettingsSnapshot, *, include_provider: bool = True
     ) -> AcceptanceService:
         if settings.semantic_timeout_seconds is None:
             raise ConfigurationUnavailable()
@@ -434,7 +439,7 @@ def create_app(
             ),
             objects,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=tenant_model_provider(db, snapshot),
+            model_provider=tenant_model_provider(db, snapshot) if include_provider else None,
             clarification_policy=clarification_policy,
             generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
             tenant_settings=snapshot,
@@ -452,7 +457,8 @@ def create_app(
         )
 
     def local_generation_service(
-        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False
+        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False,
+        resolve_provider: bool = True,
     ) -> GenerationService:
         if artifact_store is None:
             raise EvidenceInvalid()
@@ -474,7 +480,7 @@ def create_app(
             local_evidence_service(snapshot).objects,
             artifact_store,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=tenant_model_provider(db, snapshot),
+            model_provider=tenant_model_provider(db, snapshot) if resolve_provider else None,
             generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
             tenant_settings=snapshot,
         )
@@ -2292,6 +2298,39 @@ def create_app(
         )
         db.commit()
         return {"membership": {"id": str(row.id), "role": row.role, "active": row.active}}
+
+    if native_receive_enabled and evidence_store is None:
+        raise ConfigurationUnavailable()
+    if evidence_store is not None:
+
+        def native_access(
+            db: Session, snapshot: TenantSettingsSnapshot
+        ) -> tuple[ProviderProfile, FoundryAccess]:
+            profile = snapshot.settings.provider_profile
+            if (
+                not snapshot.settings.automatic_generation_enabled
+                or profile is None
+                or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or snapshot.secret_reference_id is not None
+                or foundry_credentials is None
+            ):
+                raise ConfigurationUnavailable()
+            validate_qualified_profile(profile, qualified_profiles)
+            try:
+                if foundry_credentials.ready(snapshot.company_id, profile) is not True:
+                    raise ConfigurationUnavailable()
+                return profile, foundry_credentials.resolve(snapshot.company_id, profile)
+            except Exception:
+                raise ConfigurationUnavailable() from None
+
+        register_native_response_routes(
+            app, database, require_csrf=require_csrf, snapshot_for=tenant_snapshot,
+            service_for=local_acceptance_service, generation_for=local_generation_service,
+            access_for=native_access,
+            objects=evidence_store, receive_enabled=native_receive_enabled,
+            reservations=(foundry_credentials.reservations
+                          if isinstance(foundry_credentials, ReservedCredentials) else None),
+        )
 
     app.state.settings = settings
     app.state.database = database

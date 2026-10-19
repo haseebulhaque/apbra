@@ -40,6 +40,9 @@ def historical_migration_checkpoint(
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
     inspector = inspect(database.engine)
     assert {
+        "native_receive_commands",
+        "native_response_receipts",
+        "native_contract_bindings",
         "system_errors",
         "system_error_diagnostics",
         "tenant_knowledge_dispatches",
@@ -66,7 +69,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261017_13"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
@@ -600,7 +603,7 @@ def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
     assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261017_13"
         assert {table: db.scalar(query) for table, query in queries.items()} == before
 
 
@@ -631,7 +634,7 @@ def test_knowledge_drafts_populated_downgrade_preserves_original_history(
     with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261017_13"
         assert (
             db.execute(
                 text(

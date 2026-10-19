@@ -538,7 +538,7 @@ class ProviderExecutionObservation:
     """Safe observed execution metadata, never raw provider or candidate content."""
 
     usage: dict[str, int | None]
-    latency_ms: int
+    latency_ms: int | None
     call_count: int
     profile_id: str
     model_or_deployment: str
@@ -560,6 +560,14 @@ class ProviderCallError(RuntimeError):
         self.code = code
         self.observation = observation
         self.diagnostic = safe_provider_diagnostic(diagnostic)
+
+
+class ProviderContractError(ProviderCallError):
+    """Fixed parser findings, never model text, citation values or credentials."""
+
+    def __init__(self, code: str, *, path: str, reason: str) -> None:
+        super().__init__(code)
+        self.contract_finding = {"path": path, "reason": reason}
 
 
 class ProviderCapabilities(BaseModel):
@@ -658,7 +666,7 @@ class ProviderRequest:
 class ProviderResult:
     value: dict[str, Any]
     usage: dict[str, int | None]
-    latency_ms: int
+    latency_ms: int | None
     call_count: int
     profile_id: str
     model_or_deployment: str
@@ -667,6 +675,7 @@ class ProviderResult:
     capability_profile: dict[str, bool]
     candidate_digest: str | None = None
     grounding: dict[str, Any] | None = None
+    source_receipt_id: str | None = None
 
     @property
     def observation(self) -> ProviderExecutionObservation:
@@ -1166,6 +1175,135 @@ def _validate_foundry_access(
             and not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", access.agent_version))
     ):
         raise ProviderConfigurationError("FOUNDRY_QUALIFICATION_INVALID")
+
+
+def decode_foundry_contract(
+    payload: Any, *, profile: ProviderProfile, knowledge_binding: str,
+    knowledge_scope: str, agent_version: str | None, qualification: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Pure observed-output parser; no credentials, transport or output instruction."""
+    if not isinstance(payload, dict) or payload.get("status") != "completed":
+        raise ProviderCallError("MODEL_RESPONSE_NOT_COMPLETED")
+    if payload.get("error") is not None or payload.get("incomplete_details") is not None:
+        raise ProviderCallError("MODEL_RESPONSE_NOT_COMPLETED")
+    output = payload.get("output")
+    if not isinstance(output, list) or not 1 <= len(output) <= 100:
+        raise ProviderCallError("MODEL_OUTPUT_INVALID")
+    texts: list[str] = []
+    aliases: dict[str, str] = {}
+    references: set[str] = set()
+    tool_count = 0
+    for item in output:
+        if not isinstance(item, dict):
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        kind = item.get("type")
+        if not isinstance(kind, str):
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        if kind == "reasoning":
+            continue
+        if kind in {"mcp_call", "file_search_call", "mcp_list_tools"}:
+            if item.get("status") not in (None, "completed") or item.get("error"):
+                raise ProviderCallError("MODEL_TOOL_FAILED")
+            if kind != "mcp_list_tools":
+                tool_count += 1
+            # Raw arguments, tool output and document text are never retained.
+            continue
+        if kind != "message":
+            raise ProviderCallError("MODEL_TOOL_ACTION_UNSUPPORTED")
+        if item.get("role") != "assistant" or item.get("status") != "completed":
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        parts = item.get("content")
+        if not isinstance(parts, list) or not 1 <= len(parts) <= 100:
+            raise ProviderCallError("MODEL_OUTPUT_INVALID")
+        for part in parts:
+            if not isinstance(part, dict):
+                raise ProviderCallError("MODEL_OUTPUT_INVALID")
+            if part.get("type") == "refusal":
+                raise ProviderCallError("MODEL_RESPONSE_REFUSED")
+            text = part.get("text")
+            annotations = part.get("annotations", [])
+            if (
+                part.get("type") != "output_text" or not isinstance(text, str)
+                or len(text.encode()) > 2_000_000
+                or not isinstance(annotations, list) or len(annotations) > 100
+            ):
+                raise ProviderCallError("MODEL_OUTPUT_INVALID")
+            texts.append(text)
+            for annotation in annotations:
+                if not isinstance(annotation, dict):
+                    raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                annotation_type = annotation.get("type")
+                if annotation_type == "file_citation":
+                    source = annotation.get("file_id")
+                elif annotation_type == "url_citation":
+                    source = annotation.get("url")
+                else:
+                    # An attachment/file-path is not evidence of retrieved standards.
+                    raise ProviderCallError("MODEL_GROUNDING_UNSUPPORTED")
+                if not isinstance(source, str) or not 1 <= len(source) <= 2_000:
+                    raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                if annotation_type == "url_citation":
+                    parsed = urlparse(source)
+                    if parsed.scheme != "https" or not parsed.hostname or parsed.username:
+                        raise ProviderCallError("MODEL_GROUNDING_INVALID")
+                identity = json.dumps([
+                    knowledge_binding, annotation_type, source,
+                ], separators=(",", ":"))
+                reference = "provider:" + hashlib.sha256(identity.encode()).hexdigest()
+                aliases[source] = reference
+                aliases[reference] = reference
+                references.add(reference)
+    if len(texts) != 1 or len(references) > 100:
+        raise ProviderCallError("MODEL_OUTPUT_INVALID")
+    value = _decode_structured_candidate(texts[0])
+    if not isinstance(value, dict):
+        raise ProviderCallError("MODEL_OUTPUT_INVALID")
+    standards = value.get("standardsApplied", [])
+    if not isinstance(standards, list):
+        raise ProviderCallError("MODEL_GROUNDING_INVALID")
+    unverified_standard_indexes: list[int] = []
+    for index, standard in enumerate(standards):
+        if not isinstance(standard, dict):
+            raise ProviderContractError(
+                "MODEL_GROUNDING_INVALID", path=f"/standardsApplied/{index}",
+                reason="STANDARD_OBJECT_REQUIRED",
+            )
+        if not isinstance(standard.get("citation"), str):
+            raise ProviderContractError(
+                "MODEL_GROUNDING_INVALID", path=f"/standardsApplied/{index}/citation",
+                reason="CITATION_STRING_REQUIRED",
+            )
+        if standard["citation"] not in aliases:
+            if standard["citation"].startswith("provider:"):
+                raise ProviderContractError(
+                    "MODEL_GROUNDING_INVALID", path=f"/standardsApplied/{index}/citation",
+                    reason="UNBOUND_VERIFIED_REFERENCE",
+                )
+            # Preserve the model claim verbatim without promoting it to evidence.
+            unverified_standard_indexes.append(index)
+            continue
+        # Only reference normalization; the provider's business decision is retained.
+        standard["citation"] = aliases[standard["citation"]]
+    normalized = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    if any(source in normalized for source in aliases if not source.startswith("provider:")):
+        raise ProviderCallError("MODEL_GROUNDING_UNSAFE")
+    grounding: dict[str, Any] = {
+        "mode": "PROVIDER_MANAGED", "scope": knowledge_scope,
+        "profileId": profile.profile_id,
+        "configurationId": profile.configuration_id,
+        "knowledgeBinding": knowledge_binding,
+        "agentVersion": agent_version,
+        "qualification": qualification,
+        "references": sorted(references), "observedToolCount": tool_count,
+        "retrievalEvidence": (
+            "OBSERVED_TOOL_TRACE" if tool_count else
+            "ANNOTATIONS_ONLY" if references else "NO_OBSERVED_RETRIEVAL"
+        ),
+    }
+    if unverified_standard_indexes:
+        grounding["unverifiedStandardIndexes"] = unverified_standard_indexes
+    return value, grounding
+
 
 
 class FoundryAgentResponsesProvider:

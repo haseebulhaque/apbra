@@ -1237,6 +1237,8 @@ class AcceptanceService:
                 ).session
                 session["providerProvenance"] = {
                     "profileId": result.profile_id,
+                    **({"sourceReceiptId": result.source_receipt_id}
+                       if result.source_receipt_id is not None else {}),
                     "modelOrDeployment": result.model_or_deployment,
                     "promptVersion": result.prompt_version,
                     "configurationId": result.configuration_id,
