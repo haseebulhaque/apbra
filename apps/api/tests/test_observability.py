@@ -771,7 +771,7 @@ def test_offline_native_output_operations_use_exact_reports_mapping_before_limit
     assert item["details"] == {"sha256": "a" * 64, "byte_size": 42, "outcome": "SUCCEEDED"}
     assert result["next_cursor"]
     second = list_audit(offline_db, offline_actor,
-                        HistoryFilters(module="Reports", cursor=result["next_cursor"]),
+                        HistoryFilters(module="Reports", limit=1, cursor=result["next_cursor"]),
                         cursor_secret=offline_actor.identity_id.hex)
     assert [row["operation"] for row in second["items"]] == ["NATIVE_ANALYSIS_INTAKE"]
     other = list_audit(offline_db, offline_actor, HistoryFilters(module="Other"),
