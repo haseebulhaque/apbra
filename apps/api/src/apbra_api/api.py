@@ -59,6 +59,7 @@ from .evidence import LocalEvidenceStore
 from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
+from .knowledge_dispatch import KnowledgeDispatchService, KnowledgeProvider, parse_request
 from .knowledge_documents import (
     DraftContext,
     Kind,
@@ -284,9 +285,12 @@ def create_app(
     artifact_objects: ArtifactObjectStore | None = None,
     foundry_credentials: FoundryCredentialProvider | None = None,
     foundry_metadata_credentials: AgentMetadataCredentialProvider | None = None,
+    knowledge_provider: KnowledgeProvider | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
+    if knowledge_provider is not None and settings.profile != "test":
+        raise ValueError("Document provider injection requires the test profile.")
     qualified_profiles = settings.qualified_provider_profiles()
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
@@ -456,6 +460,7 @@ def create_app(
         response.delete_cookie(AUTH_BINDING_COOKIE, path="/api/auth/callback")
         return response
 
+    dispatch_service = KnowledgeDispatchService(knowledge_provider)
     document_service = KnowledgeDocumentsService()
     document_base = "/api/tenant-settings/knowledge-documents"
 
@@ -540,6 +545,128 @@ def create_app(
             )
         except SQLAlchemyError:
             raise documents_unavailable() from None
+
+    @app.get(document_base + "/provider-commands/{command_key}")
+    def knowledge_provider_recover(
+        command_key: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        try:
+            with database.session() as db:
+                context = authorize_documents(
+                    db, session_token, request.headers.get("X-Expected-Membership-Id")
+                )
+                if request.query_params:
+                    raise invalid_document_request()
+                result = dispatch_service.recover(db, context, document_uuid(command_key))
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    @app.get(document_base + "/{document_id}/provider-operations")
+    def knowledge_provider_status(
+        document_id: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        try:
+            with database.session() as db:
+                context = authorize_documents(
+                    db, session_token, request.headers.get("X-Expected-Membership-Id")
+                )
+                if request.query_params:
+                    raise invalid_document_request()
+                result = dispatch_service.status(db, context, document_uuid(document_id))
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    async def provider_write(
+        request: Request,
+        session_token: str | None,
+        supplied_csrf: str | None,
+        document_id: str,
+        operation_id: str | None = None,
+        reconcile: bool = False,
+    ) -> Response:
+        require_csrf(session_token, supplied_csrf)
+        expected = request.headers.get("X-Expected-Membership-Id")
+        try:
+
+            def preflight_provider() -> DraftContext:
+                with database.session() as db:
+                    return authorize_documents(db, session_token, expected)
+
+            initial = await run_in_threadpool(preflight_provider)
+            if request.query_params or request.headers.get("Content-Type", "").lower().replace(
+                " ", ""
+            ) not in {"application/json", "application/json;charset=utf-8"}:
+                raise invalid_document_request()
+            identifier = document_uuid(document_id)
+            operation = document_uuid(operation_id) if operation_id is not None else None
+            key = (
+                document_uuid(request.headers.get("Idempotency-Key")) if operation is None else None
+            )
+            raw = bytearray()
+            async for chunk in request.stream():
+                if len(raw) + len(chunk) > initial.maximum_request_bytes:
+                    raise document_request_too_large()
+                raw.extend(chunk)
+            payload = parse_request(bytes(raw), operation is None)
+
+            def perform() -> dict[str, Any]:
+                with database.session() as db:
+                    context = authorize_documents(db, session_token, expected, initial=initial)
+                    if len(raw) > context.maximum_request_bytes:
+                        raise document_request_too_large()
+                    if operation is None:
+                        assert key is not None
+                        return dispatch_service.prepare(db, context, identifier, key, payload)
+                    claimed = dispatch_service.claim(db, context, identifier, operation, reconcile)
+                # The immutable claim commits before IO; no database locks cross IO.
+                if claimed is not None:
+                    provider_result = dispatch_service.invoke(claimed, reconcile)
+                    with database.session() as db:
+                        dispatch_service.complete(db, claimed[1], provider_result)
+                # Completion is retained even if this caller lost authority during IO.
+                with database.session() as db:
+                    context = authorize_documents(db, session_token, expected, initial=initial)
+                    return dispatch_service.status(db, context, identifier)
+
+            result = await run_in_threadpool(perform)
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    @app.post(document_base + "/{document_id}/provider-operations")
+    async def knowledge_provider_prepare(
+        document_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(request, session_token, supplied_csrf, document_id)
+
+    @app.post(document_base + "/{document_id}/provider-operations/{operation_id}/dispatch")
+    async def knowledge_provider_dispatch(
+        document_id: str,
+        operation_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(
+            request, session_token, supplied_csrf, document_id, operation_id
+        )
+
+    @app.post(document_base + "/{document_id}/provider-operations/{operation_id}/reconcile")
+    async def knowledge_provider_observe(
+        document_id: str,
+        operation_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(
+            request, session_token, supplied_csrf, document_id, operation_id, True
+        )
 
     @app.get(document_base + "/capabilities")
     def knowledge_capabilities(request: Request, session_token: SessionCookie = None) -> Response:

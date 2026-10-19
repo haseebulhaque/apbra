@@ -2473,3 +2473,115 @@ class Database:
             raise
         finally:
             session.close()
+
+
+class KnowledgeDispatchRow(Base):
+    __tablename__ = "tenant_knowledge_dispatches"
+    __table_args__ = (
+        UniqueConstraint("id", "document_id", "company_id", name="uq_dispatch_scope"),
+        UniqueConstraint(
+            "company_id", "initiator_identity_id", "command_key", name="uq_dispatch_identity_key"
+        ),
+        UniqueConstraint("document_id", "company_id", "sequence", name="uq_dispatch_sequence"),
+        ForeignKeyConstraint(
+            ["command_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_commands.id",
+                "tenant_knowledge_commands.document_id",
+                "tenant_knowledge_commands.company_id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["revision_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_revisions.id",
+                "tenant_knowledge_revisions.document_id",
+                "tenant_knowledge_revisions.company_id",
+            ],
+        ),
+        ForeignKeyConstraint(
+            ["settings_id", "company_id"],
+            ["tenant_settings_versions.id", "tenant_settings_versions.company_id"],
+        ),
+        ForeignKeyConstraint(
+            ["initiator_membership_id", "company_id"], ["memberships.id", "memberships.company_id"]
+        ),
+        CheckConstraint("sequence > 0 AND settings_version > 0", name="ck_dispatch_sequence"),
+        CheckConstraint("action IN ('UPLOAD','UPDATE','DELETE')", name="ck_dispatch_action"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    document_id: Mapped[UUID] = mapped_column(nullable=False)
+    command_id: Mapped[UUID] = mapped_column(nullable=False)
+    revision_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_id: Mapped[UUID] = mapped_column(nullable=False)
+    settings_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    command_key: Mapped[UUID] = mapped_column(nullable=False)
+    initiator_identity_id: Mapped[UUID] = mapped_column(
+        ForeignKey("external_identities.id"), nullable=False
+    )
+    initiator_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    action: Mapped[str] = mapped_column(String(8), nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class KnowledgeDispatchCallRow(Base):
+    __tablename__ = "tenant_knowledge_dispatch_calls"
+    __table_args__ = (
+        UniqueConstraint(
+            "id", "dispatch_id", "document_id", "company_id", name="uq_dispatch_call_scope"
+        ),
+        UniqueConstraint("dispatch_id", "sequence", name="uq_dispatch_call_sequence"),
+        ForeignKeyConstraint(
+            ["dispatch_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_dispatches.id",
+                "tenant_knowledge_dispatches.document_id",
+                "tenant_knowledge_dispatches.company_id",
+            ],
+        ),
+        CheckConstraint("sequence > 0", name="ck_dispatch_call_sequence"),
+        CheckConstraint("kind IN ('SEND','RECONCILE')", name="ck_dispatch_call_kind"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    document_id: Mapped[UUID] = mapped_column(nullable=False)
+    dispatch_id: Mapped[UUID] = mapped_column(nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    manifest_json: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class KnowledgeDispatchReceiptRow(Base):
+    __tablename__ = "tenant_knowledge_dispatch_receipts"
+    __table_args__ = (
+        UniqueConstraint("call_id", name="uq_dispatch_receipt_call"),
+        ForeignKeyConstraint(
+            ["call_id", "dispatch_id", "document_id", "company_id"],
+            [
+                "tenant_knowledge_dispatch_calls.id",
+                "tenant_knowledge_dispatch_calls.dispatch_id",
+                "tenant_knowledge_dispatch_calls.document_id",
+                "tenant_knowledge_dispatch_calls.company_id",
+            ],
+        ),
+        CheckConstraint(
+            "outcome IN ('ACKNOWLEDGED','FAILED','PARTIAL','UNKNOWN')",
+            name="ck_dispatch_receipt_outcome",
+        ),
+        CheckConstraint("acknowledged >= 0 AND rejected >= 0", name="ck_dispatch_receipt_counts"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    document_id: Mapped[UUID] = mapped_column(nullable=False)
+    dispatch_id: Mapped[UUID] = mapped_column(nullable=False)
+    call_id: Mapped[UUID] = mapped_column(nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    acknowledged: Mapped[int] = mapped_column(Integer, nullable=False)
+    rejected: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -29,7 +29,9 @@ def historical_migration_checkpoint(
     request: pytest.FixtureRequest, settings: Settings, database: Database
 ) -> None:
     # Original migration assertions remain at their reviewed08 checkpoint.
-    # New09 tests separately prove the current full schema and retained drafts.
+    # Original09 draft assertions retain their checkpoint; clean-head/dispatch tests prove10.
+    if request.node.name.startswith("test_knowledge_drafts_"):
+        command.downgrade(disposable_alembic_config(settings.database_url), "20261013_09")
     if (
         request.node.name != "test_clean_upgrade_head_and_recovery"
         and not request.node.name.startswith("test_knowledge_drafts_")
@@ -39,6 +41,9 @@ def historical_migration_checkpoint(
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
     inspector = inspect(database.engine)
     assert {
+        "tenant_knowledge_dispatches",
+        "tenant_knowledge_dispatch_calls",
+        "tenant_knowledge_dispatch_receipts",
         "companies",
         "memberships",
         "reporting_cases",
@@ -60,7 +65,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261013_09"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
