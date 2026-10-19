@@ -85,6 +85,7 @@ class AnalysisAttemptFailed(IntelligentAnalysisUnavailable):
         error_code: str,
         observation: ProviderExecutionObservation | None,
         semantic_reason: object = None,
+        provider_diagnostic: dict[str, Any] | None = None,
     ) -> None:
         super().__init__()
         safe_code = (
@@ -114,6 +115,12 @@ class AnalysisAttemptFailed(IntelligentAnalysisUnavailable):
             ),
             "usage": usage,
         }
+        if provider_diagnostic:
+            from .provider_diagnostics import safe_provider_diagnostic
+
+            self.audit_details["provider_diagnostic"] = safe_provider_diagnostic(
+                provider_diagnostic
+            )
         if stage == "SEMANTIC_VALIDATION":
             self.audit_details["semantic_reason"] = safe_semantic_reason(semantic_reason)
 
@@ -1240,7 +1247,10 @@ class AcceptanceService:
                     **({"grounding": result.grounding} if result.grounding is not None else {}),
                 }
             except ProviderCallError as exc:
-                raise AnalysisAttemptFailed("PROVIDER_CALL", exc.code, exc.observation) from exc
+                raise AnalysisAttemptFailed(
+                    "PROVIDER_CALL", exc.code, exc.observation,
+                    provider_diagnostic=exc.diagnostic,
+                ) from exc
             except SemanticValidationFailed as exc:
                 raise AnalysisAttemptFailed(
                     "SEMANTIC_VALIDATION",

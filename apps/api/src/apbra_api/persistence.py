@@ -1221,6 +1221,25 @@ class ApplicationSession(Session):
     ``domain.py``.
     """
 
+    def record_system_error(
+        self, actor: Actor, case_id: UUID | None, operation: str, error: Exception, *,
+        source_kind: str | None = None, source_id: UUID | None = None,
+        module: str = "Reports", correlation_id: UUID | None = None,
+    ) -> UUID:
+        from .observability import record_system_error
+
+        return record_system_error(
+            self, actor, case_id, operation, error, source_kind=source_kind,
+            source_id=source_id, module=module, correlation_id=correlation_id,
+        )
+
+
+    def error_reference(self, company_id: UUID, source_kind: str, source_id: UUID) -> UUID | None:
+        from .observability import error_reference
+
+        return error_reference(self, company_id, source_kind, source_id)
+
+
     def resolve_external_identity(
         self,
         profile_id: str,
@@ -2585,3 +2604,74 @@ class KnowledgeDispatchReceiptRow(Base):
     reason: Mapped[str] = mapped_column(String(32), nullable=False)
     payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SystemErrorRow(Base):
+    __tablename__ = "system_errors"
+    __table_args__ = (
+        UniqueConstraint("id", "company_id", name="uq_system_error_company"),
+        UniqueConstraint("company_id", "source_kind", "source_id", name="uq_system_error_source"),
+        ForeignKeyConstraint(
+            ["actor_membership_id", "company_id"], ["memberships.id", "memberships.company_id"],
+            name="fk_system_error_actor_company",
+        ),
+        ForeignKeyConstraint(
+            ["case_id", "company_id"], ["reporting_cases.id", "reporting_cases.company_id"],
+            name="fk_system_error_case_company",
+        ),
+        CheckConstraint(
+            "module IN ('Identity','Company','Reports','Settings','Documents','API','Other')",
+            name="ck_system_error_module",
+        ),
+        CheckConstraint(
+            "category IN ('VALIDATION','ACCESS','CONFLICT','PROVIDER','INTERNAL')",
+            name="ck_system_error_category",
+        ),
+        CheckConstraint("outcome IN ('FAILED','REJECTED')", name="ck_system_error_outcome"),
+        CheckConstraint(
+            "length(operation) BETWEEN 1 AND 100 AND length(message) BETWEEN 1 AND 500 "
+            "AND length(safe_code) BETWEEN 1 AND 100",
+            name="ck_system_error_size",
+        ),
+        CheckConstraint(
+            "(source_kind IS NULL AND source_id IS NULL) OR "
+            "(source_kind IS NOT NULL AND "
+            "source_kind IN ('AUTOMATIC_DESIGN','GENERATION','INTERPRETATION') "
+            "AND source_id IS NOT NULL)", name="ck_system_error_source",
+        ),
+        Index("ix_system_error_company_time", "company_id", "occurred_at", "id"),
+        Index("ix_system_error_case_time", "company_id", "case_id", "occurred_at", "id"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    actor_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    case_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    module: Mapped[str] = mapped_column(String(16), nullable=False)
+    operation: Mapped[str] = mapped_column(String(100), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    safe_code: Mapped[str] = mapped_column(String(100), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    correlation_id: Mapped[UUID] = mapped_column(nullable=False)
+    source_kind: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    source_id: Mapped[UUID | None] = mapped_column(nullable=True)
+
+
+
+class SystemErrorDiagnosticRow(Base):
+    __tablename__ = "system_error_diagnostics"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["error_id", "company_id"], ["system_errors.id", "system_errors.company_id"],
+            name="fk_system_error_diagnostic_company",
+        ),
+        CheckConstraint(
+            "octet_length(technical_json) <= 4096", name="ck_system_error_diagnostic_size",
+        ),
+    )
+    error_id: Mapped[UUID] = mapped_column(primary_key=True)
+    company_id: Mapped[UUID] = mapped_column(nullable=False)
+    technical_json: Mapped[str] = mapped_column(Text, nullable=False)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False)
+

@@ -31,6 +31,12 @@ from pydantic import (
     model_validator,
 )
 
+from .provider_diagnostics import (
+    response_diagnostic,
+    safe_provider_diagnostic,
+    transport_diagnostic,
+)
+
 # Historical callers may still carry this policy metadata. Version-2 schemas
 # never use it to bound or manufacture AI-authored geometry.
 COMPILER_MAX_VISUALS_PER_PAGE = 6
@@ -547,11 +553,13 @@ class ProviderCallError(RuntimeError):
     """A safe provider failure which may carry observed execution provenance."""
 
     def __init__(
-        self, code: str, *, observation: ProviderExecutionObservation | None = None
+        self, code: str, *, observation: ProviderExecutionObservation | None = None,
+        diagnostic: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(code)
         self.code = code
         self.observation = observation
+        self.diagnostic = safe_provider_diagnostic(diagnostic)
 
 
 class ProviderCapabilities(BaseModel):
@@ -1334,11 +1342,13 @@ class FoundryAgentResponsesProvider:
                 candidate_digest=candidate_digest, grounding=grounding,
             )
 
+        diagnostic: dict[str, Any] = {}
         last_code = "MODEL_PROVIDER_FAILED"
         limit = min(self.profile.max_calls_per_operation, self.profile.retry_limit + 1)
         try:
             body = self._body(request)
             while calls < limit:
+                diagnostic = {}
                 remaining = self.profile.time_budget_seconds - (time.monotonic() - started)
                 if remaining <= 0:
                     raise ProviderCallError("MODEL_TIME_BUDGET_EXCEEDED")
@@ -1369,6 +1379,9 @@ class FoundryAgentResponsesProvider:
                                      "Content-Type": "application/json"},
                             params={"api-version": self.profile.api_version}, json=body,
                         ) as response:
+                            diagnostic = response_diagnostic(
+                                response.status_code, response.headers, None
+                            )
                             chunks: list[bytes] = []
                             size = 0
                             for chunk in response.iter_bytes():
@@ -1382,6 +1395,9 @@ class FoundryAgentResponsesProvider:
                                 payload = json.loads(b"".join(chunks))
                             except ValueError:
                                 payload = None
+                    diagnostic = response_diagnostic(
+                        response.status_code, response.headers, payload
+                    )
                     usage = payload.get("usage") if isinstance(payload, dict) else None
                     if isinstance(usage, dict):
                         for wire, name in (("input_tokens", "prompt_tokens"),
@@ -1435,13 +1451,19 @@ class FoundryAgentResponsesProvider:
                         capability_profile=observed.capability_profile,
                         candidate_digest=candidate_digest, grounding=grounding,
                     )
-                except (httpx.TimeoutException, httpx.TransportError):
+                except (httpx.TimeoutException, httpx.TransportError) as exc:
+                    transport = transport_diagnostic(exc)
+                    if diagnostic.get("response_received"):
+                        transport["response_received"] = True
+                    diagnostic = {**diagnostic, **transport}
                     last_code = "MODEL_PROVIDER_TIMEOUT"
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     raise ProviderCallError("MODEL_OUTPUT_INVALID") from exc
             raise ProviderCallError(last_code)
         except ProviderCallError as exc:
             exc.observation = observation()
+            if not exc.diagnostic:
+                exc.diagnostic = diagnostic
             raise
 
 

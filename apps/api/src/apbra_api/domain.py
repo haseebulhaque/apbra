@@ -310,6 +310,18 @@ class GeneratedArtifactRecord(Protocol):
 class ApplicationPersistence(Protocol):
     """Application-facing persistence port implemented by the SQL adapter."""
 
+    def record_system_error(
+        self, actor: Actor, case_id: UUID | None, operation: str, error: Exception, *,
+        source_kind: str | None = None, source_id: UUID | None = None,
+        module: str = "Reports", correlation_id: UUID | None = None,
+    ) -> UUID: ...
+
+
+    def error_reference(
+        self, company_id: UUID, source_kind: str, source_id: UUID,
+    ) -> UUID | None: ...
+
+
     def resolve_external_identity(
         self,
         profile_id: str,

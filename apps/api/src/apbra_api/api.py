@@ -1,10 +1,10 @@
 import json
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Cookie, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -53,6 +53,7 @@ from .domain import (
     ConfigurationUnavailable,
     Conflict,
     EvidenceInvalid,
+    Forbidden,
     Role,
 )
 from .evidence import LocalEvidenceStore
@@ -92,6 +93,15 @@ from .model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
 )
+from .observability import (
+    CURRENT_CORRELATION,
+    HistoryFilters,
+    audit_detail,
+    error_detail,
+    list_audit,
+    list_errors,
+    record_system_error,
+)
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     ApplicationSession,
@@ -102,6 +112,7 @@ from .persistence import (
     Database,
     MembershipRow,
     SessionRow,
+    SystemErrorRow,
     TenantSecretRow,
 )
 from .reference_material import ReferenceMaterialService
@@ -316,6 +327,22 @@ def create_app(
     identity_service = IdentityService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
+
+    @app.middleware("http")
+    async def correlate_request(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # A client-supplied correlation header never chooses our support identity.
+        correlation = uuid4()
+        request.state.apbra_correlation_id = correlation
+        token = CURRENT_CORRELATION.set(correlation)
+        try:
+            response = await call_next(request)
+        finally:
+            CURRENT_CORRELATION.reset(token)
+        response.headers["X-APBRA-Request-ID"] = str(correlation)
+        return response
+
 
     def db_session() -> Iterator[Session]:
         with database.session() as db:
@@ -728,6 +755,92 @@ def create_app(
             request, session_token, "original", document_id=document_id, revision_id=revision_id
         )
 
+    def request_error_reference(
+        request: Request, exc: Exception
+    ) -> tuple[str, bool, str]:
+        correlation = getattr(request.state, "apbra_correlation_id", None)
+        if not isinstance(correlation, UUID):
+            correlation = uuid4()
+        reference = uuid4()
+        # Reconnecting to a database which just failed can delay the original
+        # error and cannot establish durable history. Report that truthfully.
+        if isinstance(exc, SQLAlchemyError):
+            logger.warning("Error history unavailable: reference=%s", reference)
+            return str(reference), False, str(correlation)
+        try:
+            route = request.scope.get("route")
+            template = getattr(route, "path", "")
+            operation = getattr(route, "name", "")
+            if (not isinstance(template, str) or not template.startswith("/api/")
+                    or template.startswith("/api/auth/")
+                    or not isinstance(operation, str)
+                    or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", operation) is None):
+                return str(reference), False, str(correlation)
+            with database.session() as error_db:
+                assert isinstance(error_db, ApplicationSession)
+                actor = resolve_actor(error_db, request.cookies.get(SESSION_COOKIE))
+                case_id = None
+                if "case_id" in request.path_params:
+                    case_id = UUID(str(request.path_params["case_id"]))
+                    # An error path is never a way to discover a foreign or
+                    # revoked private report. Recheck before associating it.
+                    case_service.get(error_db, actor, case_id)
+                prior_reference = getattr(request.state, "apbra_error_reference", None)
+                if prior_reference is None:
+                    prior_reference = getattr(exc, "support_reference", None)
+                if isinstance(prior_reference, UUID):
+                    prior = error_db.scalar(select(SystemErrorRow).where(
+                        SystemErrorRow.id == prior_reference,
+                        SystemErrorRow.company_id == actor.company_id,
+                        SystemErrorRow.actor_membership_id == actor.membership_id,
+                        SystemErrorRow.case_id == case_id,
+                    ))
+                    if prior is not None:
+                        return str(prior_reference), True, str(prior.correlation_id)
+                module = (
+                    "Reports" if case_id is not None else
+                    "Settings" if template.startswith("/api/tenant-settings") else
+                    "Company" if template.startswith(("/api/companies", "/api/memberships")) else
+                    "API"
+                )
+                reference = record_system_error(
+                    error_db, actor, case_id, operation.upper(),
+                    ApplicationError() if isinstance(exc, RequestValidationError) else exc,
+                    module=module, correlation_id=correlation,
+                )
+            return str(reference), True, str(correlation)
+        except Exception as recording_error:
+            # Never echo an exception message, connection string or request body.
+            logger.warning(
+                "Error history unavailable: reference=%s type=%s",
+                reference, type(recording_error).__name__,
+            )
+            return str(reference), False, str(correlation)
+
+
+    async def supported_error_response(
+        request: Request, exc: Exception, *, status_code: int, code: str, message: str
+    ) -> Response:
+        # Keep protected-resource denials indistinguishable and anonymous
+        # invitation/auth validation responses free of tenant diagnostics.
+        if status_code == 404 or not request.cookies.get(SESSION_COOKIE):
+            return JSONResponse(
+                status_code=status_code, content={"error": {"code": code, "message": message}},
+                headers={"Cache-Control": "no-store"},
+            )
+        reference, recorded, correlation = await run_in_threadpool(
+            request_error_reference, request, exc
+        )
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": {
+                "code": code, "message": message, "support_reference": reference,
+                "recorded": recorded, "correlation_id": correlation,
+            }},
+            headers={"X-APBRA-Request-ID": correlation, "Cache-Control": "no-store"},
+        )
+
+
     @app.exception_handler(ApplicationError)
     async def handle_application_error(request: Request, exc: ApplicationError) -> Response:
         if request.url.path == "/api/auth/callback" and "text/html" in request.headers.get(
@@ -736,7 +849,17 @@ def create_app(
             return callback_failure_redirect(
                 "unavailable" if exc.code == "PROVIDER_UNAVAILABLE" else "invalid"
             )
-        return error_response(exc)
+        return await supported_error_response(
+            request, exc, status_code=exc.status_code, code=exc.code, message=exc.public_message
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
+        return await supported_error_response(
+            request, exc, status_code=500, code="SYSTEM_ERROR",
+            message="The operation could not be completed. Report the support reference for help.",
+        )
+
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, _exc: RequestValidationError) -> Response:
@@ -746,14 +869,9 @@ def create_app(
             return callback_failure_redirect("invalid")
         # Validation details can contain bearer credentials (for example an
         # invalid invitation token). Never echo rejected request input.
-        return JSONResponse(
-            status_code=422,
-            content={
-                "error": {
-                    "code": "REQUEST_VALIDATION_FAILED",
-                    "message": "The request format is invalid.",
-                }
-            },
+        return await supported_error_response(
+            request, _exc, status_code=422, code="REQUEST_VALIDATION_FAILED",
+            message="The request format is invalid.",
         )
 
     @app.get("/api/health")
@@ -846,6 +964,150 @@ def create_app(
     @app.get("/api/tenant-settings/history")
     def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         return {"items": settings_history(db, resolve_actor(db, session_token))}
+
+    def history_filters(request: Request) -> HistoryFilters:
+        allowed = {
+            "from", "to", "module", "actor_id", "operation", "outcome",
+            "support_reference", "limit", "cursor",
+        }
+        values = request.query_params
+        if any(key not in allowed or len(values.getlist(key)) != 1 for key in values):
+            raise RequestValidationError([])
+        if any(len(value) > (4096 if key == "cursor" else 100)
+               for key, value in values.items()):
+            raise RequestValidationError([])
+        try:
+            return HistoryFilters(
+                from_time=datetime.fromisoformat(values["from"].replace("Z", "+00:00"))
+                if "from" in values else None,
+                to_time=datetime.fromisoformat(values["to"].replace("Z", "+00:00"))
+                if "to" in values else None,
+                module=values.get("module"), operation=values.get("operation"),
+                actor_id=UUID(values["actor_id"]) if "actor_id" in values else None,
+                outcome=values.get("outcome"),
+                support_reference=UUID(values["support_reference"])
+                if "support_reference" in values else None,
+                limit=int(values.get("limit", "50")), cursor=values.get("cursor"),
+            )
+        except (ValueError, TypeError, OverflowError):
+            raise RequestValidationError([]) from None
+
+
+    def history_admin(
+        request: Request, db: Session, session_token: str | None
+    ) -> Actor:
+        actor = resolve_actor(db, session_token)
+        if actor.role not in {Role.COMPANY_OWNER, Role.COMPANY_ADMIN}:
+            raise Forbidden()
+        if request.headers.get("X-Expected-Membership-Id") != str(actor.membership_id):
+            raise Conflict()
+        return actor
+
+
+    def history_read_audit(db: Session, actor: Actor, event: str) -> None:
+        assert isinstance(db, ApplicationSession)
+        correlation = CURRENT_CORRELATION.get()
+        db.add_audit(
+            actor, event, "COMPANY", actor.company_id,
+            json.dumps({
+                "outcome": "SUCCEEDED",
+                "correlation_id": str(correlation) if correlation is not None else None,
+            }, sort_keys=True, separators=(",", ":")),
+        )
+
+
+    @app.get("/api/tenant-settings/audit-events")
+    def tenant_audit_events(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        result = list_audit(
+            db, actor, history_filters(request), cursor_secret=settings.session_secret
+        )
+        history_read_audit(db, actor, "AUDIT_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/audit-events/{event_id}")
+    def tenant_audit_event(
+        event_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = audit_detail(db, actor, event_id)
+        history_read_audit(db, actor, "AUDIT_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/errors")
+    def tenant_errors(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        result = list_errors(
+            db, actor, history_filters(request), cursor_secret=settings.session_secret
+        )
+        history_read_audit(db, actor, "ERROR_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/errors/{error_id}")
+    def tenant_error(
+        error_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = error_detail(db, actor, error_id, technical=True)
+        history_read_audit(db, actor, "ERROR_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/cases/{case_id}/errors")
+    def report_errors(
+        case_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = resolve_actor(db, session_token)
+        case_service.get(db, actor, case_id)
+        result = list_errors(
+            db, actor, history_filters(request), case_id=case_id,
+            cursor_secret=settings.session_secret,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/cases/{case_id}/errors/{error_id}")
+    def report_error(
+        case_id: UUID, error_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = resolve_actor(db, session_token)
+        case_service.get(db, actor, case_id)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = error_detail(db, actor, error_id, case_id=case_id, technical=False)
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
 
     @app.get("/api/tenant-settings/qualified-profiles")
     def get_qualified_profiles(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
@@ -1618,6 +1880,7 @@ def create_app(
     def create_interpretation(
         case_id: UUID,
         payload: InterpretationCreate,
+        request: Request,
         db: DB,
         session_token: SessionCookie = None,
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
@@ -1650,7 +1913,14 @@ def create_app(
                     ),
                 )
             )
+            assert isinstance(db, ApplicationSession)
+            failure_reference = record_system_error(
+                db, actor, case_id, "CREATE_INTERPRETATION", exc,
+                source_kind="INTERPRETATION",
+                source_id=request.state.apbra_correlation_id,
+            )
             db.commit()
+            request.state.apbra_error_reference = failure_reference
             current_actor = resolve_actor(db, session_token)
             case_service.get(db, current_actor, case_id)
             raise

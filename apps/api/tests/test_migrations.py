@@ -29,16 +29,19 @@ def historical_migration_checkpoint(
     request: pytest.FixtureRequest, settings: Settings, database: Database
 ) -> None:
     # Original migration assertions remain at their reviewed08 checkpoint.
-    # Draft retention/round-trip checks use current10; isolated09 guard tests stay unchanged.
+    # Draft retention/round-trip checks use current11; isolated09 guard tests stay unchanged.
     if (
         request.node.name != "test_clean_upgrade_head_and_recovery"
         and not request.node.name.startswith("test_knowledge_drafts_")
+        and not request.node.name.startswith("test_audit_errors_")
     ):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
 
 def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database) -> None:
     inspector = inspect(database.engine)
     assert {
+        "system_errors",
+        "system_error_diagnostics",
         "tenant_knowledge_dispatches",
         "tenant_knowledge_dispatch_calls",
         "tenant_knowledge_dispatch_receipts",
@@ -63,7 +66,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
@@ -597,7 +600,7 @@ def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
     assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
         assert {table: db.scalar(query) for table, query in queries.items()} == before
 
 
@@ -628,7 +631,7 @@ def test_knowledge_drafts_populated_downgrade_preserves_original_history(
     with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_10"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
         assert (
             db.execute(
                 text(
@@ -686,4 +689,94 @@ def test_knowledge_drafts_guard_checks_every_table_before_ddl(
         monkeypatch.setattr(module.op, action, ddl_forbidden)
     with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
         module.downgrade()
+    assert any(populated in query and query.startswith("SELECT") for query in queries)
+
+
+def test_audit_errors_empty_roundtrip_preserves_existing_history(
+    settings: Settings, database: Database,
+) -> None:
+    original_tables = ["companies", "memberships", "audit_events", "tenant_settings_versions"]
+    with database.session() as db:
+        before = {name: db.scalar(sa.select(sa.func.count()).select_from(sa.table(name)))
+                  for name in original_tables}
+        assert db.scalar(text("SELECT count(*) FROM system_errors")) == 0
+        assert db.scalar(text("SELECT count(*) FROM system_error_diagnostics")) == 0
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20261015_10")
+    assert not {"system_errors", "system_error_diagnostics"}.intersection(
+        inspect(database.engine).get_table_names()
+    )
+    command.upgrade(config, "20261015_11")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        assert {name: db.scalar(sa.select(sa.func.count()).select_from(sa.table(name)))
+                for name in original_tables} == before
+
+
+def test_audit_errors_populated_downgrade_refuses_and_preserves_occurrence(
+    client: TestClient, settings: Settings, database: Database,
+) -> None:
+    from sqlalchemy import select
+
+    from apbra_api.persistence import SystemErrorDiagnosticRow, SystemErrorRow
+
+    owner = sign_in(client, "owner")
+    with database.session() as db:
+        actor = db.active_actor(UUID(owner["actor"]["membership_id"]),
+                                UUID(owner["actor"]["identity_id"]))
+        reference = db.record_system_error(actor, None, "MIGRATION_TEST", ValueError())
+        db.commit()
+        error = db.scalar(select(SystemErrorRow).where(SystemErrorRow.id == reference))
+        diagnostic = db.scalar(select(SystemErrorDiagnosticRow).where(
+            SystemErrorDiagnosticRow.error_id == reference
+        ))
+        original = (error.safe_code, error.message, diagnostic.technical_json)
+    with pytest.raises(RuntimeError, match="Cannot downgrade retained system error occurrences"):
+        command.downgrade(disposable_alembic_config(settings.database_url), "20261015_10")
+    with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        error = db.scalar(select(SystemErrorRow).where(SystemErrorRow.id == reference))
+        diagnostic = db.scalar(select(SystemErrorDiagnosticRow).where(
+            SystemErrorDiagnosticRow.error_id == reference
+        ))
+        assert (error.safe_code, error.message, diagnostic.technical_json) == original
+
+
+@pytest.mark.parametrize("populated", ["system_errors", "system_error_diagnostics"])
+def test_audit_errors_guard_checks_every_table_before_ddl(
+    monkeypatch: pytest.MonkeyPatch, populated: str,
+) -> None:
+    import importlib.util
+    from pathlib import Path
+
+    path = Path("alembic/versions/20261015_11_audit_errors.py")
+    spec = importlib.util.spec_from_file_location("audit_errors_migration_guard_probe", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    queries = []
+
+    class Result:
+        def __init__(self, exists):
+            self.exists = exists
+
+        def first(self):
+            return (1,) if self.exists else None
+
+    class Connection:
+        def execute(self, query):
+            sql = str(query)
+            queries.append(sql)
+            return Result(sql.startswith("SELECT") and populated in sql)
+
+    monkeypatch.setattr(module.op, "get_bind", lambda: Connection())
+
+    def ddl_forbidden(*args, **kwargs):
+        raise AssertionError("DDL_BEFORE_POPULATED_GUARD")
+
+    for action in ("drop_index", "drop_table", "execute"):
+        monkeypatch.setattr(module.op, action, ddl_forbidden)
+    with pytest.raises(RuntimeError, match="Cannot downgrade retained system error occurrences"):
+        module.downgrade()
+    assert queries[0].startswith("LOCK TABLE ")
     assert any(populated in query and query.startswith("SELECT") for query in queries)
