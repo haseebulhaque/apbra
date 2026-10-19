@@ -63,6 +63,8 @@ def errors(task, branch, paths):
 
 
 def strip_hooks(source):
+    if "nv=runpy.run_path(" in source:
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_hooks'](source)
     for count, hook in HOOKS:
         if source.count(hook) != count:
             raise ValueError('Dispatch/audit hook differs')
@@ -71,6 +73,8 @@ def strip_hooks(source):
 
 
 def strip_sp_changes(source):
+    if "check_nv.py" in source:
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_sp_changes'](source)
     for before, after in SP_EDITS:
         if source.count(after) != 1:
             raise ValueError('Dispatch/audit helper inverse differs')
@@ -107,7 +111,7 @@ def historical_document_fixture_names(source_root, additions):
         if not names or names[-1] != '' or len(set(names[:-1])) != len(names) - 1:
             raise ValueError('Historical fixture universe malformed')
         selected = set(names[:-1])
-        for name in [*selected, *additions, 'scripts/check_dispatch_audit_20261019.py']:
+        for name in [*selected, *additions, 'scripts/check_dispatch_audit_20261019.py', 'scripts/check_nv.py']:
             if (type(name) is not str or not name or '\\' in name or '\0' in name
                     or PurePosixPath(name).is_absolute()
                     or any(part in ('', '.', '..', '.git') for part in name.split('/'))):

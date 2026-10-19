@@ -29,7 +29,10 @@ def inverse(source,edits):
         source=source.replace(after,before)
     return source
 def strip_uf_changes(source):return inverse(source,UF_EDITS)
-def strip_sc_changes(source):return inverse(source,SC_EDITS)
+def strip_sc_changes(source):
+    if 'check_nv.py' in source:
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_sc_changes'](source)
+    return inverse(source,SC_EDITS)
 def strip_hooks(source):
     if "da=runpy.run_path(" in source:
         source=runpy.run_path(Path(__file__).with_name('check_dispatch_audit_20261019.py'))['strip_hooks'](source)

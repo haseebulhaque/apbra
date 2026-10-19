@@ -174,7 +174,7 @@ class DispatchAuditScopeTests(unittest.TestCase):
         self.assertEqual(ast.dump(ast.parse(current.replace(after,before,1))),ast.dump(ast.parse(previous)))
         names=H['historical_document_fixture_names'](ROOT,set())
         expected=set(subprocess.check_output(['git','ls-tree','-rz','--name-only',H['BASE']],cwd=ROOT).decode().split('\0')[:-1])
-        self.assertEqual(names,expected|{'scripts/check_dispatch_audit_20261019.py'})
+        self.assertEqual(names,expected|{'scripts/check_dispatch_audit_20261019.py','scripts/check_nv.py'})
         self.assertNotIn(TASK,names)
         self.assertIn(ROOT/TASK,c.repo_files(ROOT))
 
