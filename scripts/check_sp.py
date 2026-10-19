@@ -38,14 +38,14 @@ def strip_hooks(source):
         source=source.replace(hook,'')
     return source
 def released_product_paths(root):
-    qualified=runpy.run_path(Path(__file__).with_name('check_nv.py'))['qualified_current_paths'](root)
-    if qualified:return qualified
     try:
         checker=runpy.run_path(Path(__file__).with_name('check_bootstrap.py'))
         own,errors=bind(root,json.loads((root/'agents/catalog.json').read_text()),json.loads((root/'docs/source-register.json').read_text()),checker['bound_provider_registration'])
         if own is None or errors:return set()
         result=subprocess.run(['git','merge-base','--is-ancestor',CANDIDATE,'HEAD'],cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
         if result.returncode!=0:return set()
+        qualified=runpy.run_path(Path(__file__).with_name('check_nv.py'))['qualified_current_paths'](root)
+        if qualified:return qualified
         result=set()
         for name,expected in zip(PIN_PATHS,PIN_HASHES,strict=True):
             target=root/name

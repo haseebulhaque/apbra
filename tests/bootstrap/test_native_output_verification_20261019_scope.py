@@ -69,3 +69,27 @@ class NativeOutputVerificationScope(unittest.TestCase):
    for name in H['OVERLAP']:
     p=root/name;before=p.read_bytes();p.write_bytes(before+b'\n# Changed source\n');self.assertEqual(H['qualified_current_paths'](root),set());p.unlink();p.symlink_to(ROOT/name);self.assertEqual(H['qualified_current_paths'](root),set());p.unlink();p.write_bytes(before)
    with patch.dict(H['qualified_current_paths'].__globals__,{'git':lambda *a:b'Wrong candidate blob'}):self.assertEqual(H['qualified_current_paths'](root),set())
+
+ def test_prior_settings_release_guard_still_bounds_actual_prospective_chain(self):
+  with tempfile.TemporaryDirectory(prefix='apbra-native-sp-guard-') as t:
+   root=Path(t)/'repo';env=dict(os.environ,GIT_CONFIG_GLOBAL='/dev/null',GIT_CONFIG_NOSYSTEM='1')
+   def git(*args):return subprocess.run(['git','-C',str(root),*args],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=env)
+   subprocess.run(['git','clone','--no-hardlinks',str(ROOT),str(root)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=env)
+   governance=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+   git('checkout','-B',D['B'],H['CANDIDATE'])
+   git('-c','user.name=APBRA synthetic fixture','-c','user.email=apbra-fixture@example.invalid','merge','--no-ff',governance,'-m','Synthetic prospective composition only')
+   git('update-ref','refs/remotes/origin/main',governance)
+   checker=runpy.run_path(str(root/'scripts/check_bootstrap.py'));sp=runpy.run_path(str(root/'scripts/check_sp.py'));uf=runpy.run_path(str(root/'scripts/check_uf.py'))
+   actual_run=subprocess.run
+   def without_prior(command,*args,**kwargs):
+    if command==['git','merge-base','--is-ancestor',sp['CANDIDATE'],'HEAD']:return subprocess.CompletedProcess(command,1)
+    return actual_run(command,*args,**kwargs)
+   with patch.dict(os.environ,{'GITHUB_HEAD_REF':D['B'],'GITHUB_BASE_REF':'main'}):
+    identity,branch,paths=checker['delivery_context'](root)
+    self.assertEqual((identity,branch,paths),('APBRA-160',D['B'],D['P']))
+    self.assertEqual(checker['check'](root,active_task_id=identity,active_branch=branch,changed_paths=paths)[0],[])
+    self.assertEqual(sp['released_product_paths'](root),set(H['OVERLAP']))
+    self.assertEqual(uf['qualified_consumption'](root,checker),{uf['CONFIG']}|set(H['OVERLAP']))
+    with patch('subprocess.run',side_effect=without_prior):
+     self.assertEqual(sp['released_product_paths'](root),set())
+     self.assertEqual(uf['qualified_consumption'](root,checker),{uf['CONFIG']})
