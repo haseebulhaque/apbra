@@ -186,3 +186,32 @@ export const observabilityApi={
   caseErrors:(caseId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`/api/cases/${encodeURIComponent(caseId)}/errors${historyQuery(filters)}`),
 };
 
+export type NativeReceipt={operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
+export type NativeAnswer={receipt_id:string;context_version:number;texts:string[];bytes:number;sha256:string};
+export type CaseFileAvailability={receive_available?:boolean;receive_reason?:string;connection_id?:string|null;ready:boolean;reason:string|null;scope:string;request_version_id:string;context_version:number;settings_id:string;input_characters:number|null;input_limit:number|null;files:Array<{id:string;filename:string;status:string;reason:string|null;bytes?:number;transport:string;contentDigest:string;serviceFileUploaded:false;processingVerified:false}>};
+export type NativeTask='REQUIREMENT_ANALYSIS'|'REPORT_DESIGN';
+export type NativeContractDiagnostic={code:string;phase:string;findings:Array<{path:string;reason:string}>};
+export type NativeContractCheck={recognized:boolean;current:boolean;task:NativeTask|null;context_version:number;settings_id:string;reason:string|null;receipt_id:string;diagnostic?:NativeContractDiagnostic|null;warnings?:Array<{path:string;reason:string}>};
+export const savedAzureApi={
+ list:(caseId:string)=>request<{items:NativeReceipt[]}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts`),
+ view:(caseId:string,receiptId:string)=>request<NativeAnswer>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/view`),
+ input:(caseId:string,task?:NativeTask,contractId?:string)=>request<CaseFileAvailability>(`/api/cases/${encodeURIComponent(caseId)}/native-response-input${task?'?'+new URLSearchParams({task,...(contractId?{confirmed_contract_id:contractId}:{})}):''}`),
+ receive:(caseId:string,contextVersion:number,settingsId:string,commandKey:string,csrfToken:string,stage?:{task:NativeTask;confirmed_contract_id?:string})=>request<{native_response:NativeReceipt}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-checks`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId,command_key:commandKey,...stage})}),
+ contract:(caseId:string,receiptId:string)=>request<NativeContractCheck>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`),
+ intake:(caseId:string,receiptId:string,contextVersion:number,settingsId:string,csrfToken:string)=>request<{accepted:boolean;reason?:string;task?:NativeTask;diagnostic?:NativeContractDiagnostic|null}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId})}),
+ download:(caseId:string,receiptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}`,
+};
+
+export type RequestOutput={id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;content_verification:'NOT_RUN';created_at:string};
+export const requestOutputsApi={
+ list:(caseId:string,before?:string)=>request<{items:RequestOutput[];has_more:boolean;next_cursor?:string|null;maximum_bytes:number}>(`/api/cases/${encodeURIComponent(caseId)}/outputs${before?'?'+new URLSearchParams({before}):''}`),
+ upload:(caseId:string,file:File,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/outputs?${new URLSearchParams({filename:file.name,expected_context_version:String(context),command_key:command})}`,{method:'POST',headers:{...csrfHeaders(csrfToken),'Content-Type':'application/octet-stream'},body:file}),
+ saveNative:(caseId:string,receiptId:string,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),
+ download:(caseId:string,id:string)=>`/api/cases/${encodeURIComponent(caseId)}/outputs/${encodeURIComponent(id)}/download`,
+};
+
+export type NativeGeneratedFile={index:number;filename:string;savable:boolean};
+export const nativeFilesApi={
+ list:(caseId:string,receiptId:string)=>request<{items:NativeGeneratedFile[];retrieval_configured:boolean;content_verification:'NOT_RUN'}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/files`),
+ save:(caseId:string,receiptId:string,index:number,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/files/${index}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),
+};
