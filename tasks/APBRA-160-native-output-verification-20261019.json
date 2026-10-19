@@ -13,11 +13,11 @@
     "Actual full integrated bootstrap on15336b8c againstmain93f1453 ran633tests and failed eight current-source assertions across exactly four existing authorized product paths. Historical Git blob assertions passed. This correction preserves every original historical expected hash and assertion.",
     "The prospective witness requires both the original dispatch task and this separate governance task to bind completely, actual APBRA-160 product branch, nonempty literal P62 subset and successful actual full checker. It returns only the four literal overlap paths.",
     "Released consumption requires actual candidate15336b8c ancestry in both HEAD and origin/main and independently pinned candidate/current file hashes; no guessed future release SHA, pending-candidate release claim or current-head repinning.",
-    "Registration changes exactly nine governance paths, no apps/dependencies/workflows/source register/cards or old tasks. Exact hook inverses retain complete old checker/helper AST; checker byte cap remains unchanged.",
+    "Registration changes exactly ten governance paths, no apps/dependencies/workflows/source register/cards or old tasks. Exact hook inverses retain complete old checker/helper AST; checker byte cap remains unchanged.",
     "Withdrawal, source/history drift, false context, checker failure, unknown/empty/mixed scope, stale main, wrong candidate/current bytes and malformed/symlink task must fail closed.",
     "The owner has separately authorized reviewed publication, required-check normal merges and passive local installation; this contract supplies only bounded bootstrap verification authority and grants no provider invocation, authentication or paid capability.",
     "Historical prospective document fixtures retain their exact pinned old universe plus the two required checker helper dependencies. Only the dispatch fixture expected-dependency assertion gains the new helper; an exact inverse preserves the complete old test AST and every assertion.",
-    "The finite witness joins the GP qualified product-delivery fallback alongside existing UF consumption. SP released-product and UF qualified-consumption/runtime function AST remain unchanged; their historical candidate is not asserted released. GP/UF/SP inverse-chain hooks preserve all original functions and negative checks; no historical expected hash is rewritten."
+    "The finite witness joins the GP qualified product-delivery fallback alongside existing UF consumption. SP released-product and UF qualified-consumption/runtime function AST remain unchanged; their historical candidate is not asserted released. GP/UF/SP/SC inverse-chain hooks preserve all original functions and negative checks; no historical expected hash is rewritten."
   ],
   "adrs": [
     "Existing FastAPI/PostgreSQL architecture and provider-neutral boundaries; no dependencies, platform or paid-service changes."
@@ -31,6 +31,7 @@
     "scripts/check_dispatch_audit_20261019.py",
     "scripts/check_gp.py",
     "scripts/check_nv.py",
+    "scripts/check_sc.py",
     "scripts/check_sp.py",
     "scripts/check_uf.py",
     "tasks/APBRA-160-native-output-verification-20261019.json",
@@ -48,7 +49,7 @@
   ],
   "acceptance_criteria": [
     "All original historical expected hashes/assertions,65old task bytes, source/card bytes and complete helper/checker AST after only exact inverse hooks retained.",
-    "Exactly nine governance paths; prospective and released overlap witness is exactly four literal already-authorized API paths, with independent binding and branch/check/ancestry/blob guards.",
+    "Exactly ten governance paths; prospective and released overlap witness is exactly four literal already-authorized API paths, with independent binding and branch/check/ancestry/blob guards.",
     "Positive and negative tests plus full integrated bootstrap, independent exact-head review and required hosted checks; retain every failure and do not waive native release protection."
   ],
   "verification_required": [

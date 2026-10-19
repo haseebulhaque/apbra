@@ -26,7 +26,10 @@ def inverse(source,edits):
         if source.count(after)!=1:raise ValueError('Settings context inverse differs')
         source=source.replace(after,before)
     return source
-def strip_gp_changes(source):return inverse(source,GP_EDITS)
+def strip_gp_changes(source):
+    if 'check_nv.py' in source:
+        source=runpy.run_path(Path(__file__).with_name('check_nv.py'))['strip_gp_changes'](source)
+    return inverse(source,GP_EDITS)
 def strip_uf_changes(source):
     if "check_sp.py" in source:
         source=runpy.run_path(Path(__file__).with_name('check_sp.py'))['strip_uf_changes'](source)
