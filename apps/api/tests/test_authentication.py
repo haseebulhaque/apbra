@@ -19,6 +19,7 @@ from apbra_api.auth_boundary import SESSION_COOKIE, cookie_secure, digest
 from apbra_api.config import Settings
 from apbra_api.oidc_adapter import OidcAdapter, OidcProviderUnavailable, OidcValidationError
 from apbra_api.persistence import (
+    AuthenticationEventRow,
     AuthorizationCodeRow,
     AuthTransactionRow,
     CompanyRow,
@@ -528,6 +529,68 @@ def test_invalid_hosted_id_token_never_creates_session(
     assert client.get("/api/auth/session").json() == {"authenticated": False}
 
 
+@pytest.mark.parametrize("expires_at", [10**20, float("inf"), 253_402_300_800])
+def test_unrepresentable_token_expiry_is_audited_without_session_or_exchange_retry(
+    database_url: str,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    expires_at: int | float,
+) -> None:
+    settings = hosted_settings(database_url)
+    client, state, transaction = hosted_login(settings, database)
+    now = int(datetime.now(UTC).timestamp())
+    token = jwt.encode(
+        {"alg": "RS256", "typ": "JWT", "kid": "hosted-test-key"},
+        {
+            "iss": HOSTED_ISSUER,
+            "sub": "hosted-invalid-expiry-user",
+            "aud": "apbra-local-client",
+            "iat": now,
+            "nbf": now - 1,
+            "exp": expires_at,
+            "nonce": transaction.nonce,
+        },
+        HOSTED_PRIVATE_KEY,
+    ).decode()
+    exchanges: list[str] = []
+
+    def exchange(url: str, *, data: dict[str, str], **kwargs: Any) -> httpx.Response:
+        assert url == TEST_TOKEN_ENDPOINT
+        assert data["code_verifier"] == transaction.code_verifier
+        assert kwargs == {"timeout": 10.0, "follow_redirects": False}
+        exchanges.append(data["code"])
+        return httpx.Response(
+            200, json={"id_token": token}, request=httpx.Request("POST", url)
+        )
+
+    monkeypatch.setattr("apbra_api.oidc_adapter.httpx.post", exchange)
+    params = {"state": state, "code": "synthetic-expiry-code", "iss": HOSTED_ISSUER}
+    rejected = client.get("/api/auth/callback", params=params, follow_redirects=False)
+    assert rejected.status_code == 401
+    assert rejected.json()["error"]["code"] == "OIDC_RESPONSE_INVALID"
+    assert SESSION_COOKIE not in rejected.cookies
+    assert client.get("/api/auth/session").json() == {"authenticated": False}
+    with database.session() as db:
+        consumed = db.get(AuthTransactionRow, transaction.id)
+        assert consumed is not None and consumed.consumed_at is not None
+        events = db.scalars(select(AuthenticationEventRow).where(
+            AuthenticationEventRow.event_type == "AUTH_LOGIN_FAILED",
+            AuthenticationEventRow.reason == "OIDC_RESPONSE_INVALID",
+        )).all()
+        assert len(events) == 1
+        assert events[0].identity_id is None and events[0].session_id is None
+        assert db.scalar(select(ExternalIdentityRow).where(
+            ExternalIdentityRow.subject == "hosted-invalid-expiry-user"
+        )) is None
+        assert db.scalar(select(SessionRow).where(
+            SessionRow.provider_profile_id == "entra-test"
+        )) is None
+    assert client.get(
+        "/api/auth/callback", params=params, follow_redirects=False
+    ).status_code == 401
+    assert exchanges == ["synthetic-expiry-code"]
+
+
 def test_multiple_id_token_audiences_require_matching_authorized_party(
     database_url: str, database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -944,3 +1007,136 @@ def test_discovery_rejects_unqualified_jwks_and_provider_outage(
             state="s", nonce="n", code_challenge="c", profile=adapter.profile(None)
         )
     assert attempts == 2
+
+
+@pytest.mark.parametrize("body", [[], None, 42, "synthetic", True])
+def test_hosted_non_object_token_response_is_safe_rejection(
+    database_url: str, monkeypatch: pytest.MonkeyPatch, body: Any
+) -> None:
+    adapter = OidcAdapter(hosted_settings(database_url))
+    profile = adapter.profile(None)
+    monkeypatch.setattr(
+        adapter, "_metadata", lambda _profile: {"token_endpoint": TEST_TOKEN_ENDPOINT}
+    )
+    monkeypatch.setattr(
+        "apbra_api.oidc_adapter.httpx.post",
+        lambda url, **_kwargs: httpx.Response(
+            200, content=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"}, request=httpx.Request("POST", url),
+        ),
+    )
+    unused_database: Any = None  # Hosted exchange never accesses the local code store.
+    with pytest.raises(OidcValidationError):
+        adapter.exchange_code(
+            unused_database, code="synthetic-code", verifier="synthetic-verifier",
+            redirect_uri="https://api.example/api/auth/callback",
+            expected_nonce="synthetic-nonce", profile=profile,
+        )
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["http://issuer.example/authorize", "https://", "https://issuer.example:invalid/authorize"]
+)
+def test_hosted_malformed_discovery_endpoint_is_safe_rejection(
+    database_url: str, monkeypatch: pytest.MonkeyPatch, endpoint: str
+) -> None:
+    adapter = OidcAdapter(hosted_settings(database_url))
+    profile = adapter.profile(None)
+    assert profile is not None
+    monkeypatch.setattr(adapter, "_json_get", lambda _url: {
+        "issuer": profile.issuer, "authorization_endpoint": endpoint,
+        "token_endpoint": TEST_TOKEN_ENDPOINT, "jwks_uri": HOSTED_JWKS_URL,
+    })
+    with pytest.raises(OidcValidationError):
+        adapter.authorization_url(
+            state="synthetic", nonce="synthetic", code_challenge="synthetic", profile=profile,
+        )
+
+
+# Optional NumericDate compatibility; signed-token and hosted callback coverage.
+def optional_nbf_payload(nonce: str = "synthetic-nonce") -> dict[str, Any]:
+    now = int(datetime.now(UTC).timestamp())
+    return {"iss": HOSTED_ISSUER, "sub": "synthetic-user", "aud": "apbra-local-client",
+            "iat": now, "exp": now + 300, "nonce": nonce}
+
+
+def optional_nbf_encoded(value: dict[str, Any], key: Any) -> str:
+    result = jwt.encode({"alg": "RS256", "typ": "JWT", "kid": "hosted-test-key"}, value, key)
+    return result.decode() if isinstance(result, bytes) else str(result)
+
+
+@pytest.mark.parametrize("kind", ["absent", "past_integer", "past_fraction"])
+def test_optional_nbf_accepts_absence_and_elapsed_numeric_dates(kind: str) -> None:
+    settings = Settings(profile="test", database_url="sqlite://", session_secret="s" * 48)
+    adapter = OidcAdapter(settings)
+    value = optional_nbf_payload()
+    value.update(iss=settings.issuer, aud=settings.oidc_audience)
+    if kind != "absent":
+        value["nbf"] = value["iat"] - (1 if kind == "past_integer" else 1.5)
+    claims = adapter.validate_id_token(
+        optional_nbf_encoded(value, adapter._local_private_key), value["nonce"]
+    )
+    assert claims.subject == value["sub"]
+    assert ("nbf" in value) is (kind != "absent")
+
+
+@pytest.mark.parametrize("not_before", [None, True, False, "123", [], {}, float("nan"),
+                                        float("inf"), float("-inf"), 10**400, 9999999999])
+def test_present_invalid_or_future_nbf_still_rejected(not_before: Any) -> None:
+    settings = Settings(profile="test", database_url="sqlite://", session_secret="s" * 48)
+    adapter = OidcAdapter(settings)
+    value = optional_nbf_payload()
+    value.update(iss=settings.issuer, aud=settings.oidc_audience, nbf=not_before)
+    with pytest.raises(OidcValidationError):
+        adapter.validate_id_token(
+            optional_nbf_encoded(value, adapter._local_private_key), value["nonce"]
+        )
+
+
+@pytest.mark.parametrize("claim", ["iss", "sub", "aud", "iat", "exp", "nonce"])
+def test_optional_nbf_does_not_make_required_claims_optional(claim: str) -> None:
+    settings = Settings(profile="test", database_url="sqlite://", session_secret="s" * 48)
+    adapter = OidcAdapter(settings)
+    value = optional_nbf_payload()
+    value.update(iss=settings.issuer, aud=settings.oidc_audience)
+    del value[claim]
+    with pytest.raises(OidcValidationError):
+        adapter.validate_id_token(
+            optional_nbf_encoded(value, adapter._local_private_key), "synthetic-nonce"
+        )
+
+
+def test_hosted_callback_without_nbf_persists_session_and_rejects_replay(
+    database_url: str, database: Database, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = hosted_settings(database_url)
+    client, state, transaction = hosted_login(settings, database)
+    value = optional_nbf_payload(transaction.nonce)
+    assert "nbf" not in value
+    token = optional_nbf_encoded(value, HOSTED_PRIVATE_KEY)
+    exchanges: list[str] = []
+    install_hosted_token_response(monkeypatch, token)
+    from apbra_api import oidc_adapter
+    exchange = oidc_adapter.httpx.post
+
+    def once(*args: Any, **kwargs: Any) -> Any:
+        exchanges.append("exchange")
+        return exchange(*args, **kwargs)
+
+    monkeypatch.setattr(oidc_adapter.httpx, "post", once)
+    params = {"state": state, "code": "synthetic-single-code", "iss": HOSTED_ISSUER}
+    response = client.get("/api/auth/callback", params=params, follow_redirects=False)
+    assert response.status_code == 302
+    session = client.get("/api/auth/session").json()
+    assert session["authenticated"] is True
+    assert session["membership_state"] == "COMPANY_CREATION_AVAILABLE"
+    assert client.get("/api/cases").status_code == 401
+    with database.session() as db:
+        assert len(db.scalars(select(SessionRow)).all()) == 1
+        events = db.scalars(select(AuthenticationEventRow)).all()
+        assert any(event.event_type == "AUTH_LOGIN_SUCCEEDED" for event in events)
+    replay = client.get("/api/auth/callback", params=params, follow_redirects=False)
+    assert replay.status_code == 401
+    assert exchanges == ["exchange"]
+    # Provider tokens are never part of browser session projection.
+    assert token not in json.dumps(session)
