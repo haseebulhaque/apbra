@@ -36,18 +36,19 @@ export type ProviderUsage={prompt_tokens?:number|null;completion_tokens?:number|
 export type AutomaticDesignAttempt={id:string;confirmed_contract_id:string;status:'RUNNING'|'ELIGIBLE'|'FAILED'|'CANCELLED';provider_profile_id:string|null;model_or_deployment:string|null;prompt_version:string|null;configuration_id:string|null;capability_profile:Record<string,boolean>;usage:ProviderUsage;failure:{code:string;message:string}|null;validation:Record<string,unknown>|null;created_at:string;completed_at:string|null};
 export type UploadCapabilities={data_extensions:string[];reference_extensions:string[];max_file_bytes:number;max_files_per_selection:number;max_answer_characters:number};
 export type GenerationAttempt={id:string;case_id:string;confirmed_contract_id:string;reviewed_design_id:string|null;interpretation_id:string;request_version_id:string;status:'PENDING'|'RUNNING'|'SUCCEEDED'|'FAILED'|'CANCELLED';attempt_number:number;retry_of_attempt_id:string|null;supersedes_attempt_id:string|null;provenance:{mode:string;pipeline:string;runtimeEvidence:Record<string,string>;providerGrounding?:ProviderGrounding};validation:Record<string,unknown>|null;failure:{code:string;message:string}|null;created_at:string;started_at:string|null;completed_at:string|null;cancelled_at:string|null;artifact:{id:string;filename:string;content_digest:string;guide_digest?:string|null;byte_size:number;validation_status:'PASS';created_at:string}|null};
-export type ApiErrorBody={error?:{code?:string;message?:string}};
+export type ErrorReference={support_reference?:string;recorded?:boolean;correlation_id?:string};
+export type ApiErrorBody={error?:{code?:string;message?:string}&ErrorReference};
 
 export class ApiError extends Error{
-  readonly status:number;readonly code:string;
-  constructor(status:number,code:string,message:string){super(message);this.name='ApiError';this.status=status;this.code=code}
+  readonly status:number;readonly code:string;readonly support_reference?:string;readonly recorded?:boolean;readonly correlation_id?:string;
+  constructor(status:number,code:string,message:string,reference:ErrorReference={}){super(message);this.name='ApiError';this.status=status;this.code=code;this.support_reference=reference?.support_reference;this.recorded=reference?.recorded;this.correlation_id=reference?.correlation_id}
 }
 
 const jsonHeaders={'Accept':'application/json','Content-Type':'application/json'};
 async function request<T>(path:string,init:RequestInit={}):Promise<T>{
   const response=await fetch(path,{credentials:'same-origin',...init,headers:{...jsonHeaders,...init.headers}});
   const body=await response.json().catch(()=>({})) as T&ApiErrorBody;
-  if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The request could not be completed.');
+  if(!response.ok)throw new ApiError(response.status,body.error?.code??'REQUEST_FAILED',body.error?.message??'The request could not be completed.',body.error);
   return body;
 }
 
@@ -168,3 +169,49 @@ export const generationApi={
 
 export type RedactedDiagnostic={operation:string;exception_type:string;message:string;message_truncated:boolean;frames:Array<{file:string;function:string;line:number}>};
 export type AgentDetails={status:string;settings_version:number;agent:string|null;configuredVersion:string|null;observedVersion?:string|null;metadataSource?:'CONFIGURED_VERSION'|'AZURE_LATEST'|null;diagnostic?:RedactedDiagnostic;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
+
+export type HistoryFilters={from?:string;to?:string;module?:string;actor_id?:string;operation?:string;outcome?:string;support_reference?:string;cursor?:string};
+export type AuditEvent={id:string;occurred_at:string;module:string;operation:string;outcome:string;actor_id:string|null;target_type:string|null;target_id:string|null;details?:Record<string,string|number|boolean|null>;details_withheld?:boolean};
+export type ProviderFailureFacts={http_status?:number;http_reason?:string;request_id?:string;provider_code?:string;provider_type?:string;provider_message?:string;provider_message_redacted?:boolean;provider_param?:string;provider_target?:string;provider_code_redacted?:boolean;provider_type_redacted?:boolean;provider_param_redacted?:boolean;provider_target_redacted?:boolean;transport_attempted?:boolean;response_received?:boolean;exception_type?:string;cause_type?:string};
+export type DiagnosticStack={exception_type:string;frames:Array<{module:string;function:string;line:number}>};
+export type ProcessingError=AuditEvent&{support_reference:string;category:string;message:string;correlation_id:string;case_id:string|null;source_kind:string|null;source_id:string|null;technical?:{diagnostic:DiagnosticStack&{provider?:ProviderFailureFacts;causes?:DiagnosticStack[]};truncated:boolean}|null};
+export type HistoryPage<T>={company_id:string;case_id?:string;items:T[];next_cursor:string|null};
+function historyQuery(filters:HistoryFilters){const query=new URLSearchParams();for(const name of ['from','to','module','actor_id','operation','outcome','support_reference','cursor'] as const){const value=filters[name];if(value)query.set(name,value)}return query.size?`?${query}`:''}
+const historyPath='/api/tenant-settings';
+export const observabilityApi={
+  audit:(membershipId:string,filters:HistoryFilters={})=>request<HistoryPage<AuditEvent>>(`${historyPath}/audit-events${historyQuery(filters)}`,{headers:knowledgeHeaders(membershipId)}),
+  auditDetail:(membershipId:string,id:string)=>request<AuditEvent>(`${historyPath}/audit-events/${encodeURIComponent(id)}`,{headers:knowledgeHeaders(membershipId)}),
+  errors:(membershipId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`${historyPath}/errors${historyQuery(filters)}`,{headers:knowledgeHeaders(membershipId)}),
+  errorDetail:(membershipId:string,id:string)=>request<ProcessingError>(`${historyPath}/errors/${encodeURIComponent(id)}`,{headers:knowledgeHeaders(membershipId)}),
+  caseErrors:(caseId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`/api/cases/${encodeURIComponent(caseId)}/errors${historyQuery(filters)}`),
+};
+
+export type NativeReceipt={operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
+export type NativeAnswer={receipt_id:string;context_version:number;texts:string[];bytes:number;sha256:string};
+export type CaseFileAvailability={receive_available?:boolean;receive_reason?:string;connection_id?:string|null;ready:boolean;reason:string|null;scope:string;request_version_id:string;context_version:number;settings_id:string;input_characters:number|null;input_limit:number|null;files:Array<{id:string;filename:string;status:string;reason:string|null;bytes?:number;transport:string;contentDigest:string;serviceFileUploaded:false;processingVerified:false}>};
+export type NativeTask='REQUIREMENT_ANALYSIS'|'REPORT_DESIGN';
+export type NativeContractDiagnostic={code:string;phase:string;findings:Array<{path:string;reason:string}>};
+export type NativeContractCheck={recognized:boolean;current:boolean;task:NativeTask|null;context_version:number;settings_id:string;reason:string|null;receipt_id:string;diagnostic?:NativeContractDiagnostic|null;warnings?:Array<{path:string;reason:string}>};
+export const savedAzureApi={
+ list:(caseId:string)=>request<{items:NativeReceipt[]}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts`),
+ view:(caseId:string,receiptId:string)=>request<NativeAnswer>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/view`),
+ input:(caseId:string,task?:NativeTask,contractId?:string)=>request<CaseFileAvailability>(`/api/cases/${encodeURIComponent(caseId)}/native-response-input${task?'?'+new URLSearchParams({task,...(contractId?{confirmed_contract_id:contractId}:{})}):''}`),
+ receive:(caseId:string,contextVersion:number,settingsId:string,commandKey:string,csrfToken:string,stage?:{task:NativeTask;confirmed_contract_id?:string})=>request<{native_response:NativeReceipt}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-checks`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId,command_key:commandKey,...stage})}),
+ contract:(caseId:string,receiptId:string)=>request<NativeContractCheck>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`),
+ intake:(caseId:string,receiptId:string,contextVersion:number,settingsId:string,csrfToken:string)=>request<{accepted:boolean;reason?:string;task?:NativeTask;diagnostic?:NativeContractDiagnostic|null}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId})}),
+ download:(caseId:string,receiptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}`,
+};
+
+export type RequestOutput={id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;content_verification:'NOT_RUN';created_at:string};
+export const requestOutputsApi={
+ list:(caseId:string,before?:string)=>request<{items:RequestOutput[];has_more:boolean;next_cursor?:string|null;maximum_bytes:number}>(`/api/cases/${encodeURIComponent(caseId)}/outputs${before?'?'+new URLSearchParams({before}):''}`),
+ upload:(caseId:string,file:File,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/outputs?${new URLSearchParams({filename:file.name,expected_context_version:String(context),command_key:command})}`,{method:'POST',headers:{...csrfHeaders(csrfToken),'Content-Type':'application/octet-stream'},body:file}),
+ saveNative:(caseId:string,receiptId:string,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),
+ download:(caseId:string,id:string)=>`/api/cases/${encodeURIComponent(caseId)}/outputs/${encodeURIComponent(id)}/download`,
+};
+
+export type NativeGeneratedFile={index:number;filename:string;savable:boolean};
+export const nativeFilesApi={
+ list:(caseId:string,receiptId:string)=>request<{items:NativeGeneratedFile[];retrieval_configured:boolean;content_verification:'NOT_RUN'}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/files`),
+ save:(caseId:string,receiptId:string,index:number,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/files/${index}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),
+};

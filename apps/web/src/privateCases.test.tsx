@@ -6,6 +6,14 @@ import {MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,Workspa
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
+it('shows canonical support identities without manufacturing durable error history',()=>{
+  const reference='11111111-1111-4111-8111-111111111111';
+  expect(protectedErrorMessage(new ApiError(503,'SYSTEM_ERROR','Safe failure',{support_reference:reference,recorded:false}))).toBe(`Safe failure Support reference: ${reference}. Diagnostic history is unavailable.`);
+  expect(protectedErrorMessage(new ApiError(503,'SYSTEM_ERROR','Safe failure',{support_reference:reference,recorded:true}))).toContain('Recorded in error history.');
+  expect(protectedErrorMessage(new ApiError(503,'SYSTEM_ERROR','Safe failure',{support_reference:reference}))).not.toContain('Recorded');
+  expect(protectedErrorMessage(new ApiError(503,'SYSTEM_ERROR','Safe failure',{support_reference:'<script>private</script>',recorded:true}))).toBe('Safe failure');
+});
+
 it('keeps the report subtree present while another workspace destination is visible',()=>{
   expect(renderToStaticMarkup(<MountedReportWorkspace visible={false}><input defaultValue="Unsaved private draft"/></MountedReportWorkspace>)).toContain('<div hidden=""><input value="Unsaved private draft"/>');
   expect(renderToStaticMarkup(<MountedReportWorkspace visible><p>Report content</p></MountedReportWorkspace>)).toBe('<div><p>Report content</p></div>');

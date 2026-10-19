@@ -722,7 +722,14 @@ def attempt_json(store: ApplicationPersistence, row: GenerationAttemptRecord) ->
         "provenance": json.loads(row.provenance_json),
         "validation": json.loads(row.validation_json) if row.validation_json else None,
         "failure": (
-            {"code": row.failure_code, "message": row.failure_reason} if row.failure_code else None
+            {
+                "code": row.failure_code, "message": row.failure_reason,
+                "support_reference": (
+                    str(reference) if (reference := store.error_reference(
+                        row.company_id, "GENERATION", row.id,
+                    )) else None
+                ),
+            } if row.failure_code else None
         ),
         "created_at": row.created_at.isoformat(),
         "started_at": row.started_at.isoformat() if row.started_at else None,
@@ -777,7 +784,7 @@ def _provider_confirmed_requirements(contract: dict[str, Any]) -> dict[str, Any]
     return result
 
 
-def design_attempt_json(row: Any) -> dict[str, Any]:
+def design_attempt_json(row: Any, store: ApplicationPersistence | None = None) -> dict[str, Any]:
     usage = json.loads(row.usage_json)
     preflight_input_limit = (
         row.safe_failure_code == "MODEL_INPUT_BUDGET_EXCEEDED"
@@ -797,6 +804,11 @@ def design_attempt_json(row: Any) -> dict[str, Any]:
         "failure": (
             {
                 "code": row.safe_failure_code,
+                "support_reference": (
+                    str(reference) if store is not None and (reference := store.error_reference(
+                        row.company_id, "AUTOMATIC_DESIGN", row.id,
+                    )) else None
+                ),
                 "message": (
                     "The AI request exceeded the configured input limit before a model call. "
                     "Your confirmed requirements remain saved."
@@ -1144,7 +1156,9 @@ class GenerationService:
                 ),
                 None,
             )
-            return {"attempt": design_attempt_json(existing), "reviewed_design": design}, False
+            return {
+                "attempt": design_attempt_json(existing, store), "reviewed_design": design,
+            }, False
         attempt = store.create_design_attempt(
             actor,
             case_id,
@@ -1414,7 +1428,7 @@ class GenerationService:
             )
             cast(Any, db).commit()
             return {
-                "attempt": design_attempt_json(attempt),
+                "attempt": design_attempt_json(attempt, store),
                 "reviewed_design": self._reviewed_design_json(reviewed),
             }, True
         except Exception as exc:
@@ -1460,6 +1474,10 @@ class GenerationService:
             failed_attempt.status = "FAILED"
             failed_attempt.safe_failure_code = failure_code
             failed_attempt.completed_at = datetime.now(UTC)
+            failure_reference = store.record_system_error(
+                actor, case_id, "AUTOMATIC_DESIGN_FAILED", exc,
+                source_kind="AUTOMATIC_DESIGN", source_id=failed_attempt.id,
+            )
             store.add_audit(
                 actor,
                 "AUTOMATIC_DESIGN_FAILED",
@@ -1467,14 +1485,18 @@ class GenerationService:
                 failed_attempt.id,
             )
             cast(Any, db).commit()
-            raise DesignProposalUnavailable() from exc
+            unavailable = DesignProposalUnavailable()
+            cast(Any, unavailable).support_reference = failure_reference
+            raise unavailable from exc
 
     def automatic_design_history(
         self, db: object, actor: Actor, case_id: UUID, contract_id: UUID
     ) -> list[dict[str, Any]]:
         store = cast(ApplicationPersistence, db)
         self._current_payload(store, actor, case_id, contract_id, require_edit=False)
-        return [design_attempt_json(row) for row in store.design_attempts(case_id, contract_id)]
+        return [
+            design_attempt_json(row, store) for row in store.design_attempts(case_id, contract_id)
+        ]
 
     @staticmethod
     def _reviewed_design_json(row: ReviewedReportDesignRecord) -> dict[str, Any]:
@@ -1786,6 +1808,10 @@ class GenerationService:
                 )
                 current.failure_reason = "The canonical generation pipeline did not complete."
                 current.completed_at = datetime.now(UTC)
+                store.record_system_error(
+                    actor, case_id, "GENERATION_FAILED", exc,
+                    source_kind="GENERATION", source_id=current.id,
+                )
                 store.add_audit(actor, "GENERATION_FAILED", "GENERATION_ATTEMPT", current.id)
                 cast(Any, db).commit()
                 return attempt_json(store, current), True

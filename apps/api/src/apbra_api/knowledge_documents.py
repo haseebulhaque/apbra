@@ -1,4 +1,4 @@
-"""Protected local draft originals and immutable command journal; no dispatch.
+"""Protected local draft originals and immutable command journal.
 
 This application adapter reuses the pure lifecycle unchanged. Request/session
 credentials are never persisted, and original user text is never an error/log.
@@ -330,8 +330,13 @@ class KnowledgeDocumentsService:
             tombstones,
         )
 
-    def revision_metadata(self, row: KnowledgeRevisionRow, archived: bool) -> dict[str, Any]:
+    def revision_metadata(
+        self, db: Session, row: KnowledgeRevisionRow, archived: bool
+    ) -> dict[str, Any]:
         title, version, _ = _decode(row)
+        from .knowledge_dispatch import revision_outcome
+
+        outcome = revision_outcome(db, row.id)
         return {
             "revision_id": str(row.id),
             "predecessor_revision_id": str(row.predecessor_revision_id)
@@ -343,8 +348,8 @@ class KnowledgeDocumentsService:
             "text_byte_count": row.text_byte_count,
             "created_at": _iso(row.created_at),
             "local_state": "LOCAL_ARCHIVAL_REQUESTED" if archived else "LOCAL_DRAFT",
-            "provider_write_outcome": "NOT_SENT",
-            "used_by_ai": False,
+            "provider_write_outcome": outcome,
+            "used_by_ai": False if outcome == "NOT_SENT" else None,
         }
 
     def context(self, db: Session, document: KnowledgeDocumentRow) -> dict[str, Any]:
@@ -354,18 +359,22 @@ class KnowledgeDocumentsService:
         if current is None or latest is None:
             raise unavailable()
         archived = latest.kind == "ARCHIVE"
+        from .knowledge_dispatch import command_outcome
+
         return {
             "company_id": str(document.company_id),
             "document_id": str(document.id),
             "current_revision_id": str(document.current_revision_id),
             "current_operation_id": str(document.current_operation_id),
-            "current_revision": self.revision_metadata(current, archived),
+            "current_revision": self.revision_metadata(db, current, archived),
             "local_state": "LOCAL_ARCHIVAL_REQUESTED" if archived else "LOCAL_DRAFT",
-            "provider_write_outcome": "NOT_SENT",
-            "used_by_ai": False,
+            "provider_write_outcome": command_outcome(db, latest.id),
+            "used_by_ai": False if command_outcome(db, latest.id) == "NOT_SENT" else None,
         }
 
-    def command_result(self, row: KnowledgeCommandRow) -> dict[str, Any]:
+    def command_result(self, db: Session, row: KnowledgeCommandRow) -> dict[str, Any]:
+        from .knowledge_dispatch import command_outcome
+
         return {
             "command_key": str(row.command_key),
             "operation_id": str(row.id),
@@ -376,7 +385,7 @@ class KnowledgeDocumentsService:
             if row.expected_current_revision_id
             else None,
             "created_at": _iso(row.created_at),
-            "provider_write_outcome": "NOT_SENT",
+            "provider_write_outcome": command_outcome(db, row.id),
         }
 
     def list(self, db: Session, context: DraftContext) -> dict[str, Any]:
@@ -402,8 +411,8 @@ class KnowledgeDocumentsService:
         return {
             "company_id": str(context.actor.company_id),
             "document": self.context(db, document),
-            "revisions": [self.revision_metadata(row, row.id in archived) for row in ordered],
-            "operations": [self.command_result(row) for row in commands],
+            "revisions": [self.revision_metadata(db, row, row.id in archived) for row in ordered],
+            "operations": [self.command_result(db, row) for row in commands],
         }
 
     def original(
@@ -459,7 +468,7 @@ class KnowledgeDocumentsService:
         return {
             "company_id": str(context.actor.company_id),
             "reconciliation": "COMMITTED" if row is not None else "NOT_OBSERVED",
-            "command": self.command_result(row) if row is not None else None,
+            "command": self.command_result(db, row) if row is not None else None,
             "document": self.detail(db, context, row.document_id) if row is not None else None,
         }
 
@@ -520,7 +529,7 @@ class KnowledgeDocumentsService:
             return {
                 "company_id": str(actor.company_id),
                 "disposition": "REPLAY",
-                "command": self.command_result(existing),
+                "command": self.command_result(db, existing),
                 "document": self.context(db, document),
             }
         if kind == "CREATE":
@@ -611,6 +620,6 @@ class KnowledgeDocumentsService:
         return {
             "company_id": str(actor.company_id),
             "disposition": "APPLIED",
-            "command": self.command_result(row),
+            "command": self.command_result(db, row),
             "document": self.context(db, document),
         }

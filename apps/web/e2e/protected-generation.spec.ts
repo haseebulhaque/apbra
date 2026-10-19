@@ -33,7 +33,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await openStep(page,'Information');
-  const initialUpload=page.locator('input[type="file"]');
+  const initialUpload=page.getByLabel('Browse files',{exact:true});
   await expect(initialUpload).toBeEnabled();
   await initialUpload.setInputFiles({
     name:'inspections.csv',
@@ -194,7 +194,7 @@ test('confirmed meaning and expert-reviewed plan build durable private candidate
   await expect(page.getByText('No current report yet')).toBeVisible();
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(2);
   await openStep(page,'Information');
-  const updatedUpload=page.locator('input[type="file"]');
+  const updatedUpload=page.getByLabel('Browse files',{exact:true});
   await expect(updatedUpload).toBeEnabled();
   await updatedUpload.setInputFiles({
     name:'current-inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
@@ -390,7 +390,7 @@ test('business UI cancels an active attempt and keeps its truthful history',asyn
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await openStep(page,'Information');
-  const cancellationUpload=page.locator('input[type="file"]');
+  const cancellationUpload=page.getByLabel('Browse files',{exact:true});
   await expect(cancellationUpload).toBeEnabled();
   await cancellationUpload.setInputFiles({
     name:'inspections.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
@@ -428,7 +428,7 @@ test('design feedback remains pending across Back, prevents repeat submission an
   await page.getByLabel('Your reporting goal').fill('Compare completed synthetic feedback checks by facility.');
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await openStep(page,'Information');
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.getByLabel('Browse files',{exact:true}).setInputFiles({
     name:'feedback-checks.csv',mimeType:'text/csv',buffer:Buffer.from('Facility,Completed\nNorth,18\nSouth,25\n'),
   });
   await page.getByRole('button',{name:'Add selected files'}).click();

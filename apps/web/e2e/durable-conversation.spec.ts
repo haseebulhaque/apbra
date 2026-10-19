@@ -43,7 +43,7 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
 
   await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
-  await page.locator('input[type=file]').setInputFiles([
+  await page.getByLabel('Browse files',{exact:true}).setInputFiles([
     {name:'fleet.csv',mimeType:'text/csv',buffer:Buffer.from('Date,Depot,Availability\n2026-01-01,North,0.96\n')},
     {name:'layout.png',mimeType:'image/png',buffer:Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),Buffer.from('synthetic reference')])},
   ]);
@@ -93,7 +93,7 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   const workbook=supportedXlsx();
-  await page.locator('input[type=file]').setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
+  await page.getByLabel('Browse files',{exact:true}).setInputFiles({name:'appointments.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:workbook});
   await page.getByRole('button',{name:'Add selected files'}).click();
   await expect(page.locator('.evidence-attached')).toContainText('1 saved');
   await expect(page.getByText(/Data source.*XLSX/)).toBeVisible();
@@ -121,7 +121,7 @@ test('a late interpretation response cannot repaint a newer request as current',
   await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
   await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
-  await page.locator('input[type=file]').setInputFiles({
+  await page.getByLabel('Browse files',{exact:true}).setInputFiles({
     name:'availability.csv',
     mimeType:'text/csv',
     buffer:Buffer.from('Depot,Availability\nNorth,0.96\n'),

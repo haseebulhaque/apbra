@@ -1,10 +1,10 @@
 import json
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Cookie, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -53,12 +53,15 @@ from .domain import (
     ConfigurationUnavailable,
     Conflict,
     EvidenceInvalid,
+    Forbidden,
     Role,
 )
 from .evidence import LocalEvidenceStore
 from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
+from .foundry_report_runtime import ReservedCredentials
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
+from .knowledge_dispatch import KnowledgeDispatchService, KnowledgeProvider, parse_request
 from .knowledge_documents import (
     DraftContext,
     Kind,
@@ -91,6 +94,16 @@ from .model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
 )
+from .native_response_api import register_native_response_routes
+from .observability import (
+    CURRENT_CORRELATION,
+    HistoryFilters,
+    audit_detail,
+    error_detail,
+    list_audit,
+    list_errors,
+    record_system_error,
+)
 from .oidc_adapter import OidcAdapter
 from .persistence import (
     ApplicationSession,
@@ -101,9 +114,11 @@ from .persistence import (
     Database,
     MembershipRow,
     SessionRow,
+    SystemErrorRow,
     TenantSecretRow,
 )
 from .reference_material import ReferenceMaterialService
+from .request_outputs import register_request_output_routes
 from .semantic_bridge import SemanticBridge
 from .tenant_secrets import AesGcmTenantCredentialStore, credential_status
 from .tenant_settings import (
@@ -284,9 +299,15 @@ def create_app(
     artifact_objects: ArtifactObjectStore | None = None,
     foundry_credentials: FoundryCredentialProvider | None = None,
     foundry_metadata_credentials: AgentMetadataCredentialProvider | None = None,
+    knowledge_provider: KnowledgeProvider | None = None,
+    native_receive_enabled: bool = False,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
+    if native_receive_enabled and settings.profile not in {"development", "test"}:
+        raise ValueError("Native receive inspection is qualified only for local development/test.")
+    if knowledge_provider is not None and settings.profile != "test":
+        raise ValueError("Document provider injection requires the test profile.")
     qualified_profiles = settings.qualified_provider_profiles()
     database = database or Database(settings.database_url)
     oidc = oidc or OidcAdapter(settings)
@@ -312,6 +333,22 @@ def create_app(
     identity_service = IdentityService()
     membership_service = MembershipService()
     app = FastAPI(title="APBRA API", version="0.1.0")
+
+    @app.middleware("http")
+    async def correlate_request(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # A client-supplied correlation header never chooses our support identity.
+        correlation = uuid4()
+        request.state.apbra_correlation_id = correlation
+        token = CURRENT_CORRELATION.set(correlation)
+        try:
+            response = await call_next(request)
+        finally:
+            CURRENT_CORRELATION.reset(token)
+        response.headers["X-APBRA-Request-ID"] = str(correlation)
+        return response
+
 
     def db_session() -> Iterator[Session]:
         with database.session() as db:
@@ -384,7 +421,7 @@ def create_app(
         return snapshot.settings.upload_policy
 
     def local_acceptance_service(
-        db: Session, snapshot: TenantSettingsSnapshot
+        db: Session, snapshot: TenantSettingsSnapshot, *, include_provider: bool = True
     ) -> AcceptanceService:
         if settings.semantic_timeout_seconds is None:
             raise ConfigurationUnavailable()
@@ -403,7 +440,7 @@ def create_app(
             ),
             objects,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=tenant_model_provider(db, snapshot),
+            model_provider=tenant_model_provider(db, snapshot) if include_provider else None,
             clarification_policy=clarification_policy,
             generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
             tenant_settings=snapshot,
@@ -421,7 +458,8 @@ def create_app(
         )
 
     def local_generation_service(
-        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False
+        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False,
+        resolve_provider: bool = True,
     ) -> GenerationService:
         if artifact_store is None:
             raise EvidenceInvalid()
@@ -443,7 +481,7 @@ def create_app(
             local_evidence_service(snapshot).objects,
             artifact_store,
             reference_objects=(reference_service.objects if reference_service else None),
-            model_provider=tenant_model_provider(db, snapshot),
+            model_provider=tenant_model_provider(db, snapshot) if resolve_provider else None,
             generation_policy=snapshot.settings.generation_policy.model_dump(by_alias=True),
             tenant_settings=snapshot,
         )
@@ -456,6 +494,7 @@ def create_app(
         response.delete_cookie(AUTH_BINDING_COOKIE, path="/api/auth/callback")
         return response
 
+    dispatch_service = KnowledgeDispatchService(knowledge_provider)
     document_service = KnowledgeDocumentsService()
     document_base = "/api/tenant-settings/knowledge-documents"
 
@@ -541,6 +580,128 @@ def create_app(
         except SQLAlchemyError:
             raise documents_unavailable() from None
 
+    @app.get(document_base + "/provider-commands/{command_key}")
+    def knowledge_provider_recover(
+        command_key: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        try:
+            with database.session() as db:
+                context = authorize_documents(
+                    db, session_token, request.headers.get("X-Expected-Membership-Id")
+                )
+                if request.query_params:
+                    raise invalid_document_request()
+                result = dispatch_service.recover(db, context, document_uuid(command_key))
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    @app.get(document_base + "/{document_id}/provider-operations")
+    def knowledge_provider_status(
+        document_id: str, request: Request, session_token: SessionCookie = None
+    ) -> Response:
+        try:
+            with database.session() as db:
+                context = authorize_documents(
+                    db, session_token, request.headers.get("X-Expected-Membership-Id")
+                )
+                if request.query_params:
+                    raise invalid_document_request()
+                result = dispatch_service.status(db, context, document_uuid(document_id))
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    async def provider_write(
+        request: Request,
+        session_token: str | None,
+        supplied_csrf: str | None,
+        document_id: str,
+        operation_id: str | None = None,
+        reconcile: bool = False,
+    ) -> Response:
+        require_csrf(session_token, supplied_csrf)
+        expected = request.headers.get("X-Expected-Membership-Id")
+        try:
+
+            def preflight_provider() -> DraftContext:
+                with database.session() as db:
+                    return authorize_documents(db, session_token, expected)
+
+            initial = await run_in_threadpool(preflight_provider)
+            if request.query_params or request.headers.get("Content-Type", "").lower().replace(
+                " ", ""
+            ) not in {"application/json", "application/json;charset=utf-8"}:
+                raise invalid_document_request()
+            identifier = document_uuid(document_id)
+            operation = document_uuid(operation_id) if operation_id is not None else None
+            key = (
+                document_uuid(request.headers.get("Idempotency-Key")) if operation is None else None
+            )
+            raw = bytearray()
+            async for chunk in request.stream():
+                if len(raw) + len(chunk) > initial.maximum_request_bytes:
+                    raise document_request_too_large()
+                raw.extend(chunk)
+            payload = parse_request(bytes(raw), operation is None)
+
+            def perform() -> dict[str, Any]:
+                with database.session() as db:
+                    context = authorize_documents(db, session_token, expected, initial=initial)
+                    if len(raw) > context.maximum_request_bytes:
+                        raise document_request_too_large()
+                    if operation is None:
+                        assert key is not None
+                        return dispatch_service.prepare(db, context, identifier, key, payload)
+                    claimed = dispatch_service.claim(db, context, identifier, operation, reconcile)
+                # The immutable claim commits before IO; no database locks cross IO.
+                if claimed is not None:
+                    provider_result = dispatch_service.invoke(claimed, reconcile)
+                    with database.session() as db:
+                        dispatch_service.complete(db, claimed[1], provider_result)
+                # Completion is retained even if this caller lost authority during IO.
+                with database.session() as db:
+                    context = authorize_documents(db, session_token, expected, initial=initial)
+                    return dispatch_service.status(db, context, identifier)
+
+            result = await run_in_threadpool(perform)
+            return JSONResponse(result, headers={"Cache-Control": "no-store"})
+        except SQLAlchemyError:
+            raise documents_unavailable() from None
+
+    @app.post(document_base + "/{document_id}/provider-operations")
+    async def knowledge_provider_prepare(
+        document_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(request, session_token, supplied_csrf, document_id)
+
+    @app.post(document_base + "/{document_id}/provider-operations/{operation_id}/dispatch")
+    async def knowledge_provider_dispatch(
+        document_id: str,
+        operation_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(
+            request, session_token, supplied_csrf, document_id, operation_id
+        )
+
+    @app.post(document_base + "/{document_id}/provider-operations/{operation_id}/reconcile")
+    async def knowledge_provider_observe(
+        document_id: str,
+        operation_id: str,
+        request: Request,
+        session_token: SessionCookie = None,
+        supplied_csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> Response:
+        return await provider_write(
+            request, session_token, supplied_csrf, document_id, operation_id, True
+        )
+
     @app.get(document_base + "/capabilities")
     def knowledge_capabilities(request: Request, session_token: SessionCookie = None) -> Response:
         return document_read(request, session_token, "capabilities")
@@ -601,6 +762,92 @@ def create_app(
             request, session_token, "original", document_id=document_id, revision_id=revision_id
         )
 
+    def request_error_reference(
+        request: Request, exc: Exception
+    ) -> tuple[str, bool, str]:
+        correlation = getattr(request.state, "apbra_correlation_id", None)
+        if not isinstance(correlation, UUID):
+            correlation = uuid4()
+        reference = uuid4()
+        # Reconnecting to a database which just failed can delay the original
+        # error and cannot establish durable history. Report that truthfully.
+        if isinstance(exc, SQLAlchemyError):
+            logger.warning("Error history unavailable: reference=%s", reference)
+            return str(reference), False, str(correlation)
+        try:
+            route = request.scope.get("route")
+            template = getattr(route, "path", "")
+            operation = getattr(route, "name", "")
+            if (not isinstance(template, str) or not template.startswith("/api/")
+                    or template.startswith("/api/auth/")
+                    or not isinstance(operation, str)
+                    or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", operation) is None):
+                return str(reference), False, str(correlation)
+            with database.session() as error_db:
+                assert isinstance(error_db, ApplicationSession)
+                actor = resolve_actor(error_db, request.cookies.get(SESSION_COOKIE))
+                case_id = None
+                if "case_id" in request.path_params:
+                    case_id = UUID(str(request.path_params["case_id"]))
+                    # An error path is never a way to discover a foreign or
+                    # revoked private report. Recheck before associating it.
+                    case_service.get(error_db, actor, case_id)
+                prior_reference = getattr(request.state, "apbra_error_reference", None)
+                if prior_reference is None:
+                    prior_reference = getattr(exc, "support_reference", None)
+                if isinstance(prior_reference, UUID):
+                    prior = error_db.scalar(select(SystemErrorRow).where(
+                        SystemErrorRow.id == prior_reference,
+                        SystemErrorRow.company_id == actor.company_id,
+                        SystemErrorRow.actor_membership_id == actor.membership_id,
+                        SystemErrorRow.case_id == case_id,
+                    ))
+                    if prior is not None:
+                        return str(prior_reference), True, str(prior.correlation_id)
+                module = (
+                    "Reports" if case_id is not None else
+                    "Settings" if template.startswith("/api/tenant-settings") else
+                    "Company" if template.startswith(("/api/companies", "/api/memberships")) else
+                    "API"
+                )
+                reference = record_system_error(
+                    error_db, actor, case_id, operation.upper(),
+                    ApplicationError() if isinstance(exc, RequestValidationError) else exc,
+                    module=module, correlation_id=correlation,
+                )
+            return str(reference), True, str(correlation)
+        except Exception as recording_error:
+            # Never echo an exception message, connection string or request body.
+            logger.warning(
+                "Error history unavailable: reference=%s type=%s",
+                reference, type(recording_error).__name__,
+            )
+            return str(reference), False, str(correlation)
+
+
+    async def supported_error_response(
+        request: Request, exc: Exception, *, status_code: int, code: str, message: str
+    ) -> Response:
+        # Keep protected-resource denials indistinguishable and anonymous
+        # invitation/auth validation responses free of tenant diagnostics.
+        if status_code == 404 or not request.cookies.get(SESSION_COOKIE):
+            return JSONResponse(
+                status_code=status_code, content={"error": {"code": code, "message": message}},
+                headers={"Cache-Control": "no-store"},
+            )
+        reference, recorded, correlation = await run_in_threadpool(
+            request_error_reference, request, exc
+        )
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": {
+                "code": code, "message": message, "support_reference": reference,
+                "recorded": recorded, "correlation_id": correlation,
+            }},
+            headers={"X-APBRA-Request-ID": correlation, "Cache-Control": "no-store"},
+        )
+
+
     @app.exception_handler(ApplicationError)
     async def handle_application_error(request: Request, exc: ApplicationError) -> Response:
         if request.url.path == "/api/auth/callback" and "text/html" in request.headers.get(
@@ -609,7 +856,17 @@ def create_app(
             return callback_failure_redirect(
                 "unavailable" if exc.code == "PROVIDER_UNAVAILABLE" else "invalid"
             )
-        return error_response(exc)
+        return await supported_error_response(
+            request, exc, status_code=exc.status_code, code=exc.code, message=exc.public_message
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
+        return await supported_error_response(
+            request, exc, status_code=500, code="SYSTEM_ERROR",
+            message="The operation could not be completed. Report the support reference for help.",
+        )
+
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, _exc: RequestValidationError) -> Response:
@@ -619,14 +876,9 @@ def create_app(
             return callback_failure_redirect("invalid")
         # Validation details can contain bearer credentials (for example an
         # invalid invitation token). Never echo rejected request input.
-        return JSONResponse(
-            status_code=422,
-            content={
-                "error": {
-                    "code": "REQUEST_VALIDATION_FAILED",
-                    "message": "The request format is invalid.",
-                }
-            },
+        return await supported_error_response(
+            request, _exc, status_code=422, code="REQUEST_VALIDATION_FAILED",
+            message="The request format is invalid.",
         )
 
     @app.get("/api/health")
@@ -719,6 +971,150 @@ def create_app(
     @app.get("/api/tenant-settings/history")
     def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         return {"items": settings_history(db, resolve_actor(db, session_token))}
+
+    def history_filters(request: Request) -> HistoryFilters:
+        allowed = {
+            "from", "to", "module", "actor_id", "operation", "outcome",
+            "support_reference", "limit", "cursor",
+        }
+        values = request.query_params
+        if any(key not in allowed or len(values.getlist(key)) != 1 for key in values):
+            raise RequestValidationError([])
+        if any(len(value) > (4096 if key == "cursor" else 100)
+               for key, value in values.items()):
+            raise RequestValidationError([])
+        try:
+            return HistoryFilters(
+                from_time=datetime.fromisoformat(values["from"].replace("Z", "+00:00"))
+                if "from" in values else None,
+                to_time=datetime.fromisoformat(values["to"].replace("Z", "+00:00"))
+                if "to" in values else None,
+                module=values.get("module"), operation=values.get("operation"),
+                actor_id=UUID(values["actor_id"]) if "actor_id" in values else None,
+                outcome=values.get("outcome"),
+                support_reference=UUID(values["support_reference"])
+                if "support_reference" in values else None,
+                limit=int(values.get("limit", "50")), cursor=values.get("cursor"),
+            )
+        except (ValueError, TypeError, OverflowError):
+            raise RequestValidationError([]) from None
+
+
+    def history_admin(
+        request: Request, db: Session, session_token: str | None
+    ) -> Actor:
+        actor = resolve_actor(db, session_token)
+        if actor.role not in {Role.COMPANY_OWNER, Role.COMPANY_ADMIN}:
+            raise Forbidden()
+        if request.headers.get("X-Expected-Membership-Id") != str(actor.membership_id):
+            raise Conflict()
+        return actor
+
+
+    def history_read_audit(db: Session, actor: Actor, event: str) -> None:
+        assert isinstance(db, ApplicationSession)
+        correlation = CURRENT_CORRELATION.get()
+        db.add_audit(
+            actor, event, "COMPANY", actor.company_id,
+            json.dumps({
+                "outcome": "SUCCEEDED",
+                "correlation_id": str(correlation) if correlation is not None else None,
+            }, sort_keys=True, separators=(",", ":")),
+        )
+
+
+    @app.get("/api/tenant-settings/audit-events")
+    def tenant_audit_events(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        result = list_audit(
+            db, actor, history_filters(request), cursor_secret=settings.session_secret
+        )
+        history_read_audit(db, actor, "AUDIT_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/audit-events/{event_id}")
+    def tenant_audit_event(
+        event_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = audit_detail(db, actor, event_id)
+        history_read_audit(db, actor, "AUDIT_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/errors")
+    def tenant_errors(
+        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        result = list_errors(
+            db, actor, history_filters(request), cursor_secret=settings.session_secret
+        )
+        history_read_audit(db, actor, "ERROR_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/tenant-settings/errors/{error_id}")
+    def tenant_error(
+        error_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = error_detail(db, actor, error_id, technical=True)
+        history_read_audit(db, actor, "ERROR_HISTORY_VIEWED")
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/cases/{case_id}/errors")
+    def report_errors(
+        case_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = resolve_actor(db, session_token)
+        case_service.get(db, actor, case_id)
+        result = list_errors(
+            db, actor, history_filters(request), case_id=case_id,
+            cursor_secret=settings.session_secret,
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
+
+    @app.get("/api/cases/{case_id}/errors/{error_id}")
+    def report_error(
+        case_id: UUID, error_id: UUID, request: Request, response: Response,
+        db: DB, session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        assert isinstance(db, ApplicationSession)
+        actor = resolve_actor(db, session_token)
+        case_service.get(db, actor, case_id)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = error_detail(db, actor, error_id, case_id=case_id, technical=False)
+        response.headers["Cache-Control"] = "no-store"
+        return result
+
 
     @app.get("/api/tenant-settings/qualified-profiles")
     def get_qualified_profiles(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
@@ -1491,6 +1887,7 @@ def create_app(
     def create_interpretation(
         case_id: UUID,
         payload: InterpretationCreate,
+        request: Request,
         db: DB,
         session_token: SessionCookie = None,
         csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
@@ -1523,7 +1920,14 @@ def create_app(
                     ),
                 )
             )
+            assert isinstance(db, ApplicationSession)
+            failure_reference = record_system_error(
+                db, actor, case_id, "CREATE_INTERPRETATION", exc,
+                source_kind="INTERPRETATION",
+                source_id=request.state.apbra_correlation_id,
+            )
             db.commit()
+            request.state.apbra_error_reference = failure_reference
             current_actor = resolve_actor(db, session_token)
             case_service.get(db, current_actor, case_id)
             raise
@@ -1540,7 +1944,9 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
-        result = local_acceptance_service(db, tenant_snapshot(db, actor)).start_refinement_cycle(
+        result = local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).start_refinement_cycle(
             db,
             actor,
             case_id,
@@ -1558,7 +1964,9 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_acceptance_service(db, tenant_snapshot(db, actor)).state(db, actor, case_id)
+        return local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).state(db, actor, case_id)
 
     @app.post("/api/cases/{case_id}/confirm")
     def confirm_interpretation(
@@ -1570,7 +1978,9 @@ def create_app(
     ) -> dict[str, Any]:
         require_csrf(session_token, csrf)
         actor = resolve_actor(db, session_token)
-        result = local_acceptance_service(db, tenant_snapshot(db, actor)).confirm(
+        result = local_acceptance_service(
+            db, tenant_snapshot(db, actor), include_provider=False
+        ).confirm(
             db,
             actor,
             case_id,
@@ -1607,7 +2017,9 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "items": local_generation_service(db, tenant_snapshot(db, actor)).history(
+            "items": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).history(
                 db, actor, case_id
             )
         }
@@ -1620,7 +2032,9 @@ def create_app(
         session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
-        return local_generation_service(db, tenant_snapshot(db, actor)).list_reviewed_designs(
+        return local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).list_reviewed_designs(
             db, actor, case_id, confirmed_contract_id
         )
 
@@ -1664,7 +2078,7 @@ def create_app(
         actor = resolve_actor(db, session_token)
         return {
             "items": local_generation_service(
-                db, tenant_snapshot(db, actor)
+                db, tenant_snapshot(db, actor), resolve_provider=False
             ).automatic_design_history(
                 db,
                 actor,
@@ -1708,7 +2122,7 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         actor = resolve_actor(db, session_token)
         result, created = local_generation_service(
-            db, tenant_snapshot(db, actor), require_bridge=True
+            db, tenant_snapshot(db, actor), resolve_provider=False, require_bridge=True
         ).start(
             db,
             actor,
@@ -1731,7 +2145,9 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).get(
+            "attempt": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).get(
                 db, actor, case_id, attempt_id
             )
         }
@@ -1747,7 +2163,9 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         actor = resolve_actor(db, session_token)
         return {
-            "attempt": local_generation_service(db, tenant_snapshot(db, actor)).cancel(
+            "attempt": local_generation_service(
+                db, tenant_snapshot(db, actor), resolve_provider=False
+            ).cancel(
                 db, actor, case_id, attempt_id
             )
         }
@@ -1761,7 +2179,7 @@ def create_app(
     ) -> Response:
         actor = resolve_actor(db, session_token)
         content, filename, digest_value = local_generation_service(
-            db, tenant_snapshot(db, actor)
+            db, tenant_snapshot(db, actor), resolve_provider=False
         ).artifact(db, actor, case_id, attempt_id)
         safe_filename = "".join(
             character for character in filename if character.isalnum() or character in "._-"
@@ -1895,6 +2313,62 @@ def create_app(
         )
         db.commit()
         return {"membership": {"id": str(row.id), "role": row.role, "active": row.active}}
+
+    if native_receive_enabled and evidence_store is None:
+        raise ConfigurationUnavailable()
+    if evidence_store is not None:
+
+        def native_access(
+            db: Session, snapshot: TenantSettingsSnapshot
+        ) -> tuple[ProviderProfile, FoundryAccess]:
+            profile = snapshot.settings.provider_profile
+            if (
+                not snapshot.settings.automatic_generation_enabled
+                or profile is None
+                or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or snapshot.secret_reference_id is not None
+                or foundry_credentials is None
+            ):
+                raise ConfigurationUnavailable()
+            validate_qualified_profile(profile, qualified_profiles)
+            try:
+                if foundry_credentials.ready(snapshot.company_id, profile) is not True:
+                    raise ConfigurationUnavailable()
+                return profile, foundry_credentials.resolve(snapshot.company_id, profile)
+            except Exception:
+                raise ConfigurationUnavailable() from None
+
+        register_native_response_routes(
+            app, database, require_csrf=require_csrf, snapshot_for=tenant_snapshot,
+            service_for=local_acceptance_service, generation_for=local_generation_service,
+            access_for=native_access,
+            objects=evidence_store, receive_enabled=native_receive_enabled,
+            reservations=(foundry_credentials.reservations
+                          if isinstance(foundry_credentials, ReservedCredentials) else None),
+        )
+
+    def artifact_access(db: Session, company_id: UUID, case_id: UUID) -> tuple[
+        ProviderProfile, FoundryAccess, Callable[[], bool]
+    ]:
+        snapshot = current_settings(db, company_id)
+        profile = snapshot.settings.provider_profile
+        if (profile is None or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or snapshot.secret_reference_id is not None or foundry_credentials is None):
+            raise ConfigurationUnavailable()
+        validate_qualified_profile(profile, qualified_profiles)
+        credentials = foundry_credentials
+        if credentials.ready(company_id, profile) is not True:
+            raise ConfigurationUnavailable()
+        access = (credentials.resolve_readonly(company_id, profile, case_id=case_id)
+                  if isinstance(credentials, ReservedCredentials)
+                  else credentials.resolve(company_id, profile))
+        return profile, access, lambda: credentials.ready(company_id, profile)
+
+    register_request_output_routes(
+        app, database, require_csrf=require_csrf, objects=artifact_store,
+        native_objects=evidence_store,
+        artifact_access_for=artifact_access if foundry_credentials is not None else None,
+    )
 
     app.state.settings = settings
     app.state.database = database

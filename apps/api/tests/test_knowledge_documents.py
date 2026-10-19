@@ -966,3 +966,27 @@ except BaseException:
         "provider_write_outcome": "NOT_SENT",
     }
     assert counts(database) == (1, 2, 3)
+
+
+def test_local_draft_revision_archive_do_not_implicitly_prepare_provider(client, database):
+    from apbra_api.persistence import KnowledgeDispatchRow
+
+    session = sign_in(client)
+    h = headers(client, session)
+    first = created(client, h)["document"]
+    path = BASE + "/" + first["document_id"]
+    revised = client.post(
+        path + "/revisions",
+        headers={**h, "Idempotency-Key": str(uuid4())},
+        json={**draft(), "expected_current_revision_id": first["current_revision_id"]},
+    )
+    assert revised.status_code == 201
+    archived = client.post(
+        path + "/archive",
+        headers={**h, "Idempotency-Key": str(uuid4())},
+        json={"expected_current_revision_id": revised.json()["document"]["current_revision_id"]},
+    )
+    assert archived.status_code == 201
+    assert client.get(path + "/provider-operations", headers=h).json()["operations"] == []
+    with database.session() as db:
+        assert db.scalar(select(KnowledgeDispatchRow.id)) is None

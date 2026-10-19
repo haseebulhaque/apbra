@@ -1,0 +1,20 @@
+{
+  "status": "completed",
+  "output": [
+    {
+      "type": "mcp_list_tools"
+    },
+    {
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "{\"artifact_kind\": \"ReportDesign\", \"schema_version\": 2, \"standardsApplied\": [{\"citation\": \"synthetic-unobserved-standard-a\", \"decision\": \"Synthetic claimed decision A\"}, {\"citation\": \"synthetic-unobserved-standard-b\", \"decision\": \"Synthetic claimed decision B\"}], \"pages\": [{\"visuals\": [{}, {}, {}, {}, {}]}, {\"visuals\": [{}, {}, {}, {}]}, {\"visuals\": [{}, {}, {}, {}]}]}",
+          "annotations": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import {inspectMeasureIntegrity,type ReportDesign,type RequirementInterpretation} from './foundry';
+import {inspectMeasureIntegrity,validateStandardProvenance,type StandardProvenance,type ReportDesign,type RequirementInterpretation} from './foundry';
 import type {DataStructure} from './schemaIngestion';
 import type {TenantSettings} from './tenant';
 
@@ -11,7 +11,7 @@ const fieldExists=(reference:string,schema:DataStructure)=>{const [table,column]
 
 /** Deterministic tenant policy evaluates typed AI output and request schema.
  * Prompt text never directly grants, blocks, or authorizes generation. */
-export function evaluateGuardrails(interpretation:RequirementInterpretation,design:ReportDesign|null,schema:DataStructure,settings:TenantSettings):GuardrailDecision{
+export function evaluateGuardrails(interpretation:RequirementInterpretation,design:ReportDesign|null,schema:DataStructure,settings:TenantSettings,provenance?:StandardProvenance):GuardrailDecision{
   const evaluations:PolicyEvaluation[]=[];
   evaluations.push(interpretation.request_kind==='POWER_BI_REPORT'?evaluation('SCOPE-001','scope','PASS','The structured interpretation is a Power BI report request.','Continue with bounded design.'):evaluation('SCOPE-001','scope','OUT_OF_SCOPE','The structured interpretation is outside Power BI report generation.','Return to the requester; generation must not start.'));
   if(!design)return{outcome:evaluations[0].result,generation:'NOT_STARTED',evaluations};
@@ -23,6 +23,8 @@ export function evaluateGuardrails(interpretation:RequirementInterpretation,desi
   const inaccessible=design.pages.flatMap(page=>page.visuals).filter(visual=>!visual.title.trim()||!visual.altText.trim());evaluations.push(settings.governance.requireAccessibility&&inaccessible.length?evaluation('ACCESSIBILITY-001','accessibility','WARNING',`${inaccessible.length} visuals lack a title or text alternative.`,'Add accessible titles and descriptions.'):evaluation('ACCESSIBILITY-001','accessibility','PASS','Visuals provide titles and text alternatives.','Continue.'));
   const supported=new Set(['card','bar','column','line','table','slicer']);const unsupported=design.pages.flatMap(page=>page.visuals).filter(visual=>!supported.has(visual.type));evaluations.push(unsupported.length?evaluation('CAPABILITY-001','unsupported-feature','HUMAN_REVIEW_REQUIRED',`Unsupported visual types: ${[...new Set(unsupported.map(item=>item.type))].join(', ')}.`,'Revise the design or extend the compiler.'):evaluation('CAPABILITY-001','unsupported-feature','PASS','All requested visuals are in the bounded compiler capability set.','Continue.'));
   evaluations.push(settings.generation.enabled?evaluation('GENERATION-001','generation-capability','PASS','PBIP generation is enabled for supported designs.','Compile after all blocking policies pass.'):evaluation('GENERATION-001','generation-capability','BLOCKED','PBIP generation is disabled by tenant policy.','An administrator must enable generation.'));
-  evaluations.push(!settings.governance.requireKnowledge||design.standardsApplied.length?evaluation('GROUNDING-001','ai-output-validity','PASS','The design retains governed-knowledge provenance.','Continue.'):evaluation('GROUNDING-001','ai-output-validity','WARNING','Tenant policy requires governed knowledge but no standards were applied.','Retrieve governed knowledge and regenerate the design.'));
+  if(provenance)validateStandardProvenance(design.standardsApplied,provenance.references,provenance.unverifiedStandardIndexes);
+  const unverified=provenance?.unverifiedStandardIndexes?.length??0;
+  evaluations.push(unverified?evaluation('GROUNDING-001','ai-output-validity','WARNING',`${unverified} unverified model standards claim(s) retained; these are not observed retrieval evidence.`,'Review the original claims and evidence separately.'):!settings.governance.requireKnowledge||design.standardsApplied.length?evaluation('GROUNDING-001','ai-output-validity','PASS','The design retains governed-knowledge provenance.','Continue.'):evaluation('GROUNDING-001','ai-output-validity','WARNING','Tenant policy requires governed knowledge but no standards were applied.','Retrieve governed knowledge and regenerate the design.'));
   const outcome=evaluations.reduce<PolicyResult>((current,item)=>rank[item.result]>rank[current]?item.result:current,'PASS');return{outcome,generation:rank[outcome]>=rank.HUMAN_REVIEW_REQUIRED?'NOT_STARTED':'AVAILABLE',evaluations};
 }
