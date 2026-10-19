@@ -738,7 +738,7 @@ def test_audit_errors_populated_downgrade_refuses_and_preserves_occurrence(
     with pytest.raises(RuntimeError, match="Cannot downgrade retained system error occurrences"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261015_10")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261015_11"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261018_14"
         error = db.scalar(select(SystemErrorRow).where(SystemErrorRow.id == reference))
         diagnostic = db.scalar(select(SystemErrorDiagnosticRow).where(
             SystemErrorDiagnosticRow.error_id == reference

@@ -70,7 +70,8 @@ def integrated(saved_case, monkeypatch, request):
         new_settings(
             db, s.company, {"provider_profile": s.profile, "automatic_generation_enabled": True}
         )
-    s.settings.qualified_provider_profiles_json = json.dumps([s.profile.model_dump()])
+    monkeypatch.setattr(s.settings, "qualified_provider_profiles_json",
+                        json.dumps([s.profile.model_dump()]))
     state = s.load()
     data = approval(stages=("REQUIREMENT_ANALYSIS",)).model_dump()
     data["binding"].update(company_id=s.company, provider_profile=s.profile)

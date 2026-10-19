@@ -254,7 +254,8 @@ def integration(client, artifact_case, database, settings, profile, access, monk
     access = replace(access, company_id=company)
     with database.session() as db:
         new_settings(db, company, {"provider_profile": profile})
-    settings.qualified_provider_profiles_json = json.dumps([profile.model_dump()])
+    monkeypatch.setattr(settings, "qualified_provider_profiles_json",
+                        json.dumps([profile.model_dump()]))
     from apbra_api.native_response_index import NativeReceiveCommandRow
     from apbra_api.tenant_settings import current_settings
 
