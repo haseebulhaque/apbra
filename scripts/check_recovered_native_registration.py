@@ -171,7 +171,7 @@ def historical_native_source(root,name):
 
 # V3 is a separately bound CI/source version; v2 task/manifests remain immutable.
 V3_PATH = 'scripts/check_ci_browser_registration_v3.py'
-V3_HELPER_SHA = '463c05c406048e52af1f1968513581451101e4b85589d3e6119bae801c1ccc49'
+V3_HELPER_SHA = '0226cfb94e9c723b1f88459d897ea702fe130a8f742f68d4c66519f2c950d116'
 V3_TASKS = ('tasks/APBRA-183-ci-browser-registration-v3.json', 'tasks/APBRA-160-recovered-account-public-v3.json', 'tasks/APBRA-183-native-organisation-public-v3.json')
 V3_BRANCHES = {'G': R, 'Q': 'agent/APBRA-DEVOPS/APBRA-160-recovered-account-public-v3', 'N': 'agent/APBRA-DEVOPS/APBRA-183-native-organisation-public-v3'}
 _v2_bind = bind

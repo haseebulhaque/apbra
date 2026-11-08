@@ -426,5 +426,33 @@ class CiBrowserRegistration(unittest.TestCase):
         self.assertEqual(P['historical_fixture_source']('tests/bootstrap/test_tenant_document_drafts_20261013_scope.py',current),subprocess.check_output(['git','show',H['BASE']+':tests/bootstrap/test_tenant_document_drafts_20261013_scope.py'],cwd=ROOT,text=True))
 
 
+    def test_frozen_full_inventories_include_unchanged_paths_without_requiring_unpublished_ancestry(self):
+        frozen=H['manifest'](ROOT)
+        self.assertEqual(frozen['product_status'],'FROZEN')
+        self.assertEqual((frozen['account_observed_source'],frozen['native_observed_source']),('135f8f8c17ea40e5814c16493a3953b0c35d5681','263c383a372a5db09b0d838d213c11b402ef4ae7'))
+        self.assertEqual((len(frozen['account_files']),len(frozen['native_files']),len({**frozen['account_files'],**frozen['native_files']})),(80,17,83))
+        def original_hash(name):
+            try:raw=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:return None
+            return hashlib.sha256(raw).hexdigest()
+        # Reconstruct only the real publicBASE+immutableReg7 application baseline.
+        # No lookup of unpublished521/135/263 commit objects is needed after a legitimate squash.
+        account=frozen['account_files'];native=frozen['native_files'];registration=frozen['registration_fixture_files']
+        unchanged_q={name for name,sha in account.items() if sha==(registration[name] if name in H['REG_FIXTURES'] else original_hash(name))}
+        self.assertEqual(unchanged_q,{'apps/api/src/apbra_api/config.py','apps/api/src/apbra_api/main.py','apps/api/tests/conftest.py','apps/api/tests/test_native_contracts.py','apps/api/tests/test_report_authorization_clock.py','apps/web/src/RequestOutputs.test.tsx','apps/web/src/durableGeneration.test.tsx'})
+        self.assertEqual((len(account)-len(unchanged_q),len(unchanged_q&H['REG_FIXTURES'])),(73,3))
+        unchanged_n={name for name,sha in native.items() if sha==(account[name] if name in account else original_hash(name))}
+        self.assertEqual(unchanged_n,{'apps/web/src/privateCases.test.tsx'})
+        self.assertEqual(len(native)-len(unchanged_n),16)
+        self.assertNotEqual(account['apps/web/src/style.css'],native['apps/web/src/style.css'])
+        # Unchanged paths remain mandatory: even a newly repinned raw manifest cannot omit them.
+        for field,name in [('account_files','apps/api/src/apbra_api/config.py'),('native_files','apps/web/src/privateCases.test.tsx')]:
+            with tempfile.TemporaryDirectory() as folder:
+                root=self.minimal_root(folder);path=root/H['MANIFEST'];value=json.loads(path.read_text())
+                value[field]=[row for row in value[field] if row[0]!=name];raw=json.dumps(value).encode();path.write_bytes(raw)
+                with patch.dict(H['manifest'].__globals__,{'MANIFEST_SHA':hashlib.sha256(raw).hexdigest()}):
+                    with self.assertRaisesRegex(ValueError,'literal paths differ'):H['manifest'](root)
+
+
 if __name__ == '__main__':
     unittest.main()
