@@ -2,7 +2,7 @@
   "schema_version": 3,
   "public_base": "444f4828c87a3a158fc102efae37196540cbbafa",
   "continuation_base": "647712931331e89b1f5257b6443090f98df84b37",
-  "registration_phase": "G40-CI",
+  "registration_phase": "G41-CI",
   "product_status": "NOT_FROZEN",
   "account_observed_source": null,
   "native_observed_source": null,
@@ -168,6 +168,7 @@
     "tests/bootstrap/test_foundry_qualification_scope.py",
     "tests/bootstrap/test_guided_preparation_scope.py",
     "tests/bootstrap/test_historical_fixture_staging_20261012_scope.py",
+    "tests/bootstrap/test_invited_private_case_foundation_scope.py",
     "tests/bootstrap/test_knowledge_lifecycle_20261012_scope.py",
     "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
   ],
@@ -182,5 +183,11 @@
     "bootstrap_tests": 679,
     "bootstrap_failures": 4,
     "disposition": "Retained complete intermediate failure; no final qualification claim"
+  },
+  "retained_foundation_diagnostic": {
+    "head": "79d188c3f2f3bf2021033595f49172ad126660f1",
+    "bootstrap_tests": 680,
+    "bootstrap_failures": 2,
+    "disposition": "Retained complete intermediate failure; original APBRA162 fixture pin correctly denied current setup adapter"
   }
 }
