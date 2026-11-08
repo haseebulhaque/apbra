@@ -37,6 +37,10 @@ class FoundryQualificationScopeTests(unittest.TestCase):
             if source.is_file():
                 shutil.copyfile(source, target)
 
+        if historical:
+            workflow = root / '.github/workflows/bootstrap.yml'
+            workflow.write_text(c.pn['workflow_projection'](ROOT, workflow.read_text()))
+
     def check(self, root, paths, branch=None):
         return c.check(root, active_task_id="APBRA-160",
                        active_branch=branch or c.FOUNDRY_QUALIFICATION_BRANCH,

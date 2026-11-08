@@ -29,6 +29,10 @@ class FoundryQualificationOct11ScopeTests(unittest.TestCase):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / name, target)
 
+        if historical:
+            workflow = root / '.github/workflows/bootstrap.yml'
+            workflow.write_text(c.pn['workflow_projection'](ROOT, workflow.read_text()))
+
     def check(self, root, paths=None, branch=None):
         return c.check(root, active_task_id='APBRA-160', active_branch=branch or h['N_BRANCH'],
                        changed_paths=h['N_PATHS'] if paths is None else paths)[0]

@@ -1155,7 +1155,6 @@ def task_errors(task:dict,catalog:dict,sources:dict)->list[str]:
    errors.append('Specification authority missing')
  return errors
 def workflow_errors(text: str) -> list[str]:
-    if pn:text=pn['workflow_projection'](ROOT,text)
     errors = []
     try:
         doc = yaml.load(text, Loader=yaml.BaseLoader)
@@ -1281,7 +1280,7 @@ active_branch == 'agent/APBRA-DEVOPS/APBRA-163-durable-conversation-evidence-acc
         workflow_text = workflow_bytes.decode('utf-8')
         if historical_capacity_fixture:
             workflow_text = workflow_text.replace('timeout-minutes: 20', 'timeout-minutes: 45', 1)
-        errors += workflow_errors(workflow_text)
+        errors += workflow_errors(pn['workflow_projection'](root,workflow_text) if pn else workflow_text)
         card=next(c for c in catalog['cards']if c['agent_id']==task['assigned_agent'])
         shell_path = root / 'tasks/APBRA-129-capstone-shell.json'
         shell_task = None

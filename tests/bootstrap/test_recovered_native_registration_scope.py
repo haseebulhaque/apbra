@@ -20,7 +20,7 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         self.assertIn(current,[registration,product])
         faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
         if H['v3_present'](ROOT):
-            self.assertIn('V3 registration requires exact finite G33 CI/governance scope',faults)
+            self.assertIn('V3 registration requires exact finite G38 CI/governance scope',faults)
             current_faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['scope'](ROOT,'G'))[0]
             if current==registration:self.assertEqual(current_faults,[])
             else:self.assertIn('V3 registration test-fixture phase differs',current_faults)
@@ -141,6 +141,7 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
                 with self.assertRaises(ValueError):H['inverse'](bad,H['PUBLIC_NATIVE_TEST_EDITS'])
     def test_shared_test_fixture_transition_needs_a_complete_released_product(self):
         frozen=H['manifest'](ROOT);G=H['G'];overlap=H['REG_FIXTURES']
+        proof=H['_v2_registration_published'] if H['v3_present'](ROOT) else H['registration_published']
         # A synthetic main supplies exact G non-overlap bytes, never real refs.
         def blob(root,*args):
             prefix='origin/main:'
@@ -155,8 +156,8 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
                     expected={name:frozen['account_files'][name] for name in overlap} if released else frozen['registration_fixture_files']
                     self.assertEqual(files,expected);return True
                 return released
-            with patch.dict(H['registration_published'].__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':match}):self.assertTrue(H['registration_published'](ROOT))
-        with patch.dict(H['registration_published'].__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':lambda *a,**k:False}):self.assertFalse(H['registration_published'](ROOT))
+            with patch.dict(proof.__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':match}):self.assertTrue(proof(ROOT))
+        with patch.dict(proof.__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':lambda *a,**k:False}):self.assertFalse(proof(ROOT))
     def test_source_or_release_blob_errors_do_not_create_runtime_witness(self):
         nv=runpy.run_path(ROOT/'scripts/check_nv.py');args=(nv['OVERLAP'],nv['CANDIDATE'])
         # Missing immutable ancestry denies witnesses in every current branch phase.

@@ -23,14 +23,14 @@ NT = 'tasks/APBRA-183-native-organisation-public-v3.json'
 MANIFEST = 'docs/engineering/recovered-native-frozen-manifests-v3.json'
 FIXTURE = 'tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt'
 SOURCE_SHA = '05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb'
-G = {'.github/workflows/bootstrap.yml', 'apps/api/tests/conftest.py', 'apps/api/tests/test_foundry_private_preparation.py', 'apps/api/tests/test_foundry_report_runtime.py', 'apps/api/tests/test_native_case_files.py', 'apps/api/tests/test_native_contracts.py', 'apps/api/tests/test_native_response_integration.py', 'apps/api/tests/test_report_authorization_clock.py', 'docs/engineering/apbra183-ci-browser-recovery-v3.md', 'docs/engineering/recovered-native-frozen-manifests-v3.json', 'docs/engineering/recovered-native-frozen-manifests.json', 'docs/engineering/recovered-native-public-registration.md', 'scripts/check_bootstrap.py', 'scripts/check_ci_browser_registration_v3.py', 'scripts/check_ci_policy.py', 'scripts/check_nv.py', 'scripts/check_recovered_native_registration.py', 'tasks/APBRA-160-recovered-account-public-v2.json', 'tasks/APBRA-160-recovered-account-public-v3.json', 'tasks/APBRA-183-ci-browser-registration-v3.json', 'tasks/APBRA-183-native-organisation-public-v2.json', 'tasks/APBRA-183-native-organisation-public-v3.json', 'tasks/APBRA-183-recovered-native-registration-public-v2.json', 'tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt', 'tests/bootstrap/fixtures/settings-release-proof-c92d488-application.txt', 'tests/bootstrap/test_ci_browser_registration_v3_scope.py', 'tests/bootstrap/test_ci_policy.py', 'tests/bootstrap/test_dispatch_audit_20261019_scope.py', 'tests/bootstrap/test_native_output_verification_20261019_scope.py', 'tests/bootstrap/test_recovered_native_registration_scope.py', 'tests/bootstrap/test_settings_release_proof_scope.py', 'tests/bootstrap/test_tenant_document_drafts_20261013_scope.py', 'tests/bootstrap/test_workflow_secrets.py'}
+G = {'.github/workflows/bootstrap.yml', 'apps/api/tests/conftest.py', 'apps/api/tests/test_foundry_private_preparation.py', 'apps/api/tests/test_foundry_report_runtime.py', 'apps/api/tests/test_native_case_files.py', 'apps/api/tests/test_native_contracts.py', 'apps/api/tests/test_native_response_integration.py', 'apps/api/tests/test_report_authorization_clock.py', 'docs/engineering/apbra183-ci-browser-recovery-v3.md', 'docs/engineering/recovered-native-frozen-manifests-v3.json', 'docs/engineering/recovered-native-frozen-manifests.json', 'docs/engineering/recovered-native-public-registration.md', 'scripts/check_bootstrap.py', 'scripts/check_ci_browser_registration_v3.py', 'scripts/check_ci_policy.py', 'scripts/check_nv.py', 'scripts/check_recovered_native_registration.py', 'tasks/APBRA-160-recovered-account-public-v2.json', 'tasks/APBRA-160-recovered-account-public-v3.json', 'tasks/APBRA-183-ci-browser-registration-v3.json', 'tasks/APBRA-183-native-organisation-public-v2.json', 'tasks/APBRA-183-native-organisation-public-v3.json', 'tasks/APBRA-183-recovered-native-registration-public-v2.json', 'tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt', 'tests/bootstrap/fixtures/settings-release-proof-c92d488-application.txt', 'tests/bootstrap/test_ci_browser_registration_v3_scope.py', 'tests/bootstrap/test_ci_policy.py', 'tests/bootstrap/test_dispatch_audit_20261019_scope.py', 'tests/bootstrap/test_foundry_qualification_renewal_20261011_scope.py', 'tests/bootstrap/test_foundry_qualification_renewal_scope.py', 'tests/bootstrap/test_foundry_qualification_scope.py', 'tests/bootstrap/test_guided_preparation_scope.py', 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py', 'tests/bootstrap/test_native_output_verification_20261019_scope.py', 'tests/bootstrap/test_recovered_native_registration_scope.py', 'tests/bootstrap/test_settings_release_proof_scope.py', 'tests/bootstrap/test_tenant_document_drafts_20261013_scope.py', 'tests/bootstrap/test_workflow_secrets.py'}
 Q = {'apps/api/alembic/versions/20261105_15_tenant_date_display.py', 'apps/api/alembic/versions/20261105_16_session_identity_contact.py', 'apps/api/alembic/versions/20261106_17_password_auth.py', 'apps/api/pyproject.toml', 'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py', 'apps/api/src/apbra_api/config.py', 'apps/api/src/apbra_api/domain.py', 'apps/api/src/apbra_api/foundry_admin_reads.py', 'apps/api/src/apbra_api/foundry_agent_details.py', 'apps/api/src/apbra_api/foundry_browser_handoff.py', 'apps/api/src/apbra_api/foundry_browser_relay.py', 'apps/api/src/apbra_api/foundry_catalogue_lease.py', 'apps/api/src/apbra_api/foundry_memory_handoff.py', 'apps/api/src/apbra_api/foundry_private_preparation.py', 'apps/api/src/apbra_api/foundry_report_runtime.py', 'apps/api/src/apbra_api/main.py', 'apps/api/src/apbra_api/native_case_files.py', 'apps/api/src/apbra_api/native_goal_context.py', 'apps/api/src/apbra_api/native_response_api.py', 'apps/api/src/apbra_api/native_response_probe.py', 'apps/api/src/apbra_api/observability.py', 'apps/api/src/apbra_api/oidc_adapter.py', 'apps/api/src/apbra_api/password_auth.py', 'apps/api/src/apbra_api/persistence.py', 'apps/api/src/apbra_api/request_outputs.py', 'apps/api/src/apbra_api/tenant_date_display.py', 'apps/api/tests/conftest.py', 'apps/api/tests/test_authentication.py', 'apps/api/tests/test_foundry_admin_reads.py', 'apps/api/tests/test_foundry_agent_details.py', 'apps/api/tests/test_foundry_artifacts.py', 'apps/api/tests/test_foundry_browser_handoff.py', 'apps/api/tests/test_foundry_browser_relay.py', 'apps/api/tests/test_foundry_catalogue_lease.py', 'apps/api/tests/test_foundry_memory_handoff.py', 'apps/api/tests/test_foundry_private_preparation.py', 'apps/api/tests/test_foundry_report_runtime.py', 'apps/api/tests/test_migrations.py', 'apps/api/tests/test_native_case_files.py', 'apps/api/tests/test_native_contracts.py', 'apps/api/tests/test_native_goal_context.py', 'apps/api/tests/test_native_response_integration.py', 'apps/api/tests/test_observability.py', 'apps/api/tests/test_password_auth.py', 'apps/api/tests/test_report_authorization_clock.py', 'apps/api/tests/test_request_outputs.py', 'apps/api/tests/test_tenant_date_display.py', 'apps/api/uv.lock', 'apps/web/e2e/audit-history.spec.ts', 'apps/web/e2e/durable-conversation.spec.ts', 'apps/web/e2e/native-outputs.spec.ts', 'apps/web/e2e/private-case.spec.ts', 'apps/web/e2e/protected-generation.spec.ts', 'apps/web/e2e/tenant-settings.spec.ts', 'apps/web/src/AdminUI.test.tsx', 'apps/web/src/AdminUI.tsx', 'apps/web/src/BusinessReportJourney.test.tsx', 'apps/web/src/BusinessReportJourney.tsx', 'apps/web/src/EnterpriseApp.tsx', 'apps/web/src/PasswordAccount.test.tsx', 'apps/web/src/PasswordAccount.tsx', 'apps/web/src/RequestOutputs.test.tsx', 'apps/web/src/RequestOutputs.tsx', 'apps/web/src/SavedAzureAnswer.test.tsx', 'apps/web/src/SavedAzureAnswer.tsx', 'apps/web/src/TenantDateTime.test.tsx', 'apps/web/src/TenantDateTime.tsx', 'apps/web/src/TenantObservability.test.tsx', 'apps/web/src/TenantObservability.tsx', 'apps/web/src/api.test.ts', 'apps/web/src/api.ts', 'apps/web/src/businessAgent.test.ts', 'apps/web/src/businessAgent.ts', 'apps/web/src/durableConversation.tsx', 'apps/web/src/durableGeneration.test.tsx', 'apps/web/src/durableGeneration.tsx', 'apps/web/src/privateCases.test.tsx', 'apps/web/src/privateCases.tsx', 'apps/web/src/style.css'}
 N = {'apps/api/alembic/versions/20261108_18_native_organisation.py', 'apps/api/src/apbra_api/api.py', 'apps/api/src/apbra_api/application.py', 'apps/api/src/apbra_api/domain.py', 'apps/api/src/apbra_api/native_organisation.py', 'apps/api/src/apbra_api/password_auth.py', 'apps/api/src/apbra_api/persistence.py', 'apps/api/tests/test_migrations.py', 'apps/api/tests/test_native_organisation.py', 'apps/api/tests/test_password_auth.py', 'apps/api/tests/test_request_outputs.py', 'apps/web/src/PasswordAccount.test.tsx', 'apps/web/src/PasswordAccount.tsx', 'apps/web/src/api.ts', 'apps/web/src/privateCases.test.tsx', 'apps/web/src/privateCases.tsx', 'apps/web/src/style.css'}
 REG_FIXTURES = {'apps/api/tests/conftest.py', 'apps/api/tests/test_foundry_private_preparation.py', 'apps/api/tests/test_foundry_report_runtime.py', 'apps/api/tests/test_native_case_files.py', 'apps/api/tests/test_native_contracts.py', 'apps/api/tests/test_native_response_integration.py', 'apps/api/tests/test_report_authorization_clock.py'}
-RT_SHA = 'c8fa6b447a5fae9543a4d6c86a26c9f7ded6e449020fec96d1439be0613b6e1d'
-QT_SHA = '8a0f8607d9cbd549c78dbc6e160c38e0aef501216be95bd49b015def9b58b32f'
-NT_SHA = 'dd3229c027af3359d61f5703a9a90e4796d3fe3a8e683b8ff7e54aba262e029c'
-MANIFEST_SHA = 'fc1ce25c01e1e70d7c99ddc58781d7d46e7977e089488322f5c04f514573dc48'
+RT_SHA = '862d8c71019cfd13e2b521609e7573a4013f49477f708bb8193d9e42b78cb979'
+QT_SHA = 'd1bd52fc3b99d3be56fadf5c9df49133266b046752a232bf4fc7b40cbd5e0074'
+NT_SHA = 'd579b214479e5ab49b1566208fb7a42b0afdb77dab0d3fe97d2ecd77fac0e0f6'
+MANIFEST_SHA = '2c0d0d15ac93f0e21788c775162aacd52114a6d5ae3575dc3ca5959071972fab'
 APPROVED_WORKFLOW_SHA = 'ae81f766235128ac4cd409549e2846d8dce1ea1893bff63d02455e5d64bb74d2'
 LEGACY_WORKFLOW_SHA = '55314de4067db48231fdc9e5833c66be3cdf4c5594f4ce4aebbb4c1a708cb47d'
 IMMUTABLE_V2 = {'tasks/APBRA-160-recovered-account-public-v2.json': '9436d80af215710d740931723b0645e0dbda77709303bb0312b1dfbb593f4eb0', 'tasks/APBRA-183-native-organisation-public-v2.json': 'c4fac394d2543196424bc773fe67c6de4b074d70873cfa5d78c5abdaa5071426', 'tasks/APBRA-183-recovered-native-registration-public-v2.json': '94be79c161a078f9d12ed5269a1fea1120e316b6369df33673576a0029c0bf7d', 'docs/engineering/recovered-native-frozen-manifests.json': '78fbc2dc6597d885344321cf668f8df28ffaa76ab5d27bc78a6746ed1e1d6433'}
@@ -183,6 +183,8 @@ def manifest(root):
             raise ValueError('Unfrozen source cannot contain provisional facts')
         value['account_files'] = {}; value['native_files'] = {}
     elif status == 'FROZEN':
+        if any(type(value.get(key)) is not str or re.fullmatch(r'[0-9a-f]{40}', value[key]) is None for key in ('account_observed_source', 'native_observed_source')):
+            raise ValueError('Frozen observed source identity is absent or invalid')
         value['account_files'] = parse_pairs(value.get('account_files'), Q)
         value['native_files'] = parse_pairs(value.get('native_files'), N)
     else:
@@ -197,8 +199,7 @@ def files_match(root, files, ref=None):
                 if not safe(root, name): return False
                 raw = (root / name).read_bytes()
             else:
-                raw = subprocess.check_output(['git', '-C', str(root), 'show', ref + ':' + name],
-                                              stderr=subprocess.DEVNULL, timeout=10)
+                raw = git(root, 'show', ref + ':' + name)
             if hashlib.sha256(raw).hexdigest() != expected: return False
         return True
     except (OSError, subprocess.SubprocessError):
@@ -248,8 +249,7 @@ def registration_published(root):
         if not ancestor(root, BASE, 'HEAD') or not ancestor(root, BASE, 'origin/main'): return False
         for name in G - REG_FIXTURES:
             if not safe(root, name): return False
-            raw = subprocess.check_output(['git', '-C', str(root), 'show', 'origin/main:' + name],
-                                          stderr=subprocess.DEVNULL, timeout=10)
+            raw = git(root, 'show', 'origin/main:' + name)
             if raw != (root / name).read_bytes(): return False
         frozen = manifest(root)
         released = frozen['product_status'] == 'FROZEN' and (files_match(root, frozen['account_files'], 'origin/main') or
@@ -263,7 +263,7 @@ def registration_published(root):
 def errors(root, parent, native, registration, branch, paths):
     if branch not in (R, QB, NB): return []
     if branch == R:
-        if registration is None or paths != G: return ['V3 registration requires exact finite G33 CI/governance scope']
+        if registration is None or paths != G: return ['V3 registration requires exact finite G38 CI/governance scope']
         if not ancestor(root, BASE, 'HEAD'): return ['V3 registration actual-base ancestry missing']
         if not files_match(root, {'.github/workflows/bootstrap.yml': APPROVED_WORKFLOW_SHA}): return ['V3 approved workflow bytes differ']
         return [] if files_match(root, manifest(root)['registration_fixture_files']) else ['V3 registration test-fixture phase differs']
@@ -273,7 +273,92 @@ def errors(root, parent, native, registration, branch, paths):
     if not paths or not paths <= (Q if branch == QB else N): return ['V3 product phase scope differs']
     if parent is None or (branch == NB and native is None): return ['V3 accepted product authority missing']
     if registration is None or not registration_published(root): return ['V3 registration is not effective on actual main']
-    if branch == NB and not files_match(root, frozen['account_files'], 'origin/main'):
+    if branch == NB and not parent_released(root):
         return ['V3 native requires actually released recovered source']
     expected = frozen['account_files'] if branch == QB else {**frozen['account_files'], **frozen['native_files']}
     return [] if files_match(root, expected) else ['V3 product differs from exact frozen source']
+
+HISTORICAL_COPY_MODULES = {'test_foundry_qualification_renewal_scope.py', 'test_foundry_qualification_renewal_20261011_scope.py', 'test_foundry_qualification_scope.py'}
+HISTORICAL_COPY_ADAPTER = "        if historical:\n            workflow = root / '.github/workflows/bootstrap.yml'\n            workflow.write_text(c.pn['workflow_projection'](ROOT, workflow.read_text()))\n\n"
+HISTORICAL_GUIDED_ADAPTER = ('                    self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),expected)\n', "                    current=(ROOT/name).read_bytes()\n                    if name=='.github/workflows/bootstrap.yml':\n                        current=C['pn']['workflow_projection'](ROOT,current.decode()).encode()\n                    self.assertEqual(hashlib.sha256(current).hexdigest(),expected)\n")
+
+HISTORICAL_TEST_PREIMAGES = dict([['test_foundry_qualification_renewal_20261011_scope.py', '7b1d45611c7c6986921d817489ab0b89f1917eab077cb3f1be61ceefc5df8718'], ['test_foundry_qualification_renewal_scope.py', '60f92dcbc305155edba0242bd40d6dbd66ec287d452ee07b0d794e1fd32a90ff'], ['test_foundry_qualification_scope.py', '797f19499d90f72532780ddab509b22fd22f8d3f31bd82ab3b8ec53d6735edb1'], ['test_guided_preparation_scope.py', '718c7e3401b3fe3ed41513c8af96553fe82a6b307fb1a0995296fb0f06d20561'], ['test_historical_fixture_staging_20261012_scope.py', '57222c7ae13755f2edbfb60861028ff417a89ac08f41c25f3f4255f642ec3bee']])
+
+
+def strip_historical_copy_adapter(name, source):
+    if name not in HISTORICAL_COPY_MODULES or source.count(HISTORICAL_COPY_ADAPTER) != 1:
+        raise ValueError('Historical workflow copier inverse missing, duplicate or inexact')
+    restored = source.replace(HISTORICAL_COPY_ADAPTER, '', 1)
+    if hashlib.sha256(restored.encode()).hexdigest() != HISTORICAL_TEST_PREIMAGES[name]:
+        raise ValueError('Historical copier assertions or bytes differ')
+    return restored
+
+
+def strip_historical_guided_adapter(source):
+    before, after = HISTORICAL_GUIDED_ADAPTER
+    if source.count(after) != 1:
+        raise ValueError('Historical workflow readback inverse missing, duplicate or inexact')
+    restored = source.replace(after, before, 1)
+    if hashlib.sha256(restored.encode()).hexdigest() != HISTORICAL_TEST_PREIMAGES['test_guided_preparation_scope.py']:
+        raise ValueError('Historical guided assertions or bytes differ')
+    return restored
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.DEVNULL, timeout=10)
+
+
+def parent_released(root):
+    try:
+        frozen = manifest(root)
+        if frozen['product_status'] != 'FROZEN' or not registration_published(root): return False
+        # An already released native snapshot supersedes shared account bytes.
+        return files_match(root, frozen['account_files'], 'origin/main') or files_match(
+            root, {**frozen['account_files'], **frozen['native_files']}, 'origin/main')
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return False
+
+
+def qualified_paths(root, checker, identity, branch, paths, overlap, candidate):
+    """Version-aware protected readback; never manufacture an original release fact."""
+    try:
+        if (identity, branch, paths) != checker['delivery_context'](root): return set()
+        parent, native, registration, faults = bind(
+            root, json.loads((root / 'agents/catalog.json').read_text()),
+            json.loads((root / 'docs/source-register.json').read_text()),
+            checker['schema_errors'], checker['task_errors'])
+        if faults or parent is None or registration is None: return set()
+        frozen = manifest(root)
+        if frozen['product_status'] != 'FROZEN': return set()
+        # Preserve the original immutable candidate's actual ancestry and every original blob pin.
+        if not all(ancestor(root, candidate, ref) for ref in ('HEAD', 'origin/main')): return set()
+        for name, expected in overlap.items():
+            if hashlib.sha256(git(root, 'show', candidate + ':' + name)).hexdigest() != expected: return set()
+        if branch in (QB, NB):
+            if identity != ('APBRA-160' if branch == QB else 'APBRA-183'): return set()
+            if errors(root, parent, native, registration, branch, paths): return set()
+            complete = frozen['account_files'] if branch == QB else {**frozen['account_files'], **frozen['native_files']}
+        else:
+            if not registration_published(root): return set()
+            complete = None
+            for files in [{**frozen['account_files'], **frozen['native_files']}, frozen['account_files']]:
+                if files_match(root, files, 'origin/main') and files_match(root, files):
+                    complete = files; break
+            if complete is None: return set()
+        protected = {name: complete.get(name, expected) for name, expected in overlap.items()}
+        if not files_match(root, protected): return set()
+        faults, _ = checker['check'](root, active_task_id=identity, active_branch=branch, changed_paths=paths)
+        return set() if faults else set(overlap)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()
+
+HISTORICAL_STAGING_AST_ADAPTER = ("            new = ast.parse((ROOT / 'tests/bootstrap' / name).read_text())\n", "            current = (ROOT / 'tests/bootstrap' / name).read_text()\n            if name in {'test_foundry_qualification_scope.py', 'test_foundry_qualification_renewal_scope.py', 'test_foundry_qualification_renewal_20261011_scope.py'}:\n                current = c.pn['V3']['strip_historical_copy_adapter'](name, current)\n            new = ast.parse(current)\n")
+
+def strip_historical_staging_adapter(source):
+    before, after = HISTORICAL_STAGING_AST_ADAPTER
+    if source.count(after) != 1:
+        raise ValueError('Historical staging inverse missing, duplicate or inexact')
+    restored = source.replace(after, before, 1)
+    if hashlib.sha256(restored.encode()).hexdigest() != HISTORICAL_TEST_PREIMAGES['test_historical_fixture_staging_20261012_scope.py']:
+        raise ValueError('Historical staging assertions or bytes differ')
+    return restored
