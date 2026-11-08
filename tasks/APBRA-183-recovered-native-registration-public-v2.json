@@ -20,7 +20,7 @@
     "G19/Q74 phase-overlap source amendment: exactly five test-only paths have independent frozen registration and product snapshots. Actual-main registration proof permits the product versions only when the complete frozen P74 or P74+P17 source is actually released, never from five hashes alone. The non-autouse approved-period test helper is scoped to synthetic report consumers and a separate real-clock expiry regression; all original assertions and the legacy wrapped-call interface remain."
   ],
   "adrs": [
-    "Canonical registration is G12 governance-only. P71 and native P17 runtime are separate finite phases, never admitted by registration alone.",
+    "Canonical registration is the exact G19 governance/test-fixture inventory. Q74 (the original P71 plus three explicit fixture paths) and native N17 are separate finite product phases, never admitted by registration alone.",
     "Native accounts use immutable explicit association, current parent-session validation, active selected membership and exact private-resource checks. No email/domain merge or provider claim fabrication.",
     "All public444 historical hashes and assertions remain; additive hooks have exact byte inverses within the unchanged checker ceiling. Historicalc92 data is a test-only frozen text fixture and never production release proof."
   ],
@@ -90,6 +90,6 @@
   "effective_release": "Finite source authority only; actual published registration/source, full validation, independent review, required CI and Haseeb manual merge remain separate. Existing expired financial policy grants no renewed spending.",
   "dependencies": [
     "Clean public history starts at actual444. No private36/0751 lineage is published.",
-    "Haseeb manually merges independently reviewed registration after required CI; native product also requires accepted and actually released P71 source."
+    "Haseeb manually merges independently reviewed registration after required CI; native N17 product also requires accepted and actually released Q74 source."
   ]
 }
