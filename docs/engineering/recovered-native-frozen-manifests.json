@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "public_base": "444f4828c87a3a158fc102efae37196540cbbafa",
-  "account_observed_source": "2644e860d1d053449cfc26bcde46ce6037c73b96",
-  "native_observed_source": "10843568c10e18f75cb82bb7aa5e232a2191f9ba",
+  "account_observed_source": "8b5882a57ed9da31a2efc9d94eebe7748ced0c4d",
+  "native_observed_source": "f5f84be8f46866cc10590e3a5b5a2029124f9673",
   "account_files": [
     [
       "apps/api/alembic/versions/20261105_15_tenant_date_display.py",
@@ -113,6 +113,10 @@
       "fecca73b58d04a309f3fb95653171836239e419fdf7381db7bad43a9372e3af0"
     ],
     [
+      "apps/api/tests/conftest.py",
+      "95f084cecce1bf4f84cbb2f6285e2e03a0cd82f1dcf34b602e28ba663cf763f9"
+    ],
+    [
       "apps/api/tests/test_authentication.py",
       "3067e06f81aa32462a8eb2dddea3edd13323753d08d488678417711c3d0aed47"
     ],
@@ -146,11 +150,11 @@
     ],
     [
       "apps/api/tests/test_foundry_private_preparation.py",
-      "2c41206cbf6b13a915249846c19f2f48f7ed5a9cff87ea68be9810bad0e0a683"
+      "eaedd8329fd0f945722a40402b00a31c2ec75f6b95e3417efebfa7df4f8af5cc"
     ],
     [
       "apps/api/tests/test_foundry_report_runtime.py",
-      "3e15aecc7f555fe1c2d48ed99a688d738750c51ef505583407de3e64c936546f"
+      "2d66001e1ab445ba32aae8291cda52ee67295744fa534dee8d444a6aff33a94e"
     ],
     [
       "apps/api/tests/test_migrations.py",
@@ -159,6 +163,10 @@
     [
       "apps/api/tests/test_native_case_files.py",
       "db448264376514bff8d7c20a44c9ac8bd43bfd9f0a5f7d921b0454d0593cad0e"
+    ],
+    [
+      "apps/api/tests/test_native_contracts.py",
+      "f8f1875bc5c0cc2fc6f2e2cd857bfa085e00deeb86dfa90c4268a6f844fc0f2a"
     ],
     [
       "apps/api/tests/test_native_goal_context.py",
@@ -175,6 +183,10 @@
     [
       "apps/api/tests/test_password_auth.py",
       "8ae22b2461d2e2e2949b70ea14b312b8b9f429d5497189d7ff4d0cc1eb8abe43"
+    ],
+    [
+      "apps/api/tests/test_report_authorization_clock.py",
+      "f127bd0874263a01094b4fd4a3f2e896347e76bc1efbe92dc00de5b58dadd5dc"
     ],
     [
       "apps/api/tests/test_request_outputs.py",
@@ -372,7 +384,32 @@
   "authority": "Corrected source restores the exact financial policy already present on actual public main; October expiry still denies present November approval. This observed-source record is not new spending authority, hosted CI or released-main qualification.",
   "prior_observed_sources": {
     "account_before_exact_main_policy_restoration": "5d35d70a78eb7703c824d6891a98f49f13178a61",
-    "native_before_exact_main_policy_restoration": "86f2fec7b8fea1c98702b23984b27ade7eaa2f84"
+    "native_before_exact_main_policy_restoration": "86f2fec7b8fea1c98702b23984b27ade7eaa2f84",
+    "account_before_calendar_fixture": "2644e860d1d053449cfc26bcde46ce6037c73b96",
+    "native_before_calendar_fixture": "10843568c10e18f75cb82bb7aa5e232a2191f9ba"
   },
-  "hash_inventory_format": "path-sha256-pairs-v1"
+  "hash_inventory_format": "path-sha256-pairs-v1",
+  "registration_fixture_files": [
+    [
+      "apps/api/tests/conftest.py",
+      "95f084cecce1bf4f84cbb2f6285e2e03a0cd82f1dcf34b602e28ba663cf763f9"
+    ],
+    [
+      "apps/api/tests/test_foundry_private_preparation.py",
+      "0396e0428b5a894dc867efe2e2d8d0bdde10f7de4e94012a0fa4c7738b656113"
+    ],
+    [
+      "apps/api/tests/test_foundry_report_runtime.py",
+      "6adf512d935ff465d41c003b69e84b95c26fe342a6ab2d2043a763d92564a877"
+    ],
+    [
+      "apps/api/tests/test_native_contracts.py",
+      "f8f1875bc5c0cc2fc6f2e2cd857bfa085e00deeb86dfa90c4268a6f844fc0f2a"
+    ],
+    [
+      "apps/api/tests/test_report_authorization_clock.py",
+      "f127bd0874263a01094b4fd4a3f2e896347e76bc1efbe92dc00de5b58dadd5dc"
+    ]
+  ],
+  "fixture_overlap_policy": "Only five explicit API test paths overlap G19/Q74; registration fixtures use public444 plus the minimal calendar patch, while product fixtures use their separately frozen complete source version. No production path overlaps registration."
 }
