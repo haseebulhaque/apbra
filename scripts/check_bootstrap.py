@@ -1155,6 +1155,7 @@ def task_errors(task:dict,catalog:dict,sources:dict)->list[str]:
    errors.append('Specification authority missing')
  return errors
 def workflow_errors(text: str) -> list[str]:
+    if pn:text=pn['workflow_projection'](ROOT,text)
     errors = []
     try:
         doc = yaml.load(text, Loader=yaml.BaseLoader)
@@ -2843,7 +2844,7 @@ set(private_content_storage_task['allowed_paths']) != PRIVATE_CONTENT_STORAGE_PA
 (st,sc['P']),
 (spt,sp['P']),
 )
-        if pn:bound_authorities+=((pa,pn['Q']),(na,pn['N']),(pg,pn['G']))
+        if pn:bound_authorities+=((pa,pn['scope'](root,'Q')),(na,pn['scope'](root,'N')),(pg,pn['scope'](root,'G')))
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}
         registered_tasks[task['task_id']] = task
@@ -2887,8 +2888,8 @@ set(private_content_storage_task['allowed_paths']) != PRIVATE_CONTENT_STORAGE_PA
  PRIVATE_CONTENT_STORAGE_BRANCH, PRIVATE_CONTENT_STORAGE_REGISTRATION_BRANCH
  } else hosted_web_release_task
 )
-        if pn and active_task_id=='APBRA-183':registered_tasks['APBRA-183']=pg if active_branch==pn['R'] else na if active_branch==pn['NB'] else None
-        if pn and active_task_id=='APBRA-160' and active_branch==pn['QB']:registered_tasks['APBRA-160']=pa
+        if pn and active_task_id=='APBRA-183':registered_tasks['APBRA-183']=pg if active_branch==pn['R'] else na if active_branch==pn['branch'](root,'N') else None
+        if pn and active_task_id=='APBRA-160' and active_branch==pn['branch'](root,'Q'):registered_tasks['APBRA-160']=pa
         if changed_paths is not None and changed_paths:
             active_task = registered_tasks.get(active_task_id or '')
             if active_task_id is None:

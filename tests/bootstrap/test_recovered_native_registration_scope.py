@@ -19,7 +19,12 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         current={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in H['REG_FIXTURES']}
         self.assertIn(current,[registration,product])
         faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
-        if current==registration:self.assertEqual(faults,[])
+        if H['v3_present'](ROOT):
+            self.assertIn('V3 registration requires exact finite G33 CI/governance scope',faults)
+            current_faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['scope'](ROOT,'G'))[0]
+            if current==registration:self.assertEqual(current_faults,[])
+            else:self.assertIn('V3 registration test-fixture phase differs',current_faults)
+        elif current==registration:self.assertEqual(faults,[])
         else:self.assertIn('Public registration test fixtures differ from their frozen phase',faults)
     def test_every_registration_omission_foreign_product_and_branch_is_rejected(self):
         for name in H['G']:

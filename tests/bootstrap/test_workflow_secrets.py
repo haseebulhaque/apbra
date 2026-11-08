@@ -26,5 +26,15 @@ class WorkflowSecretContextTests(unittest.TestCase):
         self.assertIn('Privileged trigger/secret reference prohibited', c.workflow_errors(value))
 
 
+    def test_split_policy_projection_never_erases_secret_or_aggregator_mutations(self):
+        self.assertEqual(c.workflow_errors(self.workflow), [])
+        for before,after in [('test "$WEB_RESULT" = success','true'),
+                             ('needs: [governance, api, web]','needs: [governance, api]')]:
+            self.assertIn(before,self.workflow)
+            self.assertTrue(c.workflow_errors(self.workflow.replace(before,after,1)))
+        self.assertIn('Privileged trigger/secret reference prohibited',
+                      c.workflow_errors(self.workflow.replace('test "$WEB_RESULT" = success','echo ${{ secrets.VALUE }}',1)))
+
+
 if __name__ == '__main__':
     unittest.main()

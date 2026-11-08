@@ -15,20 +15,20 @@ BOOTSTRAP_SPEC.loader.exec_module(b)
 
 class CiPolicyTests(unittest.TestCase):
     def setUp(self):
-        self.text = (ROOT / '.github/workflows/bootstrap.yml').read_text()
+        self.text = (ROOT / 'tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt').read_text()
         self.doc = yaml.load(self.text, Loader=yaml.BaseLoader)
         self.job = self.doc['jobs']['bootstrap']
 
     def rejected(self):
-        self.assertTrue(c.validate(yaml.safe_dump(self.doc)))
+        self.assertTrue(c.validate_legacy(yaml.safe_dump(self.doc)))
 
     def test_current_workflow(self):
         self.assertEqual(self.job['timeout-minutes'], '45')
-        self.assertEqual(c.validate(self.text), [])
+        self.assertEqual(c.validate_legacy(self.text), [])
 
     def test_step_names_are_not_authority(self):
         self.job['steps'][0]['name'] = 'A different description'
-        self.assertEqual(c.validate(yaml.safe_dump(self.doc)), [])
+        self.assertEqual(c.validate_legacy(yaml.safe_dump(self.doc)), [])
 
     def test_missing_frontend_tests(self):
         self.job['steps'] = [s for s in self.job['steps'] if s.get('run', '').strip() != c.WEB_COMMAND]
@@ -151,7 +151,7 @@ class CiPolicyTests(unittest.TestCase):
         self.rejected()
 
     def test_duplicate_mapping_key(self):
-        self.assertTrue(c.validate(self.text + '\npermissions:\n  contents: write\n'))
+        self.assertTrue(c.validate_legacy(self.text + '\npermissions:\n  contents: write\n'))
 
     def test_reordered_checks(self):
         self.job['steps'][2], self.job['steps'][3] = self.job['steps'][3], self.job['steps'][2]

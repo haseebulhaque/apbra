@@ -9,8 +9,45 @@ concurrency:
   group: bootstrap-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  bootstrap:
-    name: APBRA Bootstrap Checks
+  governance:
+    name: APBRA Governance Checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+      - name: Scan tracked files and fetched history
+        run: bash scripts/scan_secrets.sh
+      - name: Install exact engineering tooling
+        run: |
+          python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
+      - name: Validate mandatory CI policy
+        run: python scripts/check_ci_policy.py
+      - name: Validate engineering contracts and scope
+        run: python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json
+      - name: Exercise positive and negative tests
+        run: python -m unittest discover -s tests/bootstrap -v
+      - name: Retain bounded checker evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bootstrap-checks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/bootstrap/checks.json
+          if-no-files-found: error
+          retention-days: 7
+  api:
+    name: APBRA API Checks
+    needs: governance
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -51,17 +88,6 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '24.19.0'
-      - name: Scan tracked files and fetched history
-        run: bash scripts/scan_secrets.sh
-      - name: Install exact engineering tooling
-        run: |
-          python -m pip install --only-binary=:all: --no-deps -r requirements-bootstrap.txt
-      - name: Validate mandatory CI policy
-        run: python scripts/check_ci_policy.py
-      - name: Validate engineering contracts and scope
-        run: python scripts/check_bootstrap.py --report artifacts/bootstrap/checks.json
-      - name: Exercise positive and negative tests
-        run: python -m unittest discover -s tests/bootstrap -v
       - name: Install and verify locked API dependencies
         run: |
           python -m pip install uv==0.12.3
@@ -82,17 +108,81 @@ jobs:
           uv --directory apps/api run --frozen alembic upgrade head
           uv --directory apps/api run --frozen pytest
           uv --directory apps/api run --frozen python -c "import psycopg; connection=psycopg.connect('postgresql://postgres@127.0.0.1:5432/apbra'); row=connection.execute('SELECT value FROM backend_test_isolation_sentinel').fetchone(); assert row == ('preserved',), row; connection.close()"
+  web:
+    name: APBRA Web Checks
+    needs: governance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      APBRA_PROFILE: test
+      APBRA_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra
+      APBRA_TEST_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra_test
+      APBRA_E2E_DATABASE_URL: postgresql+psycopg://postgres@127.0.0.1:5432/apbra_e2e
+      APBRA_E2E_SESSION_SECRET: ci-only-browser-test-session-material
+      APBRA_PUBLIC_ORIGIN: http://127.0.0.1:5173
+      APBRA_API_ORIGIN: http://127.0.0.1:8000
+      APBRA_SESSION_SECRET: ci-only-generated-context-session-material
+      APBRA_BOOTSTRAP_ENABLED: "true"
+      APBRA_TEST_SEMANTIC_BRIDGE: /tmp/apbra-semantic-bridge.mjs
+      APBRA_TEST_GENERATION_BRIDGE: /tmp/apbra-generation-bridge.mjs
+    services:
+      postgres:
+        image: postgres:17.11-bookworm
+        env:
+          POSTGRES_DB: apbra
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d apbra"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+      - name: Install and verify locked API dependencies
+        run: |
+          python -m pip install uv==0.12.3
+          uv --directory apps/api lock --check
+          uv --directory apps/api sync --frozen --python 3.13
+      - name: Create isolated backend and browser test databases
+        run: |
+          uv --directory apps/api run --frozen python -c "import psycopg; connection=psycopg.connect('postgresql://postgres@127.0.0.1:5432/postgres', autocommit=True); connection.execute('CREATE DATABASE apbra_test'); connection.execute('CREATE DATABASE apbra_e2e'); connection.close(); sentinel=psycopg.connect('postgresql://postgres@127.0.0.1:5432/apbra', autocommit=True); sentinel.execute('CREATE TABLE backend_test_isolation_sentinel (value text NOT NULL)'); sentinel.execute(\"INSERT INTO backend_test_isolation_sentinel VALUES ('preserved')\"); sentinel.close()"
+      - name: Build canonical TypeScript bridges
+        run: |
+          npm --prefix apps/web ci --ignore-scripts
+          npm --prefix apps/web run build:semantic-bridge
+          npm --prefix apps/web run build:generation-bridge
       - name: Build and test locked requester shell
         run: |
           npm --prefix apps/web test
           npm --prefix apps/web run build
           npm --prefix apps/web exec playwright install --with-deps chromium
           npm --prefix apps/web run test:e2e
-      - name: Retain bounded checker evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: bootstrap-checks-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/bootstrap/checks.json
-          if-no-files-found: error
-          retention-days: 7
+  bootstrap:
+    name: APBRA Bootstrap Checks
+    needs: [governance, api, web]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOVERNANCE_RESULT: ${{ needs.governance.result }}
+      API_RESULT: ${{ needs.api.result }}
+      WEB_RESULT: ${{ needs.web.result }}
+    steps:
+      - name: Require every mandatory job to succeed
+        run: |
+          test "$GOVERNANCE_RESULT" = success
+          test "$API_RESULT" = success
+          test "$WEB_RESULT" = success
