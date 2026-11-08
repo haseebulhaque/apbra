@@ -2,7 +2,7 @@
   "schema_version": 3,
   "public_base": "444f4828c87a3a158fc102efae37196540cbbafa",
   "continuation_base": "647712931331e89b1f5257b6443090f98df84b37",
-  "registration_phase": "G38-CI",
+  "registration_phase": "G40-CI",
   "product_status": "NOT_FROZEN",
   "account_observed_source": null,
   "native_observed_source": null,
@@ -162,16 +162,25 @@
   "approved_workflow_sha256": "ae81f766235128ac4cd409549e2846d8dce1ea1893bff63d02455e5d64bb74d2",
   "source_authority": "Owner continuation and Jira PLAN10985/10986 authorise finite CI repair and browser qualification only. Product source remains NOT_FROZEN and non-admitted until actual repaired bytes, full results and exact independent review are recorded. Financial expiry and actual-main integration gates remain unchanged.",
   "historical_test_adapter_paths": [
+    "tests/bootstrap/test_bootstrap.py",
     "tests/bootstrap/test_foundry_qualification_renewal_20261011_scope.py",
     "tests/bootstrap/test_foundry_qualification_renewal_scope.py",
     "tests/bootstrap/test_foundry_qualification_scope.py",
     "tests/bootstrap/test_guided_preparation_scope.py",
-    "tests/bootstrap/test_historical_fixture_staging_20261012_scope.py"
+    "tests/bootstrap/test_historical_fixture_staging_20261012_scope.py",
+    "tests/bootstrap/test_knowledge_lifecycle_20261012_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"
   ],
   "retained_preliminary_diagnostic": {
     "head": "5ee0d78ee6ee124810f0ea0b80ae47001690a9f3",
     "bootstrap_tests": 674,
     "bootstrap_failures": 22,
     "disposition": "Retained preliminary failure; no final qualification claim"
+  },
+  "retained_intermediate_diagnostic": {
+    "head": "9b1616ee9ac7088c47b875865fb66b87212bc47e",
+    "bootstrap_tests": 679,
+    "bootstrap_failures": 4,
+    "disposition": "Retained complete intermediate failure; no final qualification claim"
   }
 }
