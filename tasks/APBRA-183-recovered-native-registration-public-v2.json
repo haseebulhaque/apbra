@@ -15,7 +15,8 @@
     "Preserve original private local contracts, hashes and assertions privately; never publish private transcripts, personal browser context or their Git ancestry. Public v2 is a separately versioned decision-only authority, not a repin of historical expected hashes.",
     "The inherited unverified November period change is corrected by restoring ONLY the exact PERIOD and BUDGET_END already present on actual main444. CAP and retries are unchanged. The expired October window remains fail-closed under the real November clock. Independent repair review of264 confirms AST equality and denial offline; no renewal, new numerical limit, live or paid call is authorized.",
     "Explicit G13 amendment: historical dispatch-audit AST readback reverses only the exact authorized worktree Git-locator fixture correction before retaining its original AST assertion; missing/duplicate/inexact inverse mutations fail closed.",
-    "Serialization-only source-provenance amendment: explicit path/SHA256 tuple arrays preserve all original frozen file/hash associations; canonical logical inventory digest 3ec3610c46da3009013428d66bc08a49acf0c95d248ac57325fed946e0fd36fd. The scanner rules, ignores and detectors are unchanged. Rejected prior draft history stays private; publication restarts from actual444 with no rejected ancestors."
+    "Serialization-only source-provenance amendment: explicit path/SHA256 tuple arrays preserve all original frozen file/hash associations; canonical logical inventory digest 3ec3610c46da3009013428d66bc08a49acf0c95d248ac57325fed946e0fd36fd. The scanner rules, ignores and detectors are unchanged. Rejected prior draft history stays private; publication restarts from actual444 with no rejected ancestors.",
+    "Explicit pre-edit G19 amendment: one historical native-output prospective selector/readback test and five exact API test-fixture paths are added. Only test clock fixtures change; approved production financial policy is unchanged. G19/Q74 overlap is precisely these five test paths, controlled by phase-specific frozen inventory; no source/runtime path overlaps registration."
   ],
   "adrs": [
     "Canonical registration is G12 governance-only. P71 and native P17 runtime are separate finite phases, never admitted by registration alone.",
@@ -26,6 +27,11 @@
     "APBRA-183 owner mission, accepted solo-owner process, APBRA-151 CompanyService/Template v1 and current direction119/requirements12/RTM21."
   ],
   "allowed_paths": [
+    "apps/api/tests/conftest.py",
+    "apps/api/tests/test_foundry_private_preparation.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/api/tests/test_native_contracts.py",
+    "apps/api/tests/test_report_authorization_clock.py",
     "docs/engineering/recovered-native-frozen-manifests.json",
     "docs/engineering/recovered-native-public-registration.md",
     "scripts/check_bootstrap.py",
@@ -36,6 +42,7 @@
     "tasks/APBRA-183-recovered-native-registration-public-v2.json",
     "tests/bootstrap/fixtures/settings-release-proof-c92d488-application.txt",
     "tests/bootstrap/test_dispatch_audit_20261019_scope.py",
+    "tests/bootstrap/test_native_output_verification_20261019_scope.py",
     "tests/bootstrap/test_recovered_native_registration_scope.py",
     "tests/bootstrap/test_settings_release_proof_scope.py",
     "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py"

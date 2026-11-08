@@ -15,7 +15,8 @@
     "Preserve original private local contracts, hashes and assertions privately; never publish private transcripts, personal browser context or their Git ancestry. Public v2 is a separately versioned decision-only authority, not a repin of historical expected hashes.",
     "The inherited unverified November period change is corrected by restoring ONLY the exact PERIOD and BUDGET_END already present on actual main444. CAP and retries are unchanged. The expired October window remains fail-closed under the real November clock. Independent repair review of264 confirms AST equality and denial offline; no renewal, new numerical limit, live or paid call is authorized.",
     "Independent review scope correction: the two exact frozen P71 dependency snapshot paths apps/api/pyproject.toml and apps/api/uv.lock are allowed here and removed only from this task restricted_paths. No other dependency, version or lockfile edit is authorized; canonical restriction precedence remains unchanged.",
-    "Serialization-only source-provenance amendment: explicit path/SHA256 tuple arrays preserve all original frozen file/hash associations; canonical logical inventory digest 3ec3610c46da3009013428d66bc08a49acf0c95d248ac57325fed946e0fd36fd. The scanner rules, ignores and detectors are unchanged. Rejected prior draft history stays private; publication restarts from actual444 with no rejected ancestors."
+    "Serialization-only source-provenance amendment: explicit path/SHA256 tuple arrays preserve all original frozen file/hash associations; canonical logical inventory digest 3ec3610c46da3009013428d66bc08a49acf0c95d248ac57325fed946e0fd36fd. The scanner rules, ignores and detectors are unchanged. Rejected prior draft history stays private; publication restarts from actual444 with no rejected ancestors.",
+    "Explicit pre-edit P74 amendment adds only the three exact test paths needed for shared non-autouse approved-period fixture and real-calendar denial regression. Two already allowed test files also receive fixture plumbing; no production period, cap, retry or runtime source change. Final reviewed test-source snapshots and phase-specific fixture inventories must be frozen before qualification."
   ],
   "adrs": [
     "Canonical registration is G12 governance-only. P71 and native P17 runtime are separate finite phases, never admitted by registration alone.",
@@ -53,6 +54,7 @@
     "apps/api/src/apbra_api/persistence.py",
     "apps/api/src/apbra_api/request_outputs.py",
     "apps/api/src/apbra_api/tenant_date_display.py",
+    "apps/api/tests/conftest.py",
     "apps/api/tests/test_authentication.py",
     "apps/api/tests/test_foundry_admin_reads.py",
     "apps/api/tests/test_foundry_agent_details.py",
@@ -65,10 +67,12 @@
     "apps/api/tests/test_foundry_report_runtime.py",
     "apps/api/tests/test_migrations.py",
     "apps/api/tests/test_native_case_files.py",
+    "apps/api/tests/test_native_contracts.py",
     "apps/api/tests/test_native_goal_context.py",
     "apps/api/tests/test_native_response_integration.py",
     "apps/api/tests/test_observability.py",
     "apps/api/tests/test_password_auth.py",
+    "apps/api/tests/test_report_authorization_clock.py",
     "apps/api/tests/test_request_outputs.py",
     "apps/api/tests/test_tenant_date_display.py",
     "apps/api/uv.lock",
@@ -123,8 +127,8 @@
   "escalate_when": [
     "Actual permission/source conflict, unsafe data, unexplained failure, missing mandatory validation or unresolved product/release authority."
   ],
-  "task_mode": "IMPLEMENTATION",
-  "readiness": "READY_FOR_IMPLEMENTATION",
+  "task_mode": "SPECIFICATION",
+  "readiness": "NEEDS_REFINEMENT",
   "actual_authenticated_actor": "Codex /root/governance_diagnosis delegated execution under chat01a1b8d8-9e3e-72f1-8176-c4b255b428b9, initiated by Haseeb; logical APBRA-DEVOPS0.1",
   "human_initiator": "Haseeb Ul Haque",
   "base_commit": "444f4828c87a3a158fc102efae37196540cbbafa",
