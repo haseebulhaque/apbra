@@ -15,7 +15,7 @@
     "New strict CI runs governance/security before independent API/web jobs and an always final bootstrap aggregator with exact existing required context. Every dependency must be explicitly success; missing/skipped/cancelled/failure/invalid denies.",
     "Preserve full checks, exact action/dependency pins, standard public ubuntu24.04 runner, contents-read permissions, triggers/concurrency, isolation sentinel and bounded checker artifact. No paid/larger/self-hosted runner or external service.",
     "Product inventory is NOT_FROZEN; account80/native17 literal scopes specify future bounds only. No placeholder source hash, observed commit or local stack creates release authority. New source freezes require actual complete results and separate review.",
-    "New manifest SHA256 8053d8aa499086a251e30964f76ea893bb56bac353c5725312bb6f324c6e24c1. Current actual main444f4828c87a3a158fc102efae37196540cbbafa and prior public647 remain unmerged state. Registration manual merge, recovered source release and native source release remain ordered real gates.",
+    "New manifest SHA256 fc1ce25c01e1e70d7c99ddc58781d7d46e7977e089488322f5c04f514573dc48. Current actual main444f4828c87a3a158fc102efae37196540cbbafa and prior public647 remain unmerged state. Registration manual merge, recovered source release and native source release remain ordered real gates.",
     "All prior expected hashes/AST assertions/checker ceiling and failures remain; exact versioned inverses may normalise only reviewed finite CI deltas before historical comparisons. No private transcript/history, owner data/preview, real credentials/email/provider calls, financial renewal, merge or deployment."
   ],
   "adrs": [

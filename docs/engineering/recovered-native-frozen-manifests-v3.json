@@ -159,6 +159,6 @@
   ],
   "legacy_workflow_fixture": "tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt",
   "legacy_workflow_sha256": "55314de4067db48231fdc9e5833c66be3cdf4c5594f4ce4aebbb4c1a708cb47d",
-  "approved_workflow_sha256": "06cbb5d37c22fda5fbce23e4ae2d63df7aa3b8b2d934faf0e021fe8c903dd7f3",
+  "approved_workflow_sha256": "ae81f766235128ac4cd409549e2846d8dce1ea1893bff63d02455e5d64bb74d2",
   "source_authority": "Owner continuation and Jira PLAN10985/10986 authorise finite CI repair and browser qualification only. Product source remains NOT_FROZEN and non-admitted until actual repaired bytes, full results and exact independent review are recorded. Financial expiry and actual-main integration gates remain unchanged."
 }
