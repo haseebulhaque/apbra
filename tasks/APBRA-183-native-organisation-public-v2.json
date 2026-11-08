@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-183",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-183-GOV-20261108-074134-public-v2",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Finite native organisation P17 delivery after accepted recovered account publication",
+  "requirements": [
+    "Owner mission891e4770-658b-4404-8248-14d7a15be343 authorizes finite governance recovery, independent review and bounded secret-scanned draft PR/free standard CI. Jira PLAN10980 records actor and scope.",
+    "Current direction8519682v119, requirements3932362v12 PC26-FR-008, RTM3932382v21; actual public main444f4828c87a3a158fc102efae37196540cbbafa. source_ids below retain historical accepted versions; no source-register version is fabricated.",
+    "Corrected account2644e860d1d053449cfc26bcde46ce6037c73b96 and native10843568c10e18f75cb82bb7aa5e232a2191f9ba source snapshots are frozen in docs/engineering/recovered-native-frozen-manifests.json with SHA256 b90bad32993b4dcc5d70e8474f4e634e9ad176d783540d0ba8c4a363afccff40. Earlier5d/86 observations remain recorded in private history and the prehook96bf public hash-only draft; no financial approval is inferred.",
+    "Preserve original private local contracts, hashes and assertions privately; never publish private transcripts, personal browser context or their Git ancestry. Public v2 is a separately versioned decision-only authority, not a repin of historical expected hashes.",
+    "The inherited unverified November period change is corrected by restoring ONLY the exact PERIOD and BUDGET_END already present on actual main444. CAP and retries are unchanged. The expired October window remains fail-closed under the real November clock. Independent repair review of264 confirms AST equality and denial offline; no renewal, new numerical limit, live or paid call is authorized.",
+    "Serialization-only source-provenance amendment: explicit path/SHA256 tuple arrays preserve all original frozen file/hash associations; canonical logical inventory digest 3ec3610c46da3009013428d66bc08a49acf0c95d248ac57325fed946e0fd36fd. The scanner rules, ignores and detectors are unchanged. Rejected prior draft history stays private; publication restarts from actual444 with no rejected ancestors."
+  ],
+  "adrs": [
+    "Canonical registration is G12 governance-only. P71 and native P17 runtime are separate finite phases, never admitted by registration alone.",
+    "Native accounts use immutable explicit association, current parent-session validation, active selected membership and exact private-resource checks. No email/domain merge or provider claim fabrication.",
+    "All public444 historical hashes and assertions remain; additive hooks have exact byte inverses within the unchanged checker ceiling. Historicalc92 data is a test-only frozen text fixture and never production release proof."
+  ],
+  "architecture_refs": [
+    "APBRA-183 owner mission, accepted solo-owner process, APBRA-151 CompanyService/Template v1 and current direction119/requirements12/RTM21."
+  ],
+  "allowed_paths": [
+    "apps/api/alembic/versions/20261108_18_native_organisation.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/native_organisation.py",
+    "apps/api/src/apbra_api/password_auth.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/tests/test_migrations.py",
+    "apps/api/tests/test_native_organisation.py",
+    "apps/api/tests/test_password_auth.py",
+    "apps/api/tests/test_request_outputs.py",
+    "apps/web/src/PasswordAccount.test.tsx",
+    "apps/web/src/PasswordAccount.tsx",
+    "apps/web/src/api.ts",
+    "apps/web/src/privateCases.test.tsx",
+    "apps/web/src/privateCases.tsx",
+    "apps/web/src/style.css"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "agents/**",
+    "contracts/**",
+    "infrastructure/**",
+    "local-data/**",
+    "apps/api/.env",
+    "apps/web/.env",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "apps/web/package.json",
+    "apps/web/package-lock.json"
+  ],
+  "acceptance_criteria": [
+    "Native sign-in, name-only atomic organisation/COMPANY_OWNER/settings creation, real scoped workspace, reload and returning-user persistence.",
+    "One immutable account/principal binding; current parent/session/epoch/revocation and selected active membership/company; no email autojoin; exact private-resource grants; unsupported native invitations and AI remain truthful.",
+    "Concurrency/replay/rollback/migration/isolation tests and desktop320px keyboard/returning-user checks on disposable synthetic infrastructure."
+  ],
+  "verification_required": [
+    "Canonical checker, CI policy, complete bootstrap, exact inverse/ceiling/privacy/provenance regression checks and Linux current-tree/full fetched-history scan.",
+    "Product requires applicable full API/web/migration/lint/types/build, separate exact-head review and actual released prerequisites; local fixtures are not hosted/main evidence."
+  ],
+  "out_of_scope": [
+    "Private transcript or private-history publication, live credentials/models/email, owner preview/database changes, paid tooling, financial-policy selection, direct main/merge/forcepush/automatic approval or deployment."
+  ],
+  "escalate_when": [
+    "Actual permission/source conflict, unsafe data, unexplained failure, missing mandatory validation or unresolved product/release authority."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex /root/governance_diagnosis delegated execution under chat01a1b8d8-9e3e-72f1-8176-c4b255b428b9, initiated by Haseeb; logical APBRA-DEVOPS0.1",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "444f4828c87a3a158fc102efae37196540cbbafa",
+  "branch": "agent/APBRA-DEVOPS/APBRA-183-native-organisation-public-v2",
+  "source_ids": [
+    "apbra-151-self-service-direction",
+    "apbra-151-multi-tenancy-isolation",
+    "apbra-160-editable-first-draft-direction"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Finite source authority only; actual published registration/source, full validation, independent review, required CI and Haseeb manual merge remain separate. Existing expired financial policy grants no renewed spending.",
+  "dependencies": [
+    "Clean public history starts at actual444. No private36/0751 lineage is published.",
+    "Haseeb manually merges independently reviewed registration after required CI; native product also requires accepted and actually released P71 source."
+  ]
+}
