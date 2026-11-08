@@ -21,6 +21,42 @@ from apbra_api.bootstrap import bootstrap
 from apbra_api.config import Settings
 from apbra_api.persistence import Database
 
+
+def apply_approved_report_authorization_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test-only advancing clock for an explicitly approved historical report fixture.
+
+    Callers opt in; neither production policy nor unrelated tests are changed.
+    Keep issuer/session and JWT validation clocks consistent with the ledger.
+    """
+    import time
+    from datetime import UTC, datetime
+
+    from apbra_api import api, application, auth_boundary, authorization, oidc_adapter
+    from apbra_api import foundry_report_runtime as report
+
+    wall_time, utc_time = time.time, time.gmtime
+    midpoint = datetime.strptime(report.PERIOD + "-14", "%Y-%m-%d").replace(tzinfo=UTC)
+    offset = midpoint.timestamp() - wall_time()
+    monkeypatch.setattr(time, "time", lambda: wall_time() + offset)
+
+    class AuthorizationDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(time.time(), tz)
+
+    for module in (api, application, auth_boundary, authorization, oidc_adapter):
+        monkeypatch.setattr(module, "datetime", AuthorizationDateTime)
+    monkeypatch.setattr(
+        time, "gmtime", lambda stamp=None: utc_time(time.time() if stamp is None else stamp)
+    )
+
+
+@pytest.fixture
+def approved_report_authorization_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-autouse: only named synthetic-report consumers receive this clock."""
+    apply_approved_report_authorization_clock(monkeypatch)
+
+
 _TARGET_CHANGING_LIBPQ_ENV = (
     "PGHOST",
     "PGHOSTADDR",

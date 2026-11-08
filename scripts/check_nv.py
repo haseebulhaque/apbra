@@ -52,7 +52,7 @@ GP_EDITS = [("    if task_id!='APBRA-160' or branch!=B or not paths or not paths
 def strip_gp_changes(source):return inverse(source,GP_EDITS)
 def strip_dispatch_changes(source):return inverse(source,DISPATCH_EDITS)
 DISPATCH_TEST_EDITS = [("        self.assertEqual(names,expected|{'scripts/check_dispatch_audit_20261019.py'})\n", "        self.assertEqual(names,expected|{'scripts/check_dispatch_audit_20261019.py','scripts/check_nv.py'})\n")]
-def strip_dispatch_test_changes(source):return inverse(source,DISPATCH_TEST_EDITS)
+def strip_dispatch_test_changes(source):return inverse(strip_public_dispatch_test(source),DISPATCH_TEST_EDITS)
 def checker():return runpy.run_path(Path(__file__).with_name('check_bootstrap.py'))
 def git(root,*args):return subprocess.check_output(['git','-C',str(root),*args],stderr=subprocess.DEVNULL,timeout=10)
 def qualified_current_paths(root):
@@ -101,3 +101,10 @@ def strip_public_bootstrap(source):
         if source.count(after)!=1:raise ValueError('Public canonical inverse differs')
         source=source.replace(after,before,1)
     return source
+
+PUBLIC_DISPATCH_TEST_EDIT = ('        current=(ROOT/name).read_text()\n', "        current=(ROOT/name).read_text()\n        native=ROOT/'scripts/check_recovered_native_registration.py'\n        if native.is_file():current=__import__('runpy').run_path(native)['historical_fixture_source'](name,current)\n")
+def strip_public_dispatch_test(source):
+    before,after=PUBLIC_DISPATCH_TEST_EDIT
+    if after not in source:return source
+    if source.count(after)!=1:raise ValueError('Public historical dispatch test inverse differs')
+    return source.replace(after,before,1)

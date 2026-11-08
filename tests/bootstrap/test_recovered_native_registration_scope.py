@@ -7,8 +7,12 @@ H=runpy.run_path(ROOT/'scripts/check_recovered_native_registration.py')
 C=runpy.run_path(ROOT/'scripts/check_bootstrap.py')
 class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_current_canonical_governance_only_phase_and_literal_scope(self):
-        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(13,71,17))
-        self.assertFalse(H['G']&(H['Q']|H['N']))
+        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(19,74,17))
+        self.assertEqual(H['G']&H['Q'],H['REG_FIXTURES'])
+        self.assertEqual(len(H['REG_FIXTURES']),5)
+        self.assertTrue(all(name.startswith('apps/api/tests/') for name in H['REG_FIXTURES']))
+        self.assertFalse(H['G']&H['N'])
+        self.assertTrue(all(not name.startswith('apps/api/src/') for name in H['G']))
         self.assertTrue(all('*' not in n and '..' not in n.split('/') for n in H['G']|H['Q']|H['N']))
         self.assertEqual(C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0],[])
     def test_every_registration_omission_foreign_product_and_branch_is_rejected(self):
@@ -69,11 +73,11 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_typed_checksum_arrays_preserve_the_exact_logical_source_inventory(self):
         raw=json.loads((ROOT/H['MANIFEST']).read_text());self.assertEqual(raw['schema_version'],2)
         self.assertEqual(raw['hash_inventory_format'],'path-sha256-pairs-v1')
-        for name in ['account_files','native_files','privacy_originals_sha256']:
+        for name in ['account_files','native_files','privacy_originals_sha256','registration_fixture_files']:
             self.assertIs(type(raw[name]),list)
             self.assertTrue(all(type(row) is list and len(row)==2 for row in raw[name]))
         logical=H['manifest'](ROOT)
-        self.assertEqual(H['digest']({name:logical[name] for name in ['account_files','native_files','privacy_originals_sha256']}),H['LOGICAL_INVENTORY_SHA'])
+        self.assertEqual(H['digest']({name:logical[name] for name in ['account_files','native_files','privacy_originals_sha256','registration_fixture_files']}),H['LOGICAL_INVENTORY_SHA'])
     def test_inventory_parser_rejects_ambiguous_duplicate_and_untyped_rows(self):
         sha='a'*64;valid=[['p',sha]]
         self.assertEqual(H['parse_inventory'](valid,{'p'}),{'p':sha})
@@ -108,6 +112,34 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         self.assertEqual(H['historical_fixture_source'](name,current),subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,text=True))
         for bad in [current.replace(H['FIXTURE_AFTER'],'',1),current+H['FIXTURE_AFTER'],current.replace("'--absolute-git-dir'","'--git-dir'",1)]:
             with self.assertRaises(ValueError):H['historical_fixture_source'](name,bad)
+    def test_original_native_fixture_selector_and_all_nine_readbacks_are_frozen(self):
+        public=runpy.run_path(ROOT/'scripts/check_nv.py')
+        governance=subprocess.check_output(['git','log','-1','--no-merges','--format=%H',H['BASE'],'--','scripts/check_nv.py'],cwd=ROOT,text=True).strip()
+        self.assertEqual(governance,'fed5c942cdafe057118ffc9b51dc114752ee52d7')
+        for name in public['P']:
+            self.assertEqual(H['historical_native_source'](ROOT,name),subprocess.check_output(['git','show',governance+':'+name],cwd=ROOT))
+        name='tests/bootstrap/test_native_output_verification_20261019_scope.py';source=(ROOT/name).read_text()
+        for before,after in H['PUBLIC_NATIVE_TEST_EDITS']:
+            for bad in [source.replace(after,'',1),source+after]:
+                with self.assertRaises(ValueError):H['inverse'](bad,H['PUBLIC_NATIVE_TEST_EDITS'])
+    def test_shared_test_fixture_transition_needs_a_complete_released_product(self):
+        frozen=H['manifest'](ROOT);G=H['G'];overlap=H['REG_FIXTURES']
+        # A synthetic main supplies exact G non-overlap bytes, never real refs.
+        def blob(root,*args):
+            prefix='origin/main:'
+            self.assertEqual(args[0],'show');name=args[1][len(prefix):]
+            self.assertIn(name,G-overlap)
+            return (ROOT/name).read_bytes()
+        for released in [False,True]:
+            calls=[]
+            def match(root,files,ref=None):
+                calls.append(set(files))
+                if set(files)==overlap:
+                    expected={name:frozen['account_files'][name] for name in overlap} if released else frozen['registration_fixture_files']
+                    self.assertEqual(files,expected);return True
+                return released
+            with patch.dict(H['registration_published'].__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':match}):self.assertTrue(H['registration_published'](ROOT))
+        with patch.dict(H['registration_published'].__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':lambda *a,**k:False}):self.assertFalse(H['registration_published'](ROOT))
     def test_source_or_release_blob_errors_do_not_create_runtime_witness(self):
         nv=runpy.run_path(ROOT/'scripts/check_nv.py');args=(nv['OVERLAP'],nv['CANDIDATE'])
         for identity,branch,paths in [('APBRA-183',H['R'],H['G']),('APBRA-160',H['QB'],H['Q']),('APBRA-183',H['NB'],H['N'])]:

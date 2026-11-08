@@ -15,6 +15,9 @@ from apbra_api.foundry_private_preparation import Preparation, QualifiedAgentFac
 from apbra_api.foundry_report_runtime import ReportState
 from apbra_api.model_provider import ProviderConfigurationError
 
+# Only this synthetic-report module opts into the approved historical clock.
+pytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")
+
 
 def state_for(a):
     return ReportState(
