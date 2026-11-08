@@ -7,9 +7,9 @@ H=runpy.run_path(ROOT/'scripts/check_recovered_native_registration.py')
 C=runpy.run_path(ROOT/'scripts/check_bootstrap.py')
 class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_current_canonical_governance_only_phase_and_literal_scope(self):
-        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(19,74,17))
+        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(21,74,17))
         self.assertEqual(H['G']&H['Q'],H['REG_FIXTURES'])
-        self.assertEqual(len(H['REG_FIXTURES']),5)
+        self.assertEqual(len(H['REG_FIXTURES']),7)
         self.assertTrue(all(name.startswith('apps/api/tests/') for name in H['REG_FIXTURES']))
         self.assertFalse(H['G']&H['N'])
         self.assertTrue(all(not name.startswith('apps/api/src/') for name in H['G']))
@@ -146,4 +146,18 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
             self.assertEqual(H['qualified_paths'](ROOT,C,identity,branch,paths,*args),set())
         with patch.dict(H['registration_published'].__globals__,{'git':lambda *args:(_ for _ in ()).throw(subprocess.CalledProcessError(1,['git']))}):
             self.assertFalse(H['registration_published'](ROOT))
+    def test_additional_approval_consumers_only_opt_into_the_existing_clock(self):
+        case='apps/api/tests/test_native_case_files.py';response='apps/api/tests/test_native_response_integration.py'
+        marker='@pytest.mark.usefixtures("approved_report_authorization_clock")\n'
+        module='\npytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")\n'
+        for name,added in [(case,marker),(response,module)]:
+            current=(ROOT/name).read_text()
+            self.assertEqual(current.count(added),1)
+            before=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,text=True)
+            self.assertEqual(current.replace(added,'',1),before)
+            self.assertIn(name,H['G']&H['Q'])
+            self.assertNotIn(name,H['N'])
+            self.assertEqual(hashlib.sha256(current.encode()).hexdigest(),H['manifest'](ROOT)['registration_fixture_files'][name])
+            # Exact removal proves all original bodies, assertions and signatures survive.
+            self.assertEqual(ast.dump(ast.parse(current.replace(added,'',1))),ast.dump(ast.parse(before)))
 if __name__=='__main__':unittest.main()

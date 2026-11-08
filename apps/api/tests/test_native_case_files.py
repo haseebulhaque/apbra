@@ -129,6 +129,7 @@ def test_original_images_are_inline_bytes_only_when_settings_permits_vision(sour
     assert 'image-private-key' not in repr(ready)
 
 
+@pytest.mark.usefixtures("approved_report_authorization_clock")
 @pytest.mark.parametrize("fault", ["disabled", "oversized", "remote", "malformed", "mismatch"])
 def test_native_image_serializer_rejects_invalid_or_overbudget_input_before_dispatch(fault):
     from test_foundry_report_runtime import approval
