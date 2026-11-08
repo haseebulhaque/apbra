@@ -7,22 +7,29 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Register finite CI workload separation and pending browser-repaired source v3",
+  "objective": "Register finite CI workload separation and exact qualified Q80/N17 candidate source snapshots v3",
   "requirements": [
     "Owner continuation selects necessary bounded CI repair and browser qualification. Jira PLAN10985/10986 records actual actor, source versions direction119/requirements12/RTM21 and literal pre-edit scope.",
     "Official hosted job128697804131 exceeded45m; bootstrap659PASS1097.429s, API2207PASS1086.84s, public Playwright120 progressed91 before automatic cancellation. Separate complete workloads without raising45m per-job bounds or hiding tests.",
     "G41 is exactly originalG21 union initial16 CI/registration paths and eight explicit additional historical test paths and the inherited tenant readback adapter. No application/runtime/browser source enters governance. V2 contracts and manifest remain byte-identical historical evidence.",
     "New strict CI runs governance/security before independent API/web jobs and an always final bootstrap aggregator with exact existing required context. Every dependency must be explicitly success; missing/skipped/cancelled/failure/invalid denies.",
     "Preserve full checks, exact action/dependency pins, standard public ubuntu24.04 runner, contents-read permissions, triggers/concurrency, isolation sentinel and bounded checker artifact. No paid/larger/self-hosted runner or external service.",
-    "Product inventory is NOT_FROZEN; account80/native17 literal scopes specify future bounds only. No placeholder source hash, observed commit or local stack creates release authority. New source freezes require actual complete results and separate review.",
-    "New manifest SHA256 7a5d590ffa374193beff0e004e5524919f90dce5d385a53ad0a61baaea02a3cd. Current actual main444f4828c87a3a158fc102efae37196540cbbafa and prior public647 remain unmerged state. Registration manual merge, recovered source release and native source release remain ordered real gates.",
+    "Product candidate inventory is FROZEN to complete qualified account80/native17 snapshots. This binds source bytes only; no observed commit or local stack creates actual released authority.",
+    "New manifest SHA256 d88d66f5012f932812366e8b77a0efae844af75db568716a46ecd0b3d9b1d162. Current actual main444f4828c87a3a158fc102efae37196540cbbafa and prior public647 remain unmerged state. Registration manual merge, recovered source release and native source release remain ordered real gates.",
     "All prior expected hashes/AST assertions/checker ceiling and failures remain; exact versioned inverses may normalise only reviewed finite CI deltas before historical comparisons. No private transcript/history, owner data/preview, real credentials/email/provider calls, financial renewal, merge or deployment.",
     "Jira PLAN10992/10993 pre-edit amendments authorise only exact historical=True workflow-fixture projection in three Foundry copiers, its precise old-AST inverse and one protected-workflow current-byte readback. Every original expected hash/assertion and current malicious-workflow negative remains unchanged.",
     "Jira PLAN10996/10997 pre-edit amendments preserve original historical validator coverage through exact self.workflow fixture projection, exact policy-helper inverse and composed staging/knowledge/tenant test readback inverses. Every original assertion, expected hash, current strict workflow negative and checker ceiling remains unchanged.",
-    "Jira PLAN10998 pre-edit amendment permits only the literal bootstrap-file copy in the APBRA162 historical test producer to inverse the approved setup adapter before every original mutation/assertion. Production accepted fixture SHA5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c and all original authority rules remain unchanged."
+    "Jira PLAN10998 pre-edit amendment permits only the literal bootstrap-file copy in the APBRA162 historical test producer to inverse the approved setup adapter before every original mutation/assertion. Production accepted fixture SHA5a800efd19a58a14ccff61a2e2cd03deecabed61c5c14cc725bd9ddf09ed2c9c and all original authority rules remain unchanged.",
+    "Jira PLAN11004 and the pre-edit final eight-path contract freeze exactly qualified Q80/N17 input snapshots; current direction119/requirements12/RTM21 were refreshed13:46:59UTC. No runtime, workflow, helper qualification semantics, financial policy or historical expected hash changes.",
+    "Actual source inputs Q135f8f8c17ea40e5814c16493a3953b0c35d5681 and N263c383a372a5db09b0d838d213c11b402ef4ae7 have separate source/phase/harness review PASS. Q API2567PASS814.52s and N API2587PASS832.97s have zero fail/error/skip; migrations17/18, isolation sentinels, source hashes and owned database cleanup were verified.",
+    "Q web630PASS and N web631PASS retain exactly3 pre-existing opt-in live-provider cases NOT_RUN each; this is not live-provider qualification. Ruff/configured mypy50/51, type/build and own bridges passed. Offline uv lock command ran on Q; N lockfile is byte-identical Q and is qualified by source equivalence, not an invented separate N command.",
+    "Full unfiltered Q browser128/128PASS380.16s and N browser128/128PASS377.51s have no fail/skip/notrun/timeout. Actual synthetic-mail desktop1440/mobile320 account UI QPASS8.27s and Nv3PASS10.61s use fresh independently active reset sessions, no real mail/owner/provider data. All previous failures and limited receipts remain retained.",
+    "Q80 is the complete frozen inventory with73 actual changes, including exactly3 unchanged Reg7 fixtures plus4 unchanged other paths. N17 is the complete inventory with16 actual changes because privateCases.test.tsx already equals Q. Complete combined source union83 and distinct account/native style hashes remain mandatory.",
+    "Observed135/263 IDs are immutable source input provenance, not required ancestors or released authority. Reassembled delivery commits on final Gov/Q must keep all source hashes/apps subtrees identical and receive separately recorded new delivery-head validation; do not repin observed IDs on every rebase.",
+    "The accepted October financial period/cutoff remains expired and cap/retry policy unchanged. Source qualification authorises no spending, live model/provider, mail or owner resource access. Actual main444 still lacks effective registration; local source snapshots or synthetic release models cannot substitute ordered real Haseeb manual G->Q->N integration."
   ],
   "adrs": [
-    "Finite G41 CI registration is distinct from unfrozen account80 and native17 product phases. Current accepted source register and catalog remain unchanged.",
+    "Finite G41 CI registration is distinct from frozen candidate account80 and native17 product phases. Current accepted source register and catalog remain unchanged.",
     "The accepted solo-owner process still requires separate exact-head review, required hosted CI and Haseeb manual merge; logical roles are not extra GitHub identities."
   ],
   "architecture_refs": [
@@ -111,9 +118,9 @@
     "apbra-160-editable-first-draft-direction"
   ],
   "owner_acceptance": "RECORDED",
-  "effective_release": "Versioned finite registration only; unfrozen product is non-admitted. Actual-main source proof, full exact-candidate validation, separate review, hosted CI and Haseeb manual merge remain separate.",
+  "effective_release": "Versioned finite registration and candidate-source binding only. FROZEN records qualified input bytes; actual-main source proof, final exact-candidate validation, separate review, hosted CI and Haseeb manual G->Q->N merge remain separate and mandatory.",
   "dependencies": [
-    "Actual main registration and then accepted recovered source must be manually integrated before dependent native admission.",
-    "Product mode remains specification/NEEDS_REFINEMENT with NOT_FROZEN inventory until actual final browser-repaired candidate is validated/reviewed."
+    "Exact Q135/N263 source qualification and separate review are recorded; previous G521680PASS/source-control PASS remain historical, while the amended final governance head requires fresh complete qualification/review/scans/hosted CI.",
+    "Actual main registration and then complete recovered source must be manually integrated before dependent native admission. Frozen source snapshots do not satisfy either real integration gate."
   ]
 }
