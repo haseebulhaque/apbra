@@ -205,7 +205,7 @@ class CiBrowserRegistration(unittest.TestCase):
         return root
 
     def test_exact_versioned_scopes_preserve_all_v2_bytes_and_current_canonical_integration(self):
-        self.assertEqual((len(H['G']), len(H['Q']), len(H['N']), len(H['REG_FIXTURES'])), (40, 80, 17, 7))
+        self.assertEqual((len(H['G']), len(H['Q']), len(H['N']), len(H['REG_FIXTURES'])), (41, 80, 17, 7))
         self.assertEqual(H['G'] & H['Q'], H['REG_FIXTURES'])
         self.assertFalse(H['G'] & H['N'])
         self.assertFalse(any(name.startswith(('apps/api/src/', 'apps/web/')) for name in H['G']))
@@ -402,7 +402,8 @@ class CiBrowserRegistration(unittest.TestCase):
     def test_composed_historical_fixtures_preserve_all_original_assertions_and_reject_corruption(self):
         cases=[('test_bootstrap.py','strip_historical_bootstrap_adapter',[H['HISTORICAL_BOOTSTRAP_ADAPTER']]),
                ('test_knowledge_lifecycle_20261012_scope.py','strip_historical_knowledge_adapter',H['HISTORICAL_KNOWLEDGE_ADAPTERS']),
-               ('test_tenant_document_drafts_20261013_scope.py','strip_historical_tenant_adapter',[H['HISTORICAL_TENANT_ADAPTER']])]
+               ('test_tenant_document_drafts_20261013_scope.py','strip_historical_tenant_adapter',[H['HISTORICAL_TENANT_ADAPTER']]),
+               ('test_invited_private_case_foundation_scope.py','strip_historical_foundation_adapter',[H['HISTORICAL_FOUNDATION_ADAPTER']])]
         for name,function,pairs in cases:
             current=(ROOT/'tests/bootstrap'/name).read_text();restored=H[function](current)
             self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),H['HISTORICAL_TEST_PREIMAGES'][name])
@@ -412,6 +413,8 @@ class CiBrowserRegistration(unittest.TestCase):
                     with self.subTest(name=name),self.assertRaises(ValueError):H[function](changed)
         original=H['strip_historical_bootstrap_adapter']((ROOT/'tests/bootstrap/test_bootstrap.py').read_text())
         self.assertEqual(original,subprocess.check_output(['git','show',H['BASE']+':tests/bootstrap/test_bootstrap.py'],cwd=ROOT,text=True))
+        foundation=H['strip_historical_foundation_adapter']((ROOT/'tests/bootstrap/test_invited_private_case_foundation_scope.py').read_text())
+        self.assertEqual(foundation,subprocess.check_output(['git','show',H['BASE']+':tests/bootstrap/test_invited_private_case_foundation_scope.py'],cwd=ROOT,text=True))
         current=(ROOT/'scripts/check_ci_policy.py').read_bytes();restored=H['historical_policy_source']('check_ci_policy.py',current)
         self.assertEqual(hashlib.sha256(restored).hexdigest(),H['HISTORICAL_POLICY_SHA'])
         self.assertEqual(restored,subprocess.check_output(['git','show',H['BASE']+':scripts/check_ci_policy.py'],cwd=ROOT))

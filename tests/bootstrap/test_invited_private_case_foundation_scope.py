@@ -33,6 +33,8 @@ class InvitedPrivateCaseFoundationScopeTests(unittest.TestCase):
             source = ROOT / name
             if source.exists():
                 shutil.copyfile(source, target)
+                if name == "tests/bootstrap/test_bootstrap.py":
+                    target.write_text(c.pn['V3']['strip_historical_bootstrap_adapter'](target.read_text()))
             else:
                 target.write_text("APBRA-162 fixture\n")
 
