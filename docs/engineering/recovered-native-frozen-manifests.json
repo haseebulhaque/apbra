@@ -403,13 +403,27 @@
       "6adf512d935ff465d41c003b69e84b95c26fe342a6ab2d2043a763d92564a877"
     ],
     [
+      "apps/api/tests/test_native_case_files.py",
+      "d31cb7e9a0be8f5bce1983640ba29e18a89c1f4929ae24b225c5596112819739"
+    ],
+    [
       "apps/api/tests/test_native_contracts.py",
       "f8f1875bc5c0cc2fc6f2e2cd857bfa085e00deeb86dfa90c4268a6f844fc0f2a"
+    ],
+    [
+      "apps/api/tests/test_native_response_integration.py",
+      "fa682da2e146a3d4ac5cdb45e11706712f3766e1850ecc862fb42404fb5bf91e"
     ],
     [
       "apps/api/tests/test_report_authorization_clock.py",
       "f127bd0874263a01094b4fd4a3f2e896347e76bc1efbe92dc00de5b58dadd5dc"
     ]
   ],
-  "fixture_overlap_policy": "Only five explicit API test paths overlap G19/Q74; registration fixtures use public444 plus the minimal calendar patch, while product fixtures use their separately frozen complete source version. No production path overlaps registration."
+  "fixture_overlap_policy": "Only seven explicit API test paths overlap G21/Q74; registration fixtures use public444 plus the minimal approved-clock opt-ins, while product fixtures use their separately frozen complete source version. No production path overlaps registration.",
+  "registration_fixture_amendment": {
+    "phase": "G21/Reg7",
+    "previous_registration_manifest_sha256": "3775fba127bfb5e15397502cb1fe971bf580306558a1047c3bee0e71559f59b0",
+    "authority_recorded_utc": "2026-11-08T09:15:22.918707+00:00",
+    "decision": "Two additional historical report-approval test consumers explicitly opt into the existing non-autouse synthetic clock. Q74/N17 product snapshots and all production bytes remain unchanged."
+  }
 }
