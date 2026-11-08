@@ -405,8 +405,8 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
             case = old_scope.KnowledgeLifecycleScopeTests()
             selected = Path(directory) / 'historical'; selected.mkdir()
             # Source fixture needs the real immutable Git objects only for names.
-            gitdir = ROOT / '.git'
-            (source / '.git').write_text('gitdir: ' + str(gitdir.resolve()) + '\n')
+            gitdir = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--absolute-git-dir'], text=True).strip()
+            (source / '.git').write_text('gitdir: ' + gitdir + '\n')
             with patch.object(old_scope, 'ROOT', source): case.copy(selected)
             self.assertTrue(all(not (selected / name).exists() for name in names))
             with case.prospective(selected):
