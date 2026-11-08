@@ -24,7 +24,7 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_every_registration_omission_foreign_product_and_branch_is_rejected(self):
         for name in H['G']:
             self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],H['G']-{name}),name)
-        for paths in [H['G']|{next(iter(H['Q']))},H['G']|{'compose.yaml'},set()]:self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],paths))
+        for paths in [H['G']|{sorted(H['Q']-H['G'])[0]},H['G']|{'compose.yaml'},set()]:self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],paths))
         self.assertTrue(C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R']+'-foreign',changed_paths=H['G'])[0])
     def test_products_are_not_released_by_observed_hashes_or_registration(self):
         # Isolate the unmerged state; real main may legitimately advance later.
@@ -178,13 +178,15 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
             # Exact frozen readback preserves all original bodies, assertions and signatures in every phase.
             self.assertEqual(ast.dump(ast.parse(registration.replace(added,'',1))),ast.dump(ast.parse(before)))
     def test_navigation_source_amendment_is_exact_and_does_not_expand_registration(self):
-        prior=json.loads(subprocess.check_output(['git','show','3433352e3d328fbbcebd861cd978b55aeb586c09:'+H['MANIFEST']],cwd=ROOT,text=True))
-        frozen=H['manifest'](ROOT);old=dict(prior['account_files']);current=frozen['account_files'];extra='apps/web/e2e/tenant-settings.spec.ts';ui='apps/web/src/TenantDateTime.tsx'
-        self.assertEqual(set(current)-set(old),{extra})
-        self.assertEqual({name for name in old if old[name]!=current[name]},{ui})
-        self.assertEqual(frozen['native_files'],dict(prior['native_files']))
-        self.assertEqual(frozen['registration_fixture_files'],dict(prior['registration_fixture_files']))
-        self.assertNotIn(extra,H['G']|H['N'])
-        self.assertNotIn(ui,H['G']|H['N'])
+        frozen=H['manifest'](ROOT);current=frozen['account_files'];extra='apps/web/e2e/tenant-settings.spec.ts';ui='apps/web/src/TenantDateTime.tsx'
+        # Frozen prior-map commitments preserve exact Q74/N17/Reg7 provenance even after a squash merge.
+        prior={name:sha for name,sha in current.items() if name!=extra}
+        self.assertEqual(set(current)-set(prior),{extra})
+        self.assertNotEqual(current[ui],'dcef6962145d75fb6d69ad987d791776e009211589e4a8377e75139c56f93712')
+        prior[ui]='dcef6962145d75fb6d69ad987d791776e009211589e4a8377e75139c56f93712'
+        self.assertEqual(H['digest'](prior),'29da7a92dac5c0255f0bb8ecdef58fada04eb05063caa38fba117a98f336bcf1')
+        self.assertEqual(H['digest'](frozen['native_files']),'9d75706b3c13b288a864f3ac5b6811919a8b9955f0b7ee938d26f94006fd7fd1')
+        self.assertEqual(H['digest'](frozen['registration_fixture_files']),'904b32abd66a61bf2da0272130edcb3f496d11db1c6567714579d7f3fca389b7')
+        self.assertNotIn(extra,H['G']|H['N']);self.assertNotIn(ui,H['G']|H['N'])
         self.assertEqual(len(H['G']),21);self.assertEqual(len(H['REG_FIXTURES']),7)
 if __name__=='__main__':unittest.main()
