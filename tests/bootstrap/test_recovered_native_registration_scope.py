@@ -7,25 +7,37 @@ H=runpy.run_path(ROOT/'scripts/check_recovered_native_registration.py')
 C=runpy.run_path(ROOT/'scripts/check_bootstrap.py')
 class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_current_canonical_governance_only_phase_and_literal_scope(self):
-        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(21,74,17))
+        self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(21,75,17))
         self.assertEqual(H['G']&H['Q'],H['REG_FIXTURES'])
         self.assertEqual(len(H['REG_FIXTURES']),7)
         self.assertTrue(all(name.startswith('apps/api/tests/') for name in H['REG_FIXTURES']))
         self.assertFalse(H['G']&H['N'])
         self.assertTrue(all(not name.startswith('apps/api/src/') for name in H['G']))
         self.assertTrue(all('*' not in n and '..' not in n.split('/') for n in H['G']|H['Q']|H['N']))
-        self.assertEqual(C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0],[])
+        frozen=H['manifest'](ROOT);registration=frozen['registration_fixture_files']
+        product={name:frozen['account_files'][name] for name in H['REG_FIXTURES']}
+        current={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in H['REG_FIXTURES']}
+        self.assertIn(current,[registration,product])
+        faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
+        if current==registration:self.assertEqual(faults,[])
+        else:self.assertIn('Public registration test fixtures differ from their frozen phase',faults)
     def test_every_registration_omission_foreign_product_and_branch_is_rejected(self):
         for name in H['G']:
             self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],H['G']-{name}),name)
         for paths in [H['G']|{next(iter(H['Q']))},H['G']|{'compose.yaml'},set()]:self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],paths))
         self.assertTrue(C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R']+'-foreign',changed_paths=H['G'])[0])
     def test_products_are_not_released_by_observed_hashes_or_registration(self):
-        self.assertFalse(H['registration_published'](ROOT))
-        for branch,paths in [(H['QB'],H['Q']),(H['NB'],H['N'])]:
-            self.assertTrue(H['errors'](ROOT,{}, {},{},branch,paths))
-            self.assertTrue(H['errors'](ROOT,{}, {},{},branch,paths|{'compose.yaml'}))
-        self.assertTrue(H['errors'](ROOT,None,{}, {},H['QB'],H['Q']))
+        # Isolate the unmerged state; real main may legitimately advance later.
+        with patch.dict(H['errors'].__globals__,{'registration_published':lambda root:False}):
+            for branch,paths in [(H['QB'],H['Q']),(H['NB'],H['N'])]:
+                self.assertEqual(H['errors'](ROOT,{}, {},{},branch,paths),['Public product registration is not effective on actual main'])
+                self.assertTrue(H['errors'](ROOT,{}, {},{},branch,paths|{'compose.yaml'}))
+            self.assertTrue(H['errors'](ROOT,None,{}, {},H['QB'],H['Q']))
+        # An effective registration admits only complete matching account source.
+        with patch.dict(H['errors'].__globals__,{'registration_published':lambda root:True,'files_match':lambda *a,**k:True}):
+            self.assertEqual(H['errors'](ROOT,{}, {},{},H['QB'],H['Q']),[])
+        with patch.dict(H['errors'].__globals__,{'registration_published':lambda root:True,'files_match':lambda *a,**k:False}):
+            self.assertIn('differs from frozen',H['errors'](ROOT,{}, {},{},H['QB'],H['Q'])[0])
         with patch.dict(H['errors'].__globals__,{'registration_published':lambda root:True,'parent_released':lambda root:False}):
             self.assertIn('actually released',H['errors'](ROOT,{}, {},{},H['NB'],H['N'])[0])
     def test_task_bindings_cover_all_fields_and_historical_source_register(self):
@@ -142,8 +154,10 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         with patch.dict(H['registration_published'].__globals__,{'ancestor':lambda *a:True,'git':blob,'files_match':lambda *a,**k:False}):self.assertFalse(H['registration_published'](ROOT))
     def test_source_or_release_blob_errors_do_not_create_runtime_witness(self):
         nv=runpy.run_path(ROOT/'scripts/check_nv.py');args=(nv['OVERLAP'],nv['CANDIDATE'])
-        for identity,branch,paths in [('APBRA-183',H['R'],H['G']),('APBRA-160',H['QB'],H['Q']),('APBRA-183',H['NB'],H['N'])]:
-            self.assertEqual(H['qualified_paths'](ROOT,C,identity,branch,paths,*args),set())
+        # Missing immutable ancestry denies witnesses in every current branch phase.
+        with patch.dict(H['qualified_paths'].__globals__,{'ancestor':lambda *a:False}):
+            for identity,branch,paths in [('APBRA-183',H['R'],H['G']),('APBRA-160',H['QB'],H['Q']),('APBRA-183',H['NB'],H['N'])]:
+                self.assertEqual(H['qualified_paths'](ROOT,C,identity,branch,paths,*args),set())
         with patch.dict(H['registration_published'].__globals__,{'git':lambda *args:(_ for _ in ()).throw(subprocess.CalledProcessError(1,['git']))}):
             self.assertFalse(H['registration_published'](ROOT))
     def test_additional_approval_consumers_only_opt_into_the_existing_clock(self):
@@ -151,13 +165,26 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         marker='@pytest.mark.usefixtures("approved_report_authorization_clock")\n'
         module='\npytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")\n'
         for name,added in [(case,marker),(response,module)]:
-            current=(ROOT/name).read_text()
-            self.assertEqual(current.count(added),1)
+            frozen=H['manifest'](ROOT);current=(ROOT/name).read_bytes();expected=frozen['registration_fixture_files'][name]
+            self.assertIn(hashlib.sha256(current).hexdigest(),{expected,frozen['account_files'][name]})
+            commits=subprocess.check_output(['git','log','--format=%H','HEAD','--',name],cwd=ROOT,text=True).splitlines()
+            snapshots=[subprocess.check_output(['git','show',commit+':'+name],cwd=ROOT) for commit in commits]
+            snapshots=[raw for raw in snapshots if hashlib.sha256(raw).hexdigest()==expected]
+            self.assertTrue(snapshots,'Exact frozen Reg7 historical fixture snapshot is unavailable: '+name)
+            registration=snapshots[0].decode();self.assertEqual(registration.count(added),1)
             before=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,text=True)
-            self.assertEqual(current.replace(added,'',1),before)
-            self.assertIn(name,H['G']&H['Q'])
-            self.assertNotIn(name,H['N'])
-            self.assertEqual(hashlib.sha256(current.encode()).hexdigest(),H['manifest'](ROOT)['registration_fixture_files'][name])
-            # Exact removal proves all original bodies, assertions and signatures survive.
-            self.assertEqual(ast.dump(ast.parse(current.replace(added,'',1))),ast.dump(ast.parse(before)))
+            self.assertEqual(registration.replace(added,'',1),before)
+            self.assertIn(name,H['G']&H['Q']);self.assertNotIn(name,H['N'])
+            # Exact frozen readback preserves all original bodies, assertions and signatures in every phase.
+            self.assertEqual(ast.dump(ast.parse(registration.replace(added,'',1))),ast.dump(ast.parse(before)))
+    def test_navigation_source_amendment_is_exact_and_does_not_expand_registration(self):
+        prior=json.loads(subprocess.check_output(['git','show','3433352e3d328fbbcebd861cd978b55aeb586c09:'+H['MANIFEST']],cwd=ROOT,text=True))
+        frozen=H['manifest'](ROOT);old=dict(prior['account_files']);current=frozen['account_files'];extra='apps/web/e2e/tenant-settings.spec.ts';ui='apps/web/src/TenantDateTime.tsx'
+        self.assertEqual(set(current)-set(old),{extra})
+        self.assertEqual({name for name in old if old[name]!=current[name]},{ui})
+        self.assertEqual(frozen['native_files'],dict(prior['native_files']))
+        self.assertEqual(frozen['registration_fixture_files'],dict(prior['registration_fixture_files']))
+        self.assertNotIn(extra,H['G']|H['N'])
+        self.assertNotIn(ui,H['G']|H['N'])
+        self.assertEqual(len(H['G']),21);self.assertEqual(len(H['REG_FIXTURES']),7)
 if __name__=='__main__':unittest.main()
