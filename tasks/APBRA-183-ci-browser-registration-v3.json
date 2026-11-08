@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-183",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-183-CONT-20261108-110452-CI1-public-v3",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register finite CI workload separation and pending browser-repaired source v3",
+  "requirements": [
+    "Owner continuation selects necessary bounded CI repair and browser qualification. Jira PLAN10985/10986 records actual actor, source versions direction119/requirements12/RTM21 and literal pre-edit scope.",
+    "Official hosted job128697804131 exceeded45m; bootstrap659PASS1097.429s, API2207PASS1086.84s, public Playwright120 progressed91 before automatic cancellation. Separate complete workloads without raising45m per-job bounds or hiding tests.",
+    "G33 is exactly originalG21 union16 finite CI/registration paths. No application/runtime/browser source enters governance. V2 contracts and manifest remain byte-identical historical evidence.",
+    "New strict CI runs governance/security before independent API/web jobs and an always final bootstrap aggregator with exact existing required context. Every dependency must be explicitly success; missing/skipped/cancelled/failure/invalid denies.",
+    "Preserve full checks, exact action/dependency pins, standard public ubuntu24.04 runner, contents-read permissions, triggers/concurrency, isolation sentinel and bounded checker artifact. No paid/larger/self-hosted runner or external service.",
+    "Product inventory is NOT_FROZEN; account80/native17 literal scopes specify future bounds only. No placeholder source hash, observed commit or local stack creates release authority. New source freezes require actual complete results and separate review.",
+    "New manifest SHA256 8053d8aa499086a251e30964f76ea893bb56bac353c5725312bb6f324c6e24c1. Current actual main444f4828c87a3a158fc102efae37196540cbbafa and prior public647 remain unmerged state. Registration manual merge, recovered source release and native source release remain ordered real gates.",
+    "All prior expected hashes/AST assertions/checker ceiling and failures remain; exact versioned inverses may normalise only reviewed finite CI deltas before historical comparisons. No private transcript/history, owner data/preview, real credentials/email/provider calls, financial renewal, merge or deployment."
+  ],
+  "adrs": [
+    "Finite G33 CI registration is distinct from unfrozen account80 and native17 product phases. Current accepted source register and catalog remain unchanged.",
+    "The accepted solo-owner process still requires separate exact-head review, required hosted CI and Haseeb manual merge; logical roles are not extra GitHub identities."
+  ],
+  "architecture_refs": [
+    "APBRA-183 owner mission, accepted solo-owner process, APBRA-151 CompanyService/Template v1 and current direction119/requirements12/RTM21."
+  ],
+  "allowed_paths": [
+    ".github/workflows/bootstrap.yml",
+    "apps/api/tests/conftest.py",
+    "apps/api/tests/test_foundry_private_preparation.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/api/tests/test_native_case_files.py",
+    "apps/api/tests/test_native_contracts.py",
+    "apps/api/tests/test_native_response_integration.py",
+    "apps/api/tests/test_report_authorization_clock.py",
+    "docs/engineering/apbra183-ci-browser-recovery-v3.md",
+    "docs/engineering/recovered-native-frozen-manifests-v3.json",
+    "docs/engineering/recovered-native-frozen-manifests.json",
+    "docs/engineering/recovered-native-public-registration.md",
+    "scripts/check_bootstrap.py",
+    "scripts/check_ci_browser_registration_v3.py",
+    "scripts/check_ci_policy.py",
+    "scripts/check_nv.py",
+    "scripts/check_recovered_native_registration.py",
+    "tasks/APBRA-160-recovered-account-public-v2.json",
+    "tasks/APBRA-160-recovered-account-public-v3.json",
+    "tasks/APBRA-183-ci-browser-registration-v3.json",
+    "tasks/APBRA-183-native-organisation-public-v2.json",
+    "tasks/APBRA-183-native-organisation-public-v3.json",
+    "tasks/APBRA-183-recovered-native-registration-public-v2.json",
+    "tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt",
+    "tests/bootstrap/fixtures/settings-release-proof-c92d488-application.txt",
+    "tests/bootstrap/test_ci_browser_registration_v3_scope.py",
+    "tests/bootstrap/test_ci_policy.py",
+    "tests/bootstrap/test_dispatch_audit_20261019_scope.py",
+    "tests/bootstrap/test_native_output_verification_20261019_scope.py",
+    "tests/bootstrap/test_recovered_native_registration_scope.py",
+    "tests/bootstrap/test_settings_release_proof_scope.py",
+    "tests/bootstrap/test_tenant_document_drafts_20261013_scope.py",
+    "tests/bootstrap/test_workflow_secrets.py"
+  ],
+  "restricted_paths": [
+    "agents/**",
+    "contracts/**",
+    "infrastructure/**",
+    "local-data/**",
+    "apps/api/.env",
+    "apps/web/.env",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    ".github/rulesets/**",
+    ".github/CODEOWNERS",
+    "docs/source-register.json"
+  ],
+  "acceptance_criteria": [
+    "Every existing mandatory check remains executed; workload split removes the demonstrated serial45m capacity failure.",
+    "Finite scopes, immutable v2 bytes, raw manifest/workflow/task bindings and dependency-status negative controls fail closed."
+  ],
+  "verification_required": [
+    "Strict CI policy, canonical/full bootstrap and exact inverses; unchanged checker ceiling; applicable full API/web/migration/static/build/browser/Linux tree+history scan; fresh independent exact-head review and complete hosted CI."
+  ],
+  "out_of_scope": [
+    "Private transcript or private-history publication, live credentials/models/email, owner preview/database changes, paid tooling, financial-policy selection, direct main/merge/forcepush/automatic approval or deployment."
+  ],
+  "escalate_when": [
+    "Actual permission/source conflict, unsafe data, unexplained failure, missing mandatory validation or unresolved product/release authority."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex /root/governance_diagnosis delegated execution, logical APBRA-DEVOPS0.1, initiated by Haseeb Ul Haque",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "444f4828c87a3a158fc102efae37196540cbbafa",
+  "branch": "agent/APBRA-DEVOPS/APBRA-183-public-governance",
+  "source_ids": [
+    "apbra-151-self-service-direction",
+    "apbra-151-multi-tenancy-isolation",
+    "apbra-160-editable-first-draft-direction"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Versioned finite registration only; unfrozen product is non-admitted. Actual-main source proof, full exact-candidate validation, separate review, hosted CI and Haseeb manual merge remain separate.",
+  "dependencies": [
+    "Actual main registration and then accepted recovered source must be manually integrated before dependent native admission.",
+    "Product mode remains specification/NEEDS_REFINEMENT with NOT_FROZEN inventory until actual final browser-repaired candidate is validated/reviewed."
+  ]
+}

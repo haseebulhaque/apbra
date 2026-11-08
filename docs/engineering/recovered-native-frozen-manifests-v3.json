@@ -1,0 +1,164 @@
+{
+  "schema_version": 3,
+  "public_base": "444f4828c87a3a158fc102efae37196540cbbafa",
+  "continuation_base": "647712931331e89b1f5257b6443090f98df84b37",
+  "registration_phase": "G33-CI",
+  "product_status": "NOT_FROZEN",
+  "account_observed_source": null,
+  "native_observed_source": null,
+  "account_files": [],
+  "native_files": [],
+  "allowed_account_paths": [
+    "apps/api/alembic/versions/20261105_15_tenant_date_display.py",
+    "apps/api/alembic/versions/20261105_16_session_identity_contact.py",
+    "apps/api/alembic/versions/20261106_17_password_auth.py",
+    "apps/api/pyproject.toml",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/config.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/foundry_admin_reads.py",
+    "apps/api/src/apbra_api/foundry_agent_details.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/src/apbra_api/foundry_browser_relay.py",
+    "apps/api/src/apbra_api/foundry_catalogue_lease.py",
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/foundry_private_preparation.py",
+    "apps/api/src/apbra_api/foundry_report_runtime.py",
+    "apps/api/src/apbra_api/main.py",
+    "apps/api/src/apbra_api/native_case_files.py",
+    "apps/api/src/apbra_api/native_goal_context.py",
+    "apps/api/src/apbra_api/native_response_api.py",
+    "apps/api/src/apbra_api/native_response_probe.py",
+    "apps/api/src/apbra_api/observability.py",
+    "apps/api/src/apbra_api/oidc_adapter.py",
+    "apps/api/src/apbra_api/password_auth.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/src/apbra_api/request_outputs.py",
+    "apps/api/src/apbra_api/tenant_date_display.py",
+    "apps/api/tests/conftest.py",
+    "apps/api/tests/test_authentication.py",
+    "apps/api/tests/test_foundry_admin_reads.py",
+    "apps/api/tests/test_foundry_agent_details.py",
+    "apps/api/tests/test_foundry_artifacts.py",
+    "apps/api/tests/test_foundry_browser_handoff.py",
+    "apps/api/tests/test_foundry_browser_relay.py",
+    "apps/api/tests/test_foundry_catalogue_lease.py",
+    "apps/api/tests/test_foundry_memory_handoff.py",
+    "apps/api/tests/test_foundry_private_preparation.py",
+    "apps/api/tests/test_foundry_report_runtime.py",
+    "apps/api/tests/test_migrations.py",
+    "apps/api/tests/test_native_case_files.py",
+    "apps/api/tests/test_native_contracts.py",
+    "apps/api/tests/test_native_goal_context.py",
+    "apps/api/tests/test_native_response_integration.py",
+    "apps/api/tests/test_observability.py",
+    "apps/api/tests/test_password_auth.py",
+    "apps/api/tests/test_report_authorization_clock.py",
+    "apps/api/tests/test_request_outputs.py",
+    "apps/api/tests/test_tenant_date_display.py",
+    "apps/api/uv.lock",
+    "apps/web/e2e/audit-history.spec.ts",
+    "apps/web/e2e/durable-conversation.spec.ts",
+    "apps/web/e2e/native-outputs.spec.ts",
+    "apps/web/e2e/private-case.spec.ts",
+    "apps/web/e2e/protected-generation.spec.ts",
+    "apps/web/e2e/tenant-settings.spec.ts",
+    "apps/web/src/AdminUI.test.tsx",
+    "apps/web/src/AdminUI.tsx",
+    "apps/web/src/BusinessReportJourney.test.tsx",
+    "apps/web/src/BusinessReportJourney.tsx",
+    "apps/web/src/EnterpriseApp.tsx",
+    "apps/web/src/PasswordAccount.test.tsx",
+    "apps/web/src/PasswordAccount.tsx",
+    "apps/web/src/RequestOutputs.test.tsx",
+    "apps/web/src/RequestOutputs.tsx",
+    "apps/web/src/SavedAzureAnswer.test.tsx",
+    "apps/web/src/SavedAzureAnswer.tsx",
+    "apps/web/src/TenantDateTime.test.tsx",
+    "apps/web/src/TenantDateTime.tsx",
+    "apps/web/src/TenantObservability.test.tsx",
+    "apps/web/src/TenantObservability.tsx",
+    "apps/web/src/api.test.ts",
+    "apps/web/src/api.ts",
+    "apps/web/src/businessAgent.test.ts",
+    "apps/web/src/businessAgent.ts",
+    "apps/web/src/durableConversation.tsx",
+    "apps/web/src/durableGeneration.test.tsx",
+    "apps/web/src/durableGeneration.tsx",
+    "apps/web/src/privateCases.test.tsx",
+    "apps/web/src/privateCases.tsx",
+    "apps/web/src/style.css"
+  ],
+  "allowed_native_paths": [
+    "apps/api/alembic/versions/20261108_18_native_organisation.py",
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/application.py",
+    "apps/api/src/apbra_api/domain.py",
+    "apps/api/src/apbra_api/native_organisation.py",
+    "apps/api/src/apbra_api/password_auth.py",
+    "apps/api/src/apbra_api/persistence.py",
+    "apps/api/tests/test_migrations.py",
+    "apps/api/tests/test_native_organisation.py",
+    "apps/api/tests/test_password_auth.py",
+    "apps/api/tests/test_request_outputs.py",
+    "apps/web/src/PasswordAccount.test.tsx",
+    "apps/web/src/PasswordAccount.tsx",
+    "apps/web/src/api.ts",
+    "apps/web/src/privateCases.test.tsx",
+    "apps/web/src/privateCases.tsx",
+    "apps/web/src/style.css"
+  ],
+  "registration_fixture_files": [
+    [
+      "apps/api/tests/conftest.py",
+      "95f084cecce1bf4f84cbb2f6285e2e03a0cd82f1dcf34b602e28ba663cf763f9"
+    ],
+    [
+      "apps/api/tests/test_foundry_private_preparation.py",
+      "0396e0428b5a894dc867efe2e2d8d0bdde10f7de4e94012a0fa4c7738b656113"
+    ],
+    [
+      "apps/api/tests/test_foundry_report_runtime.py",
+      "6adf512d935ff465d41c003b69e84b95c26fe342a6ab2d2043a763d92564a877"
+    ],
+    [
+      "apps/api/tests/test_native_case_files.py",
+      "d31cb7e9a0be8f5bce1983640ba29e18a89c1f4929ae24b225c5596112819739"
+    ],
+    [
+      "apps/api/tests/test_native_contracts.py",
+      "f8f1875bc5c0cc2fc6f2e2cd857bfa085e00deeb86dfa90c4268a6f844fc0f2a"
+    ],
+    [
+      "apps/api/tests/test_native_response_integration.py",
+      "fa682da2e146a3d4ac5cdb45e11706712f3766e1850ecc862fb42404fb5bf91e"
+    ],
+    [
+      "apps/api/tests/test_report_authorization_clock.py",
+      "f127bd0874263a01094b4fd4a3f2e896347e76bc1efbe92dc00de5b58dadd5dc"
+    ]
+  ],
+  "immutable_v2_artifacts": [
+    [
+      "tasks/APBRA-160-recovered-account-public-v2.json",
+      "9436d80af215710d740931723b0645e0dbda77709303bb0312b1dfbb593f4eb0"
+    ],
+    [
+      "tasks/APBRA-183-native-organisation-public-v2.json",
+      "c4fac394d2543196424bc773fe67c6de4b074d70873cfa5d78c5abdaa5071426"
+    ],
+    [
+      "tasks/APBRA-183-recovered-native-registration-public-v2.json",
+      "94be79c161a078f9d12ed5269a1fea1120e316b6369df33673576a0029c0bf7d"
+    ],
+    [
+      "docs/engineering/recovered-native-frozen-manifests.json",
+      "78fbc2dc6597d885344321cf668f8df28ffaa76ab5d27bc78a6746ed1e1d6433"
+    ]
+  ],
+  "legacy_workflow_fixture": "tests/bootstrap/fixtures/bootstrap-workflow-single-job-647.txt",
+  "legacy_workflow_sha256": "55314de4067db48231fdc9e5833c66be3cdf4c5594f4ce4aebbb4c1a708cb47d",
+  "approved_workflow_sha256": "06cbb5d37c22fda5fbce23e4ae2d63df7aa3b8b2d934faf0e021fe8c903dd7f3",
+  "source_authority": "Owner continuation and Jira PLAN10985/10986 authorise finite CI repair and browser qualification only. Product source remains NOT_FROZEN and non-admitted until actual repaired bytes, full results and exact independent review are recorded. Financial expiry and actual-main integration gates remain unchanged."
+}
