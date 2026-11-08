@@ -20,7 +20,7 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         self.assertIn(current,[registration,product])
         faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
         if H['v3_present'](ROOT):
-            self.assertIn('V3 registration requires exact finite G38 CI/governance scope',faults)
+            self.assertIn('V3 registration requires exact finite G40 CI/governance scope',faults)
             current_faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['scope'](ROOT,'G'))[0]
             if current==registration:self.assertEqual(current_faults,[])
             else:self.assertIn('V3 registration test-fixture phase differs',current_faults)

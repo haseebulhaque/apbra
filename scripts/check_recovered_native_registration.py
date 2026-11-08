@@ -150,6 +150,7 @@ FIXTURE_BEFORE = "            gitdir = ROOT / '.git'\n            (source / '.gi
 FIXTURE_AFTER = "            gitdir = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--absolute-git-dir'], text=True).strip()\n            (source / '.git').write_text('gitdir: ' + gitdir + '\\n')\n"
 def historical_fixture_source(name,source):
     if name!='tests/bootstrap/test_tenant_document_drafts_20261013_scope.py':return source
+    if V3 is not None:source=V3['strip_historical_tenant_adapter'](source)
     if source.count(FIXTURE_AFTER)!=1 or FIXTURE_BEFORE in source:raise ValueError('Historical fixture producer inverse differs')
     return source.replace(FIXTURE_AFTER,FIXTURE_BEFORE,1)
 
@@ -170,7 +171,7 @@ def historical_native_source(root,name):
 
 # V3 is a separately bound CI/source version; v2 task/manifests remain immutable.
 V3_PATH = 'scripts/check_ci_browser_registration_v3.py'
-V3_HELPER_SHA = 'b724b9b2fcf172424ec3f1d1c6ab52b4823dd5bc99cff4ac239c806c8340fb40'
+V3_HELPER_SHA = 'e6b12ffbf4d7883a07e5bc2d8c149c8040d04fbf080a01e9a444a96b79650e96'
 V3_TASKS = ('tasks/APBRA-183-ci-browser-registration-v3.json', 'tasks/APBRA-160-recovered-account-public-v3.json', 'tasks/APBRA-183-native-organisation-public-v3.json')
 V3_BRANCHES = {'G': R, 'Q': 'agent/APBRA-DEVOPS/APBRA-160-recovered-account-public-v3', 'N': 'agent/APBRA-DEVOPS/APBRA-183-native-organisation-public-v3'}
 _v2_bind = bind
