@@ -70,7 +70,14 @@ class SettingsReleaseProofScope(unittest.TestCase):
         root=Path(folder)
         for name in [NAME,'agents/catalog.json','docs/source-register.json','contracts/engineering/task-contract.schema.json']:
             target=root/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/name,target)
-        raw=subprocess.check_output(['git','show',H['CANDIDATE']+':'+APP],cwd=ROOT)
+        # Exact immutable c92 blob, not executable fixture code. The original
+        # candidate may be public but unreachable from a normal full checkout.
+        fixture = ROOT / 'tests/bootstrap/fixtures/settings-release-proof-c92d488-application.txt'
+        if not fixture.is_file() or fixture.is_symlink():
+            raise ValueError('Historical settings proof fixture missing or symlink')
+        raw = fixture.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != H['PIN_HASHES'][0]:
+            raise ValueError('Historical settings proof fixture differs')
         target=root/APP;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
         return root,target,raw
     def test_exact_candidate_ancestor_git_blob_current_blob_and_task_required(self):

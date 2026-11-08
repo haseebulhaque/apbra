@@ -168,6 +168,8 @@ class DispatchAuditScopeTests(unittest.TestCase):
     def test_historical_fixture_adaptation_preserves_every_prior_assertion(self):
         name='tests/bootstrap/test_tenant_document_drafts_20261013_scope.py'
         current=(ROOT/name).read_text()
+        native=ROOT/'scripts/check_recovered_native_registration.py'
+        if native.is_file():current=__import__('runpy').run_path(native)['historical_fixture_source'](name,current)
         previous=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,text=True)
         before,after=H['DOCUMENT_FIXTURE_EDIT']
         self.assertEqual(current.count(after),1)

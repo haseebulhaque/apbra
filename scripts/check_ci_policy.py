@@ -178,6 +178,20 @@ def validate(text: str) -> list[str]:
         return ['Invalid or ambiguous workflow YAML']
 
 
+validate_legacy = validate
+
+
+def validate(text: str) -> list[str]:
+    import runpy
+    helper = Path(__file__).with_name('check_ci_browser_registration_v3.py')
+    if not helper.is_file() or helper.is_symlink():
+        return ['V3 CI policy helper missing or unsafe']
+    try:
+        return runpy.run_path(helper)['validate_workflow'](text)
+    except (OSError, ValueError, KeyError, TypeError):
+        return ['V3 CI policy unavailable']
+
+
 def main() -> int:
     path = Path(__file__).resolve().parents[1] / '.github/workflows/bootstrap.yml'
     try:

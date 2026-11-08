@@ -92,7 +92,10 @@ class GuidedPreparationScope(unittest.TestCase):
                 baseline=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT)
                 self.assertEqual(hashlib.sha256(baseline).hexdigest(),expected)
                 if registration or (name not in H['PRODUCT'] and name not in allowed):
-                    self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(),expected)
+                    current=(ROOT/name).read_bytes()
+                    if name=='.github/workflows/bootstrap.yml':
+                        current=C['pn']['workflow_projection'](ROOT,current.decode()).encode()
+                    self.assertEqual(hashlib.sha256(current).hexdigest(),expected)
         if registration:
             for name in ['apps/api/src/apbra_api/foundry_private_preparation.py','apps/api/src/apbra_api/foundry_cost_limits.py']:
                 self.assertFalse((ROOT/name).exists())

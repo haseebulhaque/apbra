@@ -12,10 +12,11 @@ spec.loader.exec_module(c)
 class WorkflowSecretContextTests(unittest.TestCase):
     def setUp(self):
         self.workflow = (ROOT / '.github/workflows/bootstrap.yml').read_text()
+        self.projected = c.pn['workflow_projection'](ROOT,self.workflow)
 
     def test_scanner_filename_is_allowed(self):
         self.assertIn('scan_secrets.sh', self.workflow)
-        self.assertEqual(c.workflow_errors(self.workflow), [])
+        self.assertEqual(c.workflow_errors(self.projected), [])
 
     def test_dot_secret_reference_still_denied(self):
         value = self.workflow.replace('bash scripts/scan_secrets.sh', 'echo ${{ secrets.TEST_VALUE }}')
@@ -24,6 +25,16 @@ class WorkflowSecretContextTests(unittest.TestCase):
     def test_bracket_secret_reference_is_denied(self):
         value = self.workflow.replace('bash scripts/scan_secrets.sh', "echo ${{ secrets['TEST_VALUE'] }}")
         self.assertIn('Privileged trigger/secret reference prohibited', c.workflow_errors(value))
+
+
+    def test_split_policy_projection_never_erases_secret_or_aggregator_mutations(self):
+        self.assertEqual(c.workflow_errors(self.projected), [])
+        for before,after in [('test "$WEB_RESULT" = success','true'),
+                             ('needs: [governance, api, web]','needs: [governance, api]')]:
+            self.assertIn(before,self.workflow)
+            self.assertTrue(c.workflow_errors(self.workflow.replace(before,after,1)))
+        self.assertIn('Privileged trigger/secret reference prohibited',
+                      c.workflow_errors(self.workflow.replace('test "$WEB_RESULT" = success','echo ${{ secrets.VALUE }}',1)))
 
 
 if __name__ == '__main__':

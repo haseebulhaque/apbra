@@ -25,6 +25,10 @@ integrated = native_fixtures.integrated
 saved_case = native_fixtures.saved_case
 
 
+# Only this synthetic-report module opts into the approved historical clock.
+pytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")
+
+
 def native_body(value):
     return json.dumps(
         {

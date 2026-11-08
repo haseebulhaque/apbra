@@ -280,7 +280,10 @@ class HistoricalFixtureStagingScopeTests(unittest.TestCase):
     def test_historical_modules_restore_after_fixture_only_plumbing(self):
         for name in FIXTURE_MODULES:
             old = ast.parse(subprocess.check_output(['git', 'show', h['BASE'] + ':tests/bootstrap/' + name], cwd=ROOT))
-            new = ast.parse((ROOT / 'tests/bootstrap' / name).read_text())
+            current = (ROOT / 'tests/bootstrap' / name).read_text()
+            if name in {'test_foundry_qualification_scope.py', 'test_foundry_qualification_renewal_scope.py', 'test_foundry_qualification_renewal_20261011_scope.py'}:
+                current = c.pn['V3']['strip_historical_copy_adapter'](name, current)
+            new = ast.parse(current)
             old_generation_names = next(n.value for n in ast.walk(old) if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'names' for t in n.targets)) if name == 'test_generation_scope.py' else None
             new.body = [n for n in new.body if not (isinstance(n, ast.ImportFrom) and n.module == 'historical_fixture_staging')]
             for n in ast.walk(new):

@@ -24,6 +24,8 @@ from apbra_api.native_response_index import DatabaseNativeResponseIndex, NativeR
 from apbra_api.native_response_probe import receive_native_response
 from apbra_api.native_response_runtime import native_application_factory
 
+pytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")
+
 saved_case = runtime_fixtures.saved
 
 PRIVATE = "SYNTHETIC-NATIVE-PRIVATE-CANARY"

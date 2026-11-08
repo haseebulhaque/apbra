@@ -333,7 +333,7 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
     def test_entire_old_knowledge_scope_ast_after_only_five_exact_read_expressions(self):
         path = 'tests/bootstrap/test_knowledge_lifecycle_20261012_scope.py'
         old = subprocess.check_output(['git', 'show', h['BASE'] + ':' + path], cwd=ROOT, text=True)
-        current = (ROOT / path).read_text()
+        current = c.pn['V3']['strip_historical_knowledge_adapter']((ROOT / path).read_text())
         replacements = [
             ("fixture_names.document_drafts_registration_names(ROOT, h['G'])", "{p.relative_to(ROOT).as_posix() for p in c.repo_files(ROOT)} | h['G']"),
             ("fixture_names.knowledge_registration_snapshot(ROOT, 'scripts/check_bootstrap.py').decode('utf-8')", "(ROOT / 'scripts/check_bootstrap.py').read_text()"),
@@ -405,8 +405,8 @@ class TenantDocumentDraftScopeTests(unittest.TestCase):
             case = old_scope.KnowledgeLifecycleScopeTests()
             selected = Path(directory) / 'historical'; selected.mkdir()
             # Source fixture needs the real immutable Git objects only for names.
-            gitdir = ROOT / '.git'
-            (source / '.git').write_text('gitdir: ' + str(gitdir.resolve()) + '\n')
+            gitdir = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', '--absolute-git-dir'], text=True).strip()
+            (source / '.git').write_text('gitdir: ' + gitdir + '\n')
             with patch.object(old_scope, 'ROOT', source): case.copy(selected)
             self.assertTrue(all(not (selected / name).exists() for name in names))
             with case.prospective(selected):

@@ -10,14 +10,13 @@ import secrets
 import threading
 import time
 import unittest
-from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
-from conftest import csrf, sign_in
+from conftest import apply_approved_report_authorization_clock, csrf, sign_in
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -30,7 +29,6 @@ from apbra_api import foundry_browser_handoff as browser
 from apbra_api import foundry_memory_handoff as receiver
 from apbra_api import foundry_report_runtime as m
 from apbra_api import foundry_report_runtime as report
-from apbra_api import oidc_adapter
 from apbra_api.api import create_app
 from apbra_api.application import AcceptanceService
 from apbra_api.config import FoundryHostBinding
@@ -51,22 +49,8 @@ from apbra_api.tenant_settings import _encoded, current_settings
 
 @pytest.fixture(autouse=True)
 def october_authorization_clock(monkeypatch):
-    """Exercise the approved October ledger after calendar rollover too."""
-    wall_time = time.time
-    utc_time = time.gmtime
-    offset = 1791936000.0 - wall_time()  # 2026-10-14 00:00 UTC, advancing normally.
-    monkeypatch.setattr(time, "time", lambda: wall_time() + offset)
-
-    class AuthorizationDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime.fromtimestamp(time.time(), tz)
-
-    # The synthetic issuer and JWT validator must share the authorization clock.
-    monkeypatch.setattr(oidc_adapter, "datetime", AuthorizationDateTime)
-    monkeypatch.setattr(
-        time, "gmtime", lambda stamp=None: utc_time(time.time() if stamp is None else stamp)
-    )
+    """Preserve module opt-in and the existing manual wrapped-call interface."""
+    apply_approved_report_authorization_clock(monkeypatch)
 
 
 def approval(attempts=1, stages=("REPORT_DESIGN",)):

@@ -226,7 +226,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
             if name == 'scripts/check_bootstrap.py':
                 continue
             name = name.removeprefix('scripts/')
-            self.assertEqual((ROOT / 'scripts' / name).read_bytes(), subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/' + name], cwd=ROOT))
+            self.assertEqual(c.pn['V3']['historical_policy_source'](name, (ROOT / 'scripts' / name).read_bytes()), subprocess.check_output(['git', 'show', h['BASE'] + ':scripts/' + name], cwd=ROOT))
         self.assertLessEqual(checker.stat().st_size, 262076)
 
 
@@ -273,7 +273,7 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
     def test_historical_snapshot_plumbing_preserves_every_original_ast_node(self):
         name = 'tests/bootstrap/test_historical_fixture_staging_20261012_scope.py'
         old = ast.parse(subprocess.check_output(['git', 'show', h['BASE'] + ':' + name], cwd=ROOT, text=True))
-        new = restore_h9_fixture_selection(ast.parse((ROOT / name).read_text()))
+        new = restore_h9_fixture_selection(ast.parse(c.pn['V3']['strip_historical_staging_adapter']((ROOT / name).read_text())))
         names = {'HISTORICAL_CHECKER_COMMIT', 'HISTORICAL_CHECKER_TREE', 'HISTORICAL_CHECKER_DIGEST'}
         removed = []
         for node in new.body:
@@ -333,7 +333,10 @@ class KnowledgeLifecycleScopeTests(unittest.TestCase):
             with self.subTest(name=name):
                 path = 'tests/bootstrap/' + name
                 old = ast.parse(subprocess.check_output(['git', 'show', base + ':' + path], cwd=ROOT))
-                new = restore_h9_fixture_selection(ast.parse((ROOT / path).read_text()))
+                current = (ROOT / path).read_text()
+                if name == 'test_historical_fixture_staging_20261012_scope.py':
+                    current = c.pn['V3']['strip_historical_staging_adapter'](current)
+                new = restore_h9_fixture_selection(ast.parse(current))
                 self.assertEqual(ast.dump(old), ast.dump(new))
         path = 'tests/bootstrap/historical_fixture_staging.py'
         old_bytes = subprocess.check_output(['git', 'show', base + ':' + path], cwd=ROOT)

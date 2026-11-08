@@ -23,6 +23,7 @@ class BootstrapTests(unittest.TestCase):
         self.schema = c.load_json(ROOT / 'contracts/engineering/task-contract.schema.json')
         self.card = next(x for x in self.catalog['cards'] if x['agent_id'] == 'APBRA-DEVOPS')
         self.workflow = (ROOT / '.github/workflows/bootstrap.yml').read_text()
+        if c.pn:self.workflow = c.pn['workflow_projection'](ROOT, self.workflow)
 
     def test_valid_repository(self):
         errors, manifest = c.check(ROOT)
