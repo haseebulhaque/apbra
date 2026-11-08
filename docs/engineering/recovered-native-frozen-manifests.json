@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "public_base": "444f4828c87a3a158fc102efae37196540cbbafa",
-  "account_observed_source": "8b5882a57ed9da31a2efc9d94eebe7748ced0c4d",
-  "native_observed_source": "f5f84be8f46866cc10590e3a5b5a2029124f9673",
+  "account_observed_source": "8b9a2f73b931b2dceb4000b9af2f4afb1ae935e7",
+  "native_observed_source": "7d22b9caab377b9c696fd3be8a7e177924bf7b36",
   "account_files": [
     [
       "apps/api/alembic/versions/20261105_15_tenant_date_display.py",
@@ -201,6 +201,10 @@
       "a8f1288e9e6b95cbfbbd7a687d4fc25d050cb281f6282757b0ab1e9ba0c4b8de"
     ],
     [
+      "apps/web/e2e/tenant-settings.spec.ts",
+      "c0c86b95c1ae5cde5d7692678d9667446850c727198588bc63dcac68051e8ef3"
+    ],
+    [
       "apps/web/src/AdminUI.test.tsx",
       "64c5eb23857921c34da7fd920de00d95259cacd28f8d0dac7937525f7d4601c0"
     ],
@@ -250,7 +254,7 @@
     ],
     [
       "apps/web/src/TenantDateTime.tsx",
-      "dcef6962145d75fb6d69ad987d791776e009211589e4a8377e75139c56f93712"
+      "d96c66be436d7d0b8ce4836fd7f7361d34b863c71d565ed6a21ba27b5ec12ca3"
     ],
     [
       "apps/web/src/TenantObservability.test.tsx",
@@ -386,7 +390,9 @@
     "account_before_exact_main_policy_restoration": "5d35d70a78eb7703c824d6891a98f49f13178a61",
     "native_before_exact_main_policy_restoration": "86f2fec7b8fea1c98702b23984b27ade7eaa2f84",
     "account_before_calendar_fixture": "2644e860d1d053449cfc26bcde46ce6037c73b96",
-    "native_before_calendar_fixture": "10843568c10e18f75cb82bb7aa5e232a2191f9ba"
+    "native_before_calendar_fixture": "10843568c10e18f75cb82bb7aa5e232a2191f9ba",
+    "account_before_read_only_navigation_repair": "8b5882a57ed9da31a2efc9d94eebe7748ced0c4d",
+    "native_before_read_only_navigation_repair": "f5f84be8f46866cc10590e3a5b5a2029124f9673"
   },
   "hash_inventory_format": "path-sha256-pairs-v1",
   "registration_fixture_files": [
@@ -419,11 +425,17 @@
       "f127bd0874263a01094b4fd4a3f2e896347e76bc1efbe92dc00de5b58dadd5dc"
     ]
   ],
-  "fixture_overlap_policy": "Only seven explicit API test paths overlap G21/Q74; registration fixtures use public444 plus the minimal approved-clock opt-ins, while product fixtures use their separately frozen complete source version. No production path overlaps registration.",
+  "fixture_overlap_policy": "Only seven explicit API test paths overlap G21/Q75; registration fixtures use public444 plus the minimal approved-clock opt-ins, while product fixtures use their separately frozen complete source version. No production path overlaps registration.",
   "registration_fixture_amendment": {
     "phase": "G21/Reg7",
     "previous_registration_manifest_sha256": "3775fba127bfb5e15397502cb1fe971bf580306558a1047c3bee0e71559f59b0",
     "authority_recorded_utc": "2026-11-08T09:15:22.918707+00:00",
     "decision": "Two additional historical report-approval test consumers explicitly opt into the existing non-autouse synthetic clock. Q74/N17 product snapshots and all production bytes remain unchanged."
+  },
+  "source_ui_amendment": {
+    "phase": "Q75/N17; registration G21/Reg7 unchanged",
+    "previous_manifest_sha256": "2a1ec3a7eeced17fda64dab2697809256bb15687fa1125242501c9037d13b2f0",
+    "recorded_utc": "2026-11-08T09:29:52.730196+00:00",
+    "decision": "Initial read-only date-settings GET/history activity is not unsaved work. The existing save-only in-flight guard preserves dirty, pending-save and uncertain-save confirmations. Q75 adds only the existing tenant-settings browser regression path; no API, session, migration or financial-policy change."
   }
 }

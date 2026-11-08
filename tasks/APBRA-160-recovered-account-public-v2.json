@@ -7,21 +7,22 @@
   "assigned_agent": "APBRA-DEVOPS",
   "agent_card_version": "0.1",
   "risk_class": "R4",
-  "objective": "Deliver corrected recovered account P74 source after privacy-safe canonical registration",
+  "objective": "Deliver corrected recovered account Q75 source after privacy-safe canonical registration",
   "requirements": [
     "Owner mission891e4770-658b-4404-8248-14d7a15be343 authorizes finite governance recovery, independent review and bounded secret-scanned draft PR/free standard CI. Jira PLAN10980 records actor and scope.",
     "Current direction8519682v119, requirements3932362v12 PC26-FR-008, RTM3932382v21; actual public main444f4828c87a3a158fc102efae37196540cbbafa. source_ids below retain historical accepted versions; no source-register version is fabricated.",
-    "Corrected account8b5882a57ed9da31a2efc9d94eebe7748ced0c4d and nativef5f84be8f46866cc10590e3a5b5a2029124f9673 include only the explicitly scoped shared calendar-fixture correction beyond prior264/108; production code remains identical to those financial-policy-restored sources. Current frozen manifest SHA256 2a1ec3a7eeced17fda64dab2697809256bb15687fa1125242501c9037d13b2f0.",
+    "Corrected account8b9a2f73b931b2dceb4000b9af2f4afb1ae935e7 and native7d22b9caab377b9c696fd3be8a7e177924bf7b36 preserve the exact-main expired October financial policy and scoped calendar fixtures, plus only the separately authorized TenantDateTime read-only navigation guard and its tenant-settings browser regression. Current frozen manifest SHA256 78fbc2dc6597d885344321cf668f8df28ffaa76ab5d27bc78a6746ed1e1d6433. Separate exact-head review and full validation remain required.",
     "Preserve original private local contracts, hashes and assertions privately; never publish private transcripts, personal browser context or their Git ancestry. Public v2 is a separately versioned decision-only authority, not a repin of historical expected hashes.",
     "The inherited unverified November period change is corrected by restoring ONLY the exact PERIOD and BUDGET_END already present on actual main444. CAP and retries are unchanged. The expired October window remains fail-closed under the real November clock. Independent repair review of264 confirms AST equality and denial offline; no renewal, new numerical limit, live or paid call is authorized.",
     "Independent review scope correction: the two exact frozen P71 dependency snapshot paths apps/api/pyproject.toml and apps/api/uv.lock are allowed here and removed only from this task restricted_paths. No other dependency, version or lockfile edit is authorized; canonical restriction precedence remains unchanged.",
-    "Initial serialization-only checkpoint c7cc9e7 preserved all ninety original path/hash associations without detector changes. The later separately authorized G19/Q74 calendar-fixture amendment extends only test provenance. Current logical inventory digest d9cce214804f20636f941a5d2b073cb1365542fbf9b04851c10bbf60ed60f128.",
+    "Initial serialization-only checkpoint c7cc9e7 preserved all ninety original path/hash associations without detector changes. The later separately authorized G19/Q74 calendar-fixture amendment extends only test provenance. Current logical inventory digest db613c1753e914f598e00d566a8e453f321387e710181bc900c9dbf7b22eaa0e.",
     "Explicit pre-edit P74 amendment adds only the three exact test paths needed for shared non-autouse approved-period fixture and real-calendar denial regression. Two already allowed test files also receive fixture plumbing; no production period, cap, retry or runtime source change. Final reviewed test-source snapshots and phase-specific fixture inventories must be frozen before qualification.",
-    "G21/Q74 phase-overlap source amendment: exactly seven test-only paths have independent frozen registration and product snapshots. Actual-main registration proof permits the product versions only when the complete frozen Q74 or Q74+N17 source is actually released, never from seven hashes alone. The non-autouse approved-period test helper is explicitly scoped to synthetic report consumers and a separate real-clock expiry regression; all original assertions and the legacy wrapped-call interface remain.",
-    "Pre-edit G21/Reg7 amendment recorded 2026-11-08T09:15:22.918707+00:00 under Jira PLAN10980: extend registration by ONLY apps/api/tests/test_native_case_files.py and test_native_response_integration.py clock opt-ins after the retained dfb full-public calendar failures. Q74/N17 product hash inventories are unchanged. No runtime, financial-policy, global-autouse, skip or historical-hash change is authorized."
+    "G21/Q75 phase-overlap source amendment: exactly seven test-only paths have independent frozen registration and product snapshots. Actual-main registration proof permits the product versions only when the complete frozen Q75 or Q75+N17 source is actually released, never from seven hashes alone. The non-autouse approved-period test helper is explicitly scoped to synthetic report consumers and a separate real-clock expiry regression; all original assertions and the legacy wrapped-call interface remain.",
+    "Pre-edit G21/Reg7 amendment recorded 2026-11-08T09:15:22.918707+00:00 under Jira PLAN10980: extend registration by ONLY apps/api/tests/test_native_case_files.py and test_native_response_integration.py clock opt-ins after the retained dfb full-public calendar failures. Q74/N17 product hash inventories are unchanged. No runtime, financial-policy, global-autouse, skip or historical-hash change is authorized.",
+    "Pre-edit Q75 amendment recorded 2026-11-08T09:29:52.730196+00:00 under the bounded owner mission: Q74 expands by ONLY apps/web/e2e/tenant-settings.spec.ts. Existing apps/web/src/TenantDateTime.tsx receives only the approved save-in-flight guard correction. G21/Reg7 and N17 literal scopes remain unchanged. All earlier candidates, failed evidence and original historical assertions are preserved; actual-main release gates remain closed."
   ],
   "adrs": [
-    "Canonical registration is the exact G21 governance/test-fixture inventory. Q74 (the original P71 plus three explicit fixture paths) and native N17 are separate finite product phases, never admitted by registration alone.",
+    "Canonical registration is the exact G21 governance/test-fixture inventory. Q75 (the original P71 plus three explicit fixture paths and the existing tenant-settings browser regression path) and native N17 are separate finite product phases, never admitted by registration alone.",
     "Native accounts use immutable explicit association, current parent-session validation, active selected membership and exact private-resource checks. No email/domain merge or provider claim fabrication.",
     "All public444 historical hashes and assertions remain; additive hooks have exact byte inverses within the unchanged checker ceiling. Historicalc92 data is a test-only frozen text fixture and never production release proof."
   ],
@@ -78,6 +79,7 @@
     "apps/api/tests/test_request_outputs.py",
     "apps/api/tests/test_tenant_date_display.py",
     "apps/api/uv.lock",
+    "apps/web/e2e/tenant-settings.spec.ts",
     "apps/web/src/AdminUI.test.tsx",
     "apps/web/src/AdminUI.tsx",
     "apps/web/src/BusinessReportJourney.test.tsx",
@@ -144,6 +146,6 @@
   "effective_release": "Finite source authority only; actual published registration/source, full validation, independent review, required CI and Haseeb manual merge remain separate. Existing expired financial policy grants no renewed spending.",
   "dependencies": [
     "Clean public history starts at actual444. No private36/0751 lineage is published.",
-    "Haseeb manually merges independently reviewed registration after required CI; native N17 product also requires accepted and actually released Q74 source."
+    "Haseeb manually merges independently reviewed registration after required CI; native N17 product also requires accepted and actually released Q75 source."
   ]
 }
