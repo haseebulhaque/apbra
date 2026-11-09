@@ -164,8 +164,11 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         with patch.dict(H['qualified_paths'].__globals__,{'ancestor':lambda *a:False}):
             for identity,branch,paths in [('APBRA-183',H['R'],H['G']),('APBRA-160',H['QB'],H['Q']),('APBRA-183',H['NB'],H['N'])]:
                 self.assertEqual(H['qualified_paths'](ROOT,C,identity,branch,paths,*args),set())
-        with patch.dict(H['registration_published'].__globals__,{'git':lambda *args:(_ for _ in ()).throw(subprocess.CalledProcessError(1,['git']))}):
+        proof=H['V3']['registration_published'] if H['v3_present'](ROOT) else H['registration_published']
+        git_failure=unittest.mock.Mock(side_effect=subprocess.CalledProcessError(1,['git']))
+        with patch.dict(proof.__globals__,{'git':git_failure}):
             self.assertFalse(H['registration_published'](ROOT))
+        git_failure.assert_called()
     def test_additional_approval_consumers_only_opt_into_the_existing_clock(self):
         case='apps/api/tests/test_native_case_files.py';response='apps/api/tests/test_native_response_integration.py'
         marker='@pytest.mark.usefixtures("approved_report_authorization_clock")\n'
