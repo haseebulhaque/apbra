@@ -3,6 +3,7 @@
 import base64
 import binascii
 import hashlib
+import hmac
 import io
 import json
 import zipfile
@@ -14,7 +15,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Cookie, Depends, FastAPI, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import literal, select, tuple_
+from sqlalchemy import func, literal, select, tuple_
 from sqlalchemy.exc import IntegrityError
 
 from .artifacts import MAX_ARTIFACT_BYTES, read_verified_artifact
@@ -36,12 +37,18 @@ from .foundry_artifacts import (
     retrieve_file,
 )
 from .model_provider import FoundryAccess, ProviderProfile
-from .native_response_archive import NativeResponseArchive, NativeResponseScope
+from .native_response_archive import (
+    NativeResponseArchive,
+    NativeResponsePreservationFailed,
+    NativeResponseScope,
+)
 from .native_response_index import (
     DatabaseNativeResponseIndex,
+    NativeContractBindingRow,
     NativeReceiveCommandRow,
     NativeResponseReceiptRow,
 )
+from .observability import _page_snapshot
 from .persistence import ApplicationSession as Session
 from .persistence import Database, RequestOutputRow
 from .tenant_settings import current_settings, settings_version
@@ -189,11 +196,14 @@ def save_digest(expected: int, filename: str, origin: str, native_id: UUID | Non
     return hashlib.sha256(json.dumps(parts, separators=(',', ':')).encode()).hexdigest()
 
 
-def output_json(row: RequestOutputRow) -> dict[str, Any]:
+def output_json(row: RequestOutputRow, native_task: str | None = None,
+                generated_file: bool = False) -> dict[str, Any]:
     return {'id': str(row.id), 'case_id': str(row.case_id),
             'request_version_id': str(row.request_version_id),
             'context_version': row.context_version, 'filename': row.filename,
             'origin': row.origin, 'bytes': row.byte_size, 'sha256': row.content_digest,
+            'native_task': native_task,
+            'delivery_kind': 'GENERATED_FILE' if generated_file else 'RETAINED_OUTPUT',
             'native_receipt_id': str(row.native_receipt_id) if row.native_receipt_id else None,
             'content_verification': 'NOT_RUN', 'created_at': row.created_at.isoformat()}
 
@@ -202,6 +212,7 @@ def register_request_output_routes(
     app: FastAPI, database: Database, *,
     require_csrf: Callable[[str | None, str | None], None],
     objects: ArtifactObjectStore | None, native_objects: EvidenceObjectStore | None,
+    cursor_secret: str,
     artifact_access_for: Callable[[Session, UUID, UUID], tuple[
         ProviderProfile, FoundryAccess, Callable[[], bool]
     ]] | None = None,
@@ -247,7 +258,8 @@ def register_request_output_routes(
         if previous is not None:
             if previous.payload_digest != payload_digest:
                 raise Conflict()
-            return {'output': output_json(previous), 'replayed': True}
+            return {'output': output_json(previous, generated_file=source_binding is not None),
+                    'replayed': True}
         identity = uuid4()
         key, stored_digest, size = objects.write(actor.company_id, case_id, identity, content)
         if (stored_digest != digest or size != len(content)
@@ -274,11 +286,13 @@ def register_request_output_routes(
             # A concurrent command never overwrites existing bytes/history.
             previous = db.scalar(query)
             if previous is not None and previous.payload_digest == payload_digest:
-                return {'output': output_json(previous), 'replayed': True}
+                return {'output': output_json(previous, generated_file=source_binding is not None),
+                    'replayed': True}
             raise Conflict() from None
         # Commit outcome can be ambiguous: retain bytes rather than delete committed history.
         db.commit()
-        return {'output': output_json(row), 'replayed': False}
+        return {'output': output_json(row, generated_file=source_binding is not None),
+                    'replayed': False}
 
     @app.post('/api/cases/{case_id}/outputs')
     async def upload_output(
@@ -403,7 +417,7 @@ def register_request_output_routes(
                                           previous.content_digest, file.binding)
             if previous.payload_digest != expected_digest:
                 raise Conflict()
-            return {'output': output_json(previous), 'replayed': True}
+            return {'output': output_json(previous, generated_file=True), 'replayed': True}
         if artifact_access_for is None:
             raise ConfigurationUnavailable()
         db.expire_all()
@@ -436,28 +450,211 @@ def register_request_output_routes(
                     content, file.filename, 'NATIVE_OUTPUT', reference,
                     source_binding=file.binding, guard=current_connection)
 
-    @app.get('/api/cases/{case_id}/outputs')
-    def list_outputs(case_id: UUID, db: DB, token: CookieToken = None,
-                     before: UUID | None = None) -> dict[str, Any]:
+    @app.get("/api/cases/{case_id}/outputs")
+    def list_outputs(
+        case_id: UUID,
+        response: Response,
+        db: DB,
+        token: CookieToken = None,
+        before: UUID | None = None,
+        page: int | None = None,
+        limit: int = 10,
+        snapshot: str | None = None,
+    ) -> dict[str, Any]:
         actor = resolve_actor(db, token)
-        authorized_case_access(db, actor, case_id)
+        case_record, _ = authorized_case_access(db, actor, case_id)
+        response.headers["Cache-Control"] = "no-store"
         query = select(RequestOutputRow).where(
             RequestOutputRow.case_id == case_id, RequestOutputRow.company_id == actor.company_id
         )
-        if before is not None:
-            cursor = db.scalar(query.where(RequestOutputRow.id == before))
-            if cursor is None:
-                raise ProtectedResourceNotFound()
-            query = query.where(tuple_(RequestOutputRow.created_at, RequestOutputRow.id)
-                                < tuple_(literal(cursor.created_at), literal(cursor.id)))
-        rows = list(db.scalars(query.order_by(
-            RequestOutputRow.created_at.desc(), RequestOutputRow.id.desc()
-        ).limit(101)))
-        items = rows[:100]
-        return {'items': [output_json(row) for row in items],
-                'has_more': len(rows) > 100,
-                'next_cursor': str(items[-1].id) if len(rows) > 100 else None,
-                'maximum_bytes': MAX_ARTIFACT_BYTES}
+        metadata: dict[str, Any] = {}
+        if page is not None:
+            if before is not None or not 1 <= page <= 2**31 - 1 or limit not in {10, 25, 50, 100}:
+                raise OutputInputError()
+            if snapshot is not None and len(snapshot) > 2048:
+                raise OutputInputError()
+            binding = hashlib.sha256(
+                json.dumps(
+                    {
+                        "kind": "request-output-numbered-v1",
+                        "company": str(actor.company_id),
+                        "case": str(case_id),
+                        "limit": limit,
+                        "sort": "created_desc_id_desc",
+                    },
+                    sort_keys=True,
+                ).encode()
+            ).hexdigest()
+            cutoff, snapshot = _page_snapshot(snapshot, binding, cursor_secret)
+            query = query.where(RequestOutputRow.created_at <= cutoff)
+            total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+            pages = max(1, (total + limit - 1) // limit)
+            page = min(page, pages)
+            items = list(
+                db.scalars(
+                    query.order_by(
+                        RequestOutputRow.created_at.desc(),
+                        RequestOutputRow.id.desc(),
+                    )
+                    .offset((page - 1) * limit)
+                    .limit(limit)
+                )
+            )
+            metadata = {
+                "company_id": str(actor.company_id),
+                "case_id": str(case_id),
+                "page": page,
+                "page_size": limit,
+                "total": total,
+                "pages": pages,
+                "snapshot": snapshot,
+                "as_of": cutoff.isoformat(),
+                "consistency": "APPEND_CUTOFF",
+            }
+            has_more, next_cursor = page < pages, None
+        else:
+            if snapshot is not None:
+                raise OutputInputError()
+            if before is not None:
+                cursor = db.scalar(query.where(RequestOutputRow.id == before))
+                if cursor is None:
+                    raise ProtectedResourceNotFound()
+                query = query.where(
+                    tuple_(RequestOutputRow.created_at, RequestOutputRow.id)
+                    < tuple_(literal(cursor.created_at), literal(cursor.id))
+                )
+            rows = list(
+                db.scalars(
+                    query.order_by(
+                        RequestOutputRow.created_at.desc(),
+                        RequestOutputRow.id.desc(),
+                    ).limit(101)
+                )
+            )
+            items = rows[:100]
+            has_more = len(rows) > 100
+            next_cursor = str(items[-1].id) if has_more else None
+        # Stage is safe metadata, not raw agent/archive access. Keep ordinary
+        # authorized members' protected downloads available without admin grants.
+        stages: dict[UUID, str] = {
+            reference: task
+            for reference, task in db.execute(
+                select(
+                    NativeResponseReceiptRow.id,
+                    NativeContractBindingRow.task,
+                )
+                .join(
+                    NativeContractBindingRow,
+                    NativeContractBindingRow.operation_id == NativeResponseReceiptRow.operation_id,
+                )
+                .where(
+                    NativeResponseReceiptRow.company_id == actor.company_id,
+                    NativeResponseReceiptRow.case_id == case_id,
+                    NativeContractBindingRow.company_id == actor.company_id,
+                    NativeContractBindingRow.case_id == case_id,
+                    NativeResponseReceiptRow.id.in_(
+                        [
+                            row.native_receipt_id
+                            for row in items
+                            if row.native_receipt_id is not None
+                        ]
+                    ),
+                )
+            ).all()
+        }
+        file_bindings: dict[UUID, list[Any]] = {}
+
+        def is_generated_file(row: RequestOutputRow) -> bool:
+            if row.native_receipt_id is None or native_objects is None:
+                return False
+            if row.native_receipt_id not in file_bindings:
+                receipt = db.scalar(
+                    select(NativeResponseReceiptRow).where(
+                        NativeResponseReceiptRow.id == row.native_receipt_id,
+                        NativeResponseReceiptRow.company_id == actor.company_id,
+                        NativeResponseReceiptRow.case_id == case_id,
+                    )
+                )
+                if receipt is None:
+                    return False
+                try:
+                    raw = NativeResponseArchive(
+                        NativeResponseScope(
+                            actor.company_id,
+                            case_id,
+                            receipt.context_version,
+                            receipt.operation_id,
+                        ),
+                        native_objects,
+                        DatabaseNativeResponseIndex(database),
+                    ).read(receipt.id)
+                    file_bindings[receipt.id] = list(generated_files(raw))
+                except (ValueError, ApplicationError, NativeResponsePreservationFailed):
+                    file_bindings[receipt.id] = []
+            return any(
+                file.filename == row.filename
+                and hmac.compare_digest(
+                    row.payload_digest,
+                    save_digest(
+                        row.context_version,
+                        row.filename,
+                        row.origin,
+                        row.native_receipt_id,
+                        row.content_digest,
+                        file.binding,
+                    ),
+                )
+                for file in file_bindings[row.native_receipt_id]
+            )
+
+        projected = [
+            output_json(
+                row,
+                stages.get(row.native_receipt_id) if row.native_receipt_id is not None else None,
+                is_generated_file(row),
+            )
+            for row in items
+        ]
+        if page is not None:
+            # Availability belongs to the whole authorized context, never just a
+            # visible page. Preserve existing REPORT_DESIGN + archive binding
+            # classification; this is not a semantic or download validation gate.
+            candidates = (
+                query.join(
+                    NativeResponseReceiptRow,
+                    NativeResponseReceiptRow.id == RequestOutputRow.native_receipt_id,
+                )
+                .join(
+                    NativeContractBindingRow,
+                    NativeContractBindingRow.operation_id == NativeResponseReceiptRow.operation_id,
+                )
+                .where(
+                    RequestOutputRow.context_version == case_record.semantic_context_version,
+                    NativeResponseReceiptRow.company_id == actor.company_id,
+                    NativeResponseReceiptRow.case_id == case_id,
+                    NativeContractBindingRow.company_id == actor.company_id,
+                    NativeContractBindingRow.case_id == case_id,
+                    NativeContractBindingRow.task == "REPORT_DESIGN",
+                )
+            )
+            available = False
+            for candidate in db.scalars(candidates.execution_options(yield_per=100)):
+                if is_generated_file(candidate):
+                    available = True
+                    break
+                if len(file_bindings) > 100:
+                    file_bindings.clear()
+            metadata.update(
+                current_context_version=case_record.semantic_context_version,
+                current_report_available=available,
+            )
+        return {
+            "items": projected,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "maximum_bytes": MAX_ARTIFACT_BYTES,
+            **metadata,
+        }
 
     @app.get('/api/cases/{case_id}/outputs/{output_id}/download')
     def download_output(

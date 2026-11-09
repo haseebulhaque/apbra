@@ -1,4 +1,8 @@
 import {expect,test,type Page,type Route} from '@playwright/test';
+import {build} from 'esbuild';
+import type {CaseRecord,RequestOutputPage} from '../src/api';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 async function setAppearance(page:Page,mode:string){const button=page.getByRole('button',{name:mode==='system'?'Use system appearance':mode==='light'?'Light appearance':'Dark appearance',exact:true});if(!await button.isVisible())await page.getByRole('button',{name:/^Account menu for /}).click();await button.click();const menu=page.getByRole('menu',{name:'Account',exact:true});if(await menu.isVisible()){await page.keyboard.press('Escape');await expect(menu).toHaveCount(0)}}
 
@@ -10,11 +14,38 @@ async function signOut(page:Page){
 }
 
 async function signIn(page:Page,identity:'owner'|'member'|'uninvited'|'foreign'|'creator'){
-  await page.goto('/');
-  await page.getByText('Local development identities').click();
-  await page.getByRole('link',{name:identity,exact:true}).click();
+  await page.goto('/api/auth/login?'+new URLSearchParams({identity,return_to:'/'}));
   const navigation=page.getByRole('button',{name:'Open workspace navigation',exact:true});
   if((page.viewportSize()?.width??1280)<=768){await expect(navigation).toBeVisible();await navigation.click();}
+}
+
+// Direction 119 (4 November): current step labels and retained history are separate from retired inline diagnostics.
+async function openAdministrationDestination(page:Page,label:string){
+ await expect(page.locator('.admin-workspace')).toBeVisible();
+ const destination=page.getByRole('navigation',{name:'Administration sections',exact:true}).getByRole('button',{name:label,exact:true});
+ if(!await destination.isVisible())await page.getByRole('button',{name:/^Administration sections/}).click();
+ await destination.click();
+}
+async function selectTenantSection(page:Page,label:string){
+ const admin=page.getByLabel('Tenant administration');await expect(admin.locator('.tenant-section-tabs')).toBeAttached();
+ const button=admin.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:label,exact:true});
+ if(await button.isVisible())await button.click();else await admin.getByRole('combobox',{name:'Settings area',exact:true}).selectOption({label});
+ if(label==='AI agent'){const details=admin.locator('.advanced-connection-settings');if(!await details.evaluate(element=>(element as HTMLDetailsElement).open))await details.locator('summary').click()}
+}
+
+async function openBusinessStep(page:Page,step:'Goal'|'Information'|'Understanding'|'Confirm'|'Build'|'Report'){
+  const label={Goal:'Goal',Information:'Supporting information',Understanding:'Understanding',Confirm:'Confirm',Build:'Generate',Report:'Download'}[step];
+  await page.getByRole('navigation',{name:'Report steps',exact:true}).getByRole('button',{name:label,exact:true}).click();
+  await expect(page.locator('.wizard-step-heading h2')).toHaveText(label);
+}
+async function expectRetainedRequestVersions(page:Page,texts:string[]){
+  const listed=await page.request.get('/api/cases');expect(listed.status()).toBe(200);
+  const record=(await listed.json()).items.find((item:{current_request:{request_text:string}})=>item.current_request.request_text===texts.at(-1));expect(record).toBeTruthy();
+  const path=`/api/cases/${record.id}/versions`,response=await page.request.get(path);expect(response.status()).toBe(200);
+  const versions=(await response.json()).items;expect(versions.map((item:{sequence:number})=>item.sequence)).toEqual(texts.map((_,index)=>index+1));expect(versions.map((item:{request_text:string})=>item.request_text)).toEqual(texts);
+  // This is retained-history/access API evidence, not a member history-browser claim.
+  const anonymous=await page.context().browser()!.newContext();try{expect((await anonymous.request.get(new URL(path,page.url()).toString())).status()).toBe(401)}finally{await anonymous.close()}
+  await expect(page.getByText(`Earlier request versions · ${texts.length}`,{exact:true})).toHaveCount(0);
 }
 
 test('ordinary invited member creates, saves, refreshes and reopens a private case',async({page})=>{
@@ -27,8 +58,8 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
 
   const request='Compare synthetic distribution performance by depot and month.';
   await page.getByLabel('Your reporting goal').fill(request);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
   await expect(page.getByRole('heading',{name:'Compare synthetic distribution performance by depot and month'})).toBeVisible();
 
   await page.reload();
@@ -37,9 +68,9 @@ test('ordinary invited member creates, saves, refreshes and reopens a private ca
   await expect(page.getByLabel('Current business request')).toHaveValue(request);
 
   await page.getByLabel('Current business request').fill(`${request} Include carrier category.`);
-  await page.getByRole('button',{name:'Save new version'}).click();
+  await page.getByRole('button',{name:'Save goal changes'}).click();
   await expect(page.getByText('Your updated request was saved.')).toBeVisible();
-  await expect(page.getByText('Earlier request versions · 2')).toBeVisible();
+  await expectRetainedRequestVersions(page,[request,`${request} Include carrier category.`]);
   await expect(page.getByRole('heading',{name:'Private report access'})).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(protectedSettingsReads).toEqual([]);
@@ -61,13 +92,13 @@ test('business workspace remains keyboard navigable and contained on a small scr
   expect(overflow.document,JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
   await expect(page.getByText('ReportDesign JSON')).toHaveCount(0);
   await page.getByLabel('Your reporting goal').fill('Compare completed synthetic orders by depot.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await openBusinessStep(page,'Information');
   const upload=page.getByRole('button',{name:'Add data sources or reference material'});
   await upload.focus();
   await expect(upload).toBeFocused();
   await expect(page.locator('label.upload-button')).toBeVisible();
-  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2Information');
+  await expect(page.getByRole('navigation',{name:'Report steps'}).locator('[aria-current=step]')).toHaveText('2Supporting information');
 });
 
 test('stale edits are rejected through the UI and reload recovers the current version',async({page,context})=>{
@@ -75,8 +106,8 @@ test('stale edits are rejected through the UI and reload recovers the current ve
   await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Assess synthetic customer retention by segment.';
   await page.getByLabel('Your reporting goal').fill(request);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
 
   const otherTab=await context.newPage();
   await otherTab.goto('/');
@@ -84,16 +115,17 @@ test('stale edits are rejected through the UI and reload recovers the current ve
   await expect(otherTab.getByLabel('Current business request')).toHaveValue(request);
 
   const saved=`${request} Include subscription tier.`;
+  await openBusinessStep(page,'Goal');
   await page.getByLabel('Current business request').fill(saved);
-  await page.getByRole('button',{name:'Save new version'}).click();
+  await page.getByRole('button',{name:'Save goal changes'}).click();
   await expect(page.getByText('Your updated request was saved.')).toBeVisible();
 
   await otherTab.getByLabel('Current business request').fill(`${request} Include support channel.`);
-  await otherTab.getByRole('button',{name:'Save new version'}).click();
+  await otherTab.getByRole('button',{name:'Save goal changes'}).click();
   await expect(otherTab.getByRole('alert')).toContainText('This report changed in another session. Reload it before saving your changes.');
   await otherTab.getByRole('button',{name:'Reload report'}).click();
   await expect(otherTab.getByLabel('Current business request')).toHaveValue(saved);
-  await expect(otherTab.getByText('Earlier request versions · 2')).toBeVisible();
+  await expectRetainedRequestVersions(otherTab,[request,saved]);
 });
 
 test('an expired application session is reported truthfully by the protected UI handler',async({page,context})=>{
@@ -104,11 +136,11 @@ test('an expired application session is reported truthfully by the protected UI 
   const sessionControl=await context.newPage();
   await sessionControl.goto('/');
   await signOut(sessionControl);
-  await expect(sessionControl.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+  await expect(sessionControl.getByRole('heading',{name:'Sign in to APBRA'})).toBeVisible();
 
   await page.getByLabel('Your reporting goal').fill('Review synthetic marketing effectiveness by channel.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Sign in to APBRA'})).toBeVisible();
   await expect(page.getByText('Your APBRA session has expired. Sign in again to continue.')).toBeVisible();
 });
 
@@ -116,12 +148,12 @@ test('an invited identity accepts the exact single-use invitation through OIDC a
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByRole('button',{name:'User management',exact:true}).click();
-    await page.getByText('Invite user',{exact:true}).click();
-  await page.getByLabel('External subject').fill('dev-uninvited');
+    await openAdministrationDestination(page,'User management');
+    await page.getByText('Invite a user',{exact:true}).click();
+  await page.getByLabel('Provider subject').fill('dev-uninvited');
   await page.getByLabel('Application role').selectOption('EXPERT');
   await page.getByRole('button',{name:'Issue invitation'}).click();
-  const invitationLink=await page.getByLabel('One-time invitation link').inputValue();
+  const invitationLink=await page.getByLabel('Private invitation link').inputValue();
   expect(invitationLink).toMatch(/\/invite#token=/);
 
   const inviteeContext=await browser.newContext();
@@ -164,15 +196,15 @@ test('an uninvited identity creates one company with owner and approved settings
   expect(settings.body).toMatchObject({version:1,validation_status:'PASS',settings:{automatic_generation_enabled:false,provider_profile:null,generation_policy:{organisation:{name,displayName:name}}}});
   await page.reload();
   await expect(page.getByRole('heading',{name:'Your reports'})).toBeVisible();
-  await page.getByRole('button',{name:'My profile'}).click();
-  await page.locator('.profile-editor summary').click();
+  await page.getByRole('button',{name:/^Account menu for /}).click();await page.getByRole('menuitem',{name:'My profile',exact:true}).click();
+  if(!await page.locator('.profile-editor:visible').getByLabel('Display name',{exact:true}).isVisible())await page.locator('.profile-editor summary').click();
   await page.locator('.profile-editor').getByLabel('Display name').fill('Casey Creator');
   await page.getByRole('button',{name:'Save profile'}).click();
   await expect(page.getByRole('button',{name:'Account menu for Casey Creator',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Review synthetic preview activity by month.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
   const foreignContext=await browser.newContext(),foreignPage=await foreignContext.newPage();
   await signIn(foreignPage,'foreign');
   await expect(foreignPage.getByRole('button',{name:/Review synthetic preview activity by month/})).toHaveCount(0);
@@ -199,8 +231,8 @@ test('an existing company member accepts a second exact invitation and selects e
   const privateRequest='Review synthetic creator-only activity by week.';
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill(privateRequest);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
   const privateCaseId=await page.evaluate(async request=>{
     const response=await fetch('/api/cases',{credentials:'same-origin'});
     const body=await response.json() as {items:Array<{id:string;current_request:{request_text:string}}>};
@@ -218,12 +250,12 @@ test('an existing company member accepts a second exact invitation and selects e
     const targetSavedSettings=await (await inviterPage.request.get('/api/tenant-settings')).json();
     const targetSavedHistory=await (await inviterPage.request.get('/api/tenant-settings/history')).json();
     await inviterPage.getByRole('button',{name:'Administration'}).click();
-    await inviterPage.getByRole('button',{name:'User management',exact:true}).click();
-    await inviterPage.getByText('Invite user',{exact:true}).click();
-    await inviterPage.getByLabel('External subject').fill('dev-creator');
+    await openAdministrationDestination(inviterPage,'User management');
+    await inviterPage.getByText('Invite a user',{exact:true}).click();
+    await inviterPage.getByLabel('Provider subject').fill('dev-creator');
     await inviterPage.getByLabel('Application role').selectOption('MEMBER');
     await inviterPage.getByRole('button',{name:'Issue invitation'}).click();
-    const invitationLink=await inviterPage.getByLabel('One-time invitation link').inputValue();
+    const invitationLink=await inviterPage.getByLabel('Private invitation link').inputValue();
     expect(invitationLink).toMatch(/\/invite#token=/);
 
     let receivedOldBranding!:()=>void;
@@ -267,7 +299,7 @@ test('an existing company member accepts a second exact invitation and selects e
     expect(refreshed.actor.company_id).toBe(targetSession.actor.company_id);
 
     await signOut(page);
-    await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Sign in to APBRA'})).toBeVisible();
     await signIn(page,'creator');
     await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
     const fresh=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {membership_state:string;actor?:unknown;available_companies:Array<{company_id:string;membership_id:string;name:string}>});
@@ -292,7 +324,7 @@ test('an existing company member accepts a second exact invitation and selects e
     await expect(page.getByRole('button',{name:new RegExp(privateRequest)})).toBeVisible();
 
     await signOut(page);
-    await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'Sign in to APBRA'})).toBeVisible();
     await signIn(page,'creator');
     await expect(page.getByRole('heading',{name:'Choose your company'})).toBeVisible();
     await page.locator('.company-selection button').filter({hasText:target!.name}).click();
@@ -312,24 +344,24 @@ test('an existing company member accepts a second exact invitation and selects e
 test('company role controls protect the owner while allowing a bounded member-admin change',async({page,browser})=>{
   await signIn(page,'owner');
   await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByRole('button',{name:'User management',exact:true}).click();
-    await page.getByText('Invite user',{exact:true}).click();
-  const owner=page.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
-  const member=page.locator('.invitation-admin .membership-list li').filter({hasText:'Morgan Member'});
+    await openAdministrationDestination(page,'User management');
+    await page.getByText('Invite a user',{exact:true}).click();
+  const owner=page.locator('.invitation-admin .users-table tbody tr').filter({hasText:'Avery Owner'});
+  const member=page.locator('.invitation-admin .users-table tbody tr').filter({hasText:'Morgan Member'});
   await expect(owner.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
-  await member.getByText('Manage role for Morgan Member',{exact:true}).click();
+  await member.getByText('Change role for Morgan Member',{exact:true}).click();
   const role=member.getByLabel('Role for Morgan Member');
   await role.selectOption('COMPANY_ADMIN');
-  await member.getByRole('button',{name:'Save role'}).click();
-  await expect(member).toContainText('company admin');
+  await member.getByRole('button',{name:'Review role change'}).click();await page.getByRole('dialog',{name:'Change application role'}).getByRole('button',{name:'Confirm role change'}).click();
+  await expect(member).toContainText('Company admin');
   try{
     const adminContext=await browser.newContext(),adminPage=await adminContext.newPage();
     try{
       await signIn(adminPage,'member');
       await adminPage.getByRole('button',{name:'Administration'}).click();
-    await adminPage.getByRole('button',{name:'User management',exact:true}).click();
-    await adminPage.getByText('Invite user',{exact:true}).click();
-      const ownerAsAdmin=adminPage.locator('.invitation-admin .membership-list li').filter({hasText:'Avery Owner'});
+    await openAdministrationDestination(adminPage,'User management');
+    await adminPage.getByText('Invite a user',{exact:true}).click();
+      const ownerAsAdmin=adminPage.locator('.invitation-admin .users-table tbody tr').filter({hasText:'Avery Owner'});
       await expect(ownerAsAdmin.getByRole('button',{name:'Deactivate'})).toHaveCount(0);
       const ownerId=await page.evaluate(async()=>{const response=await fetch('/api/memberships',{credentials:'same-origin'}),body=await response.json() as {items:Array<{id:string;role:string}>};return body.items.find(item=>item.role==='COMPANY_OWNER')?.id});
       expect(ownerId).toBeTruthy();
@@ -337,9 +369,9 @@ test('company role controls protect the owner while allowing a bounded member-ad
       expect(denial).toBe(403);
     }finally{await adminContext.close()}
   }finally{
-    await role.selectOption('MEMBER');
-    await member.getByRole('button',{name:'Save role'}).click();
-    await expect(member).toContainText('member');
+    await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled();await member.getByText('Change role for Morgan Member',{exact:true}).click();await role.selectOption('MEMBER');
+    await member.getByRole('button',{name:'Review role change'}).click();await page.getByRole('dialog',{name:'Change application role'}).getByRole('button',{name:'Confirm role change'}).click();
+    await expect(member).toContainText('Member');
   }
 });
 
@@ -347,7 +379,8 @@ test('hosted provider metadata never exposes deterministic identity controls',as
   await page.route('**/api/auth/session',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({authenticated:false})}));
   await page.route('**/api/auth/providers',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[{profile_id:'entra-qualified',display_label:'External ID email sign-in'}],development_identities:[]})}));
   await page.goto('/');
-  await expect(page.getByRole('link',{name:/External ID email sign-in/})).toBeVisible();
+  await page.getByText('Other sign-in options',{exact:true}).click();
+  const entry=page.getByRole('link',{name:'Continue to your workspace',exact:true});await expect(entry).toBeVisible();await expect(entry).toHaveAttribute('href','/api/auth/login?profile_id=entra-qualified&return_to=%2F');
   await expect(page.getByText('Local development identities')).toHaveCount(0);
   await expect(page.getByRole('link',{name:'owner'})).toHaveCount(0);
 });
@@ -357,8 +390,8 @@ test('case owner grants and revokes named private access through the real UI',as
   await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Review synthetic clinical capacity by facility.';
   await page.getByLabel('Your reporting goal').fill(request);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
 
   await page.getByText('Manage private report access').click();
   await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
@@ -382,26 +415,27 @@ test('report step navigation preserves drafts and queued files without making AP
   await signIn(page,'member');
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity by month.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
   await page.waitForLoadState('networkidle');
   const calls:string[]=[];
   page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/api/'))calls.push(request.method()+' '+new URL(request.url()).pathname)});
   const draft='Compare synthetic workshop activity by month. Include site comparisons.';
+  await openBusinessStep(page,'Goal');
   await page.getByLabel('Current business request').fill(draft);
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await openBusinessStep(page,'Information');
   await page.getByLabel('Browse files',{exact:true}).setInputFiles({name:'synthetic-workshop.csv',mimeType:'text/csv',buffer:Buffer.from('Month,Activity\n2026-01,12\n')});
   await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
-  for(const step of ['Understanding','Confirm','Build','Report']){
-    await page.getByRole('button',{name:'Next: '+step,exact:true}).click();
-    await expect(page.locator('.wizard-step-heading h2')).toHaveText(step);
-    await expect(page.locator('.wizard-step-heading h2')).toBeFocused();
-  }
-  await expect(page.getByRole('button',{name:'Last step',exact:true})).toBeDisabled();
-  for(let step=0;step<5;step++)await page.getByRole('button',{name:'Back',exact:true}).click();
+  const steps=page.getByRole('navigation',{name:'Report steps',exact:true});
+  for(const label of ['Understanding','Confirm','Generate'])await expect(steps.getByRole('button',{name:label,exact:true})).toBeDisabled();
+  // Safe navigation remains available without submitting either draft or queued file.
+  await expect(steps.getByRole('button',{name:'Goal',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'Back',exact:true}).click();await expect(page.locator('.wizard-step-heading h2')).toBeFocused();
+  await openBusinessStep(page,'Information');await expect(page.locator('.wizard-step-heading h2')).toBeFocused();
+  await page.getByRole('button',{name:'Back',exact:true}).click();
   await expect(page.getByLabel('Current business request')).toHaveValue(draft);
-  await expect(page.getByText('Your goal has unsaved changes.',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await expect(page.getByText('Save your goal changes before AI reviews this request or you confirm it.',{exact:true})).toBeVisible();
+  await openBusinessStep(page,'Information');
   await expect(page.locator('.pending-files')).toContainText('synthetic-workshop.csv');
   await setAppearance(page,'dark');
   await expect(page.locator('.private-workspace')).toHaveAttribute('data-color-mode','dark');
@@ -443,7 +477,7 @@ test('personal appearance has readable core text, system fallback and narrow ref
 
 test('Clear Glass mobile navigation is keyboard operable, dismissible and preserves the current draft',async({page})=>{
   await page.setViewportSize({width:320,height:800});
-  await page.goto('/');await page.getByText('Local development identities').click();await page.getByRole('link',{name:'member',exact:true}).click();
+  await page.goto('/api/auth/login?'+new URLSearchParams({identity:'member',return_to:'/'}));
   const menu=page.locator('.workspace-menu-toggle');
   await expect(menu).toHaveAccessibleName('Open workspace navigation');
   await expect(page.getByRole('navigation',{name:'Workspace sections'})).toBeHidden();
@@ -470,8 +504,10 @@ test('Clear Glass has solid readable surfaces, a non-blur fallback and reduced m
   const root=page.locator('.private-workspace');await expect(root).toHaveAttribute('data-theme','clear-glass');
   for(const mode of ['light','dark'] as const){
     await setAppearance(page,mode);
-    await expect(page.locator('.tenant-admin-surface>.panel')).toHaveCSS('background-color',mode==='dark'?'rgb(23, 35, 56)':'rgb(255, 255, 255)');
-    await expect(page.locator('.tenant-settings-grid fieldset:visible').first()).toHaveCSS('border-radius','18px');
+    // Flat administration intentionally uses the opaque workspace canvas, rather than an old nested card.
+    const material=await page.locator('.tenant-admin-surface>.panel').evaluate(element=>{const channels=(value:string)=>(value.match(/[\d.]+/g)??[]).map(Number);const ancestors:Element[]=[];for(let item:Element|null=element;item;item=item.parentElement)ancestors.unshift(item);const painted=ancestors.reduce((back,item)=>{const front=channels(getComputedStyle(item).backgroundColor),alpha=front[3]??1;return front.slice(0,3).map((value,index)=>value*alpha+back[index]*(1-alpha))},[255,255,255]);const workspace=element.closest('.private-workspace')!;const canvas=channels(getComputedStyle(workspace).backgroundColor);return {painted,canvas,opaque:(canvas[3]??1)===1}});
+    expect(material.opaque,JSON.stringify({mode,material})).toBe(true);expect(material.painted).toEqual(material.canvas.slice(0,3));
+    expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
     for(const width of [1280,768,640,320]){
       await page.setViewportSize({width,height:900});
       const clipped=await page.locator('.tenant-section-tabs').evaluate(nav=>{const errors:string[]=[];for(const button of nav.querySelectorAll('button')){const bounds=button.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(button);for(const text of range.getClientRects())if(text.width&&(text.left<bounds.left-1||text.right>bounds.right+1||text.top<bounds.top-1||text.bottom>bounds.bottom+1))errors.push(button.textContent??'section');}return errors});
@@ -499,16 +535,21 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
   await signIn(page,'member');
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Compare synthetic workshop activity across locations.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
+  await openBusinessStep(page,'Information');
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.keyboard.press('Tab');await page.getByLabel('Add more requirements').focus();await expect(page.getByLabel('Add more requirements')).toHaveCSS('outline-style','solid');
+  const expectedLabels=['Goal','Supporting information','Understanding','Confirm','Generate','Download'];
+  let expectedComposer=(await page.locator('.message-composer .composer-footer button').textContent())!.replace(/\s+/g,' ').trim();
   const assertLabelsFit=async()=>{
+    await expect(page.getByRole('navigation',{name:'Report steps',exact:true}).locator('button strong')).toHaveText(expectedLabels);
+    expect((await page.locator('.message-composer .composer-footer button').textContent())!.replace(/\s+/g,' ').trim()).toBe(expectedComposer);
     const violations=await page.locator('.report-wizard').evaluate(wizard=>{
       const errors:string[]=[];
       const check=(element:Element,container:Element,label:string)=>{
         const bounds=container.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
+        if(!Array.from(range.getClientRects()).some(rect=>rect.width>0&&rect.height>0))errors.push('Unpainted '+label);
         for(const rect of Array.from(range.getClientRects()))if(rect.width>0&&(rect.left<bounds.left-1||rect.right>bounds.right+1||rect.top<bounds.top-1||rect.bottom>bounds.bottom+1))errors.push(label);
       };
       wizard.querySelectorAll('.journey-steps button').forEach(button=>{
@@ -517,21 +558,31 @@ test('wizard and composer labels fit their controls at narrow widths and with lo
       });
       const button=wizard.querySelector('.message-composer .composer-footer button')!;
       check(button,button,'Composer button text');check(button,button.closest('.message-composer')!,'Composer boundary');
+      // Wrapping is supported; every painted line must stay distinct and inside its control.
+      const lines:Array<{owner:Element;rect:DOMRect}>=[];
+      const overlaps=(a:DOMRect,b:DOMRect)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1;
+      for(const control of wizard.querySelectorAll('.journey-steps button')){
+        const label=control.querySelector('strong')!,range=document.createRange();range.selectNodeContents(label);
+        const number=control.querySelector('.step-number')?.getBoundingClientRect();
+        for(const rect of range.getClientRects())if(rect.width>0){if(number&&overlaps(rect,number))errors.push('Step label overlaps its number');lines.push({owner:control,rect})}
+        if((control as HTMLButtonElement).tabIndex<0&&!control.matches(':disabled'))errors.push('Enabled step is not keyboard focusable');
+      }
+      for(let i=0;i<lines.length;i++)for(let j=i+1;j<lines.length;j++)if(lines[i].owner!==lines[j].owner&&overlaps(lines[i].rect,lines[j].rect))errors.push('Distinct step labels overlap');
       return [...new Set(errors)];
     });
     expect(violations).toEqual([]);
+    const controls=page.getByRole('navigation',{name:'Report steps',exact:true}).getByRole('button');await expect(controls).toHaveCount(expectedLabels.length);
+    for(const control of await controls.all())if(await control.isEnabled()){await control.focus();await expect(control).toBeFocused()}
     expect(await renderedTextContrast(page)).toEqual([]);
   };
   for(const mode of ['light','dark']){
     await setAppearance(page,mode);
     for(const width of [1920,1601,1600,1440,1280,1024,768,701,700,600,550,320]){
       await page.setViewportSize({width,height:900});await assertLabelsFit();
-      const wrapped=await page.locator('.journey-steps strong').evaluateAll(labels=>labels.filter(label=>{const range=document.createRange();range.selectNodeContents(label);return range.getClientRects().length>1}).map(label=>label.textContent));
-      expect(wrapped).toEqual([]);
     }
   }
-  await page.locator('.journey-steps strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});
-  await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});
+  await page.getByRole('navigation',{name:'Report steps',exact:true}).locator('button strong').nth(2).evaluate(element=>{element.textContent='Review the detailed report understanding and assumptions'});expectedLabels[2]='Review the detailed report understanding and assumptions';
+  await page.locator('.message-composer .composer-footer button').evaluate(element=>{element.firstChild!.textContent='Add these detailed business requirements to this report '});expectedComposer=(await page.locator('.message-composer .composer-footer button').textContent())!.replace(/\s+/g,' ').trim();
   for(const mode of ['light','dark']){
     await setAppearance(page,mode);
     for(const width of [1440,1280,320]){await page.setViewportSize({width,height:900});await assertLabelsFit();}
@@ -569,13 +620,13 @@ test('rendered Clear Glass text stays readable across screens, themes, hover and
       for(const width of [1280,768,320]){
         await page.setViewportSize({width,height:900});
         const navigate=async(name:string)=>{const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();await page.getByRole('navigation',{name:'Workspace sections'}).getByRole('button',{name,exact:true}).click()};
-        await navigate('Home');await check();for(const row of await page.locator('.case-row-copy small').all()){const marker=row.locator('span');await expect(marker).toHaveCSS('display','inline')}if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`home-${scheme}-${width}.png`),fullPage:true});
+        await navigate('Home');await check();for(const row of await page.locator('.case-row-copy small').all()){const marker=row.locator('time');await expect(marker).toHaveCSS('display','inline')}if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`home-${scheme}-${width}.png`),fullPage:true});
         await navigate('Create report');await check();if(appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`create-${scheme}-${width}.png`),fullPage:true});
         await page.getByRole('button',{name:/^Account menu for /}).click();const logout=page.getByRole('menuitem',{name:'Sign out',exact:true});await logout.hover();await check();await page.keyboard.press('ArrowUp');await expect(logout).toBeFocused();await expect(logout).toHaveCSS('outline-style','solid');await check();await page.keyboard.press('Escape');
         await page.mouse.move(0,0);
         const menu=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await menu.isVisible())await menu.click();
         await page.getByRole('button',{name:'Administration',exact:true}).click();
-        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();await check();if(section==='AI & models'&&appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`settings-${scheme}-${width}.png`),fullPage:true})}
+        for(const section of ['AI agent','Responses & report standards','Budget & limits','Branding & organisation']){await selectTenantSection(page,section);await check();if(section==='AI agent'&&appearance===scheme&&width!==768)await page.screenshot({path:testInfo.outputPath(`settings-${scheme}-${width}.png`),fullPage:true})}
       }
     }
   }
@@ -593,10 +644,18 @@ async function renderedControlAudit(page:Page){
     for(const element of root.querySelectorAll('input:not([type="checkbox"]):not([type="file"]),textarea,select,button.subtle:not(:disabled),.new-report-card button:not(:disabled)')){
       if(!visible(element)||element.matches(':disabled'))continue;
       const style=getComputedStyle(element),outside=background(element.parentElement),fill=background(element);
-      // Icon and menu actions are identified by their painted glyph/text, not an enclosing box.
-      if(element.matches('.icon-button,[role="menuitem"]')){if(contrast(over(rgba(style.color),fill),fill)<(element.matches('.icon-button')?3:4.5))errors.push('Icon/menu action contrast');continue;}
+      // Icon, menu and administration navigation actions are identified by their painted glyph/text, not a form-field box.
+      if(element.matches('.icon-button,[role="menuitem"],.admin-destinations button')){
+        if(contrast(over(rgba(style.color),fill),fill)<(element.matches('.icon-button')?3:4.5))errors.push('Icon/menu/navigation action contrast');
+        if(element.matches('.admin-destinations button[aria-current="page"]')){
+          const indicators=[['borderBottomWidth','borderBottomColor'],['borderLeftWidth','borderLeftColor']] as const;
+          const qualified=indicators.some(([width,colour])=>parseFloat(style[width])>0&&(rgba(style[colour])[3]??1)>0&&Math.min(contrast(over(rgba(style[colour]),outside),outside),contrast(over(rgba(style[colour]),fill),fill))>=3);
+          if(!qualified)errors.push('Selected administration navigation indicator contrast');
+        }
+        continue;
+      }
       const boundary=parseFloat(style.borderTopWidth)>0?contrast(over(rgba(style.borderTopColor),outside),outside):0;
-      if(Math.max(boundary,contrast(fill,outside))<3)errors.push(`Control boundary ${element.tagName}.${element.className}`);
+      if(Math.max(boundary,contrast(fill,outside))<3)errors.push(`Control boundary ${element.tagName}.${element.className}: ${element.textContent?.trim().slice(0,80)}; border=${boundary}; fill=${contrast(fill,outside)}`);
       if(element.matches('input[placeholder],textarea[placeholder]')){const placeholder=getComputedStyle(element,'::placeholder');if(contrast(over(rgba(placeholder.color),fill),fill)<4.5)errors.push('Placeholder contrast');}
     }
     const focused=document.activeElement;if(focused&&root.contains(focused)){const style=getComputedStyle(focused);if(style.outlineStyle==='solid'&&contrast(over(rgba(style.outlineColor),background(focused.parentElement)),background(focused.parentElement))<3)errors.push('Focus contrast');}
@@ -635,13 +694,13 @@ test('tenant presentation variants preserve readable controls, borders and non-o
       expect(logoContrast).toBeGreaterThanOrEqual(4.5);
       for(const width of [1280,768,320]){
         await page.setViewportSize({width,height:900});await navigate('Create report');await page.getByLabel('Your reporting goal').fill('Synthetic presentation audit only');
-        const create=page.locator('.new-report-card').getByRole('button',{name:/Create report/});await create.hover();await page.keyboard.press('Tab');await create.focus();
+        const create=page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true});await create.hover();await page.keyboard.press('Tab');await create.focus();
         expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
         expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         if(index===0||index===3)await page.screenshot({path:testInfo.outputPath(`tenant-${index}-${mode}-${width}.png`),fullPage:true});
         await page.mouse.move(0,0);await navigate('Administration');
-        for(const section of ['AI & models','Responses & report standards','Budget & limits','Branding & organisation']){
-          await page.getByRole('navigation',{name:'Tenant Settings sections'}).getByRole('button',{name:section,exact:true}).click();
+        for(const section of ['AI agent','Responses & report standards','Budget & limits','Branding & organisation']){
+          await selectTenantSection(page,section);
           expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
           expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         }
@@ -651,7 +710,12 @@ test('tenant presentation variants preserve readable controls, borders and non-o
   const after=(await (await page.request.get('/api/tenant-settings')).json());expect(after.version).toBe(before.version);expect(after.settings.generation_policy.branding).toEqual(before.settings.generation_policy.branding);
 });
 
-async function syntheticWorkspace(page:Page,role='COMPANY_OWNER',users:'loaded'|'empty'|'error'='loaded'){
+// A declared synthetic empty page, bound to its exact case and context; it grants no native success.
+function syntheticEmptyOutputPage(record:Pick<CaseRecord,'id'|'company_id'|'semantic_context_version'>,asOf:string):RequestOutputPage{
+ return{company_id:record.company_id,case_id:record.id,items:[],page:1,page_size:10,total:0,pages:1,snapshot:'synthetic-zero-'+record.id,as_of:asOf,current_context_version:record.semantic_context_version,current_report_available:false,maximum_bytes:25_000_000};
+}
+
+async function syntheticWorkspace(page:Page,role='COMPANY_OWNER',users:'loaded'|'empty'|'error'='loaded',dateState:'ready'|'failed'='ready'){
   const name='Alexandra Morgan with a long display name',membership='synthetic-'+role;
   const session={authenticated:true,identity:{id:'synthetic-identity',display_name:name},actor:{identity_id:'synthetic-identity',membership_id:membership,company_id:'synthetic-company',display_name:name,role},csrf_token:'synthetic-only',membership_state:'ACTIVE'};
   const record={id:'synthetic-report',company_id:'synthetic-company',creator_membership_id:membership,current_request_version_id:'synthetic-request',version:1,semantic_context_version:1,report_title:'Synthetic sales report',created_at:'2026-10-09T00:00:00Z',updated_at:'2026-10-09T00:00:00Z',current_request:{id:'synthetic-request',sequence:1,request_text:'Compare synthetic sales by month.',created_at:'2026-10-09T00:00:00Z'}};
@@ -660,12 +724,28 @@ async function syntheticWorkspace(page:Page,role='COMPANY_OWNER',users:'loaded'|
   await page.route('**/api/**',async route=>{
     const request=route.request(),path=new URL(request.url()).pathname;calls.push(request.method()+' '+path);
     if(request.method()!=='GET'){await route.abort();return}
-    const body:Record<string,unknown>={'/api/auth/session':session,'/api/auth/providers':{items:[],development_identities:[]},'/api/cases':{items:[record]},'/api/workspace/branding':{version:1,primary:'#17635E',accent:'#2D7D9A'},'/api/memberships':{items:users==='empty'?[]:members},'/api/cases/synthetic-report':{case:record},'/api/cases/synthetic-report/versions':{items:[record.current_request]},'/api/cases/synthetic-report/conversation':{items:[]},'/api/cases/synthetic-report/evidence':{items:[]},'/api/cases/synthetic-report/reference-material':{items:[]},'/api/cases/synthetic-report/acceptance':{interpretation:null,confirmed_contract:null}};
+    const body:Record<string,unknown>={'/api/auth/session':session,'/api/auth/providers':{items:[],development_identities:[]},'/api/cases':{items:[record]},'/api/workspace/branding':{version:1,primary:'#17635E',accent:'#2D7D9A'},...(dateState==='ready'?{'/api/workspace/date-display':{company_id:'synthetic-company',version:0,time_zone:null}}:{}),'/api/memberships':{items:users==='empty'?[]:members},'/api/cases/synthetic-report':{case:record},'/api/cases/synthetic-report/versions':{items:[record.current_request]},'/api/cases/synthetic-report/conversation':{items:[]},'/api/cases/synthetic-report/evidence':{items:[]},'/api/cases/synthetic-report/reference-material':{items:[]},'/api/cases/synthetic-report/acceptance':{interpretation:null,confirmed_contract:null},'/api/cases/synthetic-report/outputs':syntheticEmptyOutputPage(record,record.created_at),'/api/cases/synthetic-report/native-response-receipts':{items:[]}};
     const failure=path==='/api/memberships'&&users==='error';
     await route.fulfill({status:!failure&&path in body?200:503,contentType:'application/json',body:JSON.stringify(!failure&&path in body?body[path]:{error:{code:'UNAVAILABLE',message:'Synthetic unavailable state'}})});
   });
   await page.goto('/');await expect(page.getByRole('heading',{name:'Your reports',exact:true})).toBeVisible();
   return calls;
+}
+
+// Explicit retained reference-transport component coverage, not a normal business image uploader.
+const retainedReferencePath='/__apbra_test_retained_reference__';
+let retainedReferenceBundle:Promise<string>|undefined;
+async function mountRetainedReference(page:Page){
+ if(!retainedReferenceBundle)retainedReferenceBundle=build({stdin:{resolveDir:dirname(fileURLToPath(import.meta.url)),sourcefile:'retained-reference-fixture.tsx',loader:'tsx',contents:`
+import React,{useEffect,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {DurableConversation} from '../src/durableConversation';
+import {authApi,casesApi} from '../src/api';
+import {protectedErrorMessage} from '../src/privateCases';
+function ReferenceFixture(){const [session,setSession]=useState(null),[records,setRecords]=useState([]),[active,setActive]=useState(null),[visible,setVisible]=useState(true),[error,setError]=useState('');async function select(id){try{setActive(await casesApi.get(id));setVisible(true)}catch(value){setError(protectedErrorMessage(value))}}useEffect(()=>{let live=true;Promise.all([authApi.session(),casesApi.list()]).then(([value,cases])=>{if(!live)return;setSession(value);setRecords(cases.items);void select('recovery-a')}).catch(value=>setError(protectedErrorMessage(value)));return()=>{live=false}},[]);return <main data-testid="retained-reference-fixture"><p>Synthetic retained reference-transport component; normal business input remains CSV/XLSX only.</p><button onClick={()=>setVisible(false)}>Home</button><button onClick={()=>setVisible(false)}>My reports</button><button onClick={()=>setVisible(true)}>Current report</button><nav aria-label="Retained fixture report selection">{records.map(record=><button key={record.id} onClick={()=>void select(record.id)}>{record.report_title}</button>)}</nav>{error&&<p role="alert">{error}</p>}{active&&session?.actor&&<section hidden={!visible}><h1>{active.report_title}</h1><DurableConversation key={session.actor.membership_id+':'+active.id} record={active} csrfToken={session.csrf_token} actorRole={session.actor.role} visibleStep="information" onContextChanged={version=>setActive(current=>current&&({...current,semantic_context_version:version}))} onError={value=>setError(protectedErrorMessage(value))}/></section>}</main>}
+createRoot(document.getElementById('retained-reference')!).render(<ReferenceFixture/>);
+`},bundle:true,write:false,loader:{'.md':'text'},format:'iife',platform:'browser',target:'es2022',define:{'process.env.NODE_ENV':'"test"'}}).then(result=>result.outputFiles[0].text);
+ const code=await retainedReferenceBundle;await page.route('**'+retainedReferencePath,route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/src/style.css"></head><body><div id="retained-reference"></div><script>'+code.replaceAll('</script','<\\/script')+'</script></body></html>'}));await page.goto(retainedReferencePath);await expect(page.getByTestId('retained-reference-fixture')).toBeVisible();await expect(page.getByLabel('Browse files',{exact:true})).toBeEnabled();
 }
 
 async function syntheticRecoveryWorkspace(page:Page){
@@ -695,7 +775,10 @@ async function syntheticRecoveryWorkspace(page:Page){
         if(failed){status=503;body={error:{code:'UPLOAD_UNAVAILABLE',message:'Synthetic upload temporarily unavailable'}}}
         else{record.semantic_context_version+=1;const item={id:'evidence-'+evidence.length,filename:new URL(request.url()).searchParams.get('filename'),format:'CSV',semantic_context_version:record.semantic_context_version,observed_schema:{tables:[{name:'Observations',rowCount:1,columns:[{name:'Value',type:'number'}]}]}};evidence.push(item);body={evidence:item}}
       }else body={items:record.id==='recovery-a'?evidence:[]};
-    }else if(record&&path.endsWith('/reference-material'))body={items:[]};
+    }else if(path==='/api/workspace/date-display')body={company_id:'recovery-company',version:1,time_zone:'UTC'};
+    else if(record&&path==='/api/cases/'+record.id+'/outputs')body=syntheticEmptyOutputPage(record,created);
+    else if(record&&path==='/api/cases/'+record.id+'/native-response-receipts')body={items:[]};
+    else if(record&&path.endsWith('/reference-material'))body={items:[]};
     else if(record&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
     else if(record&&path.endsWith('/generation'))body={items:[]};
     else if(record&&path.endsWith('/access'))body={items:[]};
@@ -703,9 +786,9 @@ async function syntheticRecoveryWorkspace(page:Page){
     else{status=503;body={error:{code:'UNAVAILABLE',message:'Synthetic endpoint not available'}}}
     await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
   });
-  await page.goto('/');await page.getByRole('button',{name:'Recovery report a'}).click();await page.getByRole('button',{name:'Next: Information',exact:true}).click();
-  await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible();
-  return{calls,allowUploads:()=>{failUpload=false}};
+  await page.goto('/');await page.getByRole('button',{name:'Recovery report a'}).click();await openBusinessStep(page,'Information');
+  await expect(page.getByText('CSV, XLSX files · up to 8 at once')).toBeVisible();
+  return{calls,allowUploads:()=>{failUpload=false},setContextVersion:(version:number)=>{reports[0].semantic_context_version=version}};
 }
 
 test('same-report workspace navigation preserves the stage, draft and queued file without saving',async({page})=>{
@@ -714,20 +797,20 @@ test('same-report workspace navigation preserves the stage, draft and queued fil
   await page.getByLabel('Browse files',{exact:true}).setInputFiles({name:'queued.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n12\n')});
   await page.waitForLoadState('networkidle');calls.length=0;
   for(const destination of ['Home','My reports','My profile','Administration']){
-    const navigation=destination==='My profile'||destination==='Administration'?'Account sections':'Workspace sections';
-    await page.getByRole('navigation',{name:navigation}).getByRole('button',{name:destination==='My reports'?/^My reports/:destination,exact:destination!=='My reports'}).click();
+    if(destination==='My profile'){await page.getByRole('button',{name:'Account menu for Recovery Owner'}).click();await page.getByRole('menuitem',{name:'My profile',exact:true}).click()}
+    else{const navigation=destination==='Administration'?'Account sections':'Workspace sections';await page.getByRole('navigation',{name:navigation}).getByRole('button',{name:destination==='My reports'?/^My reports/:destination,exact:destination!=='My reports'}).click()}
     await expect(page.getByLabel('Add more requirements')).toBeHidden();
     await page.getByRole('button',{name:'Current report',exact:true}).click();
-    await expect(page.locator('.wizard-step-heading h2')).toHaveText('Information');
+    await expect(page.locator('.wizard-step-heading h2')).toHaveText('Supporting information');
     await expect(page.getByLabel('Add more requirements')).toHaveValue('Unsaved synthetic priority.');
     await expect(page.locator('.pending-files')).toContainText('queued.csv');
   }
   expect(calls).toEqual([]);
   await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
+  await openBusinessStep(page,'Information');await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
   await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report a'}).click();
-  await page.getByRole('button',{name:'Next: Information',exact:true}).click();await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
-  await page.getByRole('button',{name:'Account menu for Recovery Owner'}).click();await page.getByRole('menuitem',{name:'Sign out'}).click();await expect(page.getByRole('heading',{name:'Sign in to continue'})).toBeVisible();await expect(page.getByLabel('Add more requirements')).toHaveCount(0);
+  await openBusinessStep(page,'Information');await expect(page.getByLabel('Add more requirements')).toBeEmpty();await expect(page.locator('.pending-files')).toHaveCount(0);
+  await page.getByRole('button',{name:'Account menu for Recovery Owner'}).click();await page.getByRole('menuitem',{name:'Sign out'}).click();await expect(page.getByRole('heading',{name:'Sign in to APBRA'})).toBeVisible();await expect(page.getByLabel('Add more requirements')).toHaveCount(0);
 });
 
 test('failed uploads remain retryable after a successful file changes the saved context',async({page})=>{
@@ -752,7 +835,8 @@ test('mobile account appearance controls are reachable by keyboard without leavi
 });
 
 test('workspace chrome has named appearance icons, bounded geometry and a keyboard account menu',async({page},testInfo)=>{
-  test.setTimeout(120_000);const calls=await syntheticWorkspace(page);
+  test.setTimeout(120_000);for(const dateState of ['ready','failed'] as const){const calls=await syntheticWorkspace(page,'COMPANY_OWNER','loaded',dateState);
+  if(dateState==='failed')await expect(page.getByText('Tenant date settings could not be loaded. Dates show UTC; reload to retry.',{exact:true})).toBeVisible();
   const account=page.getByRole('button',{name:/^Account menu for /});
   for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
     await page.setViewportSize({width,height:900});await setAppearance(page,mode);
@@ -764,9 +848,9 @@ test('workspace chrome has named appearance icons, bounded geometry and a keyboa
       await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve())));
     }
     expect(navigationFrameFailures).toEqual([]);
-    const geometry=await page.evaluate(()=>{const header=document.querySelector('.workspace-topbar')!,rail=document.querySelector('.workspace-rail')!,avatar=document.querySelector('.account-trigger')!;const h=header.getBoundingClientRect(),r=rail.getBoundingClientRect(),a=avatar.getBoundingClientRect();return {headerRadius:parseFloat(getComputedStyle(header).borderRadius),railRadius:parseFloat(getComputedStyle(rail).borderRadius),gap:h.left-r.right,avatarWithinRail:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,overflow:document.documentElement.scrollWidth>innerWidth}});
+    const geometry=await page.evaluate(()=>{const header=document.querySelector('.workspace-topbar')!,rail=document.querySelector('.workspace-rail')!,avatar=document.querySelector('.account-trigger')!;const h=header.getBoundingClientRect(),r=rail.getBoundingClientRect(),a=avatar.getBoundingClientRect();return {headerRect:{x:h.x,y:h.y,width:h.width,height:h.height},railRect:{x:r.x,y:r.y,width:r.width,height:r.height},avatarRect:{x:a.x,y:a.y,width:a.width,height:a.height},dateWarning:document.body.textContent?.includes('Tenant date settings could not be loaded'),headerRadius:parseFloat(getComputedStyle(header).borderRadius),railRadius:parseFloat(getComputedStyle(rail).borderRadius),gap:h.left-r.right,avatarWithinRail:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,overflow:document.documentElement.scrollWidth>innerWidth}});
     expect(geometry.overflow).toBe(false);expect(geometry.railRadius).toBeGreaterThan(0);
-    if(width>768){expect(geometry.headerRadius).toBeGreaterThan(0);expect(geometry.gap).toBeGreaterThan(0)}else expect(geometry.avatarWithinRail).toBe(true);
+    if(width>768){expect(geometry.headerRadius).toBeGreaterThan(0);expect(geometry.gap).toBeGreaterThan(0)}else expect(geometry.avatarWithinRail,JSON.stringify({mode,width,...geometry})).toBe(true);
     await account.focus();await page.keyboard.press('ArrowDown');const menu=page.getByRole('menu',{name:'Account',exact:true});const profile=menu.getByRole('menuitem',{name:'My profile',exact:true}),logout=menu.getByRole('menuitem',{name:'Sign out',exact:true});
     await expect(profile,JSON.stringify({mode,width,focus:await page.evaluate(()=>({tag:document.activeElement?.tagName,text:document.activeElement?.textContent,html:document.activeElement?.outerHTML.slice(0,300)}))})).toBeFocused();await page.keyboard.press('ArrowDown');await expect(logout).toBeFocused();await page.keyboard.press('ArrowUp');await expect(profile).toBeFocused();await page.keyboard.press('End');await expect(logout).toBeFocused();await page.keyboard.press('Home');await expect(profile).toBeFocused();
     await expect(page.locator('.account-identity')).toContainText('company owner');
@@ -774,12 +858,13 @@ test('workspace chrome has named appearance icons, bounded geometry and a keyboa
     expect(icons.filter(icon=>icon.selected==='true')).toHaveLength(1);for(const icon of icons){expect(icon.tooltip).toBe(icon.label);expect(icon.contrast).toBeGreaterThanOrEqual(3);expect(icon.width).toBeGreaterThanOrEqual(40);expect(icon.height).toBeGreaterThanOrEqual(40)}
     const popup=await page.locator('.account-popover').boundingBox();expect(popup!.x).toBeGreaterThanOrEqual(0);expect(popup!.x+popup!.width).toBeLessThanOrEqual(width);
     await page.keyboard.press('Escape');await expect(menu).toHaveCount(0);await expect(account).toBeFocused();
-    await account.click();await page.locator('.workspace-hero h2').click();await expect(menu).toHaveCount(0);
+    await account.click();const popupBounds=await page.locator('.account-popover').boundingBox();expect(popupBounds!.y).toBeGreaterThan(1);await page.mouse.click(1,1);await expect(menu).toHaveCount(0);
     await account.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Tab');await expect(menu).toHaveCount(0);
     if(width===1440||width===320)await page.screenshot({path:testInfo.outputPath(`chrome-${mode}-${width}.png`),fullPage:true});
   }
   await page.setViewportSize({width:320,height:900});await account.click();await page.getByRole('button',{name:'Light appearance',exact:true}).focus();await page.keyboard.press('Escape');await expect(account).toBeFocused();
   expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
+  }
 });
 
 test('user management remains tenant-scoped, truthful in empty/error states and hidden from business roles',async({page},testInfo)=>{
@@ -792,16 +877,17 @@ test('user management remains tenant-scoped, truthful in empty/error states and 
     }
     for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
       await page.setViewportSize({width,height:900});await setAppearance(page,mode);const open=page.getByRole('button',{name:'Open workspace navigation',exact:true});if(await open.isVisible())await open.click();
-      await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();
-      await expect(page.getByRole('heading',{name:'User management',exact:true})).toBeVisible();await expect(page.getByText('3 users',{exact:true})).toBeVisible();
-      const list=page.locator('.membership-list');await expect(list.getByText('Taylor Chen',{exact:true})).toBeVisible();await expect(list.getByText('Deactivated',{exact:true})).toBeVisible();await expect(list.getByText('Provider subject: synthetic-member-subject',{exact:true})).toBeHidden();
+      await page.getByRole('button',{name:'Administration',exact:true}).click();await openAdministrationDestination(page,'User management');
+      await expect(page.getByRole('heading',{name:'User management',exact:true})).toBeVisible();await expect(page.getByText('3 users returned',{exact:true})).toBeVisible();
+      const administrationMenu=page.getByRole('button',{name:/^Administration sections/});if(await administrationMenu.isVisible()&&await administrationMenu.getAttribute('aria-expanded')==='false')await administrationMenu.click();
+      const list=page.locator('.users-table');await expect(list.getByText('Taylor Chen',{exact:true})).toBeVisible();await expect(list.getByText('Deactivated',{exact:true})).toBeVisible();await expect(list.getByText('Provider subject: synthetic-member-subject',{exact:true})).toBeHidden();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);expect(await renderedTextContrast(page)).toEqual([]);expect(await renderedControlAudit(page)).toEqual([]);
       if(width===320)await page.screenshot({path:testInfo.outputPath(`users-${role}-${mode}.png`),fullPage:true});
     }
     await page.locator('html').evaluate(element=>(element as HTMLElement).style.fontSize='200%');expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeVisible();await page.locator('html').evaluate(element=>(element as HTMLElement).style.fontSize='');
     expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
   }
-  for(const state of ['empty','error'] as const){await syntheticWorkspace(page,'COMPANY_OWNER',state);await page.setViewportSize({width:1440,height:900});await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();await expect(page.getByText(state==='empty'?'No company users were returned. Refresh to check again.':'Users could not be loaded.',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled()}
+  for(const state of ['empty','error'] as const){await syntheticWorkspace(page,'COMPANY_OWNER',state);await page.setViewportSize({width:1440,height:900});await page.getByRole('button',{name:'Administration',exact:true}).click();await openAdministrationDestination(page,'User management');await expect(page.getByText(state==='empty'?'No company users returned':'Users could not be loaded',{exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled()}
 });
 
 test('report wizard keeps meaningful step names and recoverable goal text without redundant action labels',async({page},testInfo)=>{
@@ -810,10 +896,11 @@ test('report wizard keeps meaningful step names and recoverable goal text withou
   for(const mode of ['light','dark'])for(const width of [1440,1024,768,375,320]){
     await page.setViewportSize({width,height:900});await setAppearance(page,mode);const steps=page.getByRole('navigation',{name:'Report steps',exact:true});
     await expect(steps.getByText('Open step',{exact:true})).toHaveCount(0);await expect(steps.getByText('Viewing',{exact:true})).toHaveCount(0);
-    for(const label of ['Information','Understanding','Confirm','Build','Report','Goal']){
+    for(const label of ['Supporting information','Understanding','Download','Goal']){
       const button=steps.getByRole('button',{name:label,exact:true});await button.focus();await page.keyboard.press('Enter');await expect(button).toHaveAttribute('aria-current','step');await expect(steps.locator('[aria-current="step"]')).toHaveCount(1);
       const heading=page.locator('.wizard-step-heading h2');await expect(heading).toBeFocused();await expect(heading).toHaveText(label);
     }
+    for(const label of ['Confirm','Generate'])await expect(steps.getByRole('button',{name:label,exact:true})).toBeDisabled();
     await expect(goal).toHaveValue('Synthetic unsaved goal that must survive UI navigation.');
     const clipped=await steps.evaluate(nav=>[...nav.querySelectorAll('button')].filter(button=>{const bounds=button.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(button.querySelector('strong')!);return [...range.getClientRects()].some(rect=>rect.width&&(rect.left<bounds.left-1||rect.right>bounds.right+1||rect.top<bounds.top-1||rect.bottom>bounds.bottom+1))}).map(button=>button.textContent));
     expect(clipped).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -827,27 +914,29 @@ test('report wizard keeps meaningful step names and recoverable goal text withou
 test('account menu keyboard actions use existing profile and CSRF sign-out transport',async({page})=>{
  const calls=await syntheticWorkspace(page);const account=page.getByRole('button',{name:/^Account menu for /});await account.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'My profile',exact:true})).toBeVisible();await expect(page.getByLabel('Display name',{exact:true})).toHaveValue('Alexandra Morgan with a long display name');
  let signedOut=false;await page.route('**/api/auth/logout',async route=>{expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('synthetic-only');signedOut=true;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({logged_out:true})})});
- await account.focus();await page.keyboard.press('ArrowUp');await expect(page.getByRole('menuitem',{name:'Sign out',exact:true})).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();expect(signedOut).toBe(true);expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
+ await account.focus();await page.keyboard.press('ArrowUp');await expect(page.getByRole('menuitem',{name:'Sign out',exact:true})).toBeFocused();await page.keyboard.press('Enter');await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();expect(signedOut).toBe(true);expect(calls.every(call=>call.startsWith('GET '))).toBe(true);
 });
 
 
-test('an older user refresh cannot overwrite a completed explicit role change',async({page})=>{
-  await syntheticWorkspace(page);await page.getByRole('button',{name:'Administration',exact:true}).click();await page.getByRole('button',{name:'User management',exact:true}).click();
-  const member=page.locator('.membership-list li').filter({hasText:'Taylor Chen'});await expect(member.locator('.member-role')).toHaveText('member');
-  let held:Route|undefined,role='MEMBER',gets=0;const items=()=>[{id:'synthetic-member',display_name:'Taylor Chen',subject:'synthetic-member-subject',role,active:true}];
-  await page.route('**/api/memberships**',async route=>{if(route.request().method()==='GET'){if(++gets===1){held=route;return}await route.fulfill({json:{items:items()}})}else{expect(route.request().postDataJSON()).toEqual({role:'COMPANY_ADMIN'});role='COMPANY_ADMIN';await route.fulfill({json:{membership:items()[0]}})}});
-  await page.getByRole('button',{name:'Refresh users',exact:true}).click();await expect.poll(()=>Boolean(held)).toBe(true);
-  await member.getByText('Manage role for Taylor Chen',{exact:true}).click();await member.getByLabel('Role for Taylor Chen').selectOption('COMPANY_ADMIN');await member.getByRole('button',{name:'Save role',exact:true}).click();
-  await expect(member.locator('.member-role')).toHaveText('company admin');await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled();
-  await held!.fulfill({json:{items:[{...items()[0],role:'MEMBER'}]}});await page.waitForLoadState('networkidle');await expect(member.locator('.member-role')).toHaveText('company admin');await expect(member.getByRole('button',{name:'Save role',exact:true})).toBeDisabled();
+test('user refresh prevents competing role writes and the reviewed change stays authoritative',async({page})=>{
+  await syntheticWorkspace(page);await page.getByRole('button',{name:'Administration',exact:true}).click();await openAdministrationDestination(page,'User management');
+  const member=page.locator('.users-table tbody tr').filter({hasText:'Taylor Chen'}),roleControl=member.getByLabel('Role for Taylor Chen'),review=member.getByRole('button',{name:'Review role change',exact:true});
+  await expect(member.locator('.member-status')).toContainText('Member');await member.getByText('Change role for Taylor Chen',{exact:true}).click();
+  let held:Route|undefined,role='MEMBER',gets=0,writes=0;const items=()=>[{id:'synthetic-member',display_name:'Taylor Chen',subject:'synthetic-member-subject',role,active:true}];
+  await page.route('**/api/memberships**',async route=>{if(route.request().method()==='GET'){if(++gets===1){held=route;return}await route.fulfill({json:{items:items()}})}else{writes++;expect(route.request().postDataJSON()).toEqual({role:'COMPANY_ADMIN'});role='COMPANY_ADMIN';await route.fulfill({json:{membership:items()[0]}})}});
+  await page.getByRole('button',{name:'Refresh users',exact:true}).click();await expect.poll(()=>Boolean(held)).toBe(true);await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeDisabled();await expect(member).toHaveCount(0);expect(writes).toBe(0);
+  await held!.fulfill({json:{items:[{...items()[0],role:'MEMBER'}]}});await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled();
+  await member.getByText('Change role for Taylor Chen',{exact:true}).click();await roleControl.selectOption('COMPANY_ADMIN');await review.click();await page.getByRole('dialog',{name:'Change application role'}).getByRole('button',{name:'Confirm role change'}).click();
+  await expect(member.locator('.member-status')).toContainText('Company admin');await expect(page.getByRole('button',{name:'Refresh users',exact:true})).toBeEnabled();await page.waitForLoadState('networkidle');await expect(member.locator('.member-status')).toContainText('Company admin');expect(writes).toBe(1);
+  await member.getByText('Change role for Taylor Chen',{exact:true}).click();await expect(review).toBeDisabled();
 });
 
 test('pending profile save protects its submitted draft and a late refresh cannot restore a signed-out session',async({page})=>{
-  await syntheticWorkspace(page);await page.getByRole('button',{name:'My profile',exact:true}).click();await page.locator('.profile-editor summary').click();let save:Route|undefined,refresh:Route|undefined;
+  await syntheticWorkspace(page);await page.getByRole('button',{name:/^Account menu for /}).click();await page.getByRole('menuitem',{name:'My profile',exact:true}).click();if(!await page.locator('.profile-editor:visible').getByLabel('Display name',{exact:true}).isVisible())await page.locator('.profile-editor summary').click();let save:Route|undefined,refresh:Route|undefined;
   await page.route('**/api/profile',route=>{save=route});await page.route('**/api/auth/session',route=>{refresh=route});await page.route('**/api/auth/logout',route=>route.fulfill({json:{}}));
   const input=page.getByLabel('Display name',{exact:true});await input.fill('Saved synthetic name');await page.getByRole('button',{name:'Save profile',exact:true}).click();await expect.poll(()=>Boolean(save)).toBe(true);await expect(input).toBeDisabled();
-  await save!.fulfill({json:{profile:{identity_id:'synthetic-identity',display_name:'Saved synthetic name'}}});await expect.poll(()=>Boolean(refresh)).toBe(true);await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
-  await refresh!.fulfill({json:{authenticated:true,identity:{id:'synthetic-identity',display_name:'Saved synthetic name'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-COMPANY_OWNER',company_id:'synthetic-company',display_name:'Saved synthetic name',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'}});await page.waitForLoadState('networkidle');await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();await expect(page.locator('.private-workspace')).toHaveCount(0);
+  await save!.fulfill({json:{profile:{identity_id:'synthetic-identity',display_name:'Saved synthetic name'}}});await expect.poll(()=>Boolean(refresh)).toBe(true);await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();
+  await refresh!.fulfill({json:{authenticated:true,identity:{id:'synthetic-identity',display_name:'Saved synthetic name'},actor:{identity_id:'synthetic-identity',membership_id:'synthetic-COMPANY_OWNER',company_id:'synthetic-company',display_name:'Saved synthetic name',role:'COMPANY_OWNER'},csrf_token:'synthetic-only',membership_state:'ACTIVE'}});await page.waitForLoadState('networkidle');await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();await expect(page.locator('.private-workspace')).toHaveCount(0);
 });
 
 
@@ -866,16 +955,22 @@ test('late report access reads cannot replace the current report recipients',asy
   else if(rec&&path==='/api/cases/'+rec.id)body={case:rec};
   else if(rec&&path.endsWith('/versions'))body={items:[rec.current_request]};
   else if(rec&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
+  else if(rec&&path==='/api/cases/'+rec.id+'/outputs')body=syntheticEmptyOutputPage(rec,ts);
+  else if(rec&&path==='/api/cases/'+rec.id+'/native-response-receipts')body={items:[]};
+  else if(path==='/api/workspace/date-display')body={company_id:'c',version:0,time_zone:null};
   else if(path==='/api/cases/a/access'){held=route;heldAReads.push(route);return}
   else if(path==='/api/cases/b/access'){heldB=route;heldBReads.push(route);return}
   else if(path.startsWith('/api/tenant-settings')){await route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic settings not loaded'}}});return}
   await route.fulfill({json:body});
  });
- await page.goto('/');await page.getByRole('button',{name:'Audit report a'}).click();await expect.poll(()=>Boolean(held)).toBe(true);
- await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await page.locator('.workspace-admin summary').click();
- await expect.poll(()=>Boolean(heldB)).toBe(true);const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');
+ // Positive control: this exact private-access row selector must exist before a later loading state clears it.
+ await page.goto('/');await page.getByRole('button',{name:'Audit report b'}).click();await page.locator('.workspace-admin summary').click();await expect.poll(()=>Boolean(heldB)).toBe(true);
+ const initialPanel=page.locator('.case-access-admin');await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(initialPanel.locator('.membership-list li')).toHaveCount(1);await expect(initialPanel.locator('.membership-list li')).toContainText('B only recipient');heldB=undefined;
+ await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report a'}).click();await expect.poll(()=>Boolean(held)).toBe(true);await expect(page.locator('.case-identity')).toContainText('Audit report a');
+ await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await expect.poll(()=>Boolean(heldB)).toBe(true);await expect(page.locator('.case-identity')).toContainText('Audit report b');if(!await page.locator('.case-access-admin').isVisible())await page.locator('.workspace-admin summary').click();
+ const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.locator('.membership-list li')).toHaveCount(1);
  await Promise.all(heldAReads.map(route=>route.fulfill({json:{items:[{membership_id:'member-a',display_name:'A only recipient',subject:'synthetic-a',access_level:'VIEWER',active:true}]}})));
- await expect(page.locator('.case-identity')).toContainText('Audit report b');await page.waitForLoadState('networkidle');await expect(panel).not.toContainText('A only recipient');await expect(panel).toContainText('B only recipient');
+ await expect(page.locator('.case-identity')).toContainText('Audit report b');await page.waitForLoadState('networkidle');await expect(panel).not.toContainText('A only recipient');await expect(panel).toContainText('B only recipient');await expect(panel.locator('.membership-list li')).toHaveCount(1);
  expect(calls.every(c=>c.startsWith('GET '))).toBe(true);
 });
 
@@ -894,17 +989,20 @@ test('report access composer resets on case change and failed reads require expl
   else if(rec&&path==='/api/cases/'+rec.id)body={case:rec};
   else if(rec&&path.endsWith('/versions'))body={items:[rec.current_request]};
   else if(rec&&path.endsWith('/acceptance'))body={interpretation:null,confirmed_contract:null};
+  else if(rec&&path==='/api/cases/'+rec.id+'/outputs')body=syntheticEmptyOutputPage(rec,ts);
+  else if(rec&&path==='/api/cases/'+rec.id+'/native-response-receipts')body={items:[]};
+  else if(path==='/api/workspace/date-display')body={company_id:'c',version:0,time_zone:null};
   else if(path==='/api/cases/a/access')body={items:[{membership_id:'member-a',display_name:'A only recipient',subject:'synthetic-a',access_level:'VIEWER',active:true}]};
   else if(path==='/api/memberships')body={items:[{id:'synthetic-new-recipient',display_name:'New recipient',subject:'synthetic-new',role:'MEMBER',active:true}]};
   else if(path==='/api/cases/b/access'){heldB=route;heldBReads.push(route);return}
   else if(path.startsWith('/api/tenant-settings')){await route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic settings not loaded'}}});return}
   await route.fulfill({json:body});
  });
- await page.goto('/');await page.getByRole('button',{name:'Audit report a'}).click();await page.locator('.workspace-admin summary').click();const firstPanel=page.locator('.case-access-admin');await expect(firstPanel).toContainText('A only recipient');await firstPanel.getByLabel('Company member').selectOption('synthetic-new-recipient');await firstPanel.getByLabel('Report permission').selectOption('EDITOR');await expect(firstPanel.getByRole('button',{name:'Grant report access'})).toBeEnabled();
+ await page.goto('/');await page.getByRole('button',{name:'Audit report a'}).click();await page.locator('.workspace-admin summary').click();const firstPanel=page.locator('.case-access-admin');await expect(firstPanel).toContainText('A only recipient');await expect(firstPanel.locator('.membership-list li')).toHaveCount(1);await firstPanel.getByLabel('Company member').selectOption('synthetic-new-recipient');await firstPanel.getByLabel('Report permission').selectOption('EDITOR');await expect(firstPanel.getByRole('button',{name:'Grant report access'})).toBeEnabled();
  await page.getByRole('button',{name:'All reports',exact:true}).click();await page.getByRole('button',{name:'Audit report b'}).click();await expect(page.locator('.case-identity')).toContainText('Audit report b');if(!await page.locator('.case-access-admin').isVisible())await page.locator('.workspace-admin summary').click();
  await expect.poll(()=>Boolean(heldB)).toBe(true);const panel=page.locator('.case-access-admin');await expect(panel.getByRole('status')).toHaveText('Loading private report access…');await expect(panel.getByRole('button',{name:'Grant report access'})).toBeDisabled();await expect(panel.locator('.membership-list li')).toHaveCount(0);await expect(panel.getByLabel('Company member')).toHaveValue('');await expect(panel.getByLabel('Report permission')).toHaveValue('VIEWER');await expect(panel).not.toContainText('A only recipient');
  await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({status:503,json:{error:{code:'SYNTHETIC_UNAVAILABLE',message:'Synthetic unavailable'}}})));await expect(panel.getByRole('alert')).toContainText('Private report access could not be loaded.');await expect(panel.getByLabel('Company member')).toBeDisabled();
- const previous=heldB;await panel.getByRole('button',{name:'Retry access',exact:true}).click();await expect.poll(()=>heldB!==previous).toBe(true);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.getByRole('alert')).toHaveCount(0);await expect(page.locator('.workspace-notice.error')).toHaveCount(0);await expect(page.getByText('Synthetic unavailable',{exact:true})).toHaveCount(0);await expect(panel.getByLabel('Company member')).toBeEnabled();
+ const previous=heldB;await panel.getByRole('button',{name:'Retry access',exact:true}).click();await expect.poll(()=>heldB!==previous).toBe(true);await Promise.all(heldBReads.splice(0).map(route=>route.fulfill({json:{items:[{membership_id:'member-b',display_name:'B only recipient',subject:'synthetic-b',access_level:'VIEWER',active:true}]}})));await expect(panel).toContainText('B only recipient');await expect(panel.locator('.membership-list li')).toHaveCount(1);await expect(panel.getByRole('alert')).toHaveCount(0);await expect(page.locator('.workspace-notice.error')).toHaveCount(0);await expect(page.getByText('Synthetic unavailable',{exact:true})).toHaveCount(0);await expect(panel.getByLabel('Company member')).toBeEnabled();
  expect(calls.every(c=>c.startsWith('GET '))).toBe(true);
 });
 
@@ -913,7 +1011,7 @@ test('a current private access read with an expired session still signs out',asy
   await syntheticWorkspace(page);
   await page.route('**/api/cases/synthetic-report/access',route=>route.fulfill({status:401,json:{error:{code:'AUTHENTICATION_REQUIRED',message:'Synthetic expired session'}}}));
   await page.getByRole('button',{name:'Synthetic sales report'}).click();
-  await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();
   await expect(page.locator('.private-workspace')).toHaveCount(0);
   await expect(page.getByText('Your APBRA session has expired. Sign in again to continue.',{exact:true})).toBeVisible();
 });
@@ -922,17 +1020,17 @@ for(const destination of ['other-report','sign-out'] as const)for(const outcome 
  const {calls}=await syntheticRecoveryWorkspace(page);const posts:Route[]=[];
  await page.route('**/api/cases/recovery-a/evidence**',async route=>{if(route.request().method()!=='POST'){await route.fallback();return}posts.push(route);if(posts.length>1)await route.fulfill({json:{evidence:{id:'late-evidence',filename:'second.csv',format:'CSV',semantic_context_version:3}}})});
  await page.getByLabel('Browse files',{exact:true}).setInputFiles([{name:'first.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n1\n')},{name:'second.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n2\n')}]);await page.getByRole('button',{name:'Add selected files',exact:true}).click();await expect.poll(()=>posts.length).toBe(1);
- if(destination==='other-report'){await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();await page.getByRole('button',{name:'Next: Information',exact:true}).click()}else{await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible()}
+ if(destination==='other-report'){await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();await openBusinessStep(page,'Information')}else{await signOut(page);await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible()}
  await posts[0].fulfill(outcome==='saved'?{json:{evidence:{id:'first-evidence',filename:'first.csv',format:'CSV',semantic_context_version:2}}}:{status:401,json:{error:{code:'AUTHENTICATION_REQUIRED',message:'Synthetic expired old request'}}});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));expect(posts).toHaveLength(1);expect(calls.some(call=>call.startsWith('POST')&&/acceptance|design/.test(call))).toBe(false);
- if(destination==='other-report'){await expect(page.getByRole('heading',{name:'Recovery report b',exact:true})).toBeVisible();await expect(page.locator('.pending-files')).toHaveCount(0);await expect(page.getByText('first.csv',{exact:true})).toHaveCount(0)}else await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();
+ if(destination==='other-report'){await expect(page.getByRole('heading',{name:'Recovery report b',exact:true})).toBeVisible();await expect(page.locator('.pending-files')).toHaveCount(0);await expect(page.getByText('first.csv',{exact:true})).toHaveCount(0)}else await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();
 });
 
-for(const destination of ['other-report','same-report'] as const)test(`reference upload batch respects ${destination} navigation`,async({page})=>{
- await syntheticRecoveryWorkspace(page);const posts:Route[]=[],versions:string[]=[],saved:Array<Record<string,unknown>>=[];
+for(const destination of ['other-report','same-report'] as const)test(`retained reference component + current input exclusion: batch respects ${destination} navigation`,async({page})=>{
+ await syntheticRecoveryWorkspace(page);await expect(page.getByLabel('Browse files',{exact:true})).toHaveAttribute('accept','.csv,.xlsx');await mountRetainedReference(page);const posts:Route[]=[],versions:string[]=[],saved:Array<Record<string,unknown>>=[];
  const response=(id:string,version:number)=>({reference_material:{id,filename:id+'.png',media_type:'image/png',interpretation_state:'NOT_INTERPRETED',semantic_context_version:version}});
  await page.route('**/api/cases/recovery-a/reference-material**',async route=>{if(route.request().method()!=='POST'){await route.fulfill({json:{items:saved}});return}posts.push(route);versions.push(new URL(route.request().url()).searchParams.get('expected_context_version')!);if(posts.length>1){saved.push(response('second',3).reference_material);await route.fulfill({json:response('second',3)})}});
  await page.getByLabel('Browse files',{exact:true}).setInputFiles(['first','second'].map(name=>({name:name+'.png',mimeType:'image/png',buffer:Buffer.from('Synthetic file content')})));await page.getByRole('button',{name:'Add selected files',exact:true}).click();await expect.poll(()=>posts.length).toBe(1);
- if(destination==='other-report'){await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();await page.getByRole('button',{name:'Next: Information',exact:true}).click()}else await page.getByRole('button',{name:'Home',exact:true}).click();
+ if(destination==='other-report'){await page.getByRole('button',{name:/^My reports/}).click();await page.getByRole('button',{name:'Recovery report b'}).click();await expect(page.getByRole('heading',{name:'Recovery report b',exact:true})).toBeVisible();await expect(page.locator('#case-evidence-recovery-b')).toBeAttached()}else await page.getByRole('button',{name:'Home',exact:true}).click();
  saved.push(response('first',2).reference_material);await posts[0].fulfill({json:response('first',2)});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  if(destination==='other-report'){expect(posts).toHaveLength(1);await expect(page.getByRole('heading',{name:'Recovery report b',exact:true})).toBeVisible();await expect(page.getByText('first.png',{exact:true})).toHaveCount(0)}else{await expect.poll(()=>posts.length).toBe(2);expect(versions).toEqual(['1','2']);await page.getByRole('button',{name:'Current report',exact:true}).click();await expect(page.locator('.pending-files')).toHaveCount(0);await expect(page.getByText('first.png',{exact:true})).toBeVisible();await expect(page.getByText('second.png',{exact:true})).toBeVisible();await expect(page.locator('.journey-progress')).toHaveCount(0)}
 });
@@ -940,11 +1038,11 @@ for(const destination of ['other-report','same-report'] as const)test(`reference
 for(const status of [401,403])test(`current upload access failure ${status} stops remaining dispatch`,async({page})=>{
  await syntheticRecoveryWorkspace(page);const posts:string[]=[];await page.route('**/api/cases/recovery-a/evidence**',async route=>{if(route.request().method()!=='POST'){await route.fallback();return}posts.push(route.request().url());await route.fulfill({status,json:{error:{code:status===401?'AUTHENTICATION_REQUIRED':'FORBIDDEN',message:'Synthetic current upload access failure'}}})});
  await page.getByLabel('Browse files',{exact:true}).setInputFiles(['first','second'].map(name=>({name:name+'.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n1\n')})));await page.getByRole('button',{name:'Add selected files',exact:true}).click();await page.waitForLoadState('networkidle');expect(posts).toHaveLength(1);
- if(status===401)await expect(page.getByRole('heading',{name:'Sign in to continue',exact:true})).toBeVisible();else{await expect(page.locator('.workspace-notice[role=alert]')).toContainText('Synthetic current upload access failure');await expect(page.locator('.pending-files')).toContainText('first.csv');await expect(page.locator('.pending-files')).toContainText('second.csv');await expect(page.getByRole('button',{name:'Retry failed uploads',exact:true})).toBeEnabled()}
+ if(status===401)await expect(page.getByRole('heading',{name:'Sign in to APBRA',exact:true})).toBeVisible();else{await expect(page.locator('.workspace-notice[role=alert]')).toContainText('Synthetic current upload access failure');await expect(page.locator('.pending-files')).toContainText('first.csv');await expect(page.locator('.pending-files')).toContainText('second.csv');await expect(page.getByRole('button',{name:'Retry failed uploads',exact:true})).toBeEnabled()}
 });
 
 test('a saved file before access denial refreshes context and stops the remaining batch',async({page})=>{
- const {calls}=await syntheticRecoveryWorkspace(page);let posts=0;const saved:Array<Record<string,unknown>>=[];
- await page.route('**/api/cases/recovery-a/evidence**',async route=>{if(route.request().method()!=='POST'){await route.fulfill({json:{items:saved}});return}posts++;if(posts===1){const item={id:'saved-evidence',filename:'first.csv',format:'CSV',semantic_context_version:2,observed_schema:{tables:[{name:'Observations',rowCount:1,columns:[{name:'Value',type:'number'}]}]}};saved.push(item);await route.fulfill({json:{evidence:item}})}else await route.fulfill({status:403,json:{error:{code:'FORBIDDEN',message:'Synthetic current batch access denied'}}})});
- await page.waitForLoadState('networkidle');calls.length=0;await page.getByLabel('Browse files',{exact:true}).setInputFiles(['first','second','third'].map(name=>({name:name+'.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n1\n')})));await page.getByRole('button',{name:'Add selected files',exact:true}).click();await page.waitForLoadState('networkidle');await expect.poll(()=>posts).toBe(2);await expect.poll(()=>calls.filter(call=>call==='GET /api/cases/recovery-a/acceptance').length).toBe(1);await expect(page.locator('.evidence-attached')).toContainText('first.csv');await expect(page.locator('.pending-files')).not.toContainText('first.csv');await expect(page.locator('.pending-files')).toContainText('second.csv');await expect(page.locator('.pending-files')).toContainText('third.csv');await expect(page.locator('.workspace-notice[role=alert]')).toContainText('Synthetic current batch access denied');await expect(page.getByRole('button',{name:'Retry failed uploads',exact:true})).toBeEnabled();await expect(page.locator('.journey-progress')).toHaveCount(0);
+ const {calls,setContextVersion}=await syntheticRecoveryWorkspace(page);let posts=0;const saved:Array<Record<string,unknown>>=[];
+ await page.route('**/api/cases/recovery-a/evidence**',async route=>{if(route.request().method()!=='POST'){await route.fulfill({json:{items:saved}});return}posts++;if(posts===1){setContextVersion(2);const item={id:'saved-evidence',filename:'first.csv',format:'CSV',semantic_context_version:2,observed_schema:{tables:[{name:'Observations',rowCount:1,columns:[{name:'Value',type:'number'}]}]}};saved.push(item);await route.fulfill({json:{evidence:item}})}else await route.fulfill({status:403,json:{error:{code:'FORBIDDEN',message:'Synthetic current batch access denied'}}})});
+ await page.waitForLoadState('networkidle');calls.length=0;await page.getByLabel('Browse files',{exact:true}).setInputFiles(['first','second','third'].map(name=>({name:name+'.csv',mimeType:'text/csv',buffer:Buffer.from('Value\n1\n')})));await page.getByRole('button',{name:'Add selected files',exact:true}).click();await page.waitForLoadState('networkidle');await expect.poll(()=>posts).toBe(2);/* Both mounted current-journey readers refresh after the one acknowledged context change. */await expect.poll(()=>calls.filter(call=>call==='GET /api/cases/recovery-a/acceptance').length).toBe(2);await expect(page.locator('.evidence-attached')).toContainText('first.csv');await expect(page.locator('.pending-files')).not.toContainText('first.csv');await expect(page.locator('.pending-files')).toContainText('second.csv');await expect(page.locator('.pending-files')).toContainText('third.csv');await expect(page.locator('.workspace-notice[role=alert]')).toContainText('Synthetic current batch access denied');await expect(page.getByRole('button',{name:'Retry failed uploads',exact:true})).toBeEnabled();await expect(page.locator('.journey-progress')).toHaveCount(0);
 });

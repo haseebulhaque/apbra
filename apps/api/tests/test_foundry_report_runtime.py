@@ -10,6 +10,8 @@ import secrets
 import threading
 import time
 import unittest
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -305,14 +307,14 @@ class TestReservations(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 m.ReportApproval.model_validate(data)
 
-    def test_october_grant_does_not_renew_into_november(self):
+    def test_fixed_period_grant_does_not_renew_into_december(self):
         a = approval()
         data = a.model_dump()
         data["binding"]["authorization_deadline"] = m.BUDGET_END + 1
         with self.assertRaises(ValidationError):
             m.ReportApproval.model_validate(data)
         g = self.gate(a, lambda: True)
-        with patch.object(m.time, "strftime", return_value="2026-11"):
+        with patch.object(m.time, "strftime", return_value="2026-12"):
             self.assertFalse(g.ready())
             with (
                 g.operation(a.case_id, "REPORT_DESIGN"),
@@ -815,7 +817,8 @@ def test_factory_real_api_cached_confirm_auth_and_private_case_before_dispatch(s
 
 
 def test_factory_hook_is_exactly_additive_and_metadata_cannot_use_it():
-    current = Path(receiver.__file__).read_text()
+    from test_foundry_memory_handoff import without_catalogue_receiver_changes
+    current = without_catalogue_receiver_changes(Path(receiver.__file__).read_text())
     restored = current.replace(
         "    application_factory: Callable[..., Any] | None = None,\n", "", 1
     )
@@ -1033,10 +1036,20 @@ def test_real_receiver_factory_failure_retains_exposure_and_hides_canary(
     assert "synthetic-private-failure-canary" not in output.out + output.err + str(error.value)
 
 
+@pytest.mark.parametrize("exposed,native,fault", [
+    (False, False, None), (True, False, None), (True, True, None),
+    (True, True, "issuer"), (True, True, "serve"),
+    (True, True, "account-digest"), (True, True, "token-digest"),
+])
 def test_private_bootstrap_default_reader_and_factory_on_synthetic_postgres(
-    saved, monkeypatch, capsys
+    saved, monkeypatch, capsys, exposed, native, fault
 ):
+    from test_foundry_memory_handoff import preview_exposure
+
+    from apbra_api import foundry_memory_handoff as memory
     from apbra_api import foundry_report_runtime as runtime
+
+    exposure = preview_exposure() if exposed else None
 
     s = saved
     interpretation = interpret(s)
@@ -1072,7 +1085,9 @@ def test_private_bootstrap_default_reader_and_factory_on_synthetic_postgres(
         def write(self, value):
             self.output.append(value)
             if value.startswith(b"{"):
-                nonce = json.loads(value)["nonce"]
+                challenge = json.loads(value)
+                nonce = challenge["nonce"]
+                assert challenge == memory.handoff_challenge(nonce, exposure)
                 common = dict(
                     v=1,
                     nonce=nonce,
@@ -1083,16 +1098,25 @@ def test_private_bootstrap_default_reader_and_factory_on_synthetic_postgres(
                     account="synthetic.account",
                 )
 
+                if exposure is not None:
+                    common["preview_exposure_digest"] = exposure.digest()
+                account = dict(common)
+                if fault == "account-digest":
+                    account["preview_exposure_digest"] = "0" * 64
+                token = dict(common)
+                if fault == "token-digest":
+                    token["preview_exposure_digest"] = "0" * 64
+
                 def frame(v):
                     r = json.dumps(v).encode()
                     return len(r).to_bytes(4, "big") + r
 
                 self.value = io.BytesIO(
                     runtime.approval_frame(p, a, nonce)
-                    + frame(common)
+                    + frame(account)
                     + frame(
                         {
-                            **common,
+                            **token,
                             "token": "synthetic-private-bootstrap-canary",
                             "expires": int(time.time() + 100),
                         }
@@ -1118,7 +1142,32 @@ def test_private_bootstrap_default_reader_and_factory_on_synthetic_postgres(
     settings = s.settings.model_copy(
         update={"profile": "development", "test_semantic_simulator_enabled": False}
     )
-    receipt = runtime.run_private_report_receiver(p, channel, settings=settings, serve=serve)
+    kwargs = {"serve": serve, "native_receive_only": native}
+    if exposure is not None:
+        settings = settings.model_copy(update={"api_origin": exposure.issuer_origin,
+                                               "public_origin": exposure.web_origin,
+                                               "bootstrap_enabled": False})
+        if fault == "issuer":
+            settings = settings.model_copy(update={"api_origin": "http://127.0.0.1:8002"})
+        def serve_preview(app, listener, stopped):
+            assert listener == (memory.CONTAINER_LISTEN, exposure.container_port)
+            assert settings.api_origin == exposure.issuer_origin
+            serve(app, settings, stopped)
+        monkeypatch.setattr(memory, "_serve", serve_preview)
+        kwargs.update(serve=serve if fault == "serve" else None,
+                      listener=(memory.CONTAINER_LISTEN, exposure.container_port),
+                      published_port=8012, preview_exposure=exposure)
+    if fault is not None:
+        with pytest.raises(ProviderConfigurationError, match=runtime.ERROR):
+            runtime.run_private_report_receiver(p, channel, settings=settings, **kwargs)
+        assert channel.closed and not held
+        if fault in {"issuer", "serve"}:
+            assert not channel.output  # no authority challenge before exposure preflight
+        else:
+            assert channel.output.count(b"REPORT_APPROVAL_ACCEPTED\n") == 1
+            assert b"HANDOFF_READY_INVOCATION_GATED\n" not in channel.output
+        return
+    receipt = runtime.run_private_report_receiver(p, channel, settings=settings, **kwargs)
     assert receipt["attempts_consumed"] == 1 and channel.closed
     assert not held[0].ready(p.company_id, a.binding.provider_profile)
     output = capsys.readouterr()
@@ -1678,3 +1727,50 @@ def test_saved_report_reads_do_not_require_live_foundry_capability(
             "resolve_failed": ["ready", "resolve"],
         }[capability]
 
+
+
+def test_approved_october_period_is_fixed_and_never_renews_approvals():
+    assert m.PERIOD == "2026-10"
+    assert m.BUDGET_END == datetime(2026, 11, 1, tzinfo=UTC).timestamp()
+    assert m.CAP == Decimal("10.00")
+    for period in ["2026-09", "2026-11", "2026-12"]:
+        value = approval(stages=("REQUIREMENT_ANALYSIS",)).model_dump()
+        value["ledger_period"] = period
+        with pytest.raises(ValueError, match="FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"):
+            m.ReportApproval.model_validate(value)
+
+
+def test_approved_authority_keeps_finite_cap_and_month_end_without_renewal():
+    value = approval(stages=("REQUIREMENT_ANALYSIS",)).model_dump()
+    value.update(posted_aud="0.00", unposted_exposure_aud="0.00",
+                 outstanding_reserves_aud="0.00", chain_reserve_aud="10.01")
+    with pytest.raises(ValueError, match="FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"):
+        m.ReportApproval.model_validate(value)
+    value["chain_reserve_aud"] = "1.00"
+    value["binding"]["authorization_deadline"] = m.BUDGET_END + 1
+    with pytest.raises(ValueError, match="FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"):
+        m.ReportApproval.model_validate(value)
+
+
+
+@pytest.mark.parametrize("fault", ["missing", "extra", "endpoint", "numeric-alias"])
+def test_exposed_approval_channel_rejects_different_inner_challenge(fault):
+    from test_foundry_memory_handoff import preview_exposure
+
+    from apbra_api.foundry_memory_handoff import handoff_challenge
+
+    exposure = preview_exposure()
+    channel = Pipe(b"")
+    bridge = m._ApprovalChannel(channel, NONCE, exposure)
+    challenge = handoff_challenge(NONCE, exposure)
+    if fault == "missing":
+        challenge.pop("preview_exposure")
+    elif fault == "extra":
+        challenge["preview_exposure"]["extra"] = True
+    elif fault == "endpoint":
+        challenge["preview_exposure"]["api_origin"] = "http://127.0.0.1:8013"
+    else:
+        challenge["preview_exposure"]["container_port"] = 8000.0
+    with pytest.raises(ProviderConfigurationError, match=m.ERROR):
+        bridge.write(json.dumps(challenge).encode())
+    assert bridge.challenge_pending and not channel.output

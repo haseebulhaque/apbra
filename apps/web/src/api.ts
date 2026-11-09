@@ -1,8 +1,8 @@
 import {stringifyExactNumbers} from './aiGeometry';
-export type Actor={identity_id:string;membership_id:string;company_id:string;display_name:string;role:string};
+export type Actor={identity_id:string;membership_id:string;company_id:string;company_name?:string;display_name:string;role:string};
 export type IdentityProviderOption={profile_id:string;display_label:string};
 export type IdentityProviders={items:IdentityProviderOption[];development_identities:string[]};
-export type Session={authenticated:boolean;identity?:{id:string;display_name:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'INVITATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;company_id:string;name:string}>};
+export type Session={authenticated:boolean;identity?:{id:string;display_name:string;email?:string|null;email_verified?:boolean|null;email_state?:'AVAILABLE'|'NOT_RETAINED'|'UNAVAILABLE';sign_in_label?:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'INVITATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;company_id:string;name:string}>};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
 export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;report_title?:string;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
@@ -71,9 +71,19 @@ export const capabilitiesApi={uploads:()=>request<UploadCapabilities>('/api/case
 export const workspaceBrandingApi={
   current:()=>request<WorkspaceBranding>('/api/workspace/branding',{method:'GET'}),
 };
+export type DateDisplay={company_id:string;version:number;time_zone:string|null};
+export type DateDisplayHistory={version:number;time_zone:string|null;created_at:string};
+export const dateDisplayApi={
+  current:()=>request<DateDisplay>('/api/workspace/date-display',{cache:'no-store'}),
+  admin:(membershipId:string)=>request<DateDisplay>('/api/tenant-settings/date-display',{cache:'no-store',headers:{'X-Expected-Membership-Id':membershipId}}),
+  history:(membershipId:string)=>request<{items:DateDisplayHistory[]}>('/api/tenant-settings/date-display/history',{cache:'no-store',headers:{'X-Expected-Membership-Id':membershipId}}).then(value=>value.items),
+  update:(timeZone:string|null,expectedVersion:number,membershipId:string,csrfToken:string)=>request<DateDisplay>('/api/tenant-settings/date-display',{method:'PATCH',headers:{...csrfHeaders(csrfToken),'X-Expected-Membership-Id':membershipId},body:JSON.stringify({time_zone:timeZone,expected_version:expectedVersion})}),
+};
 export const tenantSettingsApi={
   current:()=>request<TenantSettingsVersion>('/api/tenant-settings'),
   agentDetails:()=>request<AgentDetails>('/api/tenant-settings/agent-details'),
+  agents:(membershipId:string,settingsId:string,limit:number,after?:string)=>request<ProviderReadPage>('/api/tenant-settings/agents?'+new URLSearchParams({limit:String(limit),...(after?{after}:{})}),{cache:'no-store',headers:{'X-Expected-Membership-Id':membershipId,'X-Expected-Settings-Id':settingsId}}),
+  agentFiles:(membershipId:string,settingsId:string,vectorStoreId:string,limit:number,after?:string)=>request<ProviderReadPage>('/api/tenant-settings/agent-files?'+new URLSearchParams({limit:String(limit),vector_store_id:vectorStoreId,...(after?{after}:{})}),{cache:'no-store',headers:{'X-Expected-Membership-Id':membershipId,'X-Expected-Settings-Id':settingsId}}),
   qualifiedProfiles:()=>request<{items:TenantProviderProfile[]}>('/api/tenant-settings/qualified-profiles').then(value=>value.items),
   history:()=>request<{items:TenantSettingsHistory[]}>('/api/tenant-settings/history').then(value=>value.items),
   update:(settings:TenantSettingsDocument,expectedVersion:number,csrfToken:string)=>request<TenantSettingsVersion>('/api/tenant-settings',{method:'PUT',headers:csrfHeaders(csrfToken),body:JSON.stringify({settings,expected_version:expectedVersion})}),
@@ -168,15 +178,17 @@ export const generationApi={
 };
 
 export type RedactedDiagnostic={operation:string;exception_type:string;message:string;message_truncated:boolean;frames:Array<{file:string;function:string;line:number}>};
-export type AgentDetails={status:string;settings_version:number;agent:string|null;configuredVersion:string|null;observedVersion?:string|null;metadataSource?:'CONFIGURED_VERSION'|'AZURE_LATEST'|null;diagnostic?:RedactedDiagnostic;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
+export type ProviderReadPage={status:'OBSERVED'|'UNAVAILABLE'|'DENIED';reason:string|null;items:Array<{id:string;name?:string;state?:string;configured?:boolean;invocation_access?:string;vector_store_id?:string;status?:string;created_at?:number|null}>;has_more:boolean;next_cursor:string|null;settings_version:number;scope?:string;history?:string};
+export type AgentKnowledge={status:string;vector_store_ids:string[];warnings:string[];file_history?:string;other_knowledge_tools?:string};
+export type AgentDetails={knowledge?:AgentKnowledge;status:string;settings_version:number;agent:string|null;configuredVersion:string|null;observedVersion?:string|null;metadataSource?:'CONFIGURED_VERSION'|'AZURE_LATEST'|null;diagnostic?:RedactedDiagnostic;modelDeployment:string|null;storedInstructionUtf8Bytes:number|null;toolTypes:string[];warnings:string[]};
 
-export type HistoryFilters={from?:string;to?:string;module?:string;actor_id?:string;operation?:string;outcome?:string;support_reference?:string;cursor?:string};
+export type HistoryFilters={from?:string;to?:string;module?:string;actor_id?:string;operation?:string;outcome?:string;support_reference?:string;cursor?:string;page?:number;limit?:number;snapshot?:string};
 export type AuditEvent={id:string;occurred_at:string;module:string;operation:string;outcome:string;actor_id:string|null;target_type:string|null;target_id:string|null;details?:Record<string,string|number|boolean|null>;details_withheld?:boolean};
 export type ProviderFailureFacts={http_status?:number;http_reason?:string;request_id?:string;provider_code?:string;provider_type?:string;provider_message?:string;provider_message_redacted?:boolean;provider_param?:string;provider_target?:string;provider_code_redacted?:boolean;provider_type_redacted?:boolean;provider_param_redacted?:boolean;provider_target_redacted?:boolean;transport_attempted?:boolean;response_received?:boolean;exception_type?:string;cause_type?:string};
 export type DiagnosticStack={exception_type:string;frames:Array<{module:string;function:string;line:number}>};
 export type ProcessingError=AuditEvent&{support_reference:string;category:string;message:string;correlation_id:string;case_id:string|null;source_kind:string|null;source_id:string|null;technical?:{diagnostic:DiagnosticStack&{provider?:ProviderFailureFacts;causes?:DiagnosticStack[]};truncated:boolean}|null};
-export type HistoryPage<T>={company_id:string;case_id?:string;items:T[];next_cursor:string|null};
-function historyQuery(filters:HistoryFilters){const query=new URLSearchParams();for(const name of ['from','to','module','actor_id','operation','outcome','support_reference','cursor'] as const){const value=filters[name];if(value)query.set(name,value)}return query.size?`?${query}`:''}
+export type HistoryPage<T>={company_id:string;case_id?:string;items:T[];next_cursor:string|null;page?:number;page_size?:number;total?:number;pages?:number;snapshot?:string;as_of?:string};
+function historyQuery(filters:HistoryFilters){const query=new URLSearchParams();for(const name of ['from','to','module','actor_id','operation','outcome','support_reference','cursor','page','limit','snapshot'] as const){const value=filters[name];if(value!==undefined&&value!=='')query.set(name,String(value))}return query.size?`?${query}`:''}
 const historyPath='/api/tenant-settings';
 export const observabilityApi={
   audit:(membershipId:string,filters:HistoryFilters={})=>request<HistoryPage<AuditEvent>>(`${historyPath}/audit-events${historyQuery(filters)}`,{headers:knowledgeHeaders(membershipId)}),
@@ -186,24 +198,30 @@ export const observabilityApi={
   caseErrors:(caseId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`/api/cases/${encodeURIComponent(caseId)}/errors${historyQuery(filters)}`),
 };
 
-export type NativeReceipt={operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
+export type NativeReceipt={task?:NativeTask|null;operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
 export type NativeAnswer={receipt_id:string;context_version:number;texts:string[];bytes:number;sha256:string};
 export type CaseFileAvailability={receive_available?:boolean;receive_reason?:string;connection_id?:string|null;ready:boolean;reason:string|null;scope:string;request_version_id:string;context_version:number;settings_id:string;input_characters:number|null;input_limit:number|null;files:Array<{id:string;filename:string;status:string;reason:string|null;bytes?:number;transport:string;contentDigest:string;serviceFileUploaded:false;processingVerified:false}>};
 export type NativeTask='REQUIREMENT_ANALYSIS'|'REPORT_DESIGN';
 export type NativeContractDiagnostic={code:string;phase:string;findings:Array<{path:string;reason:string}>};
-export type NativeContractCheck={recognized:boolean;current:boolean;task:NativeTask|null;context_version:number;settings_id:string;reason:string|null;receipt_id:string;diagnostic?:NativeContractDiagnostic|null;warnings?:Array<{path:string;reason:string}>};
+export type NativeAnalysisPreview={receipt_id:string;context_version:number;admission:'NOT_ADMITTED';ai_state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION';confirmation_summary:NonNullable<AcceptanceState['interpretation']>['confirmation_summary'];interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[]};
+export type NativeContractCheck={analysis_preview?:NativeAnalysisPreview|null;recognized:boolean;current:boolean;task:NativeTask|null;context_version:number;settings_id:string;reason:string|null;receipt_id:string;diagnostic?:NativeContractDiagnostic|null;warnings?:Array<{path:string;reason:string}>};
 export const savedAzureApi={
  list:(caseId:string)=>request<{items:NativeReceipt[]}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts`),
  view:(caseId:string,receiptId:string)=>request<NativeAnswer>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/view`),
  input:(caseId:string,task?:NativeTask,contractId?:string)=>request<CaseFileAvailability>(`/api/cases/${encodeURIComponent(caseId)}/native-response-input${task?'?'+new URLSearchParams({task,...(contractId?{confirmed_contract_id:contractId}:{})}):''}`),
  receive:(caseId:string,contextVersion:number,settingsId:string,commandKey:string,csrfToken:string,stage?:{task:NativeTask;confirmed_contract_id?:string})=>request<{native_response:NativeReceipt}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-checks`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId,command_key:commandKey,...stage})}),
  contract:(caseId:string,receiptId:string)=>request<NativeContractCheck>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`),
- intake:(caseId:string,receiptId:string,contextVersion:number,settingsId:string,csrfToken:string)=>request<{accepted:boolean;reason?:string;task?:NativeTask;diagnostic?:NativeContractDiagnostic|null}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId})}),
+ intake:(caseId:string,receiptId:string,contextVersion:number,settingsId:string,csrfToken:string)=>request<{accepted:boolean;reason?:string;task?:NativeTask;interpretation?:DurableInterpretation;diagnostic?:NativeContractDiagnostic|null}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId})}),
  download:(caseId:string,receiptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}`,
 };
 
-export type RequestOutput={id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;content_verification:'NOT_RUN';created_at:string};
+export type RequestOutput={id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;native_task?:NativeTask|null;delivery_kind?:'GENERATED_FILE'|'RETAINED_OUTPUT';content_verification:'NOT_RUN';created_at:string};
+export type RequestOutputPage={company_id:string;case_id:string;items:RequestOutput[];page:number;page_size:number;total:number;pages:number;snapshot:string;as_of:string;current_context_version:number;current_report_available:boolean;maximum_bytes:number};
+export function validRequestOutputPage(value:RequestOutputPage,caseId:string,contextVersion:number,companyId?:string){
+ return value.case_id===caseId&&(!companyId||value.company_id===companyId)&&value.current_context_version===contextVersion&&typeof value.current_report_available==='boolean'&&Number.isSafeInteger(value.total)&&value.total>=0&&Number.isSafeInteger(value.page)&&value.page>=1&&[10,25,50,100].includes(value.page_size)&&value.pages===Math.max(1,Math.ceil(value.total/value.page_size))&&value.page<=value.pages&&typeof value.snapshot==='string'&&Array.isArray(value.items)&&value.items.length<=Math.min(value.total,value.page_size)&&value.items.every(item=>item.case_id===caseId);
+}
 export const requestOutputsApi={
+ page:(caseId:string,page=1,limit=10,snapshot?:string)=>request<RequestOutputPage>(`/api/cases/${encodeURIComponent(caseId)}/outputs?${new URLSearchParams({page:String(page),limit:String(limit),...(snapshot?{snapshot}:{})})}`),
  list:(caseId:string,before?:string)=>request<{items:RequestOutput[];has_more:boolean;next_cursor?:string|null;maximum_bytes:number}>(`/api/cases/${encodeURIComponent(caseId)}/outputs${before?'?'+new URLSearchParams({before}):''}`),
  upload:(caseId:string,file:File,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/outputs?${new URLSearchParams({filename:file.name,expected_context_version:String(context),command_key:command})}`,{method:'POST',headers:{...csrfHeaders(csrfToken),'Content-Type':'application/octet-stream'},body:file}),
  saveNative:(caseId:string,receiptId:string,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),

@@ -5,6 +5,7 @@ import binascii
 import json
 import logging
 import math
+import re
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -23,6 +24,17 @@ from .domain import ApplicationError, AuthenticationRequired, OidcClaims
 from .persistence import AuthorizationCodeRow, sha256_text
 
 logger = logging.getLogger("apbra_api.oidc")
+
+
+def optional_email_claims(claims: dict[str, Any]) -> tuple[str | None, bool | None]:
+    """Display-only contact from an already validated ID token; never identity authority."""
+    email = claims.get("email")
+    if type(email) is not str or len(email) > 320 or not re.fullmatch(
+        r"[^\s@<>\x00-\x1f\x7f]{1,64}@[^\s@<>\x00-\x1f\x7f]{1,255}", email
+    ):
+        return None, None
+    verified = claims.get("email_verified")
+    return email, verified if type(verified) is bool else None
 
 
 class OidcValidationError(AuthenticationRequired):
@@ -369,6 +381,7 @@ class OidcAdapter:
                 raise OidcValidationError()
             if not isinstance(claims["iss"], str) or claims["iss"] != issuer:
                 raise OidcValidationError()
+            email, email_verified = optional_email_claims(dict(claims))
             return OidcClaims(
                 issuer=claims["iss"],
                 subject=str(claims["sub"]),
@@ -376,6 +389,8 @@ class OidcAdapter:
                 nonce=str(claims["nonce"]),
                 expires_at=datetime.fromtimestamp(int(claims["exp"]), UTC),
                 display_name=str(claims.get("name") or claims["sub"]),
+                email=email,
+                email_verified=email_verified,
             )
         except (JoseError, KeyError, TypeError, ValueError, OverflowError) as exc:
             raise OidcValidationError() from exc

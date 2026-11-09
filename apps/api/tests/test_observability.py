@@ -808,3 +808,173 @@ def test_output_storage_audit_appears_in_protected_reports_history(client: Any) 
     assert row["details"] == {"sha256": output["sha256"], "byte_size": output["bytes"],
                               "outcome": "SUCCEEDED"}
     assert "PRIVATE-FILENAME-CANARY" not in history.text
+
+
+@pytest.mark.parametrize("size", [10, 25, 50, 100])
+def test_numbered_audit_pages_have_exact_counts_no_gaps_and_stable_append_cutoff(
+    offline_db, offline_actor, size
+):
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    for index in range(113):
+        offline_db.add(
+            AuditEventRow(
+                id=UUID(int=index + 1),
+                company_id=offline_actor.company_id,
+                actor_membership_id=offline_actor.membership_id,
+                event_type="GENERATION_STARTED",
+                resource_type="CASE",
+                resource_id=uuid4(),
+                created_at=base,
+                details_json=json.dumps({"outcome": "SUCCEEDED" if index % 3 else "FAILED"}),
+            )
+        )
+    offline_db.flush()
+    first = list_audit(
+        offline_db,
+        offline_actor,
+        HistoryFilters(page=1, limit=size),
+        cursor_secret=offline_actor.identity_id.hex,
+    )
+    assert first["total"] == 113 and len(first["items"]) == size
+    offline_db.add(
+        AuditEventRow(
+            company_id=offline_actor.company_id,
+            actor_membership_id=offline_actor.membership_id,
+            event_type="AUDIT_HISTORY_VIEWED",
+            resource_type="COMPANY",
+            resource_id=offline_actor.company_id,
+            created_at=datetime.now(UTC) + timedelta(seconds=1),
+            details_json="{}",
+        )
+    )
+    offline_db.flush()
+    seen = []
+    for page in range(1, first["pages"] + 1):
+        result = list_audit(
+            offline_db,
+            offline_actor,
+            HistoryFilters(page=page, limit=size, snapshot=first["snapshot"]),
+            cursor_secret=offline_actor.identity_id.hex,
+        )
+        assert result["total"] == 113
+        seen.extend(item["id"] for item in result["items"])
+    assert len(seen) == len(set(seen)) == 113
+    assert seen == [str(UUID(int=index)) for index in range(113, 0, -1)]
+    for filters in [
+        HistoryFilters(page=1, limit=25 if size != 25 else 10, snapshot=first["snapshot"]),
+        HistoryFilters(page=1, limit=size, module="Reports", snapshot=first["snapshot"]),
+    ]:
+        with pytest.raises(HistoryQueryInvalid):
+            list_audit(
+                offline_db, offline_actor, filters, cursor_secret=offline_actor.identity_id.hex
+            )
+
+
+def test_numbered_legacy_outcome_filters_count_before_paging_and_clamp(offline_db, offline_actor):
+    payloads = [
+        '{"outcome":"FAILED"}',
+        '{"outcome":"SUCCEEDED"}',
+        "invalid",
+        '{"outcome":"FAILED","number":NaN}',
+        '{"outcome":"FAILED","n":1e999}',
+        '{"outcome":"FAILED","padding":"' + "x" * 4100 + '"}',
+    ]
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    expected = []
+    for index in range(137):
+        raw = payloads[index % len(payloads)]
+        identifier = UUID(int=index + 1)
+        offline_db.add(
+            AuditEventRow(
+                id=identifier,
+                company_id=offline_actor.company_id,
+                actor_membership_id=offline_actor.membership_id,
+                event_type="GENERATION_STARTED",
+                resource_type="CASE",
+                resource_id=uuid4(),
+                created_at=base,
+                details_json=raw,
+            )
+        )
+        if _audit_details(raw).get("outcome") == "FAILED":
+            expected.append(str(identifier))
+    offline_db.flush()
+    first = list_audit(
+        offline_db,
+        offline_actor,
+        HistoryFilters(page=1, limit=10, outcome="FAILED"),
+        cursor_secret=offline_actor.identity_id.hex,
+    )
+    assert first["total"] == len(expected)
+    all_ids = []
+    for number in range(1, first["pages"] + 1):
+        page = list_audit(
+            offline_db,
+            offline_actor,
+            HistoryFilters(page=number, limit=10, outcome="FAILED", snapshot=first["snapshot"]),
+            cursor_secret=offline_actor.identity_id.hex,
+        )
+        all_ids.extend(row["id"] for row in page["items"])
+    assert all_ids == expected[::-1]
+    last = list_audit(
+        offline_db,
+        offline_actor,
+        HistoryFilters(page=1000, limit=10, outcome="FAILED", snapshot=first["snapshot"]),
+        cursor_secret=offline_actor.identity_id.hex,
+    )
+    assert (
+        last["page"] == first["pages"]
+        and [row["id"] for row in last["items"]] == expected[::-1][(first["pages"] - 1) * 10 :]
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"page": 0},
+        {"page": True},
+        {"page": 2**31},
+        {"page": 1, "limit": 11},
+        {"page": 1, "cursor": "x"},
+        {"snapshot": "x"},
+    ],
+)
+def test_numbered_history_rejects_invalid_paging(kwargs):
+    with pytest.raises(ValueError):
+        HistoryFilters(**kwargs)
+
+
+def test_deeply_nested_legacy_audit_json_is_unspecified_not_a_history_failure():
+    assert _audit_details("[" * 1500 + "]" * 1500) == {}
+
+
+
+
+def test_numbered_audit_module_filters_match_exact_projected_prefixes(offline_db, offline_actor):
+    for operation in [
+        "TENANT_DATE_DISPLAY_UPDATED",
+        "TENANTxDATE_DISPLAY_UPDATED",
+        "TENANT_SETTINGS_UPDATED",
+        "TENANTxSETTINGS_UPDATED",
+    ]:
+        offline_db.add(
+            AuditEventRow(
+                company_id=offline_actor.company_id,
+                actor_membership_id=offline_actor.membership_id,
+                event_type=operation,
+                resource_type="COMPANY",
+                resource_id=offline_actor.company_id,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                details_json="{}",
+            )
+        )
+    offline_db.flush()
+    for module in ["Settings", "Other"]:
+        result = list_audit(
+            offline_db,
+            offline_actor,
+            HistoryFilters(page=1, limit=10, module=module),
+            cursor_secret=offline_actor.identity_id.hex,
+        )
+        assert result["total"] == 2
+        assert all(item["module"] == module for item in result["items"])

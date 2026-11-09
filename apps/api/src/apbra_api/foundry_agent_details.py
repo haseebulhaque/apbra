@@ -145,7 +145,10 @@ def agent_details(
     transport: httpx.BaseTransport | None = None,
 ) -> dict[str, Any]:
     """Read only configured agent metadata. No retries, discovery or paid calls."""
+    from .foundry_admin_reads import knowledge_references
+
     result: dict[str, Any] = {
+        "knowledge": knowledge_references(None),
         "status": "METADATA_UNAVAILABLE", "agent": None, "configuredVersion": None,
         "observedVersion": None, "metadataSource": None,
         "modelDeployment": None, "storedInstructionUtf8Bytes": None,
@@ -275,6 +278,7 @@ def agent_details(
                 warnings.append("LATEST_METADATA_UNKNOWN")
         if version is not None:
             definition = version.get("definition")
+            result["knowledge"] = knowledge_references(definition)
             if type(definition) is dict:
                 result["modelDeployment"] = _identifier(definition.get("model"))
                 instructions = definition.get("instructions")
@@ -305,6 +309,7 @@ def agent_details(
         # Retain operation/type/redacted original message/trace, never raw responses.
         result["diagnostic"] = _redacted_error_details(
             error, operation, redactions=tuple(private_values))
+        result["knowledge"] = knowledge_references(None)
         result.update(observedVersion=None, metadataSource=None,
                       modelDeployment=None, storedInstructionUtf8Bytes=None, toolTypes=[],
                       warnings=["METADATA_READ_UNAVAILABLE"])

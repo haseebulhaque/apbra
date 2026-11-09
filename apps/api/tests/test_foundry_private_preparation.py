@@ -133,3 +133,33 @@ def test_preparation_prompt_states_saved_retry_allowance_without_changing_policy
     assert any("Saved retry allowance: 0" in message for message in messages)
     assert any("not an Azure hard cap" in message for message in messages)
     assert not any("no automatic retry" in message for message in messages)
+
+
+def test_private_prompts_disclose_validated_period_and_enforced_cap(monkeypatch):
+    from apbra_api.foundry_report_runtime import CAP, PERIOD
+
+    c = setup(monkeypatch)
+    sdk, peer, messages = Browser(), ReportPeer(), []
+    run_handoff(c.plan, peer,
+        preparation=Preparation(
+            lambda: None, lambda record, credential: prepare(grant(c), record=record)
+        ),
+        credential_factory=lambda **_: sdk, terminal_factory=terminal,
+        confirm=lambda terminal, plan, message, phrase: messages.append(message),
+        hold=lambda: None)
+    budget_messages = [message for message in messages if "enforced ceiling" in message]
+    assert len(budget_messages) == 2
+    assert all(f"Budget period {PERIOD}; A${CAP:.2f}" in m for m in budget_messages)
+    assert not any("October" in m or "unlimited" in m for m in messages)
+    assert len(peer.frames) == 3 and sdk.closed and peer.closed
+
+
+def test_budget_disclosure_revalidates_grant_and_does_not_accept_a_dict():
+    from apbra_api.foundry_browser_handoff import _report_budget_disclosure
+
+    a = grant()
+    assert a.ledger_period in _report_budget_disclosure(a)
+    with pytest.raises(ValueError):
+        _report_budget_disclosure(a.model_copy(update={"ledger_period": "2000-01"}))
+    with pytest.raises(HandoffError):
+        _report_budget_disclosure(a.model_dump(mode="json"))

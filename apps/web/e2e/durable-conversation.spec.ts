@@ -1,19 +1,89 @@
 import {expect,test,type Page} from '@playwright/test';
+import {build} from 'esbuild';
+import {dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+// Explicit retained-component qualification. This test route is never a product route.
+const retainedGenerationPath='/__apbra_test_retained_conversation__';
+let retainedGenerationBundle:Promise<string>|undefined;
+async function retainedGenerationCode(){
+ if(!retainedGenerationBundle)retainedGenerationBundle=build({stdin:{resolveDir:dirname(fileURLToPath(import.meta.url)),sourcefile:'retained-generation-fixture.tsx',loader:'tsx',contents:`
+import React,{useEffect,useRef,useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {CaseEditor,ReportCreationWizard,protectedErrorMessage} from '../src/privateCases';
+import {DurableConversation} from '../src/durableConversation';
+import {authApi,casesApi} from '../src/api';
+function RetainedFixture(){
+ const [session,setSession]=useState(null),[records,setRecords]=useState([]),[active,setActive]=useState(null),[versions,setVersions]=useState([]),[draft,setDraft]=useState(''),[visible,setVisible]=useState(true),[ready,setReady]=useState(false),[notice,setNotice]=useState('');
+ const selecting=useRef(0);
+ const fail=error=>setNotice(protectedErrorMessage(error));
+ async function select(id){const at=++selecting.current;try{const [record,history]=await Promise.all([casesApi.get(id),casesApi.versions(id)]);if(at!==selecting.current)return;setActive(record);setVersions(history.items);setDraft(record.current_request.request_text);setReady(false);setVisible(true)}catch(error){fail(error)}}
+ useEffect(()=>{let live=true;Promise.all([authApi.session(),casesApi.list()]).then(([value,cases])=>{if(!live)return;setSession(value);setRecords(cases.items);const selected=new URLSearchParams(location.search).get('case');if(selected)void select(selected)}).catch(fail);return()=>{live=false;selecting.current++}},[]);
+ async function save(){if(!active||!session?.csrf_token)return;try{const next=await casesApi.update(active.id,draft.trim(),active.version,session.csrf_token);setActive(next);setDraft(next.current_request.request_text);setVersions((await casesApi.versions(next.id)).items);setNotice('Your updated request was saved.')}catch(error){fail(error)}}
+ if(!session?.actor)return <main><h1>Retained component fixture access unavailable</h1>{notice&&<p role="alert">{notice}</p>}</main>;
+ return <main className="private-workspace" data-theme="clear-glass" data-color-mode="light" data-testid="retained-component-workspace"><section className="case-content"><p role="note">Synthetic retained component/API qualification. These controls are not the normal product journey.</p><h1>Your reports</h1><nav aria-label="Retained fixture report selection">{records.map(record=><button key={record.id} onClick={()=>void select(record.id)}>{record.report_title||record.current_request.request_text}</button>)}</nav>{notice&&<p role="alert">{notice}</p>}{active&&<><button onClick={()=>setVisible(false)}>All reports</button><button onClick={()=>setVisible(true)}>Current report</button><section hidden={!visible}><div className="case-identity"><h1>{active.report_title||active.current_request.request_text}</h1><p>{ready?'Candidate ready':'In progress'}</p></div><ReportCreationWizard key={session.actor.membership_id+':'+active.id} hasUnsavedGoal={draft!==active.current_request.request_text} goal={<CaseEditor record={active} versions={versions} requestText={draft} onRequestText={setDraft} onSave={()=>void save()} onRefresh={()=>void select(active.id)} busy={false}/>}>
+{step=><DurableConversation key={session.actor.membership_id+':'+active.id} record={active} csrfToken={session.csrf_token} actorRole={session.actor.role} visibleStep={step} onContextChanged={version=>setActive(current=>current&&({...current,semantic_context_version:version}))} onReportReady={setReady} onError={fail}/>}
+</ReportCreationWizard></section></>}</section></main>;
+}
+createRoot(document.getElementById('retained-fixture')!).render(<RetainedFixture/>);
+`},bundle:true,write:false,loader:{'.md':'text'},format:'iife',platform:'browser',target:'es2022',define:{'process.env.NODE_ENV':'"test"'}}).then(result=>result.outputFiles[0].text);
+ return retainedGenerationBundle;
+}
+const retainedInstalled=new WeakSet<Page>();
+async function mountRetainedGeneration(page:Page,caseId?:string){
+ if(!retainedInstalled.has(page)){
+  const code=await retainedGenerationCode();
+  await page.route('**'+retainedGenerationPath+'*',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/src/style.css"></head><body><div id="retained-fixture"></div><script>'+code.replaceAll('</script','<\\/script')+'</script></body></html>'}));
+  retainedInstalled.add(page);
+ }
+ await page.goto(retainedGenerationPath+(caseId?'?'+new URLSearchParams({case:caseId}):''));
+ await expect(page.getByTestId('retained-component-workspace')).toBeVisible();
+}
+async function ensureRetainedGeneration(page:Page){
+ if(await page.getByTestId('retained-component-workspace').count())return;
+ const input=page.locator('input[id^="case-evidence-"]').first();await expect(input).toBeAttached();
+ const id=(await input.getAttribute('id'))!.slice('case-evidence-'.length);
+ await mountRetainedGeneration(page,id);
+}
+
+
 
 async function signIn(page:Page){
-  await page.goto('/');
-  await page.getByText('Local development identities').click();
-  await page.getByRole('link',{name:'member',exact:true}).click();
+  await page.goto('/api/auth/login?'+new URLSearchParams({identity:'member',return_to:'/'}));
 }
 
 
 async function openStep(page:Page,step:'Goal'|'Information'|'Understanding'|'Confirm'|'Build'|'Report'){
-  await page.getByRole('navigation',{name:'Report steps'}).getByRole('button',{name:new RegExp(`\\b${step}$`)}).click();
+  if(!await page.getByTestId('retained-component-workspace').count()){
+    await expect(page.getByLabel('Browse files',{exact:true})).toHaveAttribute('accept','.csv,.xlsx');
+    expect((await (await page.request.get('/api/auth/session')).json()).actor.role).toBe('MEMBER');
+  }
+  await ensureRetainedGeneration(page);
+  await page.getByRole('navigation',{name:'Report steps'}).getByRole('button',{name:step,exact:true}).click();
   await expect(page.locator('.wizard-step-heading').getByRole('heading',{name:step,exact:true})).toBeVisible();
 }
+async function expectSyntheticUploadPolicy(page:Page){await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible()}
 
-async function expectSyntheticUploadPolicy(page:Page){
-  await expect(page.getByText('CSV, XLSX data · PNG, JPEG, JPG reference · up to 8 at once')).toBeVisible();
+// Current normal app proof remains distinct from deterministic retained component qualification.
+async function expectCurrentMemberRecovery(page:Page,options:{request:string;message?:string;files:string[];excludedFiles?:string[]}){
+ const caseId=new URL(page.url()).searchParams.get('case');expect(caseId).toBeTruthy();
+ const actual=(await (await page.request.get(`/api/cases/${caseId}`)).json()).case;const title=actual.report_title||actual.current_request.request_text;expect(actual.current_request.request_text).toBe(options.request);
+ const acceptance=(await (await page.request.get(`/api/cases/${caseId}/acceptance`)).json());
+ if(acceptance.interpretation)expect(acceptance.interpretation.simulation).toBe('LOCAL_DETERMINISTIC_NO_MODEL_CALL');
+ const calls:string[]=[];const observe=(request:import('@playwright/test').Request)=>{if(request.method()!=='GET'&&new URL(request.url()).pathname.startsWith('/api/'))calls.push(new URL(request.url()).pathname)};page.on('request',observe);
+ try{
+  await page.goto('/');await page.locator('button.case-row').filter({has:page.getByText(title,{exact:true})}).first().click();
+  const steps=page.getByRole('navigation',{name:'Report steps',exact:true});await steps.getByRole('button',{name:'Supporting information',exact:true}).click();
+  await expect(page.getByLabel('Browse files',{exact:true})).toHaveAttribute('accept','.csv,.xlsx');
+  if(options.message)await expect(page.getByText(options.message,{exact:true})).toBeVisible();
+  for(const file of options.files)await expect(page.locator('.evidence-attached')).toContainText(file);for(const file of options.excludedFiles??[])await expect(page.getByText(file,{exact:true})).toHaveCount(0);
+  await page.reload();await page.locator('button.case-row').filter({has:page.getByText(title,{exact:true})}).first().click();await steps.getByRole('button',{name:'Supporting information',exact:true}).click();
+  if(options.message)await expect(page.getByText(options.message,{exact:true})).toBeVisible();for(const file of options.files)await expect(page.locator('.evidence-attached')).toContainText(file);for(const file of options.excludedFiles??[])await expect(page.getByText(file,{exact:true})).toHaveCount(0);
+  await steps.getByRole('button',{name:'Understanding',exact:true}).click();await expect(page.getByRole('alert')).toContainText('requires an authorized company administrator');
+  // Retained deterministic confirmation cannot become qualified AI or native-generation authority.
+  await expect(page.getByRole('heading',{name:'Here’s what AI understands',exact:true})).toHaveCount(0);await expect(page.getByText('Your current requirements are confirmed.',{exact:false})).toHaveCount(0);
+  await expect(steps.getByRole('button',{name:'Confirm',exact:true})).toBeDisabled();await expect(steps.getByRole('button',{name:'Generate',exact:true})).toBeDisabled();expect(calls).toEqual([]);
+ }finally{page.off('request',observe)}
 }
 
 function crc32(data:Buffer){let value=0xffffffff;for(const byte of data){value^=byte;for(let bit=0;bit<8;bit+=1)value=(value>>>1)^((value&1)?0xedb88320:0)}return(value^0xffffffff)>>>0}
@@ -24,13 +94,13 @@ function supportedXlsx(){return storedZip([
   ['xl/worksheets/sheet1.xml','<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="inlineStr"><is><t>Clinic</t></is></c><c t="inlineStr"><is><t>WaitMinutes</t></is></c></row><row><c t="inlineStr"><is><t>East</t></is></c><c><v>14</v></c></row></sheetData></worksheet>'],
 ])}
 
-test('saved conversation, qualified CSV evidence, clarification and confirmation survive reload',async({page})=>{
+test('current member recovery + retained deterministic component/backend: CSV conversation, clarification and confirmation survive reload',async({page})=>{
   await signIn(page);
   await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Help managers understand the supplied fleet evidence.';
   await page.getByLabel('Your reporting goal').fill(request);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
-  await expect(page.getByText('Report request created and saved.')).toBeVisible();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
+  await expect(page.getByText('Your goal is saved. Add supporting information next.')).toBeVisible();
 
   await openStep(page,'Information');
   const message='Use monthly periods and keep maintenance class available for filtering.';
@@ -77,19 +147,21 @@ test('saved conversation, qualified CSV evidence, clarification and confirmation
   await expect(page.getByText('Saved, visual meaning not interpreted')).toBeVisible();
   await openStep(page,'Understanding');
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+  await expectCurrentMemberRecovery(page,{request,message,files:['fleet.csv','layout.png']});
   await openStep(page,'Goal');
   await page.getByLabel('Current business request').fill('Compare synthetic fleet availability by depot and maintenance class.');
   await page.getByRole('button',{name:'Save new version'}).click();
   await openStep(page,'Understanding');
   await expect(page.getByText(/Reconfirmation required/)).toBeVisible();
+  await expectCurrentMemberRecovery(page,{request:'Compare synthetic fleet availability by depot and maintenance class.',message,files:[],excludedFiles:['fleet.csv','layout.png']});
 });
 
-test('protected XLSX evidence follows the same deterministic confirmation path',async({page})=>{
+test('current member recovery + retained deterministic component/backend: protected XLSX confirmation',async({page})=>{
   await signIn(page);
   await page.getByRole('button',{name:'Create report'}).first().click();
   const request='Compare WaitMinutes by Clinic for appointment operations.';
   await page.getByLabel('Your reporting goal').fill(request);
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
   await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   const workbook=supportedXlsx();
@@ -112,13 +184,14 @@ test('protected XLSX evidence follows the same deterministic confirmation path',
   await expect(page.getByText(/Data source.*XLSX/)).toBeVisible();
   await openStep(page,'Understanding');
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
+  await expectCurrentMemberRecovery(page,{request,files:['appointments.xlsx']});
 });
 
-test('a late interpretation response cannot repaint a newer request as current',async({page})=>{
+test('current member AI guard + retained deterministic component/backend: late interpretation cannot repaint a newer request',async({page})=>{
   await signIn(page);
   await page.getByRole('button',{name:'Create report'}).first().click();
   await page.getByLabel('Your reporting goal').fill('Compare Availability by Depot.');
-  await page.locator('.new-report-card').getByRole('button',{name:/Create report/}).click();
+  await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
   await openStep(page,'Information');
   await expectSyntheticUploadPolicy(page);
   await page.getByLabel('Browse files',{exact:true}).setInputFiles({
@@ -127,6 +200,8 @@ test('a late interpretation response cannot repaint a newer request as current',
     buffer:Buffer.from('Depot,Availability\nNorth,0.96\n'),
   });
   await page.getByRole('button',{name:'Add selected files'}).click();
+
+  await expectCurrentMemberRecovery(page,{request:'Compare Availability by Depot.',files:['availability.csv']});
 
   let release!:()=>void,observed!:()=>void;
   const held=new Promise<void>(resolve=>{release=resolve});
@@ -149,4 +224,5 @@ test('a late interpretation response cannot repaint a newer request as current',
   await openStep(page,'Understanding');
   await expect(page.getByText('This local preview uses deterministic rules to propose an understanding; no AI model was called.')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Review my requirements'})).toBeDisabled();
+  await expectCurrentMemberRecovery(page,{request:'Compare the revised maintenance schedule by facility.',files:[],excludedFiles:['availability.csv']});
 });

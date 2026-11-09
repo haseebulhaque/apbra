@@ -1,8 +1,9 @@
+import {configuredAgentName} from './EnterpriseApp';
 import {providerAuthenticationLabel} from './EnterpriseApp';
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {ProfileEditor,validateProfileDisplayName,MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
@@ -24,16 +25,46 @@ it('binds report-ready presentation to membership, company, case and saved conte
   for(const change of [{company_id:'company-2'},{id:'case-2'},{version:3},{semantic_context_version:2}])expect(reportWorkspaceContext('member-1',{...record,...change})).not.toBe(original);
 });
 
-it('renders a truthful signed-out boundary without company or role inputs',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'entra-test',display_label:'External ID email sign-in'}],development_identities:[]}}/>);expect(html).toContain('Sign in to continue');expect(html).toContain('checks active company membership and private-case access');expect(html).toContain('External ID email sign-in');expect(html).not.toMatch(/company id|select role|Local development identities/i)});
-it('shows deterministic identity choices only when the server lists them',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'local-test',display_label:'Local development identity'}],development_identities:['owner','member']}}/>);expect(html).toContain('Local development identities');expect(html).toContain('identity=owner');expect(html).not.toContain('uninvited')});
+it('shows the first account screen with honest password readiness and preserved existing access',()=>{
+  const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'entra-test',display_label:'External ID email sign-in'}],development_identities:[]}}/>);
+  expect(html).toContain('Sign in to APBRA');expect(html).toContain('Create account');
+  expect(html).toContain('Checking account access');
+  expect(html).toContain('<fieldset disabled="">');
+  expect(html).toContain('Continue to your workspace');expect(html).toContain('profile_id=entra-test');
+  expect(html).not.toMatch(/Sign in with External ID|single sign.on|select role|Company Owner|identity=owner|Build a candidate/);
+});
+it('does not collect or submit credentials when password authentication is unavailable',()=>{
+  const html=renderToStaticMarkup(<SignedOut/>);
+  expect(html).toContain('<fieldset disabled="">');expect(html).toContain('type="email"');expect(html).toContain('type="password"');
+  expect(html).toContain('autoComplete="username"');expect(html).toContain('autoComplete="current-password"');
+  expect(html).not.toContain('minLength=');expect(html).not.toContain('action=');
+  expect(html).not.toMatch(/onpaste|oncopy|oncut|account created|check your inbox/i);
+  expect(html).toContain('Checking account access');expect(html).not.toContain('Existing preview access is currently unavailable');
+});
+it('does not expose fixed developer roles or fabricate a default sign-in provider',()=>{
+  const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'local-test',display_label:'Local development identity'}],development_identities:['owner','member','uninvited']}}/>);
+  expect(html).toContain('profile_id=local-test');expect(html).toContain('Other sign-in options');
+  expect(html).not.toMatch(/identity=|Local development identities|>owner<|>member<|uninvited/);
+  const unavailable=renderToStaticMarkup(<SignedOut providers={{items:[],development_identities:['owner']}}/>);
+  expect(unavailable).not.toContain('href=');expect(unavailable).toContain('Checking account access');expect(unavailable).not.toContain('Contact the APBRA operator');
+});
+it('provides labelled inputs, an explicit mode control, and no enabled SSO or fabricated recovery',()=>{
+  const html=renderToStaticMarkup(<SignedOut message="Your session has expired."/>);
+  expect(html).toContain('aria-label="Account access"');expect(html).toContain('aria-pressed="true"');
+  const labels=[...html.matchAll(/<label for="([^"]+)"/g)].map(item=>item[1]);expect(labels).toHaveLength(2);for(const label of labels)expect(html).toContain('id="'+label+'"');
+  expect(html).toContain('<legend class="auth-entry-sr-only">Sign in with email and password</legend>');expect(html).toContain('aria-label="Show password"');expect(html).toContain('Forgot password?');
+  expect(html).toContain('role="alert"');expect(html).toContain('Your session has expired.');
+  expect(html).not.toMatch(/Sign in with Microsoft|reset email has been sent|organisation name|company-name/);
+});
+
 it('offers bounded company creation without browser-authored authority or initial settings',()=>{const html=renderToStaticMarkup(<CompanyCreationForm name="Example Workspace" onName={()=>{}} onCreate={()=>{}} busy={false}/>);expect(html).toContain('Company or workspace name');expect(html).toContain('Create Company / Workspace');expect(html).toContain('does not verify legal or domain ownership');expect(html).not.toMatch(/name="(?:identity|issuer|subject|role|company_id|tenant_id|provider|settings|domain)"/)});
 it('distinguishes duplicate company display names by immutable company identity',()=>{const html=renderToStaticMarkup(<CompanySelection companies={[{membership_id:'member-a',company_id:'company-aaaa',name:'Example Workspace'},{membership_id:'member-b',company_id:'company-bbbb',name:'Example Workspace'}]} busy={false} onSelect={()=>{}}/>);expect(html.match(/Example Workspace/g)).toHaveLength(2);expect(html).toContain('Workspace ID: company-aaaa');expect(html).toContain('Workspace ID: company-bbbb');expect(html).not.toContain('member-a')});
 it('scrubs all report content and draft state before a company context transition',()=>{expect(clearedCompanyContext()).toEqual({active:null,versions:[],draft:'',cases:[],view:'home',caseReportReady:false,newRequest:''})});
 it('disables empty or busy company creation and exposes safe retry errors',()=>{const blank=renderToStaticMarkup(<CompanyCreationForm name="   " onName={()=>{}} onCreate={()=>{}} busy={false}/>),busy=renderToStaticMarkup(<CompanyCreationForm name="Example" onName={()=>{}} onCreate={()=>{}} busy/>);expect(blank).toMatch(/button[^>]*disabled=""/);expect(busy).toContain('Creating company…');expect(busy).toMatch(/button[^>]*disabled=""/);expect(companyCreationErrorMessage(new ApiError(422,'COMPANY_NAME_INVALID','internal'))).toContain('Enter a company name');expect(companyCreationErrorMessage(new ApiError(409,'COMPANY_CREATION_NOT_AVAILABLE','internal'))).toContain('access changed');expect(companyCreationErrorMessage(new ApiError(409,'IDEMPOTENCY_CONFLICT','internal'))).toContain('already used');expect(companyCreationErrorMessage(new ApiError(500,'INTERNAL','sensitive'))).not.toContain('sensitive')});
 it('does not echo profile validation or internal errors',()=>{expect(profileErrorMessage(new ApiError(422,'PROFILE_INVALID','internal claim'))).toContain('Enter a display name');expect(profileErrorMessage(new ApiError(500,'INTERNAL','sensitive detail'))).not.toContain('sensitive detail')});
-it('renders only supplied authorized case summaries with a clear selected state',()=>{const html=renderToStaticMarkup(<CaseList items={[record]} activeId="case-1" onOpen={()=>{}}/>);expect(html).toContain('Updated business request');expect(html).toContain('Request v2');expect(html).toContain('Reports available to your current membership.');expect(html).toContain('aria-current="page"')});
+it('renders only supplied authorized case summaries with a clear selected state',()=>{const html=renderToStaticMarkup(<CaseList items={[record]} activeId="case-1" onOpen={()=>{}}/>);expect(html).toContain('Updated business request');expect(html).not.toContain('Request v2');expect(html).toContain('Updated');expect(html).toContain('Reports available to your current membership.');expect(html).toContain('aria-current="page"')});
 it('makes an empty workspace actionable without claiming a report exists',()=>{const html=renderToStaticMarkup(<CaseList items={[]} onOpen={()=>{}}/>);expect(html).toContain('No reports in progress');expect(html).toContain('Start with a business question');expect(html).not.toContain('aria-current="page"')});
-it('renders immutable request history separately from the editable current request',()=>{const html=renderToStaticMarkup(<CaseEditor record={record} versions={[{id:'request-1',sequence:1,request_text:'Original business request',created_at:'2026-09-23T00:00:00Z'},record.current_request]} requestText={record.current_request.request_text} onRequestText={()=>{}} onSave={()=>{}} onRefresh={()=>{}} busy={false}/>);expect(html).toContain('Original business request');expect(html).toContain('Updated business request');expect(html).toContain('Earlier request versions · 2');expect(html).toContain('require a fresh confirmation');expect(html).not.toContain('expected_version')});
+it('renders immutable request history separately from the editable current request',()=>{const html=renderToStaticMarkup(<CaseEditor record={record} versions={[{id:'request-1',sequence:1,request_text:'Original business request',created_at:'2026-09-23T00:00:00Z'},record.current_request]} requestText={record.current_request.request_text} onRequestText={()=>{}} onSave={()=>{}} onRefresh={()=>{}} busy={false}/>);expect(html).toContain('Original business request');expect(html).toContain('Updated business request');expect(html).toContain('Earlier request versions · 2');expect(html).toContain('fresh AI review and confirmation');expect(html).not.toContain('expected_version')});
 it('does not disclose whether a protected foreign or private report exists',()=>{expect(protectedErrorMessage(new ApiError(404,'CASE_NOT_FOUND','hidden'))).toBe('That report is unavailable or you no longer have access.');expect(protectedErrorMessage(new ApiError(401,'AUTH_REQUIRED','expired'))).toContain('session has expired');expect(protectedErrorMessage(new ApiError(409,'STALE_VERSION','stale'))).toContain('changed in another session')});
 
 it('opens the wizard at Goal and distinguishes viewing a step from completing an action',()=>{
@@ -101,3 +132,33 @@ it('keeps the account menu closed until its named avatar button is opened',()=>{
  const html=renderToStaticMarkup(<WorkspaceAccountMenu name="Synthetic User" role="MEMBER" busy={false} onProfile={()=>{}} onSignOut={()=>{}}/>);
  expect(html).toContain('aria-label="Account menu for Synthetic User"');expect(html).toContain('aria-haspopup="menu"');expect(html).toContain('aria-expanded="false"');expect(html).not.toContain('role="menuitem"');
 });
+
+it('describes uncertain profile writes without claiming rejection or echoing private details',()=>{for(const error of [new ApiError(503,'UNAVAILABLE','sensitive detail'),new TypeError('sensitive detail')]){const text=profileErrorMessage(error);expect(text).toContain('could not be confirmed');expect(text).toContain('Reload the page');expect(text).not.toContain('could not be saved');expect(text).not.toContain('sensitive detail');}});
+it('keeps session expiry distinct from uncertain profile saves',()=>{expect(profileErrorMessage(new ApiError(401,'EXPIRED','private detail'))).toBe('Your APBRA session has expired. Sign in again to continue.');});
+
+it('identifies only the explicitly configured Foundry agent route, never a language model',()=>{
+ expect(configuredAgentName({protocol:'FOUNDRY_AGENT_RESPONSES',endpoint:'https://example.invalid/api/projects/test/agents/reporting-agent/endpoint/protocols/openai/responses'})).toBe('reporting-agent');
+ expect(configuredAgentName({protocol:'OPENAI_CHAT_COMPATIBLE',endpoint:'https://example.invalid/v1'})).toBeNull();
+ expect(configuredAgentName({protocol:'FOUNDRY_AGENT_RESPONSES',endpoint:'https://example.invalid/models/gpt-4.1'})).toBeNull();
+ expect(configuredAgentName(null)).toBeNull();
+});
+
+
+it('matches server display-name normalization without truncating Unicode names',()=>{
+  expect(validateProfileDisplayName('  Cafe\u0301  ')).toEqual({value:'Café',error:null});
+  expect(validateProfileDisplayName('\u0085\u001cAvery\u001f\u0085')).toEqual({value:'Avery',error:null});
+  expect(validateProfileDisplayName('😀'.repeat(200)).error).toBeNull();
+  expect(validateProfileDisplayName('😀'.repeat(201)).error).toBe('Use 200 characters or fewer.');
+  expect(validateProfileDisplayName('e\u0301'.repeat(200)).value).toBe('é'.repeat(200));
+});
+it('rejects empty, overlong and hidden-control names without echoing their contents',()=>{
+  for(const value of ['', ' \u0085\u001c ', 'A'.repeat(201), 'A\u0000B','A\u200dB','\ufeffAvery']){
+    const result=validateProfileDisplayName(value);expect(result.error).not.toBeNull();expect(result.error).not.toContain(value||'private-value');
+  }
+});
+it('links profile-name guidance and invalid state to the field and prevents invalid saves',()=>{
+  const html=renderToStaticMarkup(<ProfileEditor displayName={'A'.repeat(201)} csrfToken="synthetic" expanded onUpdated={async()=>{}} onError={()=>{}}/>);
+  expect(html).toContain('aria-invalid="true"');expect(html).toContain('aria-describedby=');expect(html).toContain('role="status"');expect(html).toContain('Use 200 characters or fewer.');expect(html).toContain('disabled=""');expect(html).toContain('Use up to 200 characters.');
+});
+
+it('uses customer language without preview or implementation messages on the account screen',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'local-test',display_label:'Local development identity'}],development_identities:['owner']}}/>);expect(html).toContain('Continue to your workspace');expect(html).not.toMatch(/preview|current iteration|not implemented|Local development identity|identity=owner|Company Owner/i)});

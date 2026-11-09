@@ -27,6 +27,7 @@ from .domain import (
     Conflict,
     Forbidden,
     ProtectedResourceNotFound,
+    SemanticValidationFailed,
     StaleVersion,
 )
 from .foundry_report_runtime import CURRENT, Reservations
@@ -40,6 +41,15 @@ from .model_provider import (
 )
 from .native_case_files import NativeInputsUnavailable, prepare_case_files
 from .native_contracts import SavedNativeContract, contract_failure, digest
+from .native_goal_context import (
+    analysis_display as _analysis_display,
+)
+from .native_goal_context import (
+    assistant_texts,
+    goal_analysis_request,
+    goal_only_context,
+    prior_analysis_receipts,
+)
 from .native_response_archive import NativeResponseArchive, NativeResponseScope
 from .native_response_index import (
     DatabaseNativeResponseIndex,
@@ -47,7 +57,11 @@ from .native_response_index import (
     NativeReceiveCommandRow,
     NativeResponseReceiptRow,
 )
-from .native_response_probe import native_request_content, receive_native_response
+from .native_response_probe import (
+    native_input_characters,
+    native_request_content,
+    receive_native_response,
+)
 from .persistence import Database
 from .provider_diagnostics import safe_provider_diagnostic
 from .tenant_settings import TenantSettingsSnapshot
@@ -105,7 +119,9 @@ def register_native_response_routes(
                 NativeResponseReceiptRow.case_id == command.case_id,
             )
         )
+        binding = db.get(NativeContractBindingRow, command.id)
         return {
+            "task": binding.task if binding is not None else None,
             "http_status": command.http_status,
             "provider_status": command.provider_status,
             "diagnostic": safe_provider_diagnostic(
@@ -122,7 +138,7 @@ def register_native_response_routes(
     def prepare_request(
         db: Session, actor: Actor, case: CaseRecord, snapshot: TenantSettingsSnapshot,
         task: str = "REQUIREMENT_ANALYSIS", contract_id: UUID | None = None,
-    ) -> tuple[ProviderRequest | None, dict[str, Any], list[dict[str, str]]]:
+    ) -> tuple[ProviderRequest | None, dict[str, Any], list[dict[str, str]], list[dict[str, str]]]:
         store = cast(ApplicationPersistence, db)
         service = service_for(db, snapshot, include_provider=False)
         bundle = prepare_case_files(
@@ -131,44 +147,79 @@ def register_native_response_routes(
             vision_enabled=bool(snapshot.settings.provider_profile
                                 and snapshot.settings.provider_profile.capabilities.vision),
         )
+        goal_only = not bundle.manifest
         availability = {
             "files": bundle.manifest,
-            "ready": bundle.ready,
+            "ready": bundle.ready or goal_only,
             "scope": "CURRENT_REQUEST_VERSION",
             "request_version_id": str(case.current_request_version_id),
             "context_version": case.semantic_context_version,
             "settings_id": str(snapshot.id),
-            "reason": None if bundle.ready else "COMPLETE_FILE_HANDOFF_UNAVAILABLE",
+            "reason": None if bundle.ready or goal_only else "COMPLETE_FILE_HANDOFF_UNAVAILABLE",
             "input_characters": None,
             "input_limit": (snapshot.settings.provider_profile.max_input_characters
                             if snapshot.settings.provider_profile else None),
         }
-        if not bundle.ready:
-            return None, availability, []
-        schema, context_binding, _ = service._current_context(store, case, include_history=True)
-        policy = service.clarification_policy
-        if policy is None or service.generation_policy is None:
-            raise ConfigurationUnavailable()
-        request = ProviderRequest(
-            task="REQUIREMENT_ANALYSIS", system_prompt="", output_schema={},
-            requires_vision=bool(bundle.image_parts),
-            context={
-                "materialContext": json.loads(context_binding),
-                "clarificationState": service.clarification_state(store, case.id),
-                "dataStructure": schema,
-                "caseFiles": bundle.sources,
-                "fileDelivery": {"transport": ("INLINE_SOURCE_AND_IMAGES" if bundle.image_parts
-                                               else "INLINE_UTF8_SOURCE"), "sampled": False,
-                                 "serviceFileUploaded": False, "processingVerified": False},
-                "clarificationPolicy": {
-                    "maxRounds": policy.max_rounds,
-                    "maxQuestionsPerRound": policy.max_questions_per_round,
-                    "maxAnswerCharacters": policy.max_answer_characters,
+        if not availability["ready"]:
+            return None, availability, [], []
+        if goal_only:
+            request = goal_analysis_request(db, case, objects, service)
+        else:
+            schema, context_binding, _ = service._current_context(store, case, include_history=True)
+            # Carry prior AI questions forward with the user's durable answers.
+            # Only assistant text is projected; raw provider/tool/diagnostic bodies
+            # remain private. Full context still passes the configured input bound.
+            prior_answers = []
+            if task == "REQUIREMENT_ANALYSIS":
+                prior_receipts = prior_analysis_receipts(
+                    db, actor.company_id, case.id, case.semantic_context_version,
+                )
+                for prior in prior_receipts:
+                    raw = NativeResponseArchive(NativeResponseScope(
+                        actor.company_id, case.id, prior.context_version, prior.operation_id,
+                    ), objects, index).read(prior.id)
+                    prior_answers.append({"receiptId": str(prior.id),
+                                          "contextVersion": prior.context_version,
+                                          "assistantTexts": assistant_texts(raw)})
+            policy = service.clarification_policy
+            if policy is None or service.generation_policy is None:
+                raise ConfigurationUnavailable()
+            request = ProviderRequest(
+                task="REQUIREMENT_ANALYSIS", system_prompt="", output_schema={},
+                requires_vision=bool(bundle.image_parts),
+                context={
+                    "materialContext": json.loads(context_binding),
+                    "priorAgentAnswers": prior_answers,
+                    "clarificationState": service.clarification_state(store, case.id),
+                    "dataStructure": schema,
+                    "caseFiles": bundle.sources,
+                    "fileDelivery": {"transport": ("NO_ATTACHED_FILES" if goal_only else
+                                                   "INLINE_ORIGINAL_FILES" if bundle.file_parts else
+                                                   "INLINE_SOURCE_AND_IMAGES" if bundle.image_parts
+                                                   else "INLINE_UTF8_SOURCE"), "sampled": False,
+                                     "serviceFileUploaded": False, "processingVerified": False},
+                    "clarificationPolicy": {
+                        "maxRounds": policy.max_rounds,
+                        "maxQuestionsPerRound": policy.max_questions_per_round,
+                        "maxAnswerCharacters": policy.max_answer_characters,
+                    },
+                    "generationPolicy": service.generation_policy,
                 },
-                "generationPolicy": service.generation_policy,
-            },
-        )
-        if task == "REPORT_DESIGN":
+            )
+        if task == "REPORT_DESIGN" and goal_only:
+            if contract_id is None:
+                raise Conflict()
+            _, session, confirmed = service.native_goal_confirmed(store, case, contract_id)
+            request = ProviderRequest(task="REPORT_DESIGN", system_prompt="", output_schema={},
+                requires_vision=False, context={
+                    "confirmedRequirements": confirmed,
+                    "materialContext": goal_only_context(store, case),
+                    "dataStructure": None, "caseFiles": [],
+                    "fileDelivery": {"transport": "NO_ATTACHED_FILES", "sampled": False,
+                                     "serviceFileUploaded": False, "processingVerified": False},
+                    "generationPolicy": service.generation_policy,
+                })
+        elif task == "REPORT_DESIGN":
             if contract_id is None:
                 raise Conflict()
             generation = generation_for(db, snapshot, require_bridge=True, resolve_provider=False)
@@ -198,16 +249,18 @@ def register_native_response_routes(
         profile = snapshot.settings.provider_profile
         if profile is None or profile.protocol != "FOUNDRY_AGENT_RESPONSES":
             availability.update(ready=False, reason="QUALIFIED_AGENT_ROUTE_REQUIRED")
-            return None, availability, []
+            return None, availability, [], []
         try:
-            content = native_request_content(profile, request, bundle.image_parts)
+            content = native_request_content(
+                profile, request, bundle.image_parts, bundle.file_parts,
+            )
         except ProviderCallError:
             availability.update(ready=False, reason="MODEL_INPUT_BUDGET_EXCEEDED")
-            return None, availability, []
-        availability["input_characters"] = len(content) + sum(
-            len(json.dumps(part, separators=(",", ":"))) for part in bundle.image_parts
+            return None, availability, [], []
+        availability["input_characters"] = native_input_characters(
+            content, bundle.image_parts, bundle.file_parts,
         )
-        return request, availability, bundle.image_parts
+        return request, availability, bundle.image_parts, bundle.file_parts
 
     @app.get("/api/cases/{case_id}/native-response-input")
     def inspect_input(
@@ -224,7 +277,9 @@ def register_native_response_routes(
             raise ProtectedResourceNotFound()
         response.headers["Cache-Control"] = "no-store"
         snapshot = snapshot_for(db, actor)
-        _, availability, _ = prepare_request(db, actor, case, snapshot, task, confirmed_contract_id)
+        _, availability, _, _ = prepare_request(
+            db, actor, case, snapshot, task, confirmed_contract_id,
+        )
         can_receive = False
         if receive_enabled and reservations is not None:
             approval = reservations.approval
@@ -326,7 +381,7 @@ def register_native_response_routes(
             or snapshot.id != payload.expected_settings_id
         ):
             raise StaleVersion()
-        native_request, availability, image_parts = prepare_request(
+        native_request, availability, image_parts, file_parts = prepare_request(
             db, actor, case, snapshot, payload.task, payload.confirmed_contract_id
         )
         if native_request is None or not availability["ready"]:
@@ -352,7 +407,8 @@ def register_native_response_routes(
             context_version=case.semantic_context_version, task=payload.task,
             contract_id=payload.confirmed_contract_id,
             input_digest=digest({"task": native_request.task, "context": native_request.context,
-                                 "images": image_parts}),
+                                 "images": image_parts,
+                                 **({"files": file_parts} if file_parts else {})}),
             profile_digest=digest(profile.model_dump()),
             metadata_json=json.dumps({
                 "knowledge_binding": access.knowledge_binding,
@@ -372,7 +428,7 @@ def register_native_response_routes(
                 company_id=actor.company_id,
                 case_id=case_id,
                 context_version=command.context_version,
-                archive=archive, image_parts=image_parts,
+                archive=archive, image_parts=image_parts, file_parts=file_parts,
             )
             command.state = result.status
             command.http_status = result.http_status
@@ -450,7 +506,26 @@ def register_native_response_routes(
         )
         case, _ = authorized_case_access(db, actor, case_id, require_edit=True)
         response.headers["Cache-Control"] = "no-store"
-        return {"recognized": candidate is not None,
+        preview = None
+        if (candidate is not None and binding is not None and case is not None
+                and binding.task == "REQUIREMENT_ANALYSIS"
+                and case.semantic_context_version == command.context_version):
+            store = cast(ApplicationPersistence, db)
+            rows = [*store.evidence_items(case.id), *store.reference_materials(case.id)]
+            if any(getattr(row, "company_id", None) != actor.company_id
+                   or getattr(row, "case_id", None) != case.id for row in rows):
+                raise SemanticValidationFailed()
+            if not any(getattr(row, "request_version_id", None) == case.current_request_version_id
+                       for row in rows):
+                request, availability, images, files = prepare_request(
+                    db, actor, case, snapshot, binding.task, binding.contract_id,
+                )
+                if (request is not None and availability["ready"]
+                        and binding.input_digest == digest({
+                        "task": request.task, "context": request.context, "images": images,
+                        **({"files": files} if files else {})})):
+                    preview = _analysis_display(candidate.value, reference, command.context_version)
+        return {"analysis_preview": preview, "recognized": candidate is not None,
                 "current": (case is not None
                             and case.semantic_context_version == command.context_version),
                 "task": binding.task if binding else None,
@@ -498,20 +573,33 @@ def register_native_response_routes(
                 session = json.loads(existing.session_json)
                 if session.get("providerProvenance", {}).get("sourceReceiptId") != str(reference):
                     raise Conflict()
-                acceptance._validated_interpretation_context(store, case, existing)
+                from .native_goal_context import GOAL_INTERPRETATION
+                if session.get("kind") == GOAL_INTERPRETATION:
+                    acceptance._validated_native_goal_context(store, case, existing)
+                else:
+                    acceptance._validated_interpretation_context(store, case, existing)
                 return {"accepted": True, "task": binding.task,
                         "interpretation": acceptance.state(db, actor, case_id)["interpretation"]}
-        request, availability, images = prepare_request(
+        request, availability, images, files = prepare_request(
             db, actor, case, snapshot, binding.task, binding.contract_id,
         )
         if (request is None or not availability["ready"] or binding.input_digest != digest({
-                "task": request.task, "context": request.context, "images": images})):
+                "task": request.task, "context": request.context, "images": images,
+                **({"files": files} if files else {})})):
             raise StaleVersion()
         if binding.task == "REQUIREMENT_ANALYSIS":
-            acceptance.model_provider = candidate
-            result = acceptance.create_interpretation(
-                db, actor, case_id, expected_context_version=case.semantic_context_version,
-            )
+            current_files = [*store.evidence_items(case.id), *store.reference_materials(case.id)]
+            if not any(getattr(row, "request_version_id", None)
+                       == case.current_request_version_id for row in current_files):
+                result = acceptance.admit_native_goal_analysis(
+                    db, actor, case_id, reference,
+                    expected_context_version=case.semantic_context_version,
+                )
+            else:
+                acceptance.model_provider = candidate
+                result = acceptance.create_interpretation(
+                    db, actor, case_id, expected_context_version=case.semantic_context_version,
+                )
             store.add_audit(actor, "NATIVE_ANALYSIS_INTAKE", "NATIVE_RESPONSE_RECEIPT", reference)
             db.commit()
             return {"accepted": True, "task": binding.task, "interpretation": result}
