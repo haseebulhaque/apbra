@@ -2,7 +2,7 @@
 
 CSV text is exact UTF-8 source, not a sample or a service file upload.
 PNG/JPEG bytes use inline image content when Tenant Settings permits vision.
-Workbook tool access needs a separate, explicitly configured route. Never send
+Original XLSX bytes use inline file input; the existing agent owns processing. Never send
 partial bundles or claim that input delivery proves processing.
 """
 
@@ -30,6 +30,8 @@ class NativeCaseFiles:
     sources: list[dict[str, Any]] = field(repr=False)
     image_parts: list[dict[str, str]] = field(default_factory=list, repr=False)
 
+    file_parts: list[dict[str, str]] = field(default_factory=list, repr=False)
+
     @property
     def ready(self) -> bool:
         return bool(self.manifest) and all(item["status"] == "READY" for item in self.manifest)
@@ -47,6 +49,7 @@ def prepare_case_files(
     manifest: list[dict[str, Any]] = []
     sources: list[dict[str, Any]] = []
     image_parts: list[dict[str, str]] = []
+    file_parts: list[dict[str, str]] = []
     groups = (
         ("DATA", store.evidence_items(case.id), objects),
         ("SUPPORTING", store.reference_materials(case.id), reference_objects),
@@ -101,7 +104,8 @@ def prepare_case_files(
                     "id": str(row.id), "requestVersionId": str(row.request_version_id),
                     "filename": row.filename, "mediaType": media_type,
                     "contentDigest": row.content_digest, "byteCount": len(content),
-                    "transport": "INLINE_ORIGINAL_IMAGE", "imageContentIndex": len(image_parts) + 1,
+                    "transport": "INLINE_ORIGINAL_IMAGE",
+                    "imageContentIndex": len(file_parts) + len(image_parts) + 1,
                 })
                 encoded = base64.b64encode(content).decode("ascii")
                 image_parts.append({
@@ -109,8 +113,33 @@ def prepare_case_files(
                     "image_url": f"data:{media_type};base64,{encoded}",
                 })
                 continue
+            if kind == "DATA" and getattr(row, "format", None) == "XLSX":
+                if not content.startswith(b"PK\x03\x04"):
+                    item["reason"] = "WORKBOOK_FORMAT_UNSUPPORTED"
+                    continue
+                filename = row.filename
+                if (not filename.lower().endswith(".xlsx") or any(
+                    ord(char) < 32 or char in "/\\" for char in filename
+                )):
+                    item["reason"] = "WORKBOOK_FORMAT_UNSUPPORTED"
+                    continue
+                media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                item.update(status="READY", reason=None, transport="INLINE_ORIGINAL_WORKBOOK")
+                sources.append({
+                    "id": str(row.id), "requestVersionId": str(row.request_version_id),
+                    "filename": filename, "mediaType": media_type,
+                    "contentDigest": row.content_digest, "byteCount": len(content),
+                    "transport": "INLINE_ORIGINAL_WORKBOOK",
+                    "fileContentIndex": len(file_parts) + 1,
+                })
+                file_parts.append({
+                    "type": "input_file", "filename": filename,
+                    "file_data": (f"data:{media_type};base64,"
+                                  + base64.b64encode(content).decode("ascii")),
+                })
+                continue
             if kind != "DATA" or getattr(row, "format", None) != "CSV":
-                item["reason"] = "APBRA_WORKBOOK_ROUTE_NOT_IMPLEMENTED"
+                item["reason"] = "DATA_FORMAT_UNSUPPORTED"
                 continue
             try:
                 # Keep BOM, line endings, quoting, every row and every column.
@@ -136,4 +165,5 @@ def prepare_case_files(
     if not manifest or any(item["status"] != "READY" for item in manifest):
         sources = []
         image_parts = []
-    return NativeCaseFiles(manifest, sources, image_parts)
+        file_parts = []
+    return NativeCaseFiles(manifest, sources, image_parts, file_parts)

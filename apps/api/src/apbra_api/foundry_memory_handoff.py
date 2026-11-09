@@ -23,6 +23,7 @@ from .foundry_owner_metadata import _Discard, _private_sdk_logging
 
 if TYPE_CHECKING:
     from .config import Settings
+    from .foundry_catalogue_lease import CataloguePlan
     from .tenant_settings import TenantSettingsSnapshot
 
 
@@ -37,6 +38,79 @@ MAX_FRAME = 65536
 MODULE = "apbra_api.foundry_memory_handoff"
 CONTAINER_LISTEN = "0.0.0.0"  # noqa: S104 -- existing container interface; publication loopback only
 HELLO = b"APBRA_MEMORY_HANDOFF_1\n"
+
+
+@dataclass(frozen=True)
+class PreviewExposure:
+    """Explicit local test exposure, separate from the preserved identity issuer.
+
+    The trusted controller must verify actual owned Docker publication and the
+    exact new entrypoint before accepting this nonce-bound declaration. This is
+    not an HTTP setting or authority to change existing services.
+    """
+
+    issuer_origin: str
+    api_origin: str
+    web_origin: str
+    container_port: int
+
+    def wire(self) -> dict[str, Any]:
+        ports = []
+        for index, value in enumerate((self.issuer_origin, self.api_origin, self.web_origin)):
+            require(type(value) is str)
+            pattern = r"http://(?:127\.0\.0\.1|localhost):([1-9][0-9]{0,4})" if index == 0 else (
+                r"http://127\.0\.0\.1:([1-9][0-9]{0,4})"
+            )
+            match = re.fullmatch(pattern, value)
+            require(match is not None)
+            assert match is not None
+            port = int(match[1])
+            require(1 <= port <= 65535)
+            ports.append(port)
+        require(len(set(ports)) == 3)
+        require(type(self.container_port) is int and 1 <= self.container_port <= 65535)
+        return {"issuer_origin": self.issuer_origin, "api_origin": self.api_origin,
+                "web_origin": self.web_origin, "container_port": self.container_port}
+
+    def digest(self) -> str:
+        return hashlib.sha256(json.dumps(self.wire(), sort_keys=True,
+                                         separators=(",", ":")).encode()).hexdigest()
+
+    def validate_runtime(
+        self, settings: Settings, listener: tuple[str, int] | None, published_port: int | None
+    ) -> None:
+        self.wire()
+        require(settings.profile in {"development", "test"})
+        require(settings.bootstrap_enabled is False)
+        require(settings.api_origin == self.issuer_origin)
+        require(settings.public_origin == self.web_origin)
+        require(type(listener) is tuple and len(listener) == 2)
+        assert listener is not None
+        require(type(listener[1]) is int)
+        require(listener == (CONTAINER_LISTEN, self.container_port))
+        require(type(published_port) is int)
+        require(self.api_origin == f"http://127.0.0.1:{published_port}")
+
+
+def handoff_challenge(nonce: str, exposure: PreviewExposure | None = None) -> dict[str, Any]:
+    require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce))
+    value: dict[str, Any] = {"v": 1, "nonce": nonce, "pid": 1}
+    if exposure is not None:
+        require(type(exposure) is PreviewExposure)
+        value["preview_exposure"] = exposure.wire()
+    return value
+
+
+def _frame_fields(
+    value: Any, expected: set[str], exposure: PreviewExposure | None
+) -> None:
+    require(type(value) is dict)
+    if exposure is None:
+        require(set(value) == expected)
+    else:
+        require(type(exposure) is PreviewExposure)
+        require(set(value) == expected | {"preview_exposure_digest"})
+        require(value["preview_exposure_digest"] == exposure.digest())
 
 
 @dataclass(frozen=True)
@@ -125,7 +199,10 @@ class MemoryAccessToken:
     expires_on: int
 
 
-def receive_account(channel: Channel, plan: HandoffPlan, nonce: str) -> str:
+def receive_account(
+    channel: Channel, plan: HandoffPlan, nonce: str,
+    preview_exposure: PreviewExposure | None = None,
+) -> str:
     value: Any = None
     try:
         length = int.from_bytes(exact(channel, 4, plan.authorization_deadline), "big")
@@ -133,10 +210,8 @@ def receive_account(channel: Channel, plan: HandoffPlan, nonce: str) -> str:
         value = json.loads(
             exact(channel, length, plan.authorization_deadline), object_pairs_hook=pairs
         )
-        require(
-            type(value) is dict
-            and set(value) == {"v", "nonce", "company", "tenant", "client", "deadline", "account"}
-        )
+        _frame_fields(value, {"v", "nonce", "company", "tenant", "client", "deadline", "account"},
+                      preview_exposure)
         require(type(value["v"]) is int and value["v"] == 1 and value["nonce"] == nonce)
         require(all(type(value[k]) is str for k in ("company", "tenant", "client", "account")))
         require(
@@ -157,7 +232,10 @@ def receive_account(channel: Channel, plan: HandoffPlan, nonce: str) -> str:
             value.clear()
 
 
-def receive(channel: Channel, plan: HandoffPlan, nonce: str) -> tuple[MemoryAccessToken, str]:
+def receive(
+    channel: Channel, plan: HandoffPlan, nonce: str,
+    preview_exposure: PreviewExposure | None = None,
+) -> tuple[MemoryAccessToken, str]:
     raw = b""
     value: dict[str, Any] = {}
     try:
@@ -165,10 +243,8 @@ def receive(channel: Channel, plan: HandoffPlan, nonce: str) -> tuple[MemoryAcce
         require(0 < length <= MAX_FRAME)
         raw = exact(channel, length, plan.authorization_deadline)
         value = json.loads(raw, object_pairs_hook=pairs)
-        require(
-            type(value) is dict
-            and set(value)
-            == {
+        _frame_fields(
+            value, {
                 "v",
                 "nonce",
                 "company",
@@ -178,7 +254,7 @@ def receive(channel: Channel, plan: HandoffPlan, nonce: str) -> tuple[MemoryAcce
                 "account",
                 "token",
                 "expires",
-            }
+            }, preview_exposure
         )
         require(type(value["v"]) is int and value["v"] == 1 and value["nonce"] == nonce)
         require(
@@ -243,6 +319,9 @@ def run_receiver(
     listener: tuple[str, int] | None = None,
     published_port: int | None = None,
     application_factory: Callable[..., Any] | None = None,
+    catalogue_plan: CataloguePlan | None = None,
+    catalogue_guard: Callable[[], bool] | None = None,
+    preview_exposure: PreviewExposure | None = None,
 ) -> None:
     """Trusted host entrypoint. CLI cannot enable invocation or manufacture attestation."""
     from .config import get_settings
@@ -252,6 +331,7 @@ def run_receiver(
     from .tenant_settings import validate_qualified_profile
 
     token = None
+    admin_credentials = None
     database = None
     stopped = threading.Event()
     watcher = None
@@ -260,10 +340,28 @@ def run_receiver(
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             plan.validate()
             require(type(runtime) is bool)
+            require(catalogue_plan is not None or catalogue_guard is None)
+            if catalogue_plan is not None:
+                from .foundry_catalogue_lease import CataloguePlan
+
+                require(type(catalogue_plan) is CataloguePlan)
+                catalogue_plan.validate()
+                require(runtime is False and invocation_gate is None
+                        and application_factory is None)
+                require((catalogue_plan.company_id, catalogue_plan.tenant_id,
+                         catalogue_plan.client_id, catalogue_plan.authorization_deadline)
+                        == (plan.company_id, plan.tenant_id, plan.client_id,
+                            plan.authorization_deadline))
+                require(catalogue_guard is None or callable(catalogue_guard))
             settings = settings or get_settings()
             settings.validate_security_profile()
+            if catalogue_plan is not None:
+                require(settings.automatic_generation_enabled is False)
             _, public = _local_address(settings)
-            if serve is None:
+            if preview_exposure is not None:
+                require(type(preview_exposure) is PreviewExposure and serve is None)
+                preview_exposure.validate_runtime(settings, listener, published_port)
+            elif serve is None:
                 require(
                     listener is not None
                     and listener[0] == CONTAINER_LISTEN
@@ -336,20 +434,56 @@ def run_receiver(
                 except Exception:
                     return False
 
+            def catalogue_current() -> bool:
+                if catalogue_plan is None or not unchanged():
+                    return False
+                if (initial.id, initial.digest, profile) != (
+                    catalogue_plan.settings_id, catalogue_plan.settings_digest,
+                    catalogue_plan.profile,
+                ):
+                    return False
+                try:
+                    if catalogue_guard is not None:
+                        return catalogue_guard() is True
+                    if database is None:
+                        return False
+                    from .foundry_catalogue_lease import owner_is_current
+
+                    return owner_is_current(database, catalogue_plan)
+                except Exception:
+                    return False
+
             require(unchanged())
+            if catalogue_plan is not None:
+                require(catalogue_current())
             require(exact(channel, len(HELLO), plan.authorization_deadline) == HELLO)
             nonce = (nonce_factory or (lambda: secrets.token_hex(32)))()
             require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce))
             channel.write(
-                json.dumps({"v": 1, "nonce": nonce, "pid": 1}, separators=(",", ":")).encode()
+                json.dumps(
+                    handoff_challenge(nonce, preview_exposure), separators=(",", ":")
+                ).encode()
                 + b"\n"
             )
-            confirmed_account = receive_account(channel, plan, nonce)
+            catalogue_account = None
+            if catalogue_plan is not None:
+                from .foundry_catalogue_lease import validate_approval
+
+                size = int.from_bytes(exact(channel, 4, plan.authorization_deadline), "big")
+                require(0 < size <= MAX_FRAME)
+                value = json.loads(exact(channel, size, plan.authorization_deadline),
+                                   object_pairs_hook=pairs)
+                catalogue_account = validate_approval(value, catalogue_plan, nonce)
+                del value
+                require(catalogue_current())
+                channel.write(b"CATALOGUE_APPROVAL_ACCEPTED\n")
+            confirmed_account = receive_account(channel, plan, nonce, preview_exposure)
+            require(catalogue_plan is None or confirmed_account == catalogue_account)
             require(
                 unchanged() and (binding is None or binding.home_account_id == confirmed_account)
             )
             channel.write(b"ACCOUNT_ACCEPTED\n")
-            acquired, account = receive(channel, plan, nonce)
+            acquired, account = receive(channel, plan, nonce, preview_exposure)
             require(account == confirmed_account)
             del confirmed_account
             require(unchanged() and (binding is None or binding.home_account_id == account))
@@ -370,8 +504,16 @@ def run_receiver(
                 enabled=lambda: not stopped.is_set(),
                 binding_digest=digest,
             )
-            del acquired, account
-            credentials = BrowserMetadataCredential(initial, token, unchanged)
+            if catalogue_plan is not None:
+                from .foundry_catalogue_lease import CatalogueCredentials
+
+                require(account == catalogue_account and catalogue_current())
+                admin_credentials = CatalogueCredentials(
+                    catalogue_plan, account, token, catalogue_current
+                )
+            del acquired, account, catalogue_account
+            credentials = (None if catalogue_plan is not None else
+                           BrowserMetadataCredential(initial, token, unchanged))
             runtime_credentials = None
             if binding is not None:
 
@@ -402,11 +544,14 @@ def run_receiver(
                     agent_version=binding.agent_version,
                     qualification=binding.qualification,
                 )
-            app = (application_factory or create_app)(
-                settings=settings,
-                foundry_metadata_credentials=credentials,
-                foundry_credentials=runtime_credentials,
-            )
+            app_kwargs: dict[str, Any] = {
+                "settings": settings,
+                "foundry_metadata_credentials": credentials,
+                "foundry_credentials": runtime_credentials,
+            }
+            if catalogue_plan is not None:
+                app_kwargs["foundry_admin_credentials"] = admin_credentials
+            app = (application_factory or create_app)(**app_kwargs)
 
             def monitor() -> None:
                 try:
@@ -422,7 +567,10 @@ def run_receiver(
 
             watcher = threading.Thread(target=monitor, daemon=True)
             watcher.start()
-            require(not stopped.is_set() and credentials.ready(plan.company_id, profile))
+            require(not stopped.is_set() and (
+                catalogue_current() if catalogue_plan is not None else
+                credentials is not None and credentials.ready(plan.company_id, profile)
+            ))
             channel.write(b"HANDOFF_READY_INVOCATION_GATED\n")
             if serve is not None:
                 serve(app, settings, stopped)
@@ -434,7 +582,8 @@ def run_receiver(
     finally:
         stopped.set()
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
-            for close in (token.close if token is not None else None, channel.close):
+            for close in (admin_credentials.close if admin_credentials is not None else None,
+                          token.close if token is not None else None, channel.close):
                 if close is not None:
                     try:
                         close()

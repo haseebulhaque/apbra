@@ -34,6 +34,8 @@ def historical_migration_checkpoint(
         request.node.name != "test_clean_upgrade_head_and_recovery"
         and not request.node.name.startswith("test_knowledge_drafts_")
         and not request.node.name.startswith("test_audit_errors_")
+        and not request.node.name.startswith("test_date_display_")
+        and not request.node.name.startswith("test_session_contact_")
     ):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
 
@@ -70,7 +72,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261018_14"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
@@ -604,7 +606,7 @@ def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
     assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
     command.upgrade(config, "head")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261018_14"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
         assert {table: db.scalar(query) for table, query in queries.items()} == before
 
 
@@ -635,7 +637,7 @@ def test_knowledge_drafts_populated_downgrade_preserves_original_history(
     with pytest.raises(RuntimeError, match="Cannot downgrade committed knowledge drafts"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261003_08")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261018_14"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
         assert (
             db.execute(
                 text(
@@ -738,7 +740,7 @@ def test_audit_errors_populated_downgrade_refuses_and_preserves_occurrence(
     with pytest.raises(RuntimeError, match="Cannot downgrade retained system error occurrences"):
         command.downgrade(disposable_alembic_config(settings.database_url), "20261015_10")
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261018_14"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
         error = db.scalar(select(SystemErrorRow).where(SystemErrorRow.id == reference))
         diagnostic = db.scalar(select(SystemErrorDiagnosticRow).where(
             SystemErrorDiagnosticRow.error_id == reference
@@ -784,3 +786,74 @@ def test_audit_errors_guard_checks_every_table_before_ddl(
         module.downgrade()
     assert queries[0].startswith("LOCK TABLE ")
     assert any(populated in query and query.startswith("SELECT") for query in queries)
+
+
+def test_date_display_additive_migration_preserves_history_and_guards_rollback(
+    settings: Settings, database: Database, client: TestClient
+) -> None:
+    owner = sign_in(client, "owner")
+    before = client.get("/api/tenant-settings").json()
+    history = client.get("/api/tenant-settings/history").json()
+    config = disposable_alembic_config(settings.database_url)
+    command.downgrade(config, "20261018_14")
+    command.upgrade(config, "head")
+    assert client.get("/api/tenant-settings").json() == before
+    assert client.get("/api/tenant-settings/history").json() == history
+    response = client.patch(
+        "/api/tenant-settings/date-display",
+        headers={
+            **csrf(owner),
+            "X-Expected-Membership-Id": owner["actor"]["membership_id"],
+        },
+        json={"expected_version": 0, "time_zone": "America/New_York"},
+    )
+    assert response.status_code == 200
+    with pytest.raises(RuntimeError, match="retained date-display history"):
+        command.downgrade(config, "20261018_14")
+    assert client.get("/api/workspace/date-display").json() == response.json()
+    assert client.get("/api/tenant-settings").json() == before
+    assert client.get("/api/tenant-settings/history").json() == history
+
+
+def test_session_contact_migration_preserves_old_sessions_and_retains_populated_rollback(
+    settings: Settings, database: Database, client: TestClient
+) -> None:
+    sign_in(client, "owner")
+    config = disposable_alembic_config(settings.database_url)
+    query = text(
+        "SELECT id, token_digest, provider_profile_id, identity_id, membership_id, "
+        "expires_at, revoked_at, created_at FROM application_sessions ORDER BY id"
+    )
+    with database.engine.connect() as connection:
+        original = connection.execute(query).all()
+        assert len(original) == 1
+        assert connection.scalar(text("SELECT count(*) FROM session_identity_contacts")) == 0
+    command.downgrade(config, "20261105_15")
+    old_schema = client.get("/api/auth/session")
+    assert old_schema.status_code == 200
+    assert old_schema.json()["identity"]["email_state"] == "UNAVAILABLE"
+    assert client.get("/api/cases").status_code == 200
+    command.upgrade(config, "head")
+    assert client.get("/api/auth/session").json()["identity"]["email_state"] == "NOT_RETAINED"
+    with database.engine.connect() as connection:
+        assert connection.execute(query).all() == original
+        assert connection.scalar(text("SELECT count(*) FROM session_identity_contacts")) == 0
+    with database.engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO session_identity_contacts(session_id,email,email_verified,created_at) "
+                "VALUES(:session_id,'synthetic@example.invalid',false,CURRENT_TIMESTAMP)"
+            ),
+            {"session_id": original[0][0]},
+        )
+    with pytest.raises(RuntimeError, match="retained authenticated email snapshots"):
+        command.downgrade(config, "20261105_15")
+    with database.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
+        assert connection.execute(query).all() == original
+        assert connection.scalar(text("SELECT email FROM session_identity_contacts")) == (
+            "synthetic@example.invalid"
+        )
+    assert (
+        client.get("/api/auth/session").json()["identity"]["email"] == "synthetic@example.invalid"
+    )

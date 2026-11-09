@@ -55,6 +55,7 @@ def receive_native_response(
     archive: NativeResponseArchive,
     transport: httpx.BaseTransport | None = None,
     image_parts: Sequence[dict[str, str]] = (),
+    file_parts: Sequence[dict[str, str]] = (),
 ) -> NativeReceiveResult:
     started = time.monotonic()
     # Preserve all existing endpoint/profile/tenant/credential qualification.
@@ -67,11 +68,12 @@ def receive_native_response(
         or archive.scope.context_version != context_version
     ):
         raise ProviderCallError("NATIVE_RESPONSE_SCOPE_INVALID")
-    content = native_request_content(profile, request, image_parts)
+    content = native_request_content(profile, request, image_parts, file_parts)
     # Nothing from system_prompt/output_schema/retry_instruction is transmitted.
     body = {
         "input": [{"role": "user", "content": (
-            [{"type": "input_text", "text": content}, *image_parts] if image_parts else content
+            [{"type": "input_text", "text": content}, *file_parts, *image_parts]
+            if file_parts or image_parts else content
         )}],
         "max_output_tokens": profile.max_output_tokens,
         "stream": False,
@@ -174,9 +176,22 @@ def receive_native_response(
         ) from None
 
 
+def native_input_characters(
+    content: str, image_parts: Sequence[dict[str, str]] = (),
+    file_parts: Sequence[dict[str, str]] = (),
+) -> int:
+    if not image_parts and not file_parts:
+        return len(content)
+    return len(json.dumps(
+        [{"type": "input_text", "text": content}, *file_parts, *image_parts],
+        separators=(",", ":"), allow_nan=False,
+    ))
+
+
 def native_request_content(
     profile: ProviderProfile, request: ProviderRequest,
     image_parts: Sequence[dict[str, str]] = (),
+    file_parts: Sequence[dict[str, str]] = (),
 ) -> str:
     content = json.dumps(
         {"task": request.task, "context": request.context},
@@ -189,7 +204,7 @@ def native_request_content(
     if bool(image_parts) != request.requires_vision:
         raise ProviderCallError("NATIVE_IMAGE_INPUT_INVALID")
     # Include base64 and content-part framing in the same configured input bound.
-    size = len(content) + sum(len(json.dumps(part, separators=(",", ":"))) for part in image_parts)
+    size = native_input_characters(content, image_parts, file_parts)
     if size > profile.max_input_characters:
         raise ProviderCallError("MODEL_INPUT_BUDGET_EXCEEDED")
     for part in image_parts:
@@ -209,4 +224,23 @@ def native_request_content(
         )
         if not valid:
             raise ProviderCallError("NATIVE_IMAGE_INPUT_INVALID")
+    for part in file_parts:
+        if set(part) != {"type", "filename", "file_data"} or part.get("type") != "input_file":
+            raise ProviderCallError("NATIVE_FILE_INPUT_INVALID")
+        filename = part.get("filename", "")
+        if (not filename.lower().endswith(".xlsx") or any(
+            ord(char) < 32 or char in "/\\" for char in filename
+        )):
+            raise ProviderCallError("NATIVE_FILE_INPUT_INVALID")
+        prefix, separator, encoded = part.get("file_data", "").partition(",")
+        if not separator or prefix != (
+            "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64"
+        ):
+            raise ProviderCallError("NATIVE_FILE_INPUT_INVALID")
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error):
+            raise ProviderCallError("NATIVE_FILE_INPUT_INVALID") from None
+        if not raw.startswith(b"PK\x03\x04"):
+            raise ProviderCallError("NATIVE_FILE_INPUT_INVALID")
     return content

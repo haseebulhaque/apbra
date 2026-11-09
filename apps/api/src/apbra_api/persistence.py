@@ -182,6 +182,46 @@ class TenantSettingsCurrentRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class TenantDateDisplayVersionRow(Base):
+    """Independent display preferences; never rewrite generation settings digests."""
+
+    __tablename__ = "tenant_date_display_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["created_by_membership_id", "company_id"],
+            ["memberships.id", "memberships.company_id"],
+            name="fk_date_display_actor_company",
+        ),
+        UniqueConstraint("company_id", "version", name="uq_date_display_company_version"),
+        UniqueConstraint("id", "company_id", "version", name="uq_date_display_identity_version"),
+        CheckConstraint("version >= 1", name="ck_date_display_version"),
+    )
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    time_zone: Mapped[str | None] = mapped_column(String(255))
+    created_by_membership_id: Mapped[UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TenantDateDisplayCurrentRow(Base):
+    __tablename__ = "tenant_date_display_current"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["version_id", "company_id", "version"],
+            [
+                "tenant_date_display_versions.id",
+                "tenant_date_display_versions.company_id",
+                "tenant_date_display_versions.version",
+            ],
+            name="fk_date_display_current_version",
+        ),
+    )
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"), primary_key=True)
+    version_id: Mapped[UUID] = mapped_column(nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class ClarificationCycleRow(Base):
     __tablename__ = "case_clarification_cycles"
     __table_args__ = (
@@ -1102,6 +1142,18 @@ class SessionRow(Base):
     membership_id: Mapped[UUID | None] = mapped_column(ForeignKey("memberships.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SessionIdentityContactRow(Base):
+    """Display-only snapshot tied to the existing authorised sign-in session."""
+
+    __tablename__ = "session_identity_contacts"
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("application_sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    email_verified: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

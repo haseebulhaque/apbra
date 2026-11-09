@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import ROUND_CEILING, Decimal, DecimalException, localcontext
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
 from fastapi import FastAPI, Request, Response
@@ -26,6 +26,10 @@ from apbra_api.model_provider import (
     ProviderConfigurationError,
     ProviderProfile,
 )
+
+if TYPE_CHECKING:
+    from .foundry_memory_handoff import PreviewExposure
+
 
 ERROR = "FOUNDRY_REPORT_AUTHORIZATION_UNAVAILABLE"
 CAP = Decimal("10.00")
@@ -246,13 +250,35 @@ def load_report_state(
                 interpretation = db.interpretation_for_context(
                     case_id, case.semantic_context_version
                 )
-                _, context_binding, _ = service._current_context(
-                    db,
-                    case,
-                    include_history=(
-                        interpretation is None or interpretation.settings_version_id is not None
-                    ),
+                # Goal-only analysis has no fabricated evidence/schema. The
+                # same immutable goal/answers bind its finite approval snapshot.
+                current_files = [row for row in db.evidence_items(case.id)
+                                 if row.request_version_id == case.current_request_version_id]
+                current_references = [row for row in db.reference_materials(case.id)
+                                      if row.request_version_id == case.current_request_version_id]
+                from apbra_api.native_goal_context import GOAL_INTERPRETATION
+                native_goal = (interpretation is not None
+                               and json.loads(interpretation.session_json).get("kind")
+                               == GOAL_INTERPRETATION)
+                if (not current_files and not current_references
+                        and (interpretation is None or native_goal)):
+                    from apbra_api.native_goal_context import goal_only_context
+                    context_binding = json.dumps(goal_only_context(db, case), sort_keys=True)
+                else:
+                    _, context_binding, _ = service._current_context(
+                        db,
+                        case,
+                        include_history=(
+                            interpretation is None or interpretation.settings_version_id is not None
+                        ),
+                    )
+                from apbra_api.native_goal_context import (
+                    native_context_binding,
+                    prior_analysis_receipts,
                 )
+                context_binding = native_context_binding(context_binding, prior_analysis_receipts(
+                    db, company_id, case_id, case.semantic_context_version,
+                ))
                 values: dict[str, Any] = {}
                 if interpretation is not None:
                     latest = db.latest_interpretation(case_id)
@@ -266,7 +292,10 @@ def load_report_state(
                             db, interpretation, company_id
                         )
                     )
-                    service._validated_interpretation_context(db, case, interpretation)
+                    if native_goal:
+                        service._validated_native_goal_context(db, case, interpretation)
+                    else:
+                        service._validated_interpretation_context(db, case, interpretation)
                     values.update(
                         interpretation_id=interpretation.id,
                         interpretation_digest=interpretation.readiness_binding_digest,
@@ -277,13 +306,18 @@ def load_report_state(
                         # re-confirming or asking the bridge to regenerate it.
                         require(
                             interpretation.state == "READY_FOR_CONFIRMATION"
-                            and interpretation.evidence_id is not None
+                            and (interpretation.evidence_id is not None or native_goal)
                             and contract.company_id == company_id
                             and contract.case_id == case_id
                             and contract.interpretation_id == interpretation.id
                             and contract.schema_version == 2
                         )
-                        contract_value = json.loads(contract.contract_json)
+                        if native_goal:
+                            _, _, contract_value = service.native_goal_confirmed(
+                                db, case, contract.id
+                            )
+                        else:
+                            contract_value = json.loads(contract.contract_json)
                         require(type(contract_value) is dict)
                         values.update(
                             confirmed_contract_id=contract.id,
@@ -572,6 +606,7 @@ def run_report_receiver(
     published_port: int | None = None,
     nonce_factory: Callable[[], str] | None = None,
     native_receive_only: bool = False,
+    preview_exposure: PreviewExposure | None = None,
 ) -> dict[str, Any]:
     """Trusted bootstrap only; all private construction/errors/cleanup stay quiet."""
     from contextlib import redirect_stderr, redirect_stdout
@@ -644,6 +679,7 @@ def run_report_receiver(
                 listener=listener,
                 published_port=published_port,
                 nonce_factory=nonce_factory,
+                preview_exposure=preview_exposure,
             )
         except BaseException:
             failed = True
@@ -767,10 +803,13 @@ class _ApprovalChannel:
     acknowledges the already received approval only after those preflights.
     """
 
-    def __init__(self, channel: Any, nonce: str) -> None:
+    def __init__(
+        self, channel: Any, nonce: str, preview_exposure: PreviewExposure | None = None
+    ) -> None:
         from apbra_api.foundry_memory_handoff import HELLO
 
         self.channel, self.nonce = channel, nonce
+        self.preview_exposure = preview_exposure
         self.hello = HELLO
         self.challenge_pending = True
 
@@ -784,16 +823,18 @@ class _ApprovalChannel:
     def write(self, value: bytes) -> None:
         import json
 
-        from apbra_api.foundry_memory_handoff import pairs
+        from apbra_api.foundry_memory_handoff import handoff_challenge, pairs
 
         if self.challenge_pending:
-            expected = {"v": 1, "nonce": self.nonce, "pid": 1}
+            expected = handoff_challenge(self.nonce, self.preview_exposure)
             parsed = json.loads(value, object_pairs_hook=pairs)
             require(
                 type(parsed) is dict
                 and parsed == expected
                 and type(parsed["v"]) is int
                 and type(parsed["pid"]) is int
+                and (self.preview_exposure is None or
+                     json.dumps(parsed, sort_keys=True) == json.dumps(expected, sort_keys=True))
             )
             self.challenge_pending = False
             self.channel.write(b"REPORT_APPROVAL_ACCEPTED\n")
@@ -820,6 +861,7 @@ def run_private_report_receiver(
     listener: tuple[str, int] | None = None,
     published_port: int | None = None,
     native_receive_only: bool = False,
+    preview_exposure: PreviewExposure | None = None,
 ) -> dict[str, Any]:
     """PID1 owner's optional runtime mode: authority comes only from private frame."""
     import json
@@ -833,11 +875,16 @@ def run_private_report_receiver(
     with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
         try:
             from apbra_api.config import get_settings
-            from apbra_api.foundry_memory_handoff import HELLO, exact
+            from apbra_api.foundry_memory_handoff import HELLO, exact, handoff_challenge
 
             plan.validate()
             settings = settings or get_settings()
             settings.validate_security_profile()
+            if preview_exposure is not None:
+                from .foundry_memory_handoff import PreviewExposure
+
+                require(type(preview_exposure) is PreviewExposure and serve is None)
+                preview_exposure.validate_runtime(settings, listener, published_port)
             # No inherited host attestation or secret-reference fallback grants reports.
             require(
                 settings.foundry_host_enabled is False
@@ -846,7 +893,9 @@ def run_private_report_receiver(
             require(exact(channel, len(HELLO), plan.authorization_deadline) == HELLO)
             nonce = secrets.token_hex(32)
             channel.write(
-                json.dumps({"v": 1, "nonce": nonce, "pid": 1}, separators=(",", ":")).encode()
+                json.dumps(
+                    handoff_challenge(nonce, preview_exposure), separators=(",", ":")
+                ).encode()
                 + b"\n"
             )
             approval = receive_approval(plan, channel, nonce)
@@ -903,7 +952,7 @@ def run_private_report_receiver(
                 load = state_loader_factory(approval)
             receipt = run_report_receiver(
                 plan,
-                _ApprovalChannel(channel, nonce),
+                _ApprovalChannel(channel, nonce, preview_exposure),
                 approval,
                 settings=settings,
                 snapshot_loader=snapshot_loader,
@@ -913,6 +962,7 @@ def run_private_report_receiver(
                 published_port=published_port,
                 nonce_factory=lambda: nonce,
                 native_receive_only=native_receive_only,
+                preview_exposure=preview_exposure,
             )
         except BaseException:
             failed = True

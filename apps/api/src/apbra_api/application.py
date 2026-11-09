@@ -35,6 +35,7 @@ from .domain import (
     LastOwnerRequired,
     MembershipRecord,
     ProfileInvalid,
+    ProtectedResourceNotFound,
     RequestVersionRecord,
     Role,
     SemanticValidationFailed,
@@ -1353,6 +1354,118 @@ class AcceptanceService:
             "clarification": self.clarification_state(store, case_id),
         }
 
+    def _validated_native_goal_context(
+        self, store: ApplicationPersistence, case: CaseRecord, row: InterpretationRecord,
+    ) -> dict[str, Any]:
+        from .native_goal_context import GOAL_INTERPRETATION, native_goal_session
+
+        try:
+            session = json.loads(row.session_json)
+            if (type(session) is not dict or session.get("kind") != GOAL_INTERPRETATION
+                    or getattr(row, "company_id", None) != case.company_id or row.case_id != case.id
+                    or row.request_version_id != case.current_request_version_id
+                    or row.context_version != case.semantic_context_version
+                    or row.evidence_id is not None or row.state != "READY_FOR_CONFIRMATION"
+                    or self.tenant_settings is None
+                    or row.settings_version_id != self.tenant_settings.id):
+                raise SemanticValidationFailed()
+            expected = native_goal_session(store, case, self.objects, self,
+                                           UUID(session["source"]["receipt_id"]))
+            if (session != expected
+                    or row.readiness_binding_digest != sha256_text(expected["readinessBinding"])
+                    or json.loads(row.confirmation_summary_json)
+                    != expected["confirmationSummary"]):
+                raise SemanticValidationFailed()
+            return session
+        except Exception:
+            # Neither provider bodies, private storage keys nor parser errors leave here.
+            raise SemanticValidationFailed() from None
+
+    def admit_native_goal_analysis(
+        self, db: object, actor: Actor, case_id: UUID, reference: UUID,
+        *, expected_context_version: int,
+    ) -> dict[str, Any]:
+        from .native_goal_context import native_goal_session
+
+        store = cast(ApplicationPersistence, db)
+        active = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+        if (active is None or active.company_id != actor.company_id
+                or not active.role.can_invite):
+            raise ProtectedResourceNotFound()
+        actor = active
+        authorized_case_access(store, actor, case_id, require_edit=True, lock=True)
+        case = store.locked_case(case_id)
+        if case is None:
+            raise ProtectedResourceNotFound()
+        if case.semantic_context_version != expected_context_version:
+            raise StaleVersion()
+        existing = store.interpretation_for_context(case_id, expected_context_version)
+        if existing is not None:
+            session = self._validated_native_goal_context(store, case, existing)
+            if session["source"]["receipt_id"] != str(reference):
+                raise Conflict()
+            return cast(dict[str, Any], self.state(db, actor, case_id)["interpretation"])
+        try:
+            session = native_goal_session(store, case, self.objects, self, reference)
+        except Exception:
+            raise SemanticValidationFailed() from None
+        store.add_interpretation(
+            actor, case.id, case.current_request_version_id, None, case.semantic_context_version,
+            json.dumps(session, sort_keys=True, separators=(",", ":")),
+            json.dumps(session["confirmationSummary"], sort_keys=True, separators=(",", ":")),
+            sha256_text(session["readinessBinding"]), session["state"],
+            settings_version_id=self.tenant_settings.id if self.tenant_settings else None,
+        )
+        store.add_audit(actor, "INTERPRETATION_READY", "REPORTING_CASE", case.id)
+        return cast(dict[str, Any], self.state(db, actor, case_id)["interpretation"])
+
+    def native_goal_confirmed(
+        self, store: ApplicationPersistence, case: CaseRecord, contract_id: UUID,
+    ) -> tuple[InterpretationRecord, dict[str, Any], dict[str, Any]]:
+        from .native_goal_context import native_goal_confirmation
+
+        contract = store.confirmed_contract_for_case(case.id, contract_id)
+        row = store.latest_interpretation(case.id)
+        if (contract is None or row is None or contract.company_id != case.company_id
+                or contract.case_id != case.id or contract.interpretation_id != row.id
+                or contract.schema_version != 2
+                or contract.settings_version_id != row.settings_version_id):
+            raise SemanticValidationFailed()
+        session = self._validated_native_goal_context(store, case, row)
+        expected = native_goal_confirmation(row, session)
+        try:
+            if json.loads(contract.contract_json) != expected:
+                raise SemanticValidationFailed()
+        except Exception:
+            raise SemanticValidationFailed() from None
+        return row, session, expected
+
+    def _confirm_native_goal(
+        self, store: ApplicationPersistence, actor: Actor, case: CaseRecord,
+        row: InterpretationRecord,
+    ) -> dict[str, Any]:
+        from .native_goal_context import native_goal_confirmation
+
+        if not actor.role.can_invite:
+            raise ProtectedResourceNotFound()
+        latest = store.latest_interpretation(case.id)
+        if latest is None or latest.id != row.id:
+            raise StaleVersion()
+        session = self._validated_native_goal_context(store, case, row)
+        if any(question["required"] for question in session["analysisProjection"]["questions"]):
+            raise StaleVersion()
+        existing = store.confirmed_contract(row.id)
+        if existing is not None:
+            self.native_goal_confirmed(store, case, existing.id)
+            contract = existing
+        else:
+            contract = store.accept_interpretation(actor, row, json.dumps(
+                native_goal_confirmation(row, session), sort_keys=True, separators=(",", ":")))
+        return {"id": str(contract.id), "interpretation_id": str(row.id),
+                "schema_version": contract.schema_version,
+                "accepted_at": contract.accepted_at.isoformat(),
+                "contract": json.loads(contract.contract_json), "current": True}
+
     def state(self, db: object, actor: Actor, case_id: UUID) -> dict[str, Any]:
         store = cast(ApplicationPersistence, db)
         case, _ = authorized_case_access(store, actor, case_id)
@@ -1372,7 +1485,13 @@ class AcceptanceService:
         )
         if current:
             try:
-                self._validated_interpretation_context(store, case, row)
+                from .native_goal_context import GOAL_INTERPRETATION
+                if session.get("kind") == GOAL_INTERPRETATION:
+                    self._validated_native_goal_context(store, case, row)
+                    if contract is not None:
+                        self.native_goal_confirmed(store, case, contract.id)
+                else:
+                    self._validated_interpretation_context(store, case, row)
             except SemanticValidationFailed:
                 current = False
         return {
@@ -1419,11 +1538,24 @@ class AcceptanceService:
     ) -> dict[str, Any]:
         store = cast(ApplicationPersistence, db)
         authorized_case_access(store, actor, case_id, require_edit=True)
+        from .native_goal_context import GOAL_INTERPRETATION
+        candidate = store.interpretation(case_id, interpretation_id)
+        if (candidate is not None
+                and json.loads(candidate.session_json).get("kind") == GOAL_INTERPRETATION):
+            active = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
+            if (active is None or active.company_id != actor.company_id
+                    or not active.role.can_invite):
+                raise ProtectedResourceNotFound()
+            actor = active
+            authorized_case_access(store, actor, case_id, require_edit=True, lock=True)
         case = store.locked_case(case_id)
         if case is None or case.semantic_context_version != expected_context_version:
             raise StaleVersion()
         interpretation = store.interpretation(case_id, interpretation_id)
         latest = store.latest_interpretation(case_id)
+        if (interpretation is not None
+                and json.loads(interpretation.session_json).get("kind") == GOAL_INTERPRETATION):
+            return self._confirm_native_goal(store, actor, case, interpretation)
         if (
             interpretation is None
             or latest is None
