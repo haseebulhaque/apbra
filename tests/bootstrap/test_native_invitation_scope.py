@@ -1,5 +1,8 @@
 """Actual finite-stage controls; synthetic ref views never claim a release."""
 import copy
+import tarfile
+import os
+import io
 from contextlib import contextmanager
 import hashlib
 import json
@@ -35,6 +38,42 @@ def fixture():
 
 def validate(root):
     return H["validate"](root,read(root/"agents/catalog.json"),C["schema_errors"],C["task_errors"])
+
+
+@contextmanager
+def registration_source_view():
+    """Counterfactual governance-only source view; no real refs/index are changed."""
+    def git(root,*args):
+        return subprocess.check_output(["git","-C",str(root),"-c","core.hooksPath=/dev/null",*args],
+            stderr=subprocess.DEVNULL)
+    original_head=git(ROOT,"rev-parse","HEAD")
+    index=Path(git(ROOT,"rev-parse","--git-path","index").decode().strip())
+    if not index.is_absolute():index=ROOT/index
+    original_index=index.read_bytes()
+    with tempfile.TemporaryDirectory() as folder:
+        root=Path(folder)
+        data=git(ROOT,"archive","origin/main")
+        with tarfile.open(fileobj=io.BytesIO(data)) as bundle:
+            if not all(member.isfile() or member.isdir() for member in bundle.getmembers()):
+                raise ValueError("Controlled source view cannot contain special entries")
+            bundle.extractall(root,filter="data")
+        for name in H["G"]:
+            target=root/name;target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(ROOT/name,target)
+        locator=git(ROOT,"rev-parse","--absolute-git-dir").decode().strip()
+        (root/".git").write_text("gitdir: "+locator+"\n")
+        # A separate index describes the complete source snapshot. Object/ref reads
+        # remain real; read-tree/update-index write ONLY this temporary index.
+        with patch.dict(os.environ,{"GIT_INDEX_FILE":str(root/".stage-view-index"),
+                "GIT_CONFIG_GLOBAL":"/dev/null","GIT_CONFIG_NOSYSTEM":"1"}):
+            git(root,"read-tree","origin/main")
+            for name in sorted(H["G"]):
+                entry=git(ROOT,"ls-tree","HEAD","--",name).decode().split()
+                if len(entry)!=4:raise ValueError("Exact committed registration source missing")
+                git(root,"update-index","--add","--cacheinfo",entry[0],entry[2],name)
+            yield root
+    if git(ROOT,"rev-parse","HEAD")!=original_head or index.read_bytes()!=original_index:
+        raise AssertionError("Source-view fixture changed a real ref or index")
 
 class FiniteStageScope(unittest.TestCase):
     def test_current_packet_exact_scope_schema_and_preserved_historical_sources(self):
@@ -157,20 +196,34 @@ class FiniteStageScope(unittest.TestCase):
 
     def test_prospective_witness_requires_context_original_pins_and_complete_check(self):
         nv=runpy.run_path(ROOT/"scripts/check_nv.py")
-        args=(ROOT,C,"APBRA-"+H["KEY"],H["R"],H["G"],nv["OVERLAP"],nv["CANDIDATE"])
-        self.assertEqual(C["delivery_context"](ROOT),args[2:5])
-        self.assertEqual(H["qualified_paths"](*args),set(nv["OVERLAP"]))
-        calls=[]
-        def fail(*a,**k):calls.append(k);return ["retained failure"],{}
-        supplied={**C,"check":fail}
-        self.assertEqual(H["qualified_paths"](ROOT,supplied,*args[2:]),set())
-        self.assertEqual(len(calls),1)
-        supplied={**C,"delivery_context":lambda root:("APBRA-85",None,set())}
-        self.assertEqual(H["qualified_paths"](ROOT,supplied,*args[2:]),set())
-        with patch.dict(H["qualified_paths"].__globals__,ancestor=lambda *args:False):
-            self.assertEqual(H["qualified_paths"](*args),set())
-        bad={**nv["OVERLAP"],next(iter(nv["OVERLAP"])):"0"*64}
-        self.assertEqual(H["qualified_paths"](ROOT,C,*args[2:5],bad,nv["CANDIDATE"]),set())
+        context=("APBRA-"+H["KEY"],H["R"],H["G"])
+        # Explicit counterfactual registration context AND complete main-source
+        # snapshot plus exact G overlay. This is not a live-branch/release claim.
+        with registration_source_view() as view:
+            calls=[]
+            def canonical(*args,**kwargs):
+                calls.append(kwargs)
+                return C["check"](*args,**kwargs)
+            model={**C,"delivery_context":lambda root:context,"check":canonical}
+            args=(view,model,*context,nv["OVERLAP"],nv["CANDIDATE"])
+            self.assertEqual(H["qualified_paths"](*args),set(nv["OVERLAP"]))
+            self.assertEqual(len(calls),1)
+            failed=[]
+            def fail(*a,**k):failed.append(k);return ["retained failure"],{}
+            supplied={**model,"check":fail}
+            self.assertEqual(H["qualified_paths"](view,supplied,*args[2:]),set())
+            self.assertEqual(len(failed),1)
+            supplied={**model,"delivery_context":lambda root:("APBRA-85",None,set())}
+            self.assertEqual(H["qualified_paths"](view,supplied,*args[2:]),set())
+            with patch.dict(H["qualified_paths"].__globals__,ancestor=lambda *args:False):
+                self.assertEqual(H["qualified_paths"](*args),set())
+            bad={**nv["OVERLAP"],next(iter(nv["OVERLAP"])):"0"*64}
+            self.assertEqual(H["qualified_paths"](view,model,*context,bad,nv["CANDIDATE"]),set())
+        # The actual current branch is also exercised. A foreign/main/product
+        # invocation must deny this hypothetical registration context.
+        actual=C["delivery_context"](ROOT)
+        result=H["qualified_paths"](ROOT,C,*context,nv["OVERLAP"],nv["CANDIDATE"])
+        self.assertEqual(result,set(nv["OVERLAP"]) if actual==context else set())
 
     def test_current_canonical_registration_and_foreign_identity_do_not_accumulate_authority(self):
         self.assertEqual(C["check"](ROOT,active_task_id="APBRA-"+H["KEY"],active_branch=H["R"],changed_paths=H["G"])[0],[])
