@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-184",
+  "historical_source_register": "docs/source-register.json",
+  "historical_object_sha256": "05882f360cdb4dbbe3a3492716b89af0a5e4b24e79a4e67fea00b394a46e7bcb",
+  "sources": [
+    {
+      "id": "apbra-184-accepted-technical-contract-v1",
+      "content_id": "19398659",
+      "version": 1,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/19398659",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb explicit20261118 four-hour instruction; technical contract accepted, not implementation/release/production or personal preview acceptance; effective separate registration/manual merge remains required.",
+      "technical_markdown_sha256": "bfd90a819d9e943e25c31c8d2851b0a5e0f5f59f0d0199b182a05744ca13d8f5",
+      "repository_decision": "docs/decisions/native-invitation-acceptance.md",
+      "repository_decision_sha256": "2525e835112d6ccc0ae83250191f027ec2c393d03437e61f2c087714330b1193",
+      "reviewed_matrix_sha256": "009d0f7049e3f6a7d2ebeb2d98b688018cf576a9d31a1b3e0976b83217ed79ef"
+    }
+  ],
+  "controlling_source_versions": {
+    "8519682": 119,
+    "3932362": 12,
+    "3932382": 21,
+    "4030847": 10,
+    "4063408": 8,
+    "4063348": 9,
+    "3932483": 4
+  },
+  "registration_amendment": "OWNER_ACCEPTED_2026-11-18T09:30:57Z_SHA919478bd8d1b51f2663bf89026da1eaece127a329b1050f34eefa121e87f4d9b"
+}
