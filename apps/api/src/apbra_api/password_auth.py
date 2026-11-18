@@ -36,7 +36,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from starlette.concurrency import run_in_threadpool
 
 from .config import Settings
-from .persistence import Base, Database, utcnow
+from .persistence import ApplicationSession, Base, Database, utcnow
 
 
 class PasswordAuthSettings(BaseSettings):
@@ -302,6 +302,8 @@ def register_password_routes(
             "password_sessions",
             "password_throttles",
             "password_audit",
+            "native_account_principals",
+            "native_workspace_sessions",
         )
     ):
         raise ValueError("PASSWORD_SCHEMA_NOT_READY")
@@ -372,7 +374,10 @@ def register_password_routes(
             return answer("REQUEST_INVALID", 400)
         if not isinstance(data, dict) or any(not isinstance(v, str) for v in data.values()):
             return answer("REQUEST_INVALID", 400)
-        if set(data) - {"email", "password", "proof"}:
+        fields = {"name"} if request.url.path == PATH + "/organisation" else {
+            "email", "password", "proof"
+        }
+        if set(data) - fields:
             return answer("REQUEST_INVALID", 400)
         peer = request.client.host if request.client else "unknown"
         with database.session() as db:
@@ -471,6 +476,9 @@ def register_password_routes(
             result.headers["content-length"] = str(len(result.body))
         return result
 
+    from .auth_boundary import SESSION_COOKIE
+    from .native_organisation import account_workspace_state
+
     @app.get(PATH + "/session")
     def session(request: Request) -> JSONResponse:
         if not feature.password_auth_enabled:
@@ -479,14 +487,14 @@ def register_password_routes(
             found = active(db, request.cookies.get(COOKIE), lock=True)
             if found is None:
                 return answer("SIGNED_OUT", authenticated=False)
+            assert isinstance(db, ApplicationSession)
             row, account = found
             row.touched_at = clock()
             return answer(
                 "SIGNED_IN",
                 authenticated=True,
                 account={"id": str(account.id), "email": account.email},
-                workspace_access=False,
-                next_step="ORGANISATION_SETUP_NOT_IMPLEMENTED",
+                **account_workspace_state(db, row, account, request.cookies.get(SESSION_COOKIE)),
             )
 
     def execute(
@@ -494,6 +502,56 @@ def register_password_routes(
     ) -> JSONResponse:
         now = clock()
         try:
+            if action in {"organisation", "workspace"}:
+                from .domain import ApplicationError, AuthenticationRequired
+                from .native_organisation import (
+                    create_organisation,
+                    restore_workspace,
+                    set_workspace_cookie,
+                )
+
+                try:
+                    with database.session() as db:
+                        assert isinstance(db, ApplicationSession)
+                        found = active(db, request.cookies.get(COOKIE))
+                        if found is None:
+                            raise AuthenticationRequired()
+                        account = db.scalar(select(PasswordAccountRow).where(
+                            PasswordAccountRow.id == found[1].id
+                        ).with_for_update().execution_options(populate_existing=True))
+                        found = active(db, request.cookies.get(COOKIE), lock=True)
+                        if found is None or account is None:
+                            raise AuthenticationRequired()
+                        parent, account = found
+                        if action == "organisation":
+                            if set(data) != {"name"}:
+                                return answer("REQUEST_INVALID", 400)
+                            key = request.headers.get("idempotency-key", "")
+                            if not re.fullmatch(r"[A-Za-z0-9_-]{8,200}", key):
+                                return answer("REQUEST_INVALID", 400)
+                            organisation, organisation_created, token = create_organisation(
+                                db, parent, account, data["name"], key,
+                                request.cookies.get(SESSION_COOKIE),
+                            )
+                            result = answer(
+                                "ORGANISATION_CREATED" if organisation_created
+                                else "ORGANISATION_RESTORED",
+                                201 if organisation_created else 200, **organisation,
+                            )
+                        else:
+                            if data:
+                                return answer("REQUEST_INVALID", 400)
+                            token = restore_workspace(
+                                db, parent, account, request.cookies.get(SESSION_COOKIE)
+                            )
+                            result = answer("WORKSPACE_READY")
+                        set_workspace_cookie(
+                            result, token, secure,
+                            max(0, int((parent.expires_at - clock()).total_seconds())),
+                        )
+                    return result
+                except ApplicationError as error:
+                    return answer(error.code, error.status_code)
             if action == "signout":
                 with database.session() as db:
                     found = active(db, request.cookies.get(COOKIE), lock=True)
@@ -554,7 +612,7 @@ def register_password_routes(
                         result = answer(
                             "SIGNED_IN",
                             workspace_access=False,
-                            next_step="ORGANISATION_SETUP_NOT_IMPLEMENTED",
+                            next_step="ORGANISATION_REQUIRED",
                         )
                         result.set_cookie(
                             COOKIE,
@@ -685,7 +743,8 @@ def register_password_routes(
 
     @app.post(PATH + "/{action}")
     async def command(action: str, request: Request, background: BackgroundTasks) -> JSONResponse:
-        if action not in {"signup", "verify", "signin", "recover", "reset", "signout"}:
+        if action not in {"signup", "verify", "signin", "recover", "reset", "signout",
+                           "organisation", "workspace"}:
             return answer("REQUEST_INVALID", 404)
         data = await payload(request)
         if isinstance(data, JSONResponse):

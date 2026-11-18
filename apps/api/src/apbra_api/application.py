@@ -375,6 +375,10 @@ class InvitationService:
         current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
         if current_actor is None or not current_actor.role.can_invite:
             raise Forbidden()
+        if current_actor.issuer is None or current_actor.subject is None:
+            from .domain import NativeInvitationsUnsupported
+
+            raise NativeInvitationsUnsupported()
         if role == Role.COMPANY_OWNER:
             raise Forbidden()
         subject = invited_subject.strip()

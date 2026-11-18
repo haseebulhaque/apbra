@@ -82,8 +82,8 @@ class ExternalIdentityRow(Base):
         default="legacy-unqualified",
         server_default="legacy-unqualified",
     )
-    issuer: Mapped[str] = mapped_column(String(500), nullable=False)
-    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    issuer: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -1344,6 +1344,7 @@ class ApplicationSession(Session):
         identity = self.scalar(
             select(ExternalIdentityRow).where(
                 ExternalIdentityRow.provider_profile_id == profile_id,
+                ExternalIdentityRow.issuer.is_not(None),
                 ExternalIdentityRow.issuer == issuer,
                 ExternalIdentityRow.subject == subject,
             )
@@ -1376,6 +1377,7 @@ class ApplicationSession(Session):
             identity = self.scalar(
                 select(ExternalIdentityRow).where(
                     ExternalIdentityRow.provider_profile_id == profile_id,
+                    ExternalIdentityRow.issuer.is_not(None),
                     ExternalIdentityRow.issuer == issuer,
                     ExternalIdentityRow.subject == subject,
                 )
@@ -1417,6 +1419,14 @@ class ApplicationSession(Session):
         )
         if row is None:
             raise AuthenticationRequired()
+        identity = self.get(ExternalIdentityRow, identity_id)
+        if identity is None or not identity.active:
+            raise AuthenticationRequired()
+        if identity.issuer is None or identity.subject is None:
+            from .native_organisation import native_parent
+
+            if native_parent(self, row, identity, now) is None:
+                raise AuthenticationRequired()
         return row
 
     def company_creation_command(
@@ -1496,6 +1506,8 @@ class ApplicationSession(Session):
         return company, membership
 
     def eligible_invitation_for_identity(self, identity: IdentityRecord, now: datetime) -> bool:
+        if identity.issuer is None or identity.subject is None:
+            return False
         return (
             self.scalar(
                 select(InvitationRow.id)
@@ -1566,6 +1578,10 @@ class ApplicationSession(Session):
         identity = self.get(ExternalIdentityRow, row.identity_id)
         if identity is None or not identity.active:
             return None
+        if identity.issuer is None or identity.subject is None:
+            from .native_organisation import native_parent
+
+            return (row, identity) if native_parent(self, row, identity, now) else None
         if row.provider_profile_id != identity.provider_profile_id and not (
             row.provider_profile_id == "local-test"
             and identity.provider_profile_id == "legacy-unqualified"

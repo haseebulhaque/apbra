@@ -2,7 +2,7 @@ import {stringifyExactNumbers} from './aiGeometry';
 export type Actor={identity_id:string;membership_id:string;company_id:string;company_name?:string;display_name:string;role:string};
 export type IdentityProviderOption={profile_id:string;display_label:string};
 export type IdentityProviders={items:IdentityProviderOption[];development_identities:string[]};
-export type Session={authenticated:boolean;identity?:{id:string;display_name:string;email?:string|null;email_verified?:boolean|null;email_state?:'AVAILABLE'|'NOT_RETAINED'|'UNAVAILABLE';sign_in_label?:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'INVITATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;company_id:string;name:string}>};
+export type Session={authenticated:boolean;authentication_kind?:'NATIVE'|'EXTERNAL';identity?:{id:string;display_name:string;email?:string|null;email_verified?:boolean|null;email_state?:'AVAILABLE'|'NOT_RETAINED'|'UNAVAILABLE';sign_in_label?:string};actor?:Actor;csrf_token?:string;membership_state?:'ACTIVE'|'COMPANY_SELECTION_REQUIRED'|'COMPANY_CREATION_AVAILABLE'|'INVITATION_AVAILABLE'|'MEMBERSHIP_INACTIVE';available_companies?:Array<{membership_id:string;company_id:string;name:string}>};
 export type RequestVersion={id:string;sequence:number;request_text:string;created_at:string};
 export type CaseRecord={id:string;company_id:string;creator_membership_id:string;current_request_version_id:string;version:number;semantic_context_version:number;report_title?:string;created_at:string;updated_at:string;current_request:RequestVersion};
 export type CaseSummary=CaseRecord;
