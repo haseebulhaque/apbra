@@ -201,6 +201,21 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 # Additive finite-stage cross-phase controls; all historical tests above remain unchanged.
+class AcceptedFiniteStageCrossPhase184(unittest.TestCase):
+    def test_original_source_and_v3_helper_remain_byte_exact(self):
+        for name in ['docs/source-register.json','scripts/check_ci_browser_registration_v3.py',
+                'docs/engineering/recovered-native-frozen-manifests.json',
+                'docs/engineering/recovered-native-frozen-manifests-v3.json']:
+            self.assertEqual((ROOT/name).read_bytes(),subprocess.check_output(
+                ['git','show','2d7fd0f2121c4bc6a6be6aa70ece317428168c28:'+name],cwd=ROOT))
+    def test_registration_is_not_combined_with_another_task_or_product(self):
+        stage=runpy.run_path(ROOT/'scripts/native_invitation_scope.py')
+        scope=stage['G']
+        for foreign in ['apps/api/src/apbra_api/api.py','apps/web/package.json','infrastructure/unissued.json']:
+            self.assertTrue(C['check'](ROOT,active_task_id='APBRA-184',active_branch=stage['R'],changed_paths=scope|{foreign})[0])
+        self.assertTrue(C['check'](ROOT,active_task_id='APBRA-85',active_branch=stage['R'],changed_paths=scope)[0])
+
+# Additive finite-stage cross-phase controls; all historical tests above remain unchanged.
 class AcceptedFiniteStageCrossPhase185(unittest.TestCase):
     def test_original_source_and_v3_helper_remain_byte_exact(self):
         for name in ['docs/source-register.json','scripts/check_ci_browser_registration_v3.py',
