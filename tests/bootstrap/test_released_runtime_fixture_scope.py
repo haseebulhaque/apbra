@@ -2,6 +2,7 @@
 import ast,copy,hashlib,json,runpy,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
+from test_demo_ux_scope import copy_demo_ux_repository
 ROOT=Path(__file__).resolve().parents[2]
 H=runpy.run_path(str(ROOT/'scripts/check_uf.py'))
 C=runpy.run_path(str(ROOT/'scripts/check_bootstrap.py'))
@@ -14,11 +15,14 @@ class ReleasedRuntimeFixtureScope(unittest.TestCase):
   self.assertEqual(set(task['allowed_paths']),H['P']);self.assertEqual(len(H['P']),5)
   errors,_=C['check'](ROOT,active_task_id='APBRA-160',active_branch=H['B'],changed_paths=H['P'])
   self.assertEqual(errors,[])
-  # This registered UX authority remains distinct; no API edit admission.
-  errors,_=C['check'](ROOT,active_task_id='APBRA-160',active_branch=C['DEMO_UX_BRANCH'],changed_paths={'apps/web/src/durableGeneration.tsx'})
-  self.assertEqual(errors,[])
-  errors,_=C['check'](ROOT,active_task_id='APBRA-160',active_branch=C['DEMO_UX_BRANCH'],changed_paths={H['CONFIG']})
-  self.assertTrue(errors)
+  # The two consumer assertions exercise the historical demo UX authority.
+  with tempfile.TemporaryDirectory() as directory:
+   view=Path(directory)
+   copy_demo_ux_repository(view)
+   errors,_=C['check'](view,active_task_id='APBRA-160',active_branch=C['DEMO_UX_BRANCH'],changed_paths={'apps/web/src/durableGeneration.tsx'})
+   self.assertEqual(errors,[])
+   errors,_=C['check'](view,active_task_id='APBRA-160',active_branch=C['DEMO_UX_BRANCH'],changed_paths={H['CONFIG']})
+   self.assertTrue(errors)
  def test_partial_mixed_foreign_and_product_scope_never_qualifies(self):
   for paths in [H['P']-{'scripts/check_uf.py'},H['P']|{'apps/web/src/durableGeneration.tsx'},{H['CONFIG']},{'compose.yaml'}]:
    with self.subTest(paths=paths):
