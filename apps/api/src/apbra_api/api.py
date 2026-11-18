@@ -116,6 +116,7 @@ from .persistence import (
     AuthTransactionRow,
     CompanyRow,
     Database,
+    ExternalIdentityRow,
     MembershipRow,
     SessionIdentityContactRow,
     SessionRow,
@@ -1845,6 +1846,7 @@ def create_app(
         contact = db.get(SessionIdentityContactRow, row.id) if contact_available else None
         result: dict[str, Any] = {
             "authenticated": True,
+            "authentication_kind": "NATIVE" if identity.issuer is None else "EXTERNAL",
             "identity": {
                 "id": str(identity.id),
                 "display_name": identity.display_name,
@@ -1891,6 +1893,11 @@ def create_app(
                     }
                     for membership, company in memberships
                 ]
+            elif identity.issuer is None:
+                # Native principals are enrolled only by explicit first-company
+                # creation. Losing their active membership must not advertise
+                # another onboarding path that the creation service rejects.
+                result["membership_state"] = "MEMBERSHIP_INACTIVE"
             elif db.eligible_invitation_for_identity(identity, datetime.now(UTC)):
                 result["membership_state"] = "INVITATION_AVAILABLE"
             else:
@@ -1911,6 +1918,10 @@ def create_app(
         if command_key is None or re.fullmatch(r"[A-Za-z0-9._:-]{8,200}", command_key) is None:
             raise Conflict()
         session_row, identity = resolve_session(db, session_token)
+        if identity.issuer is None:
+            from .domain import CompanyCreationNotAvailable
+
+            raise CompanyCreationNotAvailable()
         result, created = company_service.create(
             db, session_row, identity, payload.name, command_key
         )
@@ -1981,6 +1992,16 @@ def create_app(
         except AuthenticationRequired:
             row = None
         if row is not None:
+            if identity.issuer is None:
+                from .native_organisation import native_parent
+                from .password_auth import COOKIE, PATH
+
+                assert isinstance(db, ApplicationSession)
+                assert isinstance(row, SessionRow) and isinstance(identity, ExternalIdentityRow)
+                parent = native_parent(db, row, identity, datetime.now(UTC))
+                if parent is not None:
+                    parent.revoked_at = datetime.now(UTC)
+                response.delete_cookie(COOKIE, path=PATH)
             row.revoked_at = datetime.now(UTC)
             identity_service.record(
                 db,

@@ -242,6 +242,8 @@ def test_new_output_rows_are_immutable_and_populated_downgrade_is_blocked(
 ):
     output = upload(client, own_case).json()['output']
     config = disposable_alembic_config(settings.database_url)
+    # Preserve this reviewed retention test's original head17 checkpoint.
+    command.downgrade(config, '20261106_17')
     for sql in ['UPDATE request_outputs SET filename=\'changed\'', 'DELETE FROM request_outputs']:
         with pytest.raises(DBAPIError), database.session() as db:
             db.execute(text(sql))

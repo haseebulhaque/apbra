@@ -28,6 +28,12 @@ from apbra_api.persistence import (
 def historical_migration_checkpoint(
     request: pytest.FixtureRequest, settings: Settings, database: Database
 ) -> None:
+    # Preserve the exact prior head17 retention checkpoints after adding18.
+    if request.node.name.startswith((
+        "test_knowledge_drafts_", "test_audit_errors_", "test_date_display_",
+        "test_session_contact_",
+    )):
+        command.downgrade(disposable_alembic_config(settings.database_url), "20261106_17")
     # Original migration assertions remain at their reviewed08 checkpoint.
     # Draft retention/round-trip checks use current11; isolated09 guard tests stay unchanged.
     if (
@@ -72,7 +78,7 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
-        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261108_18"
 
 
 def test_company_lifecycle_migration_round_trips_legacy_fixture_state(
@@ -604,7 +610,7 @@ def test_knowledge_drafts_empty_roundtrip_and_existing_data_preserved(
         before = {table: db.scalar(query) for table, query in queries.items()}
     command.downgrade(config, "20261003_08")
     assert "tenant_knowledge_documents" not in inspect(database.engine).get_table_names()
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261106_17")
     with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261106_17"
         assert {table: db.scalar(query) for table, query in queries.items()} == before
@@ -796,7 +802,7 @@ def test_date_display_additive_migration_preserves_history_and_guards_rollback(
     history = client.get("/api/tenant-settings/history").json()
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "20261018_14")
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261106_17")
     assert client.get("/api/tenant-settings").json() == before
     assert client.get("/api/tenant-settings/history").json() == history
     response = client.patch(
@@ -833,7 +839,7 @@ def test_session_contact_migration_preserves_old_sessions_and_retains_populated_
     assert old_schema.status_code == 200
     assert old_schema.json()["identity"]["email_state"] == "UNAVAILABLE"
     assert client.get("/api/cases").status_code == 200
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261106_17")
     assert client.get("/api/auth/session").json()["identity"]["email_state"] == "NOT_RETAINED"
     with database.engine.connect() as connection:
         assert connection.execute(query).all() == original

@@ -31,8 +31,8 @@ class Actor:
     identity_id: UUID
     membership_id: UUID
     company_id: UUID
-    issuer: str
-    subject: str
+    issuer: str | None
+    subject: str | None
     display_name: str
     role: Role
     provider_profile_id: str
@@ -52,8 +52,8 @@ class OidcClaims:
 
 class IdentityRecord(Protocol):
     id: UUID
-    issuer: str
-    subject: str
+    issuer: str | None
+    subject: str | None
     display_name: str
     active: bool
     provider_profile_id: str
@@ -722,6 +722,11 @@ class IdempotencyConflict(Conflict):
 class CompanyCreationNotAvailable(Conflict):
     code = "COMPANY_CREATION_NOT_AVAILABLE"
     public_message = "Company creation is not available for this account right now."
+
+
+class NativeInvitationsUnsupported(Conflict):
+    code = "NATIVE_INVITATIONS_UNSUPPORTED"
+    public_message = "Invitations for email/password accounts are not available yet."
 
 
 class CompanyNameInvalid(ApplicationError):

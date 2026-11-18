@@ -86,7 +86,7 @@ def test_complete_signup_verified_signin_and_logout(flow):
     state = client.get(PATH + "/session").json()
     assert state["authenticated"] and state["account"]["email"] == EMAIL
     assert state["workspace_access"] is False
-    assert state["next_step"] == "ORGANISATION_SETUP_NOT_IMPLEMENTED"
+    assert state["next_step"] == "ORGANISATION_REQUIRED"
     with db.session() as session:
         assert session.get(PasswordSessionRow, digest(token)) is not None
         assert session.scalar(select(func.count()).select_from(PasswordAccountRow)) == 1
@@ -429,7 +429,7 @@ def test_additive_migration_preserves_old_rows_and_refuses_lossy_rollback(flow, 
         before = session.execute(text("SELECT id,name,active FROM companies ORDER BY id")).all()
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "20261105_16")
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261106_17")
     with db.session() as session:
         assert (
             session.execute(text("SELECT id,name,active FROM companies ORDER BY id")).all()
@@ -709,7 +709,7 @@ def test_existing_verified_account_signin_still_works_without_mail(flow, setting
     assert result.json() == {
         "status": "SIGNED_IN",
         "workspace_access": False,
-        "next_step": "ORGANISATION_SETUP_NOT_IMPLEMENTED",
+        "next_step": "ORGANISATION_REQUIRED",
     }
     session = client.get(PATH + "/session").json()
     assert session["authenticated"] and session["workspace_access"] is False
