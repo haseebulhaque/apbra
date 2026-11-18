@@ -229,3 +229,73 @@ def qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate)
         if not v3_present(root) or not v3_safe(root):return set()
         return V3['qualified_paths'](root,checker,identity,active_branch,paths,overlap,candidate)
     return _v2_qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate)
+
+# Accepted finite stages; all original helpers, pins and maps above are retained.
+FINITE_STAGES = [('185', 'scripts/dependency_maintenance_scope.py', 'e4b82c9f4d75975f6bbf1b1b52e84f402a1a5c29118724d3ab885f20310d487c', 'tasks/APBRA-185-development-dependency-maintenance.json', 'docs/source-register-apbra185.json', 'docs/decisions/development-dependency-maintenance.md')]
+FINITE_BOOT_HOOK = "        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 185\n"
+FINITE_BOOT_BASE_SHA = "6a6674e1d86b2e9f83c0f6a263130c53d8771f700bcc5169fa146f2f76ff4c4b"
+FINITE_NV_BASE_SHA = "cbbf837ad996d00b85dd592c9b39a13bba319218adbedba830140c0c4cc50049"
+FINITE_NV_APPEND = '\n# Exact finite-stage inverse; historical fixtures need no future helper.\nFINITE_BOOT_HOOK = "        nt,nf=pn[\'stage_authorities\'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 185\\n"\n_finite_prior_strip_public_bootstrap = strip_public_bootstrap\n\ndef strip_public_bootstrap(source):\n    if "pn[\'stage_authorities\']" in source:\n        if source.count(FINITE_BOOT_HOOK)!=1:\n            raise ValueError("Finite stage bootstrap hook missing, duplicate or inexact")\n        source=source.replace(FINITE_BOOT_HOOK,"",1)\n    return _finite_prior_strip_public_bootstrap(source)\n'
+_finite_modules = {}
+_finite_prior_strip_bootstrap = strip_bootstrap
+_finite_prior_strip_nv = strip_nv
+_finite_prior_qualified_paths = qualified_paths
+
+def finite_strip_bootstrap(source):
+    if source.count(FINITE_BOOT_HOOK)!=1:
+        raise ValueError("Finite bootstrap inverse missing, duplicate or inexact")
+    restored=source.replace(FINITE_BOOT_HOOK,"",1)
+    if hashlib.sha256(restored.encode()).hexdigest()!=FINITE_BOOT_BASE_SHA:
+        raise ValueError("Finite bootstrap inverse changed original bytes")
+    return restored
+
+def strip_bootstrap(source):
+    if "pn['stage_authorities']" in source:source=finite_strip_bootstrap(source)
+    return _finite_prior_strip_bootstrap(source)
+
+def finite_strip_nv(source):
+    if source.count(FINITE_NV_APPEND)!=1:
+        raise ValueError("Finite native inverse missing, duplicate or inexact")
+    restored=source.replace(FINITE_NV_APPEND,"",1)
+    if hashlib.sha256(restored.encode()).hexdigest()!=FINITE_NV_BASE_SHA:
+        raise ValueError("Finite native inverse changed original bytes")
+    return restored
+
+def strip_nv(source):
+    if "FINITE_BOOT_HOOK" in source:source=finite_strip_nv(source)
+    return _finite_prior_strip_nv(source)
+
+def finite_modules(root):
+    modules=[];faults=[]
+    for key,name,expected,task,source,adr in FINITE_STAGES:
+        paths=(name,task,source,adr)
+        if not any((root/p).exists() or (root/p).is_symlink() for p in paths):continue
+        if not all(safe(root,p) for p in paths):
+            faults.append(key+" incomplete or unsafe finite-stage packet");continue
+        raw=(root/name).read_bytes()
+        if hashlib.sha256(raw).hexdigest()!=expected:
+            faults.append(key+" finite helper differs");continue
+        cachekey=(str(root.resolve()),name,expected)
+        if cachekey not in _finite_modules:_finite_modules[cachekey]=__import__('runpy').run_path(root/name)
+        modules.append(_finite_modules[cachekey])
+    return modules,faults
+
+def stage_authorities(root,catalog,schema_errors,task_errors,identity,branch,paths):
+    modules,faults=finite_modules(root);authorities=()
+    if modules:
+        try:
+            finite_strip_bootstrap((root/'scripts/check_bootstrap.py').read_text())
+            finite_strip_nv((root/'scripts/check_nv.py').read_text())
+        except (OSError,ValueError):faults.append("Finite canonical integration/preimage differs")
+    for module in modules:
+        bound,errors=module['bind'](root,catalog,schema_errors,task_errors,identity,branch,paths)
+        authorities=authorities+bound;faults+=errors
+    return authorities,faults
+
+def qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate):
+    modules,faults=finite_modules(root)
+    if faults:return set()
+    for module in modules:
+        if identity=='APBRA-'+module['KEY'] and active_branch in (module['R'],module['B']):
+            return module['qualified_paths'](root,checker,identity,active_branch,paths,overlap,candidate)
+    return _finite_prior_qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate)
