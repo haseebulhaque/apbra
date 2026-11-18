@@ -108,3 +108,14 @@ def strip_public_dispatch_test(source):
     if after not in source:return source
     if source.count(after)!=1:raise ValueError('Public historical dispatch test inverse differs')
     return source.replace(after,before,1)
+
+# Exact finite-stage inverse; historical fixtures need no future helper.
+FINITE_BOOT_HOOK = "        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 184\n"
+_finite_prior_strip_public_bootstrap = strip_public_bootstrap
+
+def strip_public_bootstrap(source):
+    if "pn['stage_authorities']" in source:
+        if source.count(FINITE_BOOT_HOOK)!=1:
+            raise ValueError("Finite stage bootstrap hook missing, duplicate or inexact")
+        source=source.replace(FINITE_BOOT_HOOK,"",1)
+    return _finite_prior_strip_public_bootstrap(source)
