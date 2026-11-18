@@ -354,3 +354,57 @@ def test_close_failure_does_not_overwrite_original_authentication_failure(monkey
     assert diagnostic['cleanup_errors'][0]['exception_type'] == 'builtins.OSError'
     assert diagnostic['cleanup_errors'][0]['message'] == 'Synthetic close failed'
     assert peer.closed and CANARY not in json.dumps(diagnostic)
+
+
+def test_catalogue_handoff_discloses_exact_scope_and_binds_confirmed_account(monkeypatch, capsys):
+    from test_foundry_memory_handoff import catalogue_plan
+
+    c = setup(monkeypatch)
+    plan = catalogue_plan(c)
+    sdk = Browser()
+    p = Peer()
+    p.stream = io.BytesIO(
+        json.dumps(dict(v=1, nonce=NONCE, pid=1)).encode()
+        + b"\nCATALOGUE_APPROVAL_ACCEPTED\nACCOUNT_ACCEPTED\nHANDOFF_READY_INVOCATION_GATED\n"
+    )
+    frames = []
+    messages = []
+
+    def write(value):
+        if value != receiver.HELLO:
+            frames.append(json.loads(value[4:]))
+
+    p.write = write
+
+    def confirm(terminal, terminal_plan, message, phrase):
+        messages.append(message)
+        if phrase == "CONFIRM PRIVATE MEMORY HANDOFF":
+            assert sdk.calls == []
+        if phrase == "CONFIRM OWNER DIRECTORY READ":
+            assert sdk.calls == ["authenticate"]
+
+    execute(c, sdk, p, catalogue_plan=plan, confirm=confirm)
+    assert len(frames) == 3 and frames[0]["account"] == sdk.record.home_account_id
+    assert frames[0]["catalogue"] == plan.wire()
+    assert frames[1]["account"] == frames[2]["account"] == frames[0]["account"]
+    assert any("Directory-only" in msg for msg in messages)
+    assert any(str(plan.membership_id) in msg and "page request(s)" in msg for msg in messages)
+    assert sdk.closed and p.closed and capsys.readouterr().out == ""
+
+
+def test_catalogue_scope_account_drift_stops_before_approval_or_token(monkeypatch):
+    from test_foundry_memory_handoff import catalogue_plan
+
+    c = setup(monkeypatch)
+    sdk = Browser()
+    p = Peer()
+    frames = []
+    p.write = lambda value: frames.append(value)
+
+    def confirm(*args):
+        if args[-1] == "CONFIRM OWNER DIRECTORY READ":
+            sdk.record.home_account_id = "foreign.account"
+
+    with pytest.raises(HandoffError):
+        execute(c, sdk, p, catalogue_plan=catalogue_plan(c), confirm=confirm)
+    assert frames == [receiver.HELLO] and sdk.calls == ["authenticate", "close"] and p.closed

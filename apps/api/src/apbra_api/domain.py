@@ -46,6 +46,8 @@ class OidcClaims:
     nonce: str
     expires_at: datetime
     display_name: str
+    email: str | None = None
+    email_verified: bool | None = None
 
 
 class IdentityRecord(Protocol):

@@ -15,14 +15,14 @@ it('offers lazy read actions and never dispatches during render',()=>{
  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);const html=renderToStaticMarkup(<SavedAzureAnswer caseId="case-1" contextVersion={3} onError={()=>{}}/>);expect(html).toContain('Show saved answers');expect(html).toContain('Check complete file handoff');expect(fetch).not.toHaveBeenCalled();expect(html).not.toMatch(/Generate|Retry analysis/);
 });
 it('states blocked file route and preserves the distinction between transport and processing',()=>{
- const value:CaseFileAvailability={ready:false,reason:'COMPLETE_FILE_HANDOFF_UNAVAILABLE',scope:'CURRENT_REQUEST_VERSION',request_version_id:'r',context_version:3,settings_id:'s',input_characters:null,input_limit:5000,files:[{id:'x',filename:'<img src=x onerror=bad()>.xlsx',status:'UNAVAILABLE',reason:'QUALIFIED_FILE_INPUT_OR_TOOL_REQUIRED',transport:'NONE',contentDigest:'a'.repeat(64),serviceFileUploaded:false,processingVerified:false}]};const html=renderToStaticMarkup(<FileHandoffFacts value={value}/>);expect(html).toContain('Complete file handoff is unavailable');expect(html).toContain('qualified file input or a file tool');expect(html).toContain('does not prove that the agent processed every row');expect(html).toContain('&lt;img');expect(html).not.toContain('<img');
+ const value:CaseFileAvailability={ready:false,reason:'COMPLETE_FILE_HANDOFF_UNAVAILABLE',scope:'CURRENT_REQUEST_VERSION',request_version_id:'r',context_version:3,settings_id:'s',input_characters:null,input_limit:5000,files:[{id:'x',filename:'<img src=x onerror=bad()>.xlsx',status:'UNAVAILABLE',reason:'QUALIFIED_FILE_INPUT_OR_TOOL_REQUIRED',transport:'NONE',contentDigest:'a'.repeat(64),serviceFileUploaded:false,processingVerified:false}]};const html=renderToStaticMarkup(<FileHandoffFacts value={value}/>);expect(html).toContain('Complete file handoff is unavailable');expect(html).toContain('qualified file input or a file tool');expect(html).toContain('does not prove that the agent processed the contents');expect(html).toContain('&lt;img');expect(html).not.toContain('<img');
 });
 it('saved-answer API makes only scoped GET reads and keeps original download separate',async()=>{
  const fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({items:[]})});vi.stubGlobal('fetch',fetch);await savedAzureApi.list('case/one');await savedAzureApi.view('case/one','receipt/two');await savedAzureApi.input('case/one');expect(fetch.mock.calls.map(call=>call[0])).toEqual(['/api/cases/case%2Fone/native-response-receipts','/api/cases/case%2Fone/native-response-receipts/receipt%2Ftwo/view','/api/cases/case%2Fone/native-response-input']);for(const call of fetch.mock.calls)expect(call[1].method??'GET').toBe('GET');expect(fetch).toHaveBeenCalledTimes(3);
 });
 
 it('describes ready binary image bytes without calling them UTF8 CSV source',()=>{
- const value:CaseFileAvailability={ready:true,reason:null,scope:'CURRENT_REQUEST_VERSION',request_version_id:'r',context_version:3,settings_id:'s',input_characters:100,input_limit:5000,files:[{id:'x',filename:'synthetic.png',status:'READY',reason:null,transport:'INLINE_ORIGINAL_IMAGE',contentDigest:'a'.repeat(64),serviceFileUploaded:false,processingVerified:false}]};const html=renderToStaticMarkup(<FileHandoffFacts value={value}/>);expect(html).toContain('Original image bytes can be sent as image input.');expect(html).not.toContain('Complete UTF-8 source can be included');expect(html).toContain('not service file uploads');
+ const value:CaseFileAvailability={ready:true,reason:null,scope:'CURRENT_REQUEST_VERSION',request_version_id:'r',context_version:3,settings_id:'s',input_characters:100,input_limit:5000,files:[{id:'x',filename:'synthetic.png',status:'READY',reason:null,transport:'INLINE_ORIGINAL_IMAGE',contentDigest:'a'.repeat(64),serviceFileUploaded:false,processingVerified:false}]};const html=renderToStaticMarkup(<FileHandoffFacts value={value}/>);expect(html).toContain('Original image bytes can be sent as image input.');expect(html).not.toContain('Complete UTF-8 source can be included');expect(html).toContain('does not make a separate Files API upload');
 });
 
 it('native contract intake is explicit and performs no request on render',()=>{const fetch=vi.fn();vi.stubGlobal('fetch',fetch);const html=renderToStaticMarkup(<SavedContractAction caseId="synthetic" receiptId="receipt" currentContext={2} csrfToken="synthetic-csrf" onError={()=>{}}/>);expect(fetch).not.toHaveBeenCalled();expect(html).toContain('Inspect saved contract');expect(html).not.toContain('Validate and use saved');expect(html).toContain('send no provider request')});
@@ -37,4 +37,13 @@ it('shows only closed saved-contract code/path diagnostics and retains original'
  expect(format({code:'MODEL_GROUNDING_INVALID',phase:'PRIVATE_CANARY',findings:[]})).toBe('');
  expect(format({code:'MODEL_GROUNDING_INVALID',phase:'NATIVE_CONTRACT',findings:[{path:'/PRIVATE_CANARY',reason:'PRIVATE_CANARY'}]})).not.toContain('PRIVATE_CANARY');
  expect(format(null)).toBe('');
+});
+
+it('describes original workbook delivery without claiming processing or no provider copy',()=>{
+ const value:CaseFileAvailability={files:[{id:'workbook',filename:'report.xlsx',status:'READY',reason:null,transport:'INLINE_ORIGINAL_WORKBOOK',contentDigest:'digest',serviceFileUploaded:false,processingVerified:false}],ready:true,scope:'CURRENT_REQUEST_VERSION',request_version_id:'r',context_version:1,settings_id:'s',reason:null,input_characters:100,input_limit:5000};
+ const html=renderToStaticMarkup(<FileHandoffFacts value={value}/>);
+ expect(html).toContain('Original workbook bytes can be sent as file input');
+ expect(html).toContain('Processing depends on the configured agent');
+ expect(html).toContain('provider may retain or mount supplied files');
+ expect(html).not.toContain('Complete UTF-8 source can be included');
 });

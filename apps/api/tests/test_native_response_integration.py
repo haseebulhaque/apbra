@@ -24,9 +24,13 @@ from apbra_api.native_response_index import DatabaseNativeResponseIndex, NativeR
 from apbra_api.native_response_probe import receive_native_response
 from apbra_api.native_response_runtime import native_application_factory
 
-pytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")
-
 saved_case = runtime_fixtures.saved
+
+
+@pytest.fixture(autouse=True)
+def historical_native_approval_clock(monkeypatch):
+    """These synthetic approvals exercise the fixed-period policy, not live authority."""
+    runtime_fixtures.october_authorization_clock.__wrapped__(monkeypatch)
 
 PRIVATE = "SYNTHETIC-NATIVE-PRIVATE-CANARY"
 RAW = json.dumps(
@@ -53,17 +57,42 @@ RAW = json.dumps(
 @pytest.fixture
 def integrated(saved_case, monkeypatch, request):
     s = saved_case
-    vision = getattr(request, "param", False)
+    mode = getattr(request, "param", False)
+    vision = mode is True
+    if mode == "goal-only":
+        goal = s.client.post(
+            "/api/cases", json={"request_text": "AI: what do you need to clarify this goal?"},
+            headers={**csrf(s.session), "Idempotency-Key": str(uuid4())},
+        )
+        assert goal.status_code == 201
+        s.case.clear()
+        s.case.update(goal.json()["case"])
     s.profile = s.profile.model_copy(update={
         "max_input_characters": 100000,
-        "capabilities": s.profile.capabilities.model_copy(update={"vision": bool(vision)}),
+        "capabilities": s.profile.capabilities.model_copy(update={"vision": vision is True}),
     })
-    if vision:
+    if vision is True:
         from test_reference_material import PNG
         added = s.client.post(
             f"/api/cases/{s.case['id']}/reference-material",
             params={"filename": "synthetic.png", "expected_context_version": 2},
             content=PNG,
+            headers={**csrf(s.session), "Content-Type": "application/octet-stream"},
+        )
+        assert added.status_code == 200, added.text
+
+    workbook = None
+    if mode == "workbook":
+        from test_evidence import workbook_with_sheet
+        workbook = workbook_with_sheet(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Amount</t></is></c></row>'
+            '<row r="2"><c r="A2"><v>12</v></c></row></sheetData></worksheet>'
+        )
+        added = s.client.post(
+            f"/api/cases/{s.case['id']}/evidence",
+            params={"filename": "synthetic.xlsx", "expected_context_version": 2},
+            content=workbook,
             headers={**csrf(s.session), "Content-Type": "application/octet-stream"},
         )
         assert added.status_code == 200, added.text
@@ -133,6 +162,7 @@ def integrated(saved_case, monkeypatch, request):
         tokens=tokens,
         response=response,
         credentials=Credentials(),
+        workbook=workbook,
         path=f"/api/cases/{s.case['id']}/native-response-checks",
         payload={
             "command_key": str(uuid4()),
@@ -481,7 +511,7 @@ def test_full_request_limit_failure_precedes_admission_and_paid_slot(integrated,
     assert not i.calls and not i.tokens and i.gate.receipt()['attempts_consumed'] == 0
 
 
-@pytest.mark.parametrize("kind", ["xlsx", "image"])
+@pytest.mark.parametrize("kind", ["image"])
 def test_unsupported_file_is_visible_and_never_silently_reduced_to_schema(integrated, kind):
     from test_evidence import workbook_with_sheet
     from test_reference_material import PNG
@@ -508,8 +538,7 @@ def test_unsupported_file_is_visible_and_never_silently_reduced_to_schema(integr
     assert not manifest['ready']
     unsupported = next(file for file in manifest['files'] if file['filename'] == filename)
     assert unsupported['reason'] == (
-        'APBRA_WORKBOOK_ROUTE_NOT_IMPLEMENTED' if kind == 'xlsx'
-        else 'TENANT_VISION_CAPABILITY_DISABLED'
+        'TENANT_VISION_CAPABILITY_DISABLED'
     )
     assert not i.calls and not i.tokens and i.gate.receipt()['attempts_consumed'] == 0
 
@@ -584,4 +613,432 @@ def test_inline_image_uses_original_bytes_and_exact_route_without_tool_override(
     assert data == PNG and hashlib.sha256(data).hexdigest() == image['contentDigest']
     assert set(body) == {'input','max_output_tokens','stream','store'}
     assert str(i.calls[0].url).split('?')[0] == i.s.profile.endpoint
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize("integrated", ["goal-only"], indirect=True)
+def test_goal_only_is_sent_to_ai_without_invented_evidence_or_local_questions(integrated):
+    i = integrated
+    availability = i.client.get(f"/api/cases/{i.s.case['id']}/native-response-input")
+    assert availability.status_code == 200, availability.text
+    assert availability.json()["ready"] is True
+    assert availability.json()["files"] == []
+    result = dispatch(i)
+    assert result.status_code == 200, result.text
+    assert result.json()["native_response"]["task"] == "REQUIREMENT_ANALYSIS"
+    context = json.loads(json.loads(i.calls[0].content)["input"][0]["content"])["context"]
+    assert context["dataStructure"] is None
+    assert context["caseFiles"] == []
+    assert context["fileDelivery"]["transport"] == "NO_ATTACHED_FILES"
+    assert context["materialContext"]["requestText"] == i.s.case["current_request"]["request_text"]
+    assert "questions" not in context and "interpretation" not in context
+
+
+@pytest.mark.parametrize("integrated", ["goal-only"], indirect=True)
+def test_goal_only_answer_roundtrip_includes_prior_ai_question_and_complete_user_reply(integrated):
+    i = integrated
+    assert dispatch(i).status_code == 200
+    reply = "Synthetic complete user answer to the AI question."
+    answered = i.client.post(f"/api/cases/{i.s.case['id']}/conversation", headers=csrf(i.s.session),
+                            json={"kind": "USER_MESSAGE", "payload": {"text": reply},
+                                  "expected_context_version": 1, "command_key": str(uuid4())})
+    assert answered.status_code == 200, answered.text
+    state = i.s.load()
+    values = i.gate.approval.model_dump()
+    values.update(semantic_context_version=state.semantic_context_version,
+                  input_digest=state.input_digest)
+    approval_value = ReportApproval.model_validate(values)
+    gate = Reservations(approval_value, lambda: True, i.s.load)
+    app = native_application_factory(approval_value, gate, create_app)(
+        settings=i.s.settings, database=i.s.database, foundry_credentials=i.credentials)
+    client = TestClient(app)
+    client.cookies.update(i.client.cookies)
+    response = client.post(i.path, headers=csrf(i.s.session), json={
+        **i.payload, "command_key": str(uuid4()), "expected_context_version": 2})
+    assert response.status_code == 200, response.text
+    context = json.loads(json.loads(i.calls[-1].content)["input"][0]["content"])["context"]
+    assert context["priorAgentAnswers"][0]["assistantTexts"] == ["Native prose " + PRIVATE]
+    assert context["materialContext"]["conversation"][-1]["payload"]["text"] == reply
+    assert "https://private.invalid/file" not in json.dumps(context)
+    assert len(i.calls) == 2
+
+
+def test_late_prior_ai_answer_invalidates_new_context_approval_before_token_or_post(integrated):
+    from apbra_api.evidence import LocalEvidenceStore
+    from apbra_api.native_response_archive import NativeResponseArchive
+    from apbra_api.native_response_index import NativeContractBindingRow, NativeReceiveCommandRow
+
+    i = integrated
+    first = dispatch(i).json()["native_response"]
+    with i.s.database.session() as db:
+        original = db.get(NativeContractBindingRow, UUID(first["operation_id"]))
+        operation = uuid4()
+        db.add(NativeReceiveCommandRow(
+            id=operation, company_id=i.s.company, case_id=UUID(i.s.case["id"]),
+            actor_membership_id=UUID(i.s.session["actor"]["membership_id"]),
+            context_version=2, settings_id=UUID(i.payload["expected_settings_id"]),
+            command_key=uuid4(), state="ADMITTED",
+        ))
+        db.flush()
+        db.add(NativeContractBindingRow(
+            operation_id=operation, company_id=i.s.company, case_id=UUID(i.s.case["id"]),
+            context_version=2, task="REQUIREMENT_ANALYSIS", contract_id=None,
+            input_digest=original.input_digest, profile_digest=original.profile_digest,
+            metadata_json=original.metadata_json,
+        ))
+        db.commit()
+    changed = i.client.post(f"/api/cases/{i.s.case['id']}/conversation", headers=csrf(i.s.session),
+        json={"kind": "USER_MESSAGE", "payload": {"text": "Saved answer in next context"},
+              "expected_context_version": 2, "command_key": str(uuid4())})
+    assert changed.status_code == 200, changed.text
+    state = i.s.load()
+    values = i.gate.approval.model_dump()
+    values.update(semantic_context_version=state.semantic_context_version,
+                  input_digest=state.input_digest)
+    approval_value = ReportApproval.model_validate(values)
+    gate = Reservations(approval_value, lambda: True, i.s.load)
+    assert gate.ready() is True
+    # A legitimately earlier admitted operation finishes after new approval.
+    with i.s.database.session() as db:
+        command = db.get(NativeReceiveCommandRow, operation)
+        command.state, command.http_status, command.provider_status = "RECEIVED", 200, "completed"
+        db.commit()
+    archive = NativeResponseArchive(
+        NativeResponseScope(i.s.company, UUID(i.s.case["id"]), 2, operation),
+        LocalEvidenceStore(i.s.settings.evidence_root, "test"),
+        DatabaseNativeResponseIndex(i.s.database),
+    )
+    archive.preserve(RAW)
+    assert i.s.load().input_digest != state.input_digest
+    assert gate.ready() is False
+    assert gate.receipt()["attempts_consumed"] == 0
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize("integrated", ["workbook"], indirect=True)
+def test_inline_workbook_full_bytes_exact_route_and_idempotency(integrated):
+    import base64
+    import hashlib
+    i = integrated
+    value = i.client.get(f"/api/cases/{i.s.case['id']}/native-response-input")
+    assert value.status_code == 200 and value.json()['ready']
+    assert 'file_data' not in value.text and not i.tokens
+    workbook = next(f for f in value.json()['files'] if f['filename'] == 'synthetic.xlsx')
+    assert workbook['transport'] == 'INLINE_ORIGINAL_WORKBOOK'
+    assert not workbook['serviceFileUploaded'] and not workbook['processingVerified']
+    first = dispatch(i)
+    assert first.status_code == 200, first.text
+    body = json.loads(i.calls[0].content)
+    parts = body['input'][0]['content']
+    assert len(parts) == 2 and parts[0]['type'] == 'input_text'
+    part = parts[1]
+    assert set(part) == {'type', 'filename', 'file_data'} and part['type'] == 'input_file'
+    original = base64.b64decode(part['file_data'].split(',', 1)[1], validate=True)
+    assert original == i.workbook
+    assert hashlib.sha256(original).hexdigest() == workbook['contentDigest']
+    context = json.loads(parts[0]['text'])['context']
+    assert context['caseFiles'][0]['sourceText'] == 'Amount,Division\n12,North\n9,South\n'
+    assert context['caseFiles'][1]['fileContentIndex'] == 1
+    assert not context['fileDelivery']['processingVerified']
+    assert set(body) == {'input', 'max_output_tokens', 'stream', 'store'}
+    assert str(i.calls[0].url).split('?')[0] == i.s.profile.endpoint
+    assert dispatch(i).json() == first.json()
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize("integrated", ["workbook"], indirect=True)
+def test_workbook_changed_content_part_rejected_at_contract_intake(integrated, monkeypatch):
+    import base64
+    from dataclasses import replace as replace_bundle
+
+    from test_native_contracts import analysis_fixture, intake, native_body
+
+    i = integrated
+    i.response.raw = native_body(analysis_fixture())
+    response = dispatch(i)
+    assert response.status_code == 200, response.text
+    receipt = response.json()['native_response']['receipt_id']
+    original_prepare = native.prepare_case_files
+
+    def changed_content(*args, **kwargs):
+        bundle = original_prepare(*args, **kwargs)
+        part = dict(bundle.file_parts[0])
+        part['file_data'] = (part['file_data'].split(',')[0] + ','
+                             + base64.b64encode(b'PK\x03\x04changed-original').decode())
+        return replace_bundle(bundle, file_parts=[part])
+
+    # Inject at the already verified bundle boundary to prove intake binds wire
+    # bytes in addition to source metadata. Storage digest checks remain intact.
+    monkeypatch.setattr(native, 'prepare_case_files', changed_content)
+    result = intake(i, receipt)
+    assert result.status_code == 409, result.text
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+def test_csv_only_native_binding_keeps_legacy_digest(integrated):
+    from apbra_api.native_contracts import digest
+    from apbra_api.native_response_index import NativeContractBindingRow
+
+    i = integrated
+    assert dispatch(i).status_code == 200
+    wire = json.loads(i.calls[0].content)
+    content = json.loads(wire['input'][0]['content'])
+    with i.s.database.session() as db:
+        binding = db.scalar(select(NativeContractBindingRow))
+        assert binding.input_digest == digest({**content, 'images': []})
+
+
+@pytest.mark.parametrize('ready', [False, True])
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_only_typed_discussion_is_readonly_and_never_admitted(integrated, ready):
+    from test_conversations import provider_analysis
+    from test_native_contracts import native_body
+
+    i = integrated
+    analysis = provider_analysis(ready=ready)
+    analysis['interpretation']['unknownProviderMetadata'] = PRIVATE
+    i.response.raw = native_body(analysis)
+    received = dispatch(i)
+    assert received.status_code == 200, received.text
+    reference = received.json()['native_response']['receipt_id']
+    path = f"/api/cases/{i.s.case['id']}/native-response-receipts/{reference}/contract"
+    with i.s.database.session() as db:
+        before = report_counts(db)
+    response = i.client.get(path)
+    assert response.status_code == 200, response.text
+    check = response.json()
+    assert check['recognized'] and check['current']
+    preview = check['analysis_preview']
+    assert preview['receipt_id'] == reference and preview['context_version'] == 1
+    assert preview['admission'] == 'NOT_ADMITTED'
+    assert preview['ai_state'] == analysis['state']
+    assert preview['confirmation_summary'] == analysis['confirmationSummary']
+    assert len(preview['questions']) == len(analysis['questions'])
+    if not ready:
+        assert preview['questions'][0]['question'] == analysis['questions'][0]['question']
+    assert PRIVATE not in json.dumps(preview)
+    with i.s.database.session() as db:
+        assert report_counts(db) == before
+    state = i.client.get(f"/api/cases/{i.s.case['id']}/acceptance").json()
+    assert state['interpretation'] is None and state['confirmed_contract'] is None
+    # A normal durable message advances context; no question/interpretation row is invented.
+    reply = 'AI question: ' + (analysis['questions'][0]['question'] if not ready else 'Refinement')
+    reply += '\n\nMy answer: Synthetic complete user response.'
+    saved = i.client.post(f"/api/cases/{i.s.case['id']}/conversation", headers=csrf(i.s.session),
+                          json={'kind':'USER_MESSAGE', 'payload':{'text':reply},
+                                'expected_context_version':1, 'command_key':str(uuid4())})
+    assert saved.status_code == 200, saved.text
+    stale = i.client.get(path).json()
+    assert not stale['current'] and stale['analysis_preview'] is None
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize('fault', ['malformed', 'duplicate', 'drift'])
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_only_preview_rejects_current_input_drift_and_malformed_question(
+    integrated, monkeypatch, fault,
+):
+    from test_conversations import provider_analysis
+    from test_native_contracts import native_body
+
+    i = integrated
+    analysis = provider_analysis(ready=False)
+    if fault == 'malformed':
+        analysis['questions'][0]['required'] = 'not-a-boolean'
+    elif fault == 'duplicate':
+        analysis['questions'].append(dict(analysis['questions'][0]))
+    i.response.raw = native_body(analysis)
+    response = dispatch(i)
+    reference = response.json()['native_response']['receipt_id']
+    path = f"/api/cases/{i.s.case['id']}/native-response-receipts/{reference}/contract"
+    if fault == 'drift':
+        import apbra_api.native_goal_context as goal_native
+        original = goal_native.goal_only_context
+        monkeypatch.setattr(goal_native, 'goal_only_context',
+                            lambda *args: {**original(*args), 'requestText': 'Changed input'})
+    check = i.client.get(path).json()
+    assert check['analysis_preview'] is None
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_ready_explicit_confirmation_has_no_data_and_no_extra_ai(integrated):
+    from test_conversations import provider_analysis
+    from test_native_contracts import intake, native_body
+
+    from apbra_api.persistence import InterpretationRow
+
+    i = integrated
+    analysis = provider_analysis(ready=True)
+    assert not analysis['questions']
+    i.response.raw = native_body(analysis)
+    reference = dispatch(i).json()['native_response']['receipt_id']
+    admitted = intake(i, reference)
+    assert admitted.status_code == 200, admitted.text
+    row = admitted.json()['interpretation']
+    assert row['state'] == 'READY_FOR_CONFIRMATION'
+    base = f"/api/cases/{i.s.case['id']}"
+    assert i.client.get(base+'/acceptance').json()['confirmed_contract'] is None
+    assert intake(i, reference).json()['interpretation']['id'] == row['id']
+    payload = {'interpretation_id':row['id'], 'expected_context_version':1}
+    confirmed = i.client.post(base+'/confirm', json=payload, headers=csrf(i.s.session))
+    assert confirmed.status_code == 200, confirmed.text
+    contract = confirmed.json()['confirmed_contract']
+    assert contract['contract']['kind'] == 'APBRA_NATIVE_GOAL_CONFIRMED_REQUIREMENTS'
+    assert contract['contract']['dataStructure'] is None
+    assert contract['contract']['sourceReceiptId'] == reference
+    understanding = contract['contract']['confirmedUnderstanding']
+    assert not {'admission', 'receipt_id', 'context_version'} & understanding.keys()
+    assert understanding['confirmation_summary'] == analysis['confirmationSummary']
+    repeated = i.client.post(base+'/confirm', json=payload, headers=csrf(i.s.session))
+    assert repeated.json() == confirmed.json()
+    with i.s.database.session() as db:
+        assert db.get(InterpretationRow, UUID(row['id'])).evidence_id is None
+    state = i.s.load()
+    assert state.confirmed_contract_id == UUID(contract['id'])
+    assert state.interpretation_id == UUID(row['id'])
+    saved = i.client.post(base+'/conversation', headers=csrf(i.s.session), json={
+        'kind':'USER_MESSAGE', 'payload':{'text':'Synthetic refinement'},
+        'expected_context_version':1, 'command_key':str(uuid4())})
+    assert saved.status_code == 200, saved.text
+    stale = i.client.get(base+'/acceptance').json()
+    assert not stale['interpretation']['current'] and not stale['confirmed_contract']['current']
+    rejected = i.client.post(base+'/confirm', json=payload, headers=csrf(i.s.session))
+    assert rejected.status_code == 409
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize('fault',
+                         ['needs', 'needs-no-questions', 'malformed', 'http-error', 'archive'])
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_incomplete_error_or_unprovable_cannot_confirm(integrated, monkeypatch, fault):
+    from test_conversations import provider_analysis
+    from test_native_contracts import intake, native_body
+
+    import apbra_api.native_goal_context as goal_native
+
+    i = integrated
+    analysis = provider_analysis(ready=fault not in {'needs', 'needs-no-questions'})
+    if fault == 'needs-no-questions':
+        analysis['questions'] = []
+    if fault == 'malformed':
+        analysis['confirmationSummary']['objective'] = 23
+    i.response.raw = native_body(analysis)
+    if fault == 'http-error':
+        i.response.status = 500
+    reference = dispatch(i).json()['native_response']['receipt_id']
+    if fault == 'archive':
+        original = goal_native.ReadOnlyNativeIndex.load
+        monkeypatch.setattr(goal_native.ReadOnlyNativeIndex, 'load',
+                            lambda self, *args: replace(original(self, *args), size=1))
+    with i.s.database.session() as db:
+        before = report_counts(db)
+    response = intake(i, reference)
+    assert response.status_code in {200, 409, 422}, response.text
+    if response.status_code == 200:
+        assert response.json()['accepted'] is False
+    with i.s.database.session() as db:
+        assert report_counts(db) == before
+    state = i.client.get(f"/api/cases/{i.s.case['id']}/acceptance").json()
+    assert state['interpretation'] is None and state['confirmed_contract'] is None
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_confirmation_binds_one_native_generation_and_never_uses_renderer(integrated):
+    from test_conversations import provider_analysis
+    from test_native_contracts import intake, native_body
+
+    i = integrated
+    i.response.raw = native_body(provider_analysis(ready=True))
+    reference = dispatch(i).json()['native_response']['receipt_id']
+    row = intake(i, reference).json()['interpretation']
+    confirmed = i.client.post(f"/api/cases/{i.s.case['id']}/confirm", headers=csrf(i.s.session),
+                              json={'interpretation_id':row['id'], 'expected_context_version':1})
+    assert confirmed.status_code == 200, confirmed.text
+    state = i.s.load()
+    values = approval(stages=('REPORT_DESIGN',)).model_dump()
+    values['binding'].update(company_id=i.s.company, provider_profile=i.s.profile)
+    for name in ('case_id', 'settings_id', 'settings_digest', 'request_version_id',
+                 'semantic_context_version', 'input_digest', 'confirmed_contract_id',
+                 'confirmed_contract_digest'):
+        values[name] = getattr(state, name)
+    values.update(expected_interpretation_id=state.interpretation_id,
+                  expected_interpretation_digest=state.interpretation_digest)
+    bounded = ReportApproval.model_validate(values)
+    gate = Reservations(bounded, lambda: True, i.s.load)
+    app = native_application_factory(bounded, gate, create_app)(
+        settings=i.s.settings, database=i.s.database, foundry_credentials=i.credentials)
+    client = TestClient(app)
+    client.cookies.update(i.client.cookies)
+    i.response.raw = RAW
+    payload = {**i.payload, 'command_key':str(uuid4()), 'task':'REPORT_DESIGN',
+               'confirmed_contract_id':str(state.confirmed_contract_id)}
+    received = client.post(i.path, json=payload, headers=csrf(i.s.session))
+    assert received.status_code == 200, received.text
+    assert received.json()['native_response']['state'] == 'RECEIVED'
+    wire = json.loads(json.loads(i.calls[-1].content)['input'][0]['content'])
+    assert wire['task'] == 'REPORT_DESIGN' and wire['context']['dataStructure'] is None
+    assert wire['context']['confirmedRequirements']['sourceReceiptId'] == reference
+    assert 'rendererCapabilities' not in wire['context']
+    assert client.post(i.path, json=payload, headers=csrf(i.s.session)).json() == received.json()
+    assert len(i.calls) == len(i.tokens) == 2
+
+
+@pytest.mark.parametrize('fault', ['archive', 'input', 'settings'])
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_confirmed_proof_is_revalidated_before_reuse(integrated, monkeypatch, fault):
+    from test_conversations import provider_analysis
+    from test_native_contracts import intake, native_body
+
+    import apbra_api.native_goal_context as goal_native
+
+    i = integrated
+    i.response.raw = native_body(provider_analysis(ready=True))
+    reference = dispatch(i).json()['native_response']['receipt_id']
+    row = intake(i, reference).json()['interpretation']
+    base = f"/api/cases/{i.s.case['id']}"
+    payload = {'interpretation_id':row['id'], 'expected_context_version':1}
+    initial = i.client.post(base+'/confirm', json=payload, headers=csrf(i.s.session))
+    assert initial.status_code == 200, initial.text
+    if fault == 'archive':
+        original = goal_native.ReadOnlyNativeIndex.load
+        monkeypatch.setattr(goal_native.ReadOnlyNativeIndex, 'load',
+                            lambda self, *args: replace(original(self, *args), size=1))
+    elif fault == 'input':
+        original_context = goal_native.goal_only_context
+        monkeypatch.setattr(goal_native, 'goal_only_context',
+                            lambda *args: {**original_context(*args), 'requestText':'Changed'})
+    else:
+        with i.s.database.session() as db:
+            new_settings(db, i.s.company, {'automatic_generation_enabled':False})
+    state = i.client.get(base+'/acceptance').json()
+    assert not state['interpretation']['current'] and not state['confirmed_contract']['current']
+    denied = i.client.post(base+'/confirm', json=payload, headers=csrf(i.s.session))
+    assert denied.status_code in {409, 422}, denied.text
+    from apbra_api.model_provider import ProviderConfigurationError
+    with pytest.raises(ProviderConfigurationError):
+        i.s.load()
+    assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.mark.parametrize('identity', ['member', 'foreign'])
+@pytest.mark.parametrize('integrated', ['goal-only'], indirect=True)
+def test_goal_native_admission_and_confirmation_remain_private(integrated, identity):
+    from test_conversations import provider_analysis
+    from test_native_contracts import intake, native_body
+
+    i = integrated
+    i.response.raw = native_body(provider_analysis(ready=True))
+    reference = dispatch(i).json()['native_response']['receipt_id']
+    row = intake(i, reference).json()['interpretation']
+    session = sign_in(i.client, identity)
+    base = f"/api/cases/{i.s.case['id']}"
+    denied = i.client.post(base+f'/native-response-receipts/{reference}/contract',
+        headers=csrf(session), json={'expected_context_version':1,
+                                    'expected_settings_id':i.payload['expected_settings_id']})
+    assert denied.status_code in {403, 404}, denied.text
+    denied = i.client.post(base+'/confirm', headers=csrf(session),
+                          json={'interpretation_id':row['id'], 'expected_context_version':1})
+    assert denied.status_code in {403, 404}, denied.text
     assert len(i.calls) == len(i.tokens) == 1

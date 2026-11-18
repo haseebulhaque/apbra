@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,workspaceBrandingApi,knowledgeDocumentsApi,observabilityApi} from './api';
+import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,dateDisplayApi,requestOutputsApi,validRequestOutputPage,workspaceBrandingApi,knowledgeDocumentsApi,observabilityApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -151,4 +151,28 @@ it('retains redacted original metadata error details for the administration UI',
  vi.stubGlobal('fetch',vi.fn(async()=>response({status:'METADATA_UNAVAILABLE',settings_version:23,warnings:['METADATA_READ_UNAVAILABLE'],diagnostic})));
  const details=await tenantSettingsApi.agentDetails();
  expect(details.diagnostic).toEqual(diagnostic);expect(details.diagnostic?.message).toContain('403');
+});
+
+
+describe('tenant date display and numbered history transport',()=>{
+ it('keeps the member projection read-only and scopes admin writes with membership, CSRF and expected version',async()=>{
+  const fetch=vi.fn(async()=>response({company_id:'server-company',version:1,time_zone:'Australia/Perth',items:[]}));vi.stubGlobal('fetch',fetch);
+  await dateDisplayApi.current();await dateDisplayApi.admin('member-a');await dateDisplayApi.history('member-a');await dateDisplayApi.update('Australia/Perth',0,'member-a','synthetic-csrf');
+  const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+  expect(calls[0][0]).toBe('/api/workspace/date-display');expect(calls[0][1].cache).toBe('no-store');expect(calls[0][1].headers).not.toHaveProperty('X-CSRF-Token');
+  expect(calls[1][1].headers).toMatchObject({'X-Expected-Membership-Id':'member-a'});expect(calls[3][1].headers).toMatchObject({'X-Expected-Membership-Id':'member-a','X-CSRF-Token':'synthetic-csrf'});
+  expect(JSON.parse(String(calls[3][1].body))).toEqual({time_zone:'Australia/Perth',expected_version:0});
+  for(const [path] of calls)expect(path).not.toMatch(/company_id|tenant_id/);
+ });
+ it('encodes numbered pages and signed snapshots without silently dropping invalid zero values',async()=>{
+  const fetch=vi.fn(async()=>response({items:[]}));vi.stubGlobal('fetch',fetch);
+  await observabilityApi.audit('m',{page:3,limit:25,snapshot:'a+b/c='});await observabilityApi.errors('m',{page:0,limit:0});await requestOutputsApi.page('case/?x',2,100,'a+b/c=');
+  const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+  expect(new URL(calls[0][0],'https://synthetic.invalid').searchParams.get('snapshot')).toBe('a+b/c=');expect(calls[1][0]).toContain('page=0');expect(calls[1][0]).toContain('limit=0');expect(calls[2][0]).toContain('/case%2F%3Fx/outputs?');
+ });
+ it('rejects missing, cross-tenant, inconsistent or invalid numbered output metadata',()=>{
+  const page={company_id:'a',case_id:'case',items:[],page:1,page_size:10,total:0,pages:1,snapshot:'signed',as_of:'2026-01-01T00:00:00Z',current_context_version:1,current_report_available:false,maximum_bytes:25000000};
+  expect(validRequestOutputPage(page,'case',1,'a')).toBe(true);
+  for(const patch of [{company_id:'foreign'},{case_id:'foreign'},{current_context_version:2},{page:0},{total:NaN},{total:-1},{page_size:11},{pages:0},{snapshot:undefined},{current_report_available:undefined}])expect(validRequestOutputPage({...page,...patch} as typeof page,'case',1,'a')).toBe(false);
+ });
 });

@@ -504,3 +504,18 @@ def test_known_authored_technical_error_constants_are_preserved_exactly(code: st
     from apbra_api.foundry_agent_details import _redacted_error_details
     details = _redacted_error_details(ValueError(code), 'PRIVATE_REPORT_QUALIFICATION')
     assert details['message'] == code
+
+
+def test_knowledge_configuration_projection_uses_only_existing_two_gets() -> None:
+    configured=profile(agent_version='configured-version')
+    documents=records()
+    documents[1]['definition']['tools']=[{'type':'file_search','vector_store_ids':['vs-authorized-reference']},
+                                       {'type':'mcp','server_url':'https://'+CANARY+'.invalid'}]
+    seen=[]
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200,json=documents[len(seen)-1])
+    result=agent_details(COMPANY,configured,Credentials(configured),transport=httpx.MockTransport(handler))
+    assert len(seen)==2 and result['status']=='METADATA_OBSERVED_ONLY'
+    assert result['knowledge']['vector_store_ids']==['vs-authorized-reference']
+    assert result['knowledge']['file_history']=='NOT_READ' and CANARY not in json.dumps(result)

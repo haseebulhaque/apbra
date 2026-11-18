@@ -23,7 +23,7 @@ class Preparation:
     Nonpaid readiness runs before SDK construction. Qualification reads only
     the already approved account's selected agent/knowledge metadata privately.
     The host verifies rates and identity, discloses the conservative estimate
-    and residual direct-MCP risk, and respects the existing October ceiling.
+    and residual direct-MCP risk, and respects the current enforced period and ceiling.
     """
     preflight: Callable[[], None]
     qualify: Callable[[Any, Any], ReportApproval]

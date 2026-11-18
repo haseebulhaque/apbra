@@ -10,11 +10,12 @@ from fastapi import Cookie, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from sqlalchemy import select, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from . import tenant_date_display
 from .application import (
     AcceptanceService,
     AnalysisAttemptFailed,
@@ -57,6 +58,7 @@ from .domain import (
     Role,
 )
 from .evidence import LocalEvidenceStore
+from .foundry_admin_reads import AdminReadCredentials, ReadRequest, observe
 from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
 from .foundry_report_runtime import ReservedCredentials
 from .generation import GenerationBridge, GenerationService
@@ -105,6 +107,8 @@ from .observability import (
     record_system_error,
 )
 from .oidc_adapter import OidcAdapter
+from .password_auth import Mailer as PasswordMailer
+from .password_auth import PasswordAuthSettings, register_password_routes
 from .persistence import (
     ApplicationSession,
     AuditEventRow,
@@ -113,6 +117,7 @@ from .persistence import (
     CompanyRow,
     Database,
     MembershipRow,
+    SessionIdentityContactRow,
     SessionRow,
     SystemErrorRow,
     TenantSecretRow,
@@ -300,7 +305,10 @@ def create_app(
     foundry_credentials: FoundryCredentialProvider | None = None,
     foundry_metadata_credentials: AgentMetadataCredentialProvider | None = None,
     knowledge_provider: KnowledgeProvider | None = None,
+    foundry_admin_credentials: AdminReadCredentials | None = None,
     native_receive_enabled: bool = False,
+    password_mailer: PasswordMailer | None = None,
+    password_settings: PasswordAuthSettings | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
@@ -349,7 +357,6 @@ def create_app(
         response.headers["X-APBRA-Request-ID"] = str(correlation)
         return response
 
-
     def db_session() -> Iterator[Session]:
         with database.session() as db:
             yield db
@@ -393,7 +400,9 @@ def create_app(
                     raise ConfigurationUnavailable()
                 access = foundry_credentials.resolve(snapshot.company_id, profile)
                 return FoundryAgentResponsesProvider(
-                    profile, access, company_id=snapshot.company_id,
+                    profile,
+                    access,
+                    company_id=snapshot.company_id,
                 )
             except Exception:
                 raise ConfigurationUnavailable() from None
@@ -458,7 +467,10 @@ def create_app(
         )
 
     def local_generation_service(
-        db: Session, snapshot: TenantSettingsSnapshot, *, require_bridge: bool = False,
+        db: Session,
+        snapshot: TenantSettingsSnapshot,
+        *,
+        require_bridge: bool = False,
         resolve_provider: bool = True,
     ) -> GenerationService:
         if artifact_store is None:
@@ -762,9 +774,7 @@ def create_app(
             request, session_token, "original", document_id=document_id, revision_id=revision_id
         )
 
-    def request_error_reference(
-        request: Request, exc: Exception
-    ) -> tuple[str, bool, str]:
+    def request_error_reference(request: Request, exc: Exception) -> tuple[str, bool, str]:
         correlation = getattr(request.state, "apbra_correlation_id", None)
         if not isinstance(correlation, UUID):
             correlation = uuid4()
@@ -778,10 +788,13 @@ def create_app(
             route = request.scope.get("route")
             template = getattr(route, "path", "")
             operation = getattr(route, "name", "")
-            if (not isinstance(template, str) or not template.startswith("/api/")
-                    or template.startswith("/api/auth/")
-                    or not isinstance(operation, str)
-                    or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", operation) is None):
+            if (
+                not isinstance(template, str)
+                or not template.startswith("/api/")
+                or template.startswith("/api/auth/")
+                or not isinstance(operation, str)
+                or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,99}", operation) is None
+            ):
                 return str(reference), False, str(correlation)
             with database.session() as error_db:
                 assert isinstance(error_db, ApplicationSession)
@@ -796,34 +809,43 @@ def create_app(
                 if prior_reference is None:
                     prior_reference = getattr(exc, "support_reference", None)
                 if isinstance(prior_reference, UUID):
-                    prior = error_db.scalar(select(SystemErrorRow).where(
-                        SystemErrorRow.id == prior_reference,
-                        SystemErrorRow.company_id == actor.company_id,
-                        SystemErrorRow.actor_membership_id == actor.membership_id,
-                        SystemErrorRow.case_id == case_id,
-                    ))
+                    prior = error_db.scalar(
+                        select(SystemErrorRow).where(
+                            SystemErrorRow.id == prior_reference,
+                            SystemErrorRow.company_id == actor.company_id,
+                            SystemErrorRow.actor_membership_id == actor.membership_id,
+                            SystemErrorRow.case_id == case_id,
+                        )
+                    )
                     if prior is not None:
                         return str(prior_reference), True, str(prior.correlation_id)
                 module = (
-                    "Reports" if case_id is not None else
-                    "Settings" if template.startswith("/api/tenant-settings") else
-                    "Company" if template.startswith(("/api/companies", "/api/memberships")) else
-                    "API"
+                    "Reports"
+                    if case_id is not None
+                    else "Settings"
+                    if template.startswith("/api/tenant-settings")
+                    else "Company"
+                    if template.startswith(("/api/companies", "/api/memberships"))
+                    else "API"
                 )
                 reference = record_system_error(
-                    error_db, actor, case_id, operation.upper(),
+                    error_db,
+                    actor,
+                    case_id,
+                    operation.upper(),
                     ApplicationError() if isinstance(exc, RequestValidationError) else exc,
-                    module=module, correlation_id=correlation,
+                    module=module,
+                    correlation_id=correlation,
                 )
             return str(reference), True, str(correlation)
         except Exception as recording_error:
             # Never echo an exception message, connection string or request body.
             logger.warning(
                 "Error history unavailable: reference=%s type=%s",
-                reference, type(recording_error).__name__,
+                reference,
+                type(recording_error).__name__,
             )
             return str(reference), False, str(correlation)
-
 
     async def supported_error_response(
         request: Request, exc: Exception, *, status_code: int, code: str, message: str
@@ -832,7 +854,8 @@ def create_app(
         # invitation/auth validation responses free of tenant diagnostics.
         if status_code == 404 or not request.cookies.get(SESSION_COOKIE):
             return JSONResponse(
-                status_code=status_code, content={"error": {"code": code, "message": message}},
+                status_code=status_code,
+                content={"error": {"code": code, "message": message}},
                 headers={"Cache-Control": "no-store"},
             )
         reference, recorded, correlation = await run_in_threadpool(
@@ -840,13 +863,17 @@ def create_app(
         )
         return JSONResponse(
             status_code=status_code,
-            content={"error": {
-                "code": code, "message": message, "support_reference": reference,
-                "recorded": recorded, "correlation_id": correlation,
-            }},
+            content={
+                "error": {
+                    "code": code,
+                    "message": message,
+                    "support_reference": reference,
+                    "recorded": recorded,
+                    "correlation_id": correlation,
+                }
+            },
             headers={"X-APBRA-Request-ID": correlation, "Cache-Control": "no-store"},
         )
-
 
     @app.exception_handler(ApplicationError)
     async def handle_application_error(request: Request, exc: ApplicationError) -> Response:
@@ -863,10 +890,12 @@ def create_app(
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
         return await supported_error_response(
-            request, exc, status_code=500, code="SYSTEM_ERROR",
+            request,
+            exc,
+            status_code=500,
+            code="SYSTEM_ERROR",
             message="The operation could not be completed. Report the support reference for help.",
         )
-
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, _exc: RequestValidationError) -> Response:
@@ -877,7 +906,10 @@ def create_app(
         # Validation details can contain bearer credentials (for example an
         # invalid invitation token). Never echo rejected request input.
         return await supported_error_response(
-            request, _exc, status_code=422, code="REQUEST_VALIDATION_FAILED",
+            request,
+            _exc,
+            status_code=422,
+            code="REQUEST_VALIDATION_FAILED",
             message="The request format is invalid.",
         )
 
@@ -917,9 +949,14 @@ def create_app(
             "settings": snapshot.settings.model_dump(mode="json", by_alias=True),
             "credential": {
                 "status": "CONFIGURED" if ready else "NOT_CONFIGURED",
-                "maskedValue": None, "updatedAt": None,
-                "canReplace": False, "canRotate": False, "authMode": "ENTRA",
-            } if is_foundry else credential_status(
+                "maskedValue": None,
+                "updatedAt": None,
+                "canReplace": False,
+                "canRotate": False,
+                "authMode": "ENTRA",
+            }
+            if is_foundry
+            else credential_status(
                 db,
                 company_id=snapshot.company_id,
                 reference_id=snapshot.secret_reference_id,
@@ -928,7 +965,10 @@ def create_app(
 
     @app.get("/api/workspace/branding")
     def workspace_branding(
-        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         if request.query_params:
@@ -945,7 +985,10 @@ def create_app(
 
     @app.get("/api/tenant-settings/agent-details")
     def get_agent_details(
-        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         snapshot = admin_settings(db, actor)
@@ -956,17 +999,113 @@ def create_app(
         profile = snapshot.settings.provider_profile
         db.rollback()
         details = agent_details(
-            company_id, profile,
-            foundry_metadata_credentials if foundry_metadata_credentials is not None
+            company_id,
+            profile,
+            foundry_metadata_credentials
+            if foundry_metadata_credentials is not None
             else foundry_credentials,
         )
         fresh_actor = resolve_actor(db, session_token)
         fresh = admin_settings(db, fresh_actor)
-        if (fresh_actor.company_id != company_id or fresh_actor.membership_id != membership_id
-                or fresh.id != version_id):
+        if (
+            fresh_actor.company_id != company_id
+            or fresh_actor.membership_id != membership_id
+            or fresh.id != version_id
+        ):
             raise ConfigurationUnavailable()
         response.headers["Cache-Control"] = "no-store"
         return {**details, "settings_version": snapshot.version}
+
+    def provider_admin_read(
+        request: Request,
+        response: Response,
+        db: Session,
+        session_token: str | None,
+        *,
+        files: bool,
+    ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        snapshot = admin_settings(db, actor)
+        query = request.query_params
+        if request.headers.get("X-Expected-Membership-Id") != str(
+            actor.membership_id
+        ) or request.headers.get("X-Expected-Settings-Id") != str(snapshot.id):
+            raise ConfigurationUnavailable()
+        allowed = {"limit", "after", "vector_store_id"} if files else {"limit", "after"}
+        if any(key not in allowed or len(query.getlist(key)) != 1 for key in query):
+            raise RequestValidationError([])
+        try:
+            limit = int(query.get("limit", "10"))
+        except ValueError:
+            raise RequestValidationError([]) from None
+        if limit not in (10, 25, 50, 100) or any(len(value) > 255 for value in query.values()):
+            raise RequestValidationError([])
+        if (
+            any(
+                key in query
+                and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}", query[key]) is None
+                for key in ("after", "vector_store_id")
+            )
+            or files
+            and "vector_store_id" not in query
+        ):
+            raise RequestValidationError([])
+        response.headers["Cache-Control"] = "no-store"
+        profile = snapshot.settings.provider_profile
+        if profile is None or profile.protocol != "FOUNDRY_AGENT_RESPONSES":
+            return {
+                "status": "UNAVAILABLE",
+                "reason": "AGENT_NOT_CONFIGURED",
+                "items": [],
+                "has_more": False,
+                "next_cursor": None,
+                "settings_version": snapshot.version,
+            }
+        bound = ReadRequest(
+            actor.company_id,
+            actor.identity_id,
+            actor.membership_id,
+            snapshot.id,
+            profile.profile_id,
+            profile.configuration_id,
+            profile.endpoint,
+            profile.agent_version,
+            "LIST_AGENT_FILES" if files else "LIST_AGENTS",
+            query.get("vector_store_id"),
+            limit,
+            query.get("after"),
+        )
+        db.rollback()
+        # Deliberately no metadata/report credential fallback or owner-token reuse.
+        result = observe(bound, profile, foundry_admin_credentials)
+        fresh_actor = resolve_actor(db, session_token)
+        fresh = admin_settings(db, fresh_actor)
+        if (
+            fresh_actor.company_id,
+            fresh_actor.identity_id,
+            fresh_actor.membership_id,
+            fresh.id,
+        ) != (actor.company_id, actor.identity_id, actor.membership_id, snapshot.id):
+            raise ConfigurationUnavailable()
+        return {**result, "settings_version": snapshot.version}
+
+    @app.get("/api/tenant-settings/agents")
+    def get_readable_agents(
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return provider_admin_read(request, response, db, session_token, files=False)
+
+    @app.get("/api/tenant-settings/agent-files")
+    def get_agent_file_snapshot(
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        return provider_admin_read(request, response, db, session_token, files=True)
 
     @app.get("/api/tenant-settings/history")
     def get_tenant_settings_history(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
@@ -974,35 +1113,50 @@ def create_app(
 
     def history_filters(request: Request) -> HistoryFilters:
         allowed = {
-            "from", "to", "module", "actor_id", "operation", "outcome",
-            "support_reference", "limit", "cursor",
+            "from",
+            "to",
+            "module",
+            "actor_id",
+            "operation",
+            "outcome",
+            "support_reference",
+            "limit",
+            "cursor",
+            "page",
+            "snapshot",
         }
         values = request.query_params
         if any(key not in allowed or len(values.getlist(key)) != 1 for key in values):
             raise RequestValidationError([])
-        if any(len(value) > (4096 if key == "cursor" else 100)
-               for key, value in values.items()):
+        if any(
+            len(value) > (4096 if key in {"cursor", "snapshot"} else 100)
+            for key, value in values.items()
+        ):
             raise RequestValidationError([])
         try:
             return HistoryFilters(
                 from_time=datetime.fromisoformat(values["from"].replace("Z", "+00:00"))
-                if "from" in values else None,
+                if "from" in values
+                else None,
                 to_time=datetime.fromisoformat(values["to"].replace("Z", "+00:00"))
-                if "to" in values else None,
-                module=values.get("module"), operation=values.get("operation"),
+                if "to" in values
+                else None,
+                module=values.get("module"),
+                operation=values.get("operation"),
                 actor_id=UUID(values["actor_id"]) if "actor_id" in values else None,
                 outcome=values.get("outcome"),
                 support_reference=UUID(values["support_reference"])
-                if "support_reference" in values else None,
-                limit=int(values.get("limit", "50")), cursor=values.get("cursor"),
+                if "support_reference" in values
+                else None,
+                limit=int(values.get("limit", "10" if "page" in values else "50")),
+                cursor=values.get("cursor"),
+                page=int(values["page"]) if "page" in values else None,
+                snapshot=values.get("snapshot"),
             )
         except (ValueError, TypeError, OverflowError):
             raise RequestValidationError([]) from None
 
-
-    def history_admin(
-        request: Request, db: Session, session_token: str | None
-    ) -> Actor:
+    def history_admin(request: Request, db: Session, session_token: str | None) -> Actor:
         actor = resolve_actor(db, session_token)
         if actor.role not in {Role.COMPANY_OWNER, Role.COMPANY_ADMIN}:
             raise Forbidden()
@@ -1010,22 +1164,99 @@ def create_app(
             raise Conflict()
         return actor
 
-
     def history_read_audit(db: Session, actor: Actor, event: str) -> None:
         assert isinstance(db, ApplicationSession)
         correlation = CURRENT_CORRELATION.get()
         db.add_audit(
-            actor, event, "COMPANY", actor.company_id,
-            json.dumps({
-                "outcome": "SUCCEEDED",
-                "correlation_id": str(correlation) if correlation is not None else None,
-            }, sort_keys=True, separators=(",", ":")),
+            actor,
+            event,
+            "COMPANY",
+            actor.company_id,
+            json.dumps(
+                {
+                    "outcome": "SUCCEEDED",
+                    "correlation_id": str(correlation) if correlation is not None else None,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
         )
 
+    @app.get("/api/workspace/date-display")
+    def workspace_date_display(
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        actor = resolve_actor(db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        response.headers["Cache-Control"] = "no-store"
+        return tenant_date_display.current(db, actor.company_id)
+
+    @app.get("/api/tenant-settings/date-display")
+    def get_date_display(
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        response.headers["Cache-Control"] = "no-store"
+        return tenant_date_display.current(db, actor.company_id)
+
+    @app.get("/api/tenant-settings/date-display/history")
+    def get_date_display_history(
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+    ) -> dict[str, Any]:
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        response.headers["Cache-Control"] = "no-store"
+        return {"items": tenant_date_display.history(db, actor)}
+
+    @app.patch("/api/tenant-settings/date-display")
+    def patch_date_display(
+        payload: tenant_date_display.DateDisplayUpdate,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> dict[str, Any]:
+        require_csrf(session_token, csrf)
+        actor = history_admin(request, db, session_token)
+        if request.query_params:
+            raise RequestValidationError([])
+        result = tenant_date_display.update(db, actor, payload)
+        assert isinstance(db, ApplicationSession)
+        db.add_audit(
+            actor,
+            "TENANT_DATE_DISPLAY_UPDATED",
+            "COMPANY",
+            actor.company_id,
+            json.dumps(
+                {"outcome": "SUCCEEDED", "version": result["version"]},
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+        db.commit()
+        response.headers["Cache-Control"] = "no-store"
+        return result
 
     @app.get("/api/tenant-settings/audit-events")
     def tenant_audit_events(
-        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = history_admin(request, db, session_token)
@@ -1037,11 +1268,13 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/tenant-settings/audit-events/{event_id}")
     def tenant_audit_event(
-        event_id: UUID, request: Request, response: Response,
-        db: DB, session_token: SessionCookie = None,
+        event_id: UUID,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = history_admin(request, db, session_token)
@@ -1053,10 +1286,12 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/tenant-settings/errors")
     def tenant_errors(
-        request: Request, response: Response, db: DB, session_token: SessionCookie = None,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = history_admin(request, db, session_token)
@@ -1068,11 +1303,13 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/tenant-settings/errors/{error_id}")
     def tenant_error(
-        error_id: UUID, request: Request, response: Response,
-        db: DB, session_token: SessionCookie = None,
+        error_id: UUID,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = history_admin(request, db, session_token)
@@ -1084,27 +1321,35 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/cases/{case_id}/errors")
     def report_errors(
-        case_id: UUID, request: Request, response: Response,
-        db: DB, session_token: SessionCookie = None,
+        case_id: UUID,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = resolve_actor(db, session_token)
         case_service.get(db, actor, case_id)
         result = list_errors(
-            db, actor, history_filters(request), case_id=case_id,
+            db,
+            actor,
+            history_filters(request),
+            case_id=case_id,
             cursor_secret=settings.session_secret,
         )
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/cases/{case_id}/errors/{error_id}")
     def report_error(
-        case_id: UUID, error_id: UUID, request: Request, response: Response,
-        db: DB, session_token: SessionCookie = None,
+        case_id: UUID,
+        error_id: UUID,
+        request: Request,
+        response: Response,
+        db: DB,
+        session_token: SessionCookie = None,
     ) -> dict[str, Any]:
         assert isinstance(db, ApplicationSession)
         actor = resolve_actor(db, session_token)
@@ -1115,7 +1360,6 @@ def create_app(
         response.headers["Cache-Control"] = "no-store"
         return result
 
-
     @app.get("/api/tenant-settings/qualified-profiles")
     def get_qualified_profiles(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
         admin_settings(db, resolve_actor(db, session_token))
@@ -1125,7 +1369,8 @@ def create_app(
     # grant. Keep the invocation dependency unchanged everywhere else.
     settings_readiness: FoundryCredentialProvider | None = (
         _SettingsIdentityReadiness(foundry_metadata_credentials)
-        if foundry_metadata_credentials is not None else foundry_credentials
+        if foundry_metadata_credentials is not None
+        else foundry_credentials
     )
 
     @app.put("/api/tenant-settings")
@@ -1164,7 +1409,10 @@ def create_app(
         actor = resolve_actor(db, session_token)
         try:
             snapshot = update_settings_section(
-                db, actor, section, payload.changes,
+                db,
+                actor,
+                section,
+                payload.changes,
                 expected_version=payload.expected_version,
                 reason=payload.reason,
                 credential_store=credential_store,
@@ -1545,6 +1793,16 @@ def create_app(
         )
         db.add(session_row)
         db.flush()
+        if claims.email is not None and inspect(db.connection()).has_table(
+            "session_identity_contacts"
+        ):
+            db.add(
+                SessionIdentityContactRow(
+                    session_id=session_row.id,
+                    email=claims.email,
+                    email_verified=claims.email_verified,
+                )
+            )
         identity_service.record(
             db, transaction.provider_profile_id, "AUTH_LOGIN_SUCCEEDED", identity_id=identity.id
         )
@@ -1574,27 +1832,41 @@ def create_app(
         return response
 
     @app.get("/api/auth/session")
-    def auth_session(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
+    def auth_session(
+        response: Response, db: DB, session_token: SessionCookie = None
+    ) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
         assert isinstance(db, ApplicationSession)
         try:
             row, identity = resolve_session(db, session_token)
         except AuthenticationRequired:
             return {"authenticated": False}
+        contact_available = inspect(db.connection()).has_table("session_identity_contacts")
+        contact = db.get(SessionIdentityContactRow, row.id) if contact_available else None
         result: dict[str, Any] = {
             "authenticated": True,
             "identity": {
                 "id": str(identity.id),
                 "display_name": identity.display_name,
+                "email": contact.email if contact is not None else None,
+                "email_verified": contact.email_verified if contact is not None else None,
+                "email_state": "AVAILABLE"
+                if contact is not None
+                else ("NOT_RETAINED" if contact_available else "UNAVAILABLE"),
             },
             "csrf_token": csrf_token(session_token or "", settings.session_secret),
         }
         actor = db.active_actor(row.membership_id, identity.id) if row.membership_id else None
         if actor is not None:
+            company = db.get(CompanyRow, actor.company_id)
+            if company is None or not company.active:
+                raise AuthenticationRequired()
             result["membership_state"] = "ACTIVE"
             result["actor"] = {
                 "identity_id": str(actor.identity_id),
                 "membership_id": str(actor.membership_id),
                 "company_id": str(actor.company_id),
+                "company_name": company.name,
                 "display_name": actor.display_name,
                 "role": actor.role.value,
             }
@@ -1922,7 +2194,11 @@ def create_app(
             )
             assert isinstance(db, ApplicationSession)
             failure_reference = record_system_error(
-                db, actor, case_id, "CREATE_INTERPRETATION", exc,
+                db,
+                actor,
+                case_id,
+                "CREATE_INTERPRETATION",
+                exc,
                 source_kind="INTERPRETATION",
                 source_id=request.state.apbra_correlation_id,
             )
@@ -2019,9 +2295,7 @@ def create_app(
         return {
             "items": local_generation_service(
                 db, tenant_snapshot(db, actor), resolve_provider=False
-            ).history(
-                db, actor, case_id
-            )
+            ).history(db, actor, case_id)
         }
 
     @app.get("/api/cases/{case_id}/reviewed-designs")
@@ -2033,10 +2307,8 @@ def create_app(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, session_token)
         return local_generation_service(
-                db, tenant_snapshot(db, actor), resolve_provider=False
-            ).list_reviewed_designs(
-            db, actor, case_id, confirmed_contract_id
-        )
+            db, tenant_snapshot(db, actor), resolve_provider=False
+        ).list_reviewed_designs(db, actor, case_id, confirmed_contract_id)
 
     @app.post("/api/cases/{case_id}/reviewed-designs")
     async def intake_reviewed_design(
@@ -2051,6 +2323,7 @@ def create_app(
         require_csrf(session_token, supplied_csrf)
         raw_bytes = await request.body()
         raw_body = raw_bytes.decode(json.detect_encoding(raw_bytes), errors="surrogatepass")
+
         def save_reviewed_design() -> dict[str, Any]:
             actor = resolve_actor(db, session_token)
             service = local_generation_service(db, tenant_snapshot(db, actor))
@@ -2147,9 +2420,7 @@ def create_app(
         return {
             "attempt": local_generation_service(
                 db, tenant_snapshot(db, actor), resolve_provider=False
-            ).get(
-                db, actor, case_id, attempt_id
-            )
+            ).get(db, actor, case_id, attempt_id)
         }
 
     @app.post("/api/cases/{case_id}/generation/{attempt_id}/cancel")
@@ -2165,9 +2436,7 @@ def create_app(
         return {
             "attempt": local_generation_service(
                 db, tenant_snapshot(db, actor), resolve_provider=False
-            ).cancel(
-                db, actor, case_id, attempt_id
-            )
+            ).cancel(db, actor, case_id, attempt_id)
         }
 
     @app.get("/api/cases/{case_id}/generation/{attempt_id}/artifact")
@@ -2339,37 +2608,58 @@ def create_app(
                 raise ConfigurationUnavailable() from None
 
         register_native_response_routes(
-            app, database, require_csrf=require_csrf, snapshot_for=tenant_snapshot,
-            service_for=local_acceptance_service, generation_for=local_generation_service,
+            app,
+            database,
+            require_csrf=require_csrf,
+            snapshot_for=tenant_snapshot,
+            service_for=local_acceptance_service,
+            generation_for=local_generation_service,
             access_for=native_access,
-            objects=evidence_store, receive_enabled=native_receive_enabled,
-            reservations=(foundry_credentials.reservations
-                          if isinstance(foundry_credentials, ReservedCredentials) else None),
+            objects=evidence_store,
+            receive_enabled=native_receive_enabled,
+            reservations=(
+                foundry_credentials.reservations
+                if isinstance(foundry_credentials, ReservedCredentials)
+                else None
+            ),
         )
 
-    def artifact_access(db: Session, company_id: UUID, case_id: UUID) -> tuple[
-        ProviderProfile, FoundryAccess, Callable[[], bool]
-    ]:
+    def artifact_access(
+        db: Session, company_id: UUID, case_id: UUID
+    ) -> tuple[ProviderProfile, FoundryAccess, Callable[[], bool]]:
         snapshot = current_settings(db, company_id)
         profile = snapshot.settings.provider_profile
-        if (profile is None or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
-                or snapshot.secret_reference_id is not None or foundry_credentials is None):
+        if (
+            profile is None
+            or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+            or snapshot.secret_reference_id is not None
+            or foundry_credentials is None
+        ):
             raise ConfigurationUnavailable()
         validate_qualified_profile(profile, qualified_profiles)
         credentials = foundry_credentials
         if credentials.ready(company_id, profile) is not True:
             raise ConfigurationUnavailable()
-        access = (credentials.resolve_readonly(company_id, profile, case_id=case_id)
-                  if isinstance(credentials, ReservedCredentials)
-                  else credentials.resolve(company_id, profile))
+        access = (
+            credentials.resolve_readonly(company_id, profile, case_id=case_id)
+            if isinstance(credentials, ReservedCredentials)
+            else credentials.resolve(company_id, profile)
+        )
         return profile, access, lambda: credentials.ready(company_id, profile)
 
     register_request_output_routes(
-        app, database, require_csrf=require_csrf, objects=artifact_store,
+        app,
+        database,
+        require_csrf=require_csrf,
+        objects=artifact_store,
+        cursor_secret=settings.session_secret,
         native_objects=evidence_store,
         artifact_access_for=artifact_access if foundry_credentials is not None else None,
     )
 
+    register_password_routes(
+        app, database, settings, password_mailer, password_settings=password_settings
+    )
     app.state.settings = settings
     app.state.database = database
     app.state.oidc = oidc

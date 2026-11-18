@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from .domain import Actor, ApplicationError, Forbidden, ProtectedResourceNotFound, Role
 from .model_provider import ProviderCallError
@@ -79,10 +79,19 @@ class HistoryFilters:
     support_reference: UUID | None = None
     limit: int = 50
     cursor: str | None = None
+    page: int | None = None
+    snapshot: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.limit) is not int or not 1 <= self.limit <= 100:
             raise ValueError("History limit must be between 1 and 100")
+        if self.page is not None:
+            if type(self.page) is not int or not 1 <= self.page <= 2**31 - 1:
+                raise ValueError("History page is invalid")
+            if self.limit not in {10, 25, 50, 100} or self.cursor is not None:
+                raise ValueError("Numbered history uses a supported page size without a cursor")
+        if self.snapshot is not None and (self.page is None or len(self.snapshot) > 2048):
+            raise ValueError("History snapshot is invalid")
         for name in ("from_time", "to_time"):
             value = getattr(self, name)
             if value is not None:
@@ -287,7 +296,7 @@ def _audit_module(operation: str) -> str:
         return "Reports"
     if operation.startswith(("MEMBERSHIP", "INVITATION", "COMPANY", "PROFILE")):
         return "Company"
-    if operation.startswith(("TENANT_SETTINGS", "SETTINGS", "SECRET")):
+    if operation.startswith(("TENANT_SETTINGS", "TENANT_DATE_DISPLAY", "SETTINGS", "SECRET")):
         return "Settings"
     if operation.startswith(("KNOWLEDGE", "DOCUMENT")):
         return "Documents"
@@ -316,7 +325,7 @@ def _audit_details(raw: str) -> dict[str, Any]:
         return {}
     try:
         details = json.loads(raw)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         return {}
     if not isinstance(details, dict):
         return {}
@@ -488,6 +497,106 @@ def _conditions(
     return conditions, binding
 
 
+def _page_snapshot(value: str | None, binding: str, secret: str) -> tuple[datetime, str]:
+    """Signed append cutoff, scoped to authorization/filter/size/kind; not MVCC."""
+    prefix = b"apbra-history-numbered-v1:"
+    if value is None:
+        cutoff = datetime.now(UTC)
+        payload = json.dumps([cutoff.isoformat(), binding], separators=(",", ":")).encode()
+        signature = hmac.new(secret.encode(), prefix + payload, hashlib.sha256).hexdigest().encode()
+        return cutoff, base64.urlsafe_b64encode(payload + b"." + signature).decode()
+    try:
+        payload, signature = base64.b64decode(value, altchars=b"-_", validate=True).rsplit(b".", 1)
+        expected = hmac.new(secret.encode(), prefix + payload, hashlib.sha256).hexdigest().encode()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError
+        timestamp, scope = json.loads(payload)
+        cutoff = datetime.fromisoformat(timestamp)
+        if scope != binding or cutoff.tzinfo is None or cutoff.utcoffset() is None:
+            raise ValueError
+        return cutoff.astimezone(UTC), value
+    except (ValueError, TypeError, UnicodeError, KeyError, OverflowError):
+        raise HistoryQueryInvalid() from None
+
+
+def _numbered_history(
+    db: ApplicationSession,
+    actor: Actor,
+    filters: HistoryFilters,
+    model: Any,
+    time_column: Any,
+    conditions: list[Any],
+    binding: str,
+    secret: str,
+    project: Any,
+    case_id: UUID | None = None,
+) -> dict[str, Any]:
+    assert filters.page is not None
+    cutoff, snapshot = _page_snapshot(filters.snapshot, binding, secret)
+    scoped = [*conditions, time_column <= cutoff]
+    query = select(model).where(*scoped).order_by(time_column.desc(), model.id.desc())
+    requested_offset = (filters.page - 1) * filters.limit
+    if model is AuditEventRow and filters.outcome:
+        # Preserve the exact safe Python legacy projection. JSONB casts are unsafe
+        # for historical non-JSON/NaN/Unicode values and can change filter meaning.
+        # Stream bounded batches, retain only the requested page and last page tail.
+        from collections import deque
+
+        tail: Any = deque(maxlen=filters.limit)
+        selected: list[dict[str, Any]] = []
+        total = 0
+        columns = [column for column in AuditEventRow.__table__.c if column.name != "details_json"]
+        stream = db.execute(
+            select(
+                *columns,
+                func.substr(
+                    AuditEventRow.details_json,
+                    1,
+                    4097,
+                ).label("details_json"),
+            )
+            .where(*scoped)
+            .order_by(
+                time_column.desc(),
+                model.id.desc(),
+            )
+            .execution_options(yield_per=200)
+        )
+        for row in stream:
+            item = project(row)
+            if item["outcome"] != filters.outcome:
+                continue
+            if requested_offset <= total < requested_offset + filters.limit:
+                selected.append(item)
+            tail.append(item)
+            total += 1
+        pages = max(1, (total + filters.limit - 1) // filters.limit)
+        page = min(filters.page, pages)
+        if page != filters.page:
+            size = total - (page - 1) * filters.limit
+            selected = list(tail)[-size:] if size else []
+        items = selected
+    else:
+        total = db.scalar(select(func.count()).select_from(model).where(*scoped)) or 0
+        pages = max(1, (total + filters.limit - 1) // filters.limit)
+        page = min(filters.page, pages)
+        rows = db.scalars(query.offset((page - 1) * filters.limit).limit(filters.limit))
+        items = [project(row) for row in rows]
+    return {
+        "company_id": str(actor.company_id),
+        **({"case_id": str(case_id) if case_id else None} if model is SystemErrorRow else {}),
+        "items": items,
+        "next_cursor": None,
+        "page": page,
+        "page_size": filters.limit,
+        "total": total,
+        "pages": pages,
+        "snapshot": snapshot,
+        "as_of": cutoff.isoformat(),
+        "consistency": "APPEND_CUTOFF",
+    }
+
+
 def list_audit(
     db: ApplicationSession,
     actor: Actor,
@@ -515,13 +624,17 @@ def list_audit(
             case(
                 (AuditEventRow.event_type.in_(_NATIVE_REPORT_OPERATIONS), "Reports"),
                 *[
-                    (AuditEventRow.event_type.like(prefix + "%"), _audit_module(prefix))
+                    (
+                        AuditEventRow.event_type.startswith(prefix, autoescape=True),
+                        _audit_module(prefix),
+                    )
                     for prefix in (
                         "MEMBERSHIP",
                         "INVITATION",
                         "COMPANY",
                         "PROFILE",
                         "TENANT_SETTINGS",
+                        "TENANT_DATE_DISPLAY",
                         "SETTINGS",
                         "SECRET",
                         "KNOWLEDGE",
@@ -545,6 +658,9 @@ def list_audit(
             )
             == filters.module
         )
+    if filters.page is not None:
+        return _numbered_history(db, actor, filters, AuditEventRow, AuditEventRow.created_at,
+                                 conditions, binding, cursor_secret, _audit_item)
     rows = list(
         db.scalars(
             select(AuditEventRow)
@@ -600,6 +716,9 @@ def list_errors(
         "errors",
         cursor_secret,
     )
+    if filters.page is not None:
+        return _numbered_history(db, actor, filters, SystemErrorRow, SystemErrorRow.occurred_at,
+                                 conditions, binding, cursor_secret, _error_item, case_id)
     rows = list(
         db.scalars(
             select(SystemErrorRow)

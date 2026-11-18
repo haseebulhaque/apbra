@@ -43,6 +43,19 @@ from .foundry_owner_metadata import (
 _SCOPE = "https://ai.azure.com/.default"
 
 
+def _report_budget_disclosure(approval: Any | None = None) -> str:
+    """Describe enforced authority; never alter it or infer a new spending grant."""
+    from .foundry_report_runtime import CAP, PERIOD, ReportApproval
+
+    if approval is not None:
+        require(type(approval) is ReportApproval)
+        approval.finite()
+        period = approval.ledger_period
+    else:
+        period = PERIOD
+    return f"Budget period {period}; A${CAP:.2f} remains the enforced ceiling."
+
+
 def _private_report_frame(plan: HandoffPlan, approval: Any, nonce: str) -> tuple[bytes, str]:
     """Dependency-qualified host framing; receiver validates every authority fact."""
     value = approval if type(approval) is dict else approval.model_dump(mode="json")
@@ -294,6 +307,7 @@ def run_handoff(
     hold: Callable[[], None] | None = None,
     report_approval: Any | None = None,
     preparation: Any | None = None,
+    catalogue_plan: Any | None = None,
 ) -> None:
     """Only independently owner-run private TTY; caller cannot supply persisted bearer."""
     sdk = None
@@ -310,6 +324,15 @@ def run_handoff(
             plan.validate()
             require(not (report_approval is not None and preparation is not None))
             report_mode = report_approval is not None or preparation is not None
+            if catalogue_plan is not None:
+                from .foundry_catalogue_lease import CataloguePlan
+
+                require(type(catalogue_plan) is CataloguePlan and not report_mode)
+                catalogue_plan.validate()
+                require((catalogue_plan.company_id, catalogue_plan.tenant_id,
+                         catalogue_plan.client_id, catalogue_plan.authorization_deadline)
+                        == (plan.company_id, plan.tenant_id, plan.client_id,
+                            plan.authorization_deadline))
             require(report_mode or getattr(peer, "runtime", False) is False)
             if report_mode:
                 require(getattr(peer, "runtime", False) is True)
@@ -338,6 +361,9 @@ def run_handoff(
                     terminal,
                     terminal_plan,
                     "Approve one temporary memory lease to the exact owned Docker receiver. "
+                    + ("Directory-only: read agent metadata in the configured project for "
+                       "your exact existing local owner identity. No agent definition, files "
+                       "or report requests. " if catalogue_plan is not None else "")
                     + ("No new consent, permissions or token persistence. "
                      "Sign-in itself sends no report request." if report_mode else
                      "No new consent, permissions, token persistence or paid calls."),
@@ -370,7 +396,9 @@ def run_handoff(
                         terminal,
                         terminal_plan,
                         "Authorize the approved report steps for the selected saved report "
-                        "within its explicitly reserved October budget. "
+                        "within its explicitly reserved budget. "
+                        + _report_budget_disclosure() + " "
+                        + 
                         "This sign-in sends no report request.",
                         "YES" if preparation is not None else "CONFIRM ONE CASE REPORT",
                     )
@@ -453,7 +481,8 @@ def run_handoff(
                             f"{slot.stage}: {slot.attempts} attempt(s)"
                             for slot in report_approval.slots
                         ) + ". Direct MCP work can exceed the estimate; this is not an Azure "
-                        "hard cap. October A$10 remains the ceiling. Saved retry allowance: "
+                        "hard cap. " + _report_budget_disclosure(report_approval)
+                        + " Saved retry allowance: "
                         + str(report_approval.binding.provider_profile.retry_limit)
                         + ". Failed or unknown work is not refunded. Continue?", "YES",
                     )
@@ -463,6 +492,35 @@ def run_handoff(
                     finally:
                         private_frame = b""
                     require(line(peer, plan.authorization_deadline) == b"REPORT_APPROVAL_ACCEPTED")
+                    check()
+                if catalogue_plan is not None:
+                    from .foundry_catalogue_lease import approval_payload
+
+                    operation = "OWNER_CATALOGUE_SCOPE_CONFIRMATION"
+                    approval(
+                        terminal, terminal_plan,
+                        "This confirmed account may read directory metadata only in "
+                        + catalogue_plan.profile.endpoint.split("/agents/", 1)[0]
+                        + ". Existing local identity " + str(catalogue_plan.identity_id)
+                        + ", membership " + str(catalogue_plan.membership_id)
+                        + ". At most " + str(catalogue_plan.page_requests)
+                        + " page request(s), expiring with this private lease. "
+                        "No invocation, configured-agent definition or file access.",
+                        "CONFIRM OWNER DIRECTORY READ",
+                    )
+                    check()
+                    require(account == (record.tenant_id, record.client_id, record.home_account_id))
+                    value = approval_payload(catalogue_plan, challenge["nonce"], account[2])
+                    raw = json.dumps(value, separators=(",", ":")).encode()
+                    require(0 < len(raw) <= MAX_FRAME)
+                    operation = "CATALOGUE_APPROVAL_FRAME_AND_ACK"
+                    try:
+                        peer.write(len(raw).to_bytes(4, "big") + raw)
+                    finally:
+                        raw = b""
+                        del value
+                    require(line(peer, plan.authorization_deadline)
+                            == b"CATALOGUE_APPROVAL_ACCEPTED")
                     check()
                 claim = json.dumps(
                     {

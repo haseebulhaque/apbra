@@ -129,9 +129,17 @@ def test_original_images_are_inline_bytes_only_when_settings_permits_vision(sour
     assert 'image-private-key' not in repr(ready)
 
 
-@pytest.mark.usefixtures("approved_report_authorization_clock")
+@pytest.fixture
+def historical_native_serializer_clock(monkeypatch):
+    from test_foundry_report_runtime import october_authorization_clock
+
+    october_authorization_clock.__wrapped__(monkeypatch)
+
+
 @pytest.mark.parametrize("fault", ["disabled", "oversized", "remote", "malformed", "mismatch"])
-def test_native_image_serializer_rejects_invalid_or_overbudget_input_before_dispatch(fault):
+def test_native_image_serializer_rejects_invalid_or_overbudget_input_before_dispatch(
+    fault, historical_native_serializer_clock,
+):
     from test_foundry_report_runtime import approval
 
     from apbra_api.model_provider import ProviderCallError, ProviderRequest
@@ -153,3 +161,170 @@ def test_native_image_serializer_rejects_invalid_or_overbudget_input_before_disp
                               context={},requires_vision=fault != 'mismatch')
     with pytest.raises(ProviderCallError):
         native_request_content(profile, request, [part])
+
+
+def test_original_workbook_bytes_are_preserved_without_processing_claim(source):
+    import base64
+    s = source
+    s.objects.content = b'PK\x03\x04synthetic-original-workbook'
+    s.row.content_digest = hashlib.sha256(s.objects.content).hexdigest()
+    s.row.filename = 'Quarterly results.xlsx'
+    s.row.format = 'XLSX'
+    bundle = prepare(s)
+    assert bundle.ready and not bundle.image_parts
+    assert len(bundle.file_parts) == 1
+    part = bundle.file_parts[0]
+    assert set(part) == {'type', 'filename', 'file_data'}
+    assert part['type'] == 'input_file' and part['filename'] == s.row.filename
+    assert base64.b64decode(part['file_data'].split(',', 1)[1], validate=True) == s.objects.content
+    assert bundle.sources[0]['contentDigest'] == s.row.content_digest
+    assert bundle.sources[0]['fileContentIndex'] == 1
+    assert bundle.manifest[0]['transport'] == 'INLINE_ORIGINAL_WORKBOOK'
+    assert not bundle.manifest[0]['processingVerified']
+    assert not bundle.manifest[0]['serviceFileUploaded']
+    assert 'file_data' not in repr(bundle)
+    limited = prepare(s, max_file_bytes=1)
+    assert not limited.ready and limited.file_parts == []
+
+
+@pytest.mark.parametrize('fault', ['remote', 'base64', 'signature', 'path', 'extra', 'budget'])
+def test_workbook_serializer_fail_closed(fault, historical_native_serializer_clock):
+    import base64
+
+    from test_foundry_report_runtime import approval
+
+    from apbra_api.model_provider import ProviderCallError, ProviderRequest
+    from apbra_api.native_response_probe import native_request_content
+    profile = approval().binding.provider_profile.model_copy(update={'max_input_characters': 10000})
+    part = {'type': 'input_file', 'filename': 'report.xlsx',
+            'file_data': ('data:application/vnd.openxmlformats-officedocument.'
+                          'spreadsheetml.sheet;base64,')
+                         + base64.b64encode(b'PK\x03\x04synthetic').decode()}
+    if fault == 'remote':
+        part['file_data'] = 'https://private.invalid/do-not-fetch'
+    elif fault == 'base64':
+        part['file_data'] += '@@'
+    elif fault == 'signature':
+        part['file_data'] = part['file_data'].split(',')[0] + ',bm90LXppcA=='
+    elif fault == 'path':
+        part['filename'] = '../report.xlsx'
+    elif fault == 'extra':
+        part['tools'] = 'not-allowed'
+    else:
+        profile = profile.model_copy(update={'max_input_characters': 1})
+    request = ProviderRequest(
+        task='REQUIREMENT_ANALYSIS', system_prompt='', output_schema={}, context={},
+    )
+    with pytest.raises(ProviderCallError):
+        native_request_content(profile, request, file_parts=[part])
+
+
+def test_workbook_serializer_does_not_require_vision(historical_native_serializer_clock):
+    import base64
+
+    from test_foundry_report_runtime import approval
+
+    from apbra_api.model_provider import ProviderRequest
+    from apbra_api.native_response_probe import native_request_content
+    profile = approval().binding.provider_profile.model_copy(update={'max_input_characters': 10000})
+    part = {'type': 'input_file', 'filename': 'report.xlsx',
+            'file_data': ('data:application/vnd.openxmlformats-officedocument.'
+                          'spreadsheetml.sheet;base64,')
+                         + base64.b64encode(b'PK\x03\x04synthetic').decode()}
+    request = ProviderRequest(
+        task='REQUIREMENT_ANALYSIS', system_prompt='', output_schema={}, context={},
+    )
+    assert native_request_content(profile, request, file_parts=[part]) == (
+        '{"context":{},"task":"REQUIREMENT_ANALYSIS"}'
+    )
+
+
+@pytest.mark.parametrize('status', [200, 400])
+def test_workbook_receive_preserves_exact_mixed_parts_and_never_retries(
+    status, historical_native_serializer_clock,
+):
+    import base64
+    import json
+    import time
+
+    import httpx
+    from test_foundry_report_runtime import approval
+
+    from apbra_api.model_provider import FoundryAccess, FoundryBearer, ProviderRequest
+    from apbra_api.native_response_archive import NativeResponseArchive, NativeResponseScope
+    from apbra_api.native_response_probe import native_input_characters, receive_native_response
+
+    profile = approval().binding.provider_profile.model_copy(update={
+        'max_input_characters': 10000,
+        'capabilities': approval().binding.provider_profile.capabilities.model_copy(
+            update={'vision': True},
+        ),
+    })
+    scope = NativeResponseScope(uuid4(), uuid4(), 1, uuid4())
+    calls, tokens, saved = [], [], []
+
+    class Objects:
+        def write(self, company, case, raw):
+            assert (company, case) == (scope.company_id, scope.case_id)
+            saved.append(raw)
+            return 'synthetic-only', hashlib.sha256(raw).hexdigest()
+
+    archive = NativeResponseArchive(scope, Objects(), SimpleNamespace(commit=lambda _: None))
+
+    def credential():
+        tokens.append(True)
+        return FoundryBearer('synthetic-only', time.time() + 600)
+
+    access = FoundryAccess(
+        scope.company_id, profile.profile_id, profile.configuration_id, credential,
+        'synthetic-kb', 'SHARED_STANDARDS', qualification='LIVE_METADATA_VERIFIED',
+    )
+    original = b'PK\x03\x04original-workbook'
+    file_part = {
+        'type': 'input_file', 'filename': 'report.xlsx',
+        'file_data': ('data:application/vnd.openxmlformats-officedocument.'
+                      'spreadsheetml.sheet;base64,') + base64.b64encode(original).decode(),
+    }
+    image_part = {'type': 'input_image',
+                  'image_url': 'data:image/png;base64,iVBORw0KGgpzeW50aGV0aWM='}
+    request = ProviderRequest(
+        task='REQUIREMENT_ANALYSIS', system_prompt='do-not-send', output_schema={'not': 'sent'},
+        context={'sourceText': 'all CSV rows\r\n'}, requires_vision=True,
+    )
+    raw = b'{"status":"completed","output":[]}' if status == 200 else b'{"error":{}}'
+
+    def handler(wire):
+        calls.append(wire)
+        return httpx.Response(status, content=raw)
+
+    result = receive_native_response(
+        profile, access, request, company_id=scope.company_id, case_id=scope.case_id,
+        context_version=1, archive=archive, transport=httpx.MockTransport(handler),
+        file_parts=[file_part], image_parts=[image_part],
+    )
+    body = json.loads(calls[0].content)
+    parts = body['input'][0]['content']
+    assert [p['type'] for p in parts] == ['input_text', 'input_file', 'input_image']
+    assert parts[1] == file_part and parts[2] == image_part
+    assert base64.b64decode(parts[1]['file_data'].split(',')[1]) == original
+    assert set(body) == {'input', 'max_output_tokens', 'stream', 'store'}
+    assert str(calls[0].url).split('?')[0] == profile.endpoint
+    assert len(calls) == len(tokens) == 1 and saved == [raw]
+    assert result.status == ('RECEIVED' if status == 200 else 'HTTP_ERROR')
+    size = native_input_characters(parts[0]['text'], [image_part], [file_part])
+    assert size == len(json.dumps(parts, separators=(',', ':')))
+    # Exact bound admitted; one character below it fails before a credential or POST.
+    from apbra_api.model_provider import ProviderCallError
+    from apbra_api.native_response_probe import native_request_content
+    assert native_request_content(
+        profile.model_copy(update={'max_input_characters': size}), request,
+        [image_part], [file_part],
+    )
+    with pytest.raises(ProviderCallError, match='MODEL_INPUT_BUDGET_EXCEEDED'):
+        receive_native_response(
+            profile.model_copy(update={'max_input_characters': size - 1}), access, request,
+            company_id=scope.company_id, case_id=scope.case_id, context_version=1,
+            archive=archive, transport=httpx.MockTransport(handler),
+            file_parts=[file_part], image_parts=[image_part],
+        )
+    assert len(calls) == len(tokens) == 1

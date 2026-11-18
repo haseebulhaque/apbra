@@ -1,7 +1,7 @@
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type ProcessingError} from './api';
-import {HistoryFacts,ReportErrorHistory,TenantObservability,historyReadError} from './TenantObservability';
+import {HistoryFacts,ReportErrorHistory,TenantObservability,HistoryTable,historyTimestamp,historyReadError} from './TenantObservability';
 const occurrence:ProcessingError={id:'event-1',occurred_at:'2026-10-15T12:00:00Z',module:'Reports',operation:'generation',outcome:'FAILED',actor_id:'actor-1',target_type:'report',target_id:'case-1',support_reference:'11111111-1111-4111-8111-111111111111',category:'PROCESSING_FAILED',message:'The operation could not be completed.',correlation_id:'22222222-2222-4222-8222-222222222222',case_id:'case-1',source_kind:'generation',source_id:'attempt-1',technical:{diagnostic:{exception_type:'RuntimeError',frames:[{module:'safe.module',function:'safe_function',line:10}]},truncated:true}};
 it('business report facts omit administrative diagnostics even if a server supplies them',()=>{
  const html=renderToStaticMarkup(<HistoryFacts record={occurrence}/>);expect(html).toContain(occurrence.support_reference);expect(html).toContain('Copy support reference');expect(html).not.toMatch(/safe\.module|safe_function|RuntimeError|Redacted technical|Open affected report/);
@@ -26,10 +26,21 @@ it('never reflects error messages into history read failures or confirms private
 it('offers only outcomes accepted by the history backend',()=>{
  const html=renderToStaticMarkup(<TenantObservability kind="audit" companyId="company-1" membershipId="member-1" onError={()=>{}}/>);
  const outcome=html.match(/<select aria-label="Outcome"[^>]*>(.*?)<\/select>/)?.[1]??'';
- expect([...outcome.matchAll(/<option(?: value="[^"]*")?[^>]*>([^<]*)<\/option>/g)].map(match=>match[1])).toEqual(['All outcomes','SUCCEEDED','FAILED','REJECTED','UNSPECIFIED']);
+ expect([...outcome.matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map(match=>match[1])).toEqual(['','SUCCEEDED','FAILED','REJECTED','UNSPECIFIED']);
+ expect(outcome).toContain('>Succeeded</option>');
 });
 
 it('labels persisted timestamps with their supplied offset',()=>{const html=renderToStaticMarkup(<HistoryFacts record={{...occurrence,occurred_at:'2026-10-15T10:00:00+10:00'}}/>);expect(html).toContain('Time (with UTC offset)');expect(html).toContain('2026-10-15T10:00:00+10:00');expect(html).not.toContain('Time (UTC)')});
+
+it('renders semantic table headers, row actions and original timestamp without exposing diagnostics in the list',()=>{
+ const html=renderToStaticMarkup(<HistoryTable kind="errors" items={[{...occurrence,operation:'<script>untrusted</script>'}]} busy={false} onOpen={()=>{}}/>);
+ expect(html).toContain('<table');expect(html).toContain('<caption');expect(html).toContain('scope="col"');expect(html).toContain('scope="row"');expect(html).toContain('aria-sort="descending"');expect(html).toContain('View occurrence event-1');expect(html).toContain('dateTime="2026-10-15T12:00:00Z"');expect(html).toContain('&lt;script&gt;');expect(html).not.toMatch(/<script>|safe_function|RuntimeError|support_reference/);
+});
+
+it('converts display timestamps to UTC while details retain their original offset',()=>{
+ expect(historyTimestamp('2026-10-15T10:00:00+10:00')).toBe(historyTimestamp('2026-10-15T00:00:00Z'));
+ expect(historyTimestamp('unavailable')).toBe('unavailable');
+});
 
 it('keeps report history closed until an explicit read is requested',()=>{const html=renderToStaticMarkup(<ReportErrorHistory companyId="c" membershipId="m" caseId="r" visible onError={()=>{}}/>);expect(html).toContain('Show report error history');expect(html).toContain('aria-expanded="false"');expect(html).not.toMatch(/Search history|Loading history|From \(UTC\)|role="alert"/)});
 

@@ -493,3 +493,124 @@ def test_file_fetch_rechecks_authority_settings_and_lease_before_saving(
     assert len(s.calls) == 1
     with database.session() as db:
         assert db.scalar(text("SELECT count(*) FROM request_outputs")) == 0
+
+
+def test_generated_file_provenance_is_projected_without_raw_admin_access(integration):
+    s = integration
+    response = s.client.post(s.prefix + "/files/0/output", headers=csrf(s.session), json={
+        "expected_context_version": 1, "command_key": str(uuid4())})
+    assert response.status_code == 200, response.text
+    assert response.json()["output"]["delivery_kind"] == "GENERATED_FILE"
+    listed = s.client.get(f"/api/cases/{s.case['id']}/outputs")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["delivery_kind"] == "GENERATED_FILE"
+    # List uses retained archive metadata only, no extra provider GET.
+    assert len(s.calls) == 1
+    assert "container_id" not in listed.text and "file_id" not in listed.text
+
+
+def test_generated_file_and_saved_prose_have_distinct_provenance_and_member_downloads(integration):
+    s = integration
+    generated = s.client.post(s.prefix + "/files/0/output", headers=csrf(s.session), json={
+        "expected_context_version": 1, "command_key": str(uuid4())})
+    assert generated.status_code == 200, generated.text
+    prose = s.client.post(s.prefix + "/output", headers=csrf(s.session), json={
+        "expected_context_version": 1, "command_key": str(uuid4())})
+    assert prose.status_code == 200, prose.text
+    assert prose.json()["output"]["delivery_kind"] == "RETAINED_OUTPUT"
+    member = TestClient(s.client.app)
+    member_session = sign_in(member, "member")
+    grant = s.client.post(f"/api/cases/{s.case['id']}/access", headers=csrf(s.session), json={
+        "membership_id": member_session["actor"]["membership_id"], "access_level": "VIEWER"})
+    assert grant.status_code == 200, grant.text
+    listed = member.get(f"/api/cases/{s.case['id']}/outputs")
+    assert listed.status_code == 200, listed.text
+    kinds = {item["id"]: item["delivery_kind"] for item in listed.json()["items"]}
+    assert kinds[generated.json()["output"]["id"]] == "GENERATED_FILE"
+    assert kinds[prose.json()["output"]["id"]] == "RETAINED_OUTPUT"
+    delivered = member.get(f"/api/cases/{s.case['id']}/outputs/"
+                           f"{generated.json()['output']['id']}/download")
+    assert delivered.status_code == 200
+    assert delivered.content == b"\x00\xffUnverified original model ZIP bytes"
+    assert member.get(s.prefix + "/view").status_code == 403
+    assert len(s.calls) == 1
+
+
+@pytest.mark.parametrize("fault", ["missing", "corrupt"])
+def test_unavailable_native_archive_does_not_hide_valid_saved_member_download(
+    integration, monkeypatch, fault,
+):
+    from apbra_api.evidence import EvidenceError, LocalEvidenceStore
+
+    s = integration
+    saved = s.client.post(s.prefix + "/files/0/output", headers=csrf(s.session), json={
+        "expected_context_version": 1, "command_key": str(uuid4())})
+    assert saved.status_code == 200, saved.text
+    member = TestClient(s.client.app)
+    session = sign_in(member, "member")
+    assert s.client.post(f"/api/cases/{s.case['id']}/access", headers=csrf(s.session), json={
+        "membership_id": session["actor"]["membership_id"], "access_level": "VIEWER"}
+    ).status_code == 200
+
+    def broken_original(self, key, digest):
+        if fault == "missing":
+            raise EvidenceError("Synthetic missing archive")
+        return b"Synthetic corrupted archive"
+
+    monkeypatch.setattr(LocalEvidenceStore, "read", broken_original)
+    listed = member.get(f"/api/cases/{s.case['id']}/outputs")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["items"][0]["delivery_kind"] == "RETAINED_OUTPUT"
+    output_id = saved.json()["output"]["id"]
+    delivered = member.get(f"/api/cases/{s.case['id']}/outputs/{output_id}/download")
+    assert delivered.status_code == 200
+    assert delivered.content == b"\x00\xffUnverified original model ZIP bytes"
+    assert len(s.calls) == 1
+
+
+def test_numbered_report_availability_is_independent_of_visible_output_page(integration, database):
+    from test_request_outputs import seed_output_history
+
+    from apbra_api.native_response_index import NativeContractBindingRow, NativeResponseReceiptRow
+
+    s = integration
+    generated = s.client.post(
+        s.prefix + "/files/0/output",
+        headers=csrf(s.session),
+        json={"expected_context_version": 1, "command_key": str(uuid4())},
+    )
+    assert generated.status_code == 200, generated.text
+    with database.session() as db:
+        receipt = db.get(NativeResponseReceiptRow, s.receipt.id)
+        assert receipt is not None
+        db.add(
+            NativeContractBindingRow(
+                operation_id=receipt.operation_id,
+                company_id=UUID(s.case["company_id"]),
+                case_id=UUID(s.case["id"]),
+                context_version=1,
+                task="REPORT_DESIGN",
+                contract_id=uuid4(),
+                input_digest="a" * 64,
+                profile_digest="b" * 64,
+                metadata_json="{}",
+            )
+        )
+        db.commit()
+    seed_output_history(database, s.case, s.session, 113)
+    path = f"/api/cases/{s.case['id']}/outputs"
+    first = s.client.get(path, params={"page": 1, "limit": 10})
+    assert first.status_code == 200, first.text
+    assert first.json()["current_report_available"] is True
+    last = s.client.get(
+        path, params={"page": 12, "limit": 10, "snapshot": first.json()["snapshot"]}
+    )
+    assert last.status_code == 200, last.text
+    assert last.json()["total"] == 114
+    assert last.json()["current_report_available"] is True
+    assert all(item["delivery_kind"] == "RETAINED_OUTPUT" for item in last.json()["items"])
+    assert (
+        len(s.calls) == 1
+    )  # Only the existing synthetic fetch; pagination makes no provider calls.
+
+

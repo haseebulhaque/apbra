@@ -17,7 +17,12 @@ from sqlalchemy import select
 from apbra_api.api import create_app
 from apbra_api.auth_boundary import SESSION_COOKIE, cookie_secure, digest
 from apbra_api.config import Settings
-from apbra_api.oidc_adapter import OidcAdapter, OidcProviderUnavailable, OidcValidationError
+from apbra_api.oidc_adapter import (
+    OidcAdapter,
+    OidcProviderUnavailable,
+    OidcValidationError,
+    optional_email_claims,
+)
 from apbra_api.persistence import (
     AuthenticationEventRow,
     AuthorizationCodeRow,
@@ -107,6 +112,7 @@ def hosted_id_token(
     signing_key: Any = HOSTED_PRIVATE_KEY,
     authorized_party: str | None = None,
     kid: str = "hosted-test-key",
+    contact: dict[str, object] | None = None,
 ) -> str:
     now = datetime.now(UTC)
     payload: dict[str, object] = {
@@ -119,6 +125,8 @@ def hosted_id_token(
         "nonce": nonce,
         "name": "Hosted Test User",
     }
+    if contact:
+        payload.update(contact)
     if authorized_party is not None:
         payload["azp"] = authorized_party
     encoded = jwt.encode(
@@ -1140,3 +1148,144 @@ def test_hosted_callback_without_nbf_persists_session_and_rejects_replay(
     assert exchanges == ["exchange"]
     # Provider tokens are never part of browser session projection.
     assert token not in json.dumps(session)
+
+
+@pytest.mark.parametrize(
+    "email", [None, 1, "", "not-email", "a@b\nsecret", " a@b", "a@b ", "x" * 321]
+)
+def test_optional_invalid_contact_does_not_invent_an_email(email: object) -> None:
+    assert optional_email_claims({"email": email, "email_verified": True}) == (None, None)
+    assert optional_email_claims(
+        {"preferred_username": "upn@example.invalid", "sub": "mail@example.invalid"}
+    ) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "verified, expected", [(True, True), (False, False), (None, None), ("true", None), (1, None)]
+)
+def test_contact_verification_is_only_a_literal_boolean(
+    verified: object, expected: bool | None
+) -> None:
+    assert optional_email_claims(
+        {"email": "person@example.invalid", "email_verified": verified}
+    ) == ("person@example.invalid", expected)
+
+
+def test_signed_contact_is_self_session_metadata_not_identity_or_membership(
+    database_url: str,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = hosted_settings(database_url)
+    sessions = []
+    for email in ["first@example.invalid", "second@example.invalid"]:
+        client, state, transaction = hosted_login(settings, database)
+        install_hosted_token_response(
+            monkeypatch,
+            hosted_id_token(
+                nonce=transaction.nonce,
+                contact={"email": email, "email_verified": True},
+            ),
+        )
+        callback = client.get(
+            "/api/auth/callback",
+            params={
+                "state": state,
+                "code": secrets.token_urlsafe(32),
+                "iss": HOSTED_ISSUER,
+            },
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        response = client.get("/api/auth/session")
+        assert response.headers["cache-control"] == "no-store"
+        body = response.json()
+        assert body["identity"]["email"] == email
+        assert body["identity"]["email_verified"] is True
+        assert body["membership_state"] == "COMPANY_CREATION_AVAILABLE"
+        assert "actor" not in body
+        assert client.get("/api/cases").status_code == 401
+        sessions.append((client, body))
+    assert sessions[0][1]["identity"]["id"] == sessions[1][1]["identity"]["id"]
+    assert (
+        sessions[0][0].get("/api/auth/session").json()["identity"]["email"]
+        == "first@example.invalid"
+    )
+    for client, body in sessions:
+        result = client.patch(
+            "/api/profile",
+            headers={"X-CSRF-Token": body["csrf_token"]},
+            json={"display_name": "Name", "email": "forged@example.invalid"},
+        )
+        assert result.status_code == 422
+    with database.session() as db:
+        reasons = " ".join(
+            (row.reason or "") + row.event_type
+            for row in db.scalars(select(AuthenticationEventRow))
+        )
+        assert "first@example.invalid" not in reasons and "second@example.invalid" not in reasons
+    assert (
+        "first@example.invalid" not in caplog.text and "second@example.invalid" not in caplog.text
+    )
+
+
+def test_local_session_has_no_inferred_email_and_names_its_actual_company(
+    client: TestClient,
+) -> None:
+    owner = sign_in(client, "owner")
+    assert owner["identity"]["email"] is None and owner["identity"]["email_verified"] is None
+    assert owner["actor"]["company_name"] == "Acme Synthetic"
+    foreign = sign_in(client, "foreign")
+    assert foreign["actor"]["company_name"] == "Beta Synthetic"
+    assert foreign["actor"]["company_id"] != owner["actor"]["company_id"]
+
+
+@pytest.mark.parametrize(
+    "contact, email, verified",
+    [
+        ({}, None, None),
+        ({"email": "invalid", "email_verified": True}, None, None),
+        ({"email": "line@example.invalid\nextra"}, None, None),
+        ({"preferred_username": "upn@example.invalid"}, None, None),
+        (
+            {"email": "signed@example.invalid", "email_verified": "true"},
+            "signed@example.invalid",
+            None,
+        ),
+        (
+            {"email": "signed@example.invalid", "email_verified": False},
+            "signed@example.invalid",
+            False,
+        ),
+    ],
+)
+def test_optional_contact_through_validated_signed_callback(
+    database_url: str,
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    contact: dict[str, object],
+    email: str | None,
+    verified: bool | None,
+) -> None:
+    settings = hosted_settings(database_url)
+    client, state, transaction = hosted_login(settings, database)
+    install_hosted_token_response(
+        monkeypatch, hosted_id_token(nonce=transaction.nonce, contact=contact)
+    )
+    result = client.get(
+        "/api/auth/callback",
+        params={
+            "state": state,
+            "code": secrets.token_urlsafe(32),
+            "iss": HOSTED_ISSUER,
+        },
+        follow_redirects=False,
+    )
+    assert result.status_code == 302
+    session = client.get("/api/auth/session").json()
+    assert session["identity"]["email"] == email
+    assert session["identity"]["email_verified"] is verified
+    assert session["identity"]["email_state"] == ("AVAILABLE" if email else "NOT_RETAINED")
+    assert "actor" not in session
+    assert client.get("/api/cases").status_code == 401
