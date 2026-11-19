@@ -177,6 +177,13 @@ class InvitationIssue(BaseModel):
     expires_in_days: int | None = Field(default=None, ge=1, le=30)
 
 
+class NativeInvitationIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=1, max_length=320)
+    role: Role
+    expires_in_days: int | None = Field(default=None, ge=1, le=30, strict=True)
+
+
 class InvitationToken(BaseModel):
     model_config = ConfigDict(extra="forbid")
     token: str = Field(min_length=40, max_length=200)
@@ -2523,6 +2530,79 @@ def create_app(
         db.commit()
         return {"revoked": True}
 
+    def native_manager_cookie(request: Request, csrf: str | None) -> str:
+        raw = request.cookies.get(SESSION_COOKIE)
+        require_csrf(raw, csrf)
+        if request.method != "GET" and request.headers.get("origin") != settings.public_origin:
+            raise Forbidden()
+        assert raw is not None
+        if not app.state.native_invitation_enabled:
+            raise Forbidden()
+        return raw
+
+    @app.post("/api/native-invitations")
+    def issue_native_invitation(
+        payload: NativeInvitationIssue,
+        request: Request,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+        key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    ) -> JSONResponse:
+        from .native_invitations import issue
+        from .persistence import utcnow
+
+        raw = native_manager_cookie(request, csrf)
+        result, created = issue(
+            database,
+            raw,
+            payload.email,
+            payload.role,
+            payload.expires_in_days,
+            key or "",
+            app.state.native_invitation_mailer,
+            utcnow,
+            expected_membership=request.headers.get("X-Expected-Membership-Id"),
+        )
+        return JSONResponse(
+            {"invitation": result},
+            status_code=201 if created else 200,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/native-invitations")
+    def list_native_invitations(
+        request: Request,
+        limit: Annotated[int, Query(ge=1, le=100)] = 50,
+        cursor: str | None = None,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        from .native_invitations import list_invitations
+        from .persistence import utcnow
+
+        raw = native_manager_cookie(request, csrf)
+        result = list_invitations(
+            database, raw, limit, cursor, settings.session_secret, utcnow,
+            expected_membership=request.headers.get("X-Expected-Membership-Id"),
+        )
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/native-invitations/{invitation_id}/revoke")
+    def revoke_native_invitation(
+        invitation_id: UUID,
+        request: Request,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        from .native_invitations import revoke
+        from .persistence import utcnow
+
+        raw = native_manager_cookie(request, csrf)
+        return JSONResponse(
+            {"invitation": revoke(
+                database, raw, invitation_id, utcnow,
+                expected_membership=request.headers.get("X-Expected-Membership-Id"),
+            )},
+            headers={"Cache-Control": "no-store"},
+        )
+
     @app.post("/api/invitations")
     def issue_invitation(
         payload: InvitationIssue,
@@ -2574,8 +2654,28 @@ def create_app(
         return {"revoked": True}
 
     @app.get("/api/memberships")
-    def list_memberships(db: DB, session_token: SessionCookie = None) -> dict[str, Any]:
-        return {"items": membership_service.list(db, resolve_actor(db, session_token))}
+    def list_memberships(
+        request: Request,
+        db: DB,
+        session_token: SessionCookie = None,
+        include_invitation_addresses: bool = False,
+        csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    ) -> JSONResponse:
+        if include_invitation_addresses and app.state.native_invitation_enabled:
+            assert isinstance(db, ApplicationSession)
+            from .native_invitations import manager
+            from .persistence import utcnow
+
+            raw = native_manager_cookie(request, csrf)
+            actor = manager(
+                db, raw, utcnow,
+                expected_membership=request.headers.get("X-Expected-Membership-Id"),
+            ).actor
+            items = membership_service.list(db, actor, include_invitation_addresses=True)
+            db.commit()
+        else:
+            items = membership_service.list(db, resolve_actor(db, session_token))
+        return JSONResponse({"items": items}, headers={"Cache-Control": "no-store"})
 
     @app.post("/api/memberships/{membership_id}/deactivate")
     def deactivate_membership(

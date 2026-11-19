@@ -20,3 +20,11 @@ it('accepts only random UUIDv4 support references and never renders backend diag
 });
 
 it('validates organisation names with server-equivalent NFC codepoint and control rules',()=>{expect(organisationNameError('🟢'.repeat(200))).toBeNull();expect(organisationNameError('e\u0301'.repeat(200))).toBeNull();expect(organisationNameError('短'.repeat(201))).not.toBeNull();for(const name of ['   ','a\u0000','a\u200b'])expect(organisationNameError(name)).not.toBeNull()});
+
+it('keeps normal password signup available inside a proof-bearing invitation with no implicit grant',()=>{
+  const markup=renderToStaticMarkup(<PasswordAccount mode="signup" onAuthenticated={()=>undefined}/>);
+  expect(markup).toContain('Create an APBRA account');
+  expect(markup).toContain('Email address');
+  expect(markup).not.toContain('Accept invitation');
+  expect(markup).not.toContain('Create organisation');
+});

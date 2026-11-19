@@ -197,16 +197,24 @@ class SmtpMailer:
         message = EmailMessage()
         message["From"] = self.sender
         message["To"] = recipient
-        message["Subject"] = (
-            "Verify your APBRA account" if purpose == "verify" else "Reset your APBRA password"
-        )
-        # Fragments are not transmitted in HTTP requests/referrers. The UI scrubs
-        # the fragment before requesting options and submits it only in a POST.
-        link = f"{self.public_origin}/account#account_action={purpose}&proof={proof}"
-        message.set_content(
-            f"Open this link in APBRA to {purpose} your account:\n{link}\n"
-            "If you did not request this, ignore this email. No existing workspace access changes."
-        )
+        if purpose == "invite":
+            message["Subject"] = "Invitation to an APBRA organisation"
+            link = f"{self.public_origin}/invitation#native_invitation={proof}"
+            message.set_content(
+                f"Sign in to review and accept your organisation invitation:\n{link}"
+            )
+        else:
+            if purpose not in {"verify", "reset"}:
+                raise ValueError("UNKNOWN_MAIL_PURPOSE")
+            message["Subject"] = (
+                "Verify your APBRA account" if purpose == "verify" else "Reset your APBRA password"
+            )
+            link = f"{self.public_origin}/account#account_action={purpose}&proof={proof}"
+            message.set_content(
+                f"Open this link in APBRA to {purpose} your account:\n{link}\n"
+                "If you did not request this, ignore this email. "
+                "No existing workspace access changes."
+            )
         context = ssl.create_default_context()
         host = settings.password_smtp_host
         assert host is not None
@@ -304,9 +312,14 @@ def register_password_routes(
             "password_audit",
             "native_account_principals",
             "native_workspace_sessions",
+            "native_invitations",
+            "native_invitation_commands",
+            "native_invitation_audit",
         )
     ):
         raise ValueError("PASSWORD_SCHEMA_NOT_READY")
+    app.state.native_invitation_enabled = feature.password_auth_enabled
+    app.state.native_invitation_mailer = mailer
     secure = settings.public_origin.startswith("https://")
     secret = settings.session_secret.encode()
     dummy = password_hash(secrets.token_urlsafe(32)) if feature.password_auth_enabled else ""
@@ -395,7 +408,9 @@ def register_password_routes(
             .where(PasswordSessionRow.digest == digest(raw))
         )
         if lock:
-            query = query.with_for_update(of=PasswordSessionRow)
+            query = query.with_for_update(of=PasswordSessionRow).execution_options(
+                populate_existing=True
+            )
         row = db.execute(query).one_or_none()
         now = clock()
         if row is None:
@@ -484,7 +499,13 @@ def register_password_routes(
         if not feature.password_auth_enabled:
             return answer("PASSWORD_ACCESS_UNAVAILABLE", 503)
         with database.session() as db:
-            found = active(db, request.cookies.get(COOKIE), lock=True)
+            found = active(db, request.cookies.get(COOKIE))
+            if found is not None:
+                from .native_organisation import lock_accounts
+
+                assert isinstance(db, ApplicationSession)
+                lock_accounts(db, [found[1].id])
+                found = active(db, request.cookies.get(COOKIE), lock=True)
             if found is None:
                 return answer("SIGNED_OUT", authenticated=False)
             assert isinstance(db, ApplicationSession)
@@ -740,6 +761,44 @@ def register_password_routes(
             if code not in {"EMAIL_INVALID", "PASSWORD_INVALID", "PASSWORD_POLICY", "AUTH_BUSY"}:
                 code = "REQUEST_INVALID"
             return answer(code, 503 if code == "AUTH_BUSY" else 400)
+
+    @app.post(PATH + "/invitations/{operation}")
+    async def invitation_command(operation: str, request: Request) -> JSONResponse:
+        from .domain import ApplicationError
+        from .native_invitations import recipient, record_denial
+        from .native_organisation import set_workspace_cookie
+
+        if operation not in {"inspect", "accept"}:
+            return answer("REQUEST_INVALID", 404)
+        data = await payload(request)
+        if isinstance(data, JSONResponse):
+            return data
+        proof = data.get("proof", "")
+        if set(data) != {"proof"} or not re.fullmatch(r"[A-Za-z0-9_-]{40,200}", proof):
+            reference = await run_in_threadpool(record_denial, database)
+            return answer("INVITATION_INVALID", 410, support_reference=str(reference))
+        with database.session() as db:
+            allowed = take_rate(db, "proof:" + digest(proof), 5, clock())
+        if not allowed:
+            return answer("TRY_LATER", 429)
+        try:
+            result = await run_in_threadpool(
+                recipient,
+                database,
+                request.cookies.get(COOKIE),
+                request.cookies.get(SESSION_COOKIE),
+                proof,
+                accept=operation == "accept",
+                now=clock,
+            )
+        except ApplicationError as exc:
+            return answer(
+                exc.code, exc.status_code, support_reference=str(exc.support_reference or uuid4())
+            )
+        response = answer(result.status, 201 if result.status == "ACCEPTED" else 200, **result.body)
+        if result.workspace_token:
+            set_workspace_cookie(response, result.workspace_token, secure, result.cookie_lifetime)
+        return response
 
     @app.post(PATH + "/{action}")
     async def command(action: str, request: Request, background: BackgroundTasks) -> JSONResponse:

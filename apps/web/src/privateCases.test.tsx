@@ -3,7 +3,7 @@ import {providerAuthenticationLabel} from './EnterpriseApp';
 import {expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {ApiError,type CaseRecord} from './api';
-import {ProfileEditor,validateProfileDisplayName,MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
+import {InvitationAdmin,ProfileEditor,validateProfileDisplayName,MountedReportWorkspace,reportWorkspaceContext,AppearanceControls,WorkspaceAccountMenu,CaseEditor,CaseList,ReportCreationWizard,personalColorMode,tenantPresentationTokens,presentationContrast,CompanyCreationForm,CompanySelection,SignedOut,clearedCompanyContext,companyCreationErrorMessage,profileErrorMessage,protectedErrorMessage} from './privateCases';
 
 const record:CaseRecord={id:'case-1',company_id:'company-1',creator_membership_id:'member-1',current_request_version_id:'request-2',version:2,semantic_context_version:1,created_at:'2026-09-23T00:00:00Z',updated_at:'2026-09-23T01:00:00Z',current_request:{id:'request-2',sequence:2,request_text:'Updated business request',created_at:'2026-09-23T01:00:00Z'}};
 
@@ -162,3 +162,11 @@ it('links profile-name guidance and invalid state to the field and prevents inva
 });
 
 it('uses customer language without preview or implementation messages on the account screen',()=>{const html=renderToStaticMarkup(<SignedOut providers={{items:[{profile_id:'local-test',display_label:'Local development identity'}],development_identities:['owner']}}/>);expect(html).toContain('Continue to your workspace');expect(html).not.toMatch(/preview|current iteration|not implemented|Local development identity|identity=owner|Company Owner/i)});
+
+it('routes native management to colleague email while retaining provider-subject management for federation',()=>{
+  const props={csrfToken:'synthetic',companyId:'company',currentMembershipId:'current',currentRole:'COMPANY_OWNER',onError:()=>undefined};
+  const native=renderToStaticMarkup(<InvitationAdmin {...props} native/>);
+  const external=renderToStaticMarkup(<InvitationAdmin {...props}/>);
+  expect(native).toContain('Invite a colleague');expect(native).not.toContain('Provider subject');
+  expect(external).toContain('Provider subject');expect(external).not.toContain('Colleague email');
+});

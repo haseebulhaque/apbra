@@ -609,6 +609,14 @@ def test_smtp_adapter_requires_verified_tls_and_fixed_fragment_link(settings, mo
     body = messages[0].get_content()
     assert settings.public_origin + "/account#account_action=verify&proof=" in body
     assert "?proof=" not in body and messages[0]["To"] == EMAIL
+    calls.clear()
+    SmtpMailer(cfg, settings.public_origin).send(EMAIL, "invite", "b" * 64)
+    assert calls == ["ehlo", "tls", "ehlo", "login", "send"]
+    invitation = messages[1].get_content()
+    assert settings.public_origin + "/invitation#native_invitation=" in invitation
+    assert "?proof=" not in invitation and "/account#" not in invitation
+    assert messages[1]["To"] == EMAIL
+
 
 
 def test_smtp_config_rejects_plaintext_transport_and_header_injection(settings):
