@@ -2843,7 +2843,7 @@ set(private_content_storage_task['allowed_paths']) != PRIVATE_CONTENT_STORAGE_PA
 (st,sc['P']),
 (spt,sp['P']),
 )
-        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 184
+        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 184,185
         if pn:bound_authorities+=((pa,pn['scope'](root,'Q')),(na,pn['scope'](root,'N')),(pg,pn['scope'](root,'G')))
         registered_tasks = {registered['task_id']: registered for registered, _ in
  legacy_authorities + bound_authorities if registered is not None}

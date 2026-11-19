@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-185",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-185-REG-20261118-091048",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Accepted finite 3-path development dependency maintenance implementation; effective manual registration release and fresh execution issuance required",
+  "requirements": [
+    "Haseeb accepted Confluence19496962v1 and explicitly approved the separately reviewed nine-path registration/source-extension amendment919478bd8d1b51f2663bf89026da1eaece127a329b1050f34eefa121e87f4d9b at2026-11-18T09:30:57Z. Technical semantics and literal product scope unchanged.",
+    "PR181 actually manually merged at2d7fd0f2121c4bc6a6be6aa70ece317428168c28; reviewed native headedeb26101fb1ad0e9d35871520392e6aa2148047; source trees byteequal.",
+    "Preserve the existing58731preview/18491database/inbox/accounts/organisations without restart, migration, qualification adoption or inspection. Haseeb personal acceptance NOT_REPORTED.",
+    "Current controlling sources8519682v119/3932362v12/3932382v21/4030847v10/4063408v8/4063348v9/3932483v4. Original84-row source register and all historical manifests remain byteexact.",
+    "Authorised proposed pins Vite7.3.8, alignedVitest/mocker4.1.12,esbuild0.28.2,source-map-js1.2.2 require fresh official and actual compatibility evidence; declarednpm11.6.0 unchanged. Restricted trusted-development/static-preview profile ACCEPTED; unresolvedpicomatch risk OPEN; full audit nonzero is nonzero, not production approval."
+  ],
+  "adrs": [
+    "Confluence19496962v1 accepted20261118; preserved technical Markdown SHA2564b9628c53cd4ddea713118508013c2b89fa79f616d8ad138b269670d4d8fee32",
+    "docs/decisions/development-dependency-maintenance.md is the complete preserved technical contract; new source extension docs/source-register-apbra185.json binds owner acceptance and current versions without rewriting the old84-row register."
+  ],
+  "architecture_refs": [
+    "APBRA-151 accepted multi-company invitation/private-resource boundaries; native explicit account-principal/password-parent binding; SECURITY.md and solo-owner process."
+  ],
+  "allowed_paths": [
+    "apps/web/package.json",
+    "apps/web/package-lock.json",
+    "docs/engineering/development-dependency-security.md"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "agents/**",
+    "infrastructure/**",
+    "local-data/**",
+    "apps/api/.env",
+    "apps/web/.env",
+    "apps/api/pyproject.toml",
+    "apps/api/uv.lock",
+    "apps/api/**",
+    "apps/web/src/**",
+    "apps/web/e2e/**",
+    "apps/web/vite.config.ts",
+    "apps/web/playwright.config.ts",
+    "docs/engineering/recovered-native-frozen-manifests.json",
+    "docs/engineering/recovered-native-frozen-manifests-v3.json"
+  ],
+  "acceptance_criteria": [
+    "Exact proposed available patch versions/lock resolution assessed against actual source and complete audit; no unsupported replacement or force fix.",
+    "Residual picomatch chain stays visible; no audit exclusion or relabelling full audit exit1 as pass.",
+    "Only two package files plus bounded security profile documentation change; compatibility failure requires reviewed scope amendment."
+  ],
+  "verification_required": [
+    "Validate complete issued task/schema/accepted source/doc/card and exact literal scope, effective real-main prerequisites and unchanged historical controls.",
+    "After actual registration manual merge, issue a separate fresh execution record bound to actual current main/base/head/actor/source vector before product edits. This task retains the real selected predecessor anchor, not a fabricated future release.",
+    "Future actual candidate: full API/PostgreSQL/migration/rollback/isolation, lint/types/build/bridges, full web and complete browser, CI policy/canonical/full bootstrap, pinned Linux tree+nonshallow history scan and complete dependency audit with unresolved findings.",
+    "Genuinely separate exact final base/head review, required actual hosted CI/full logs and Haseeb manual merge."
+  ],
+  "out_of_scope": [
+    "Implementation before effective registration and new actual-base execution issuance; current prepared task is not a released candidate.",
+    "No owner preview/data/settings changes, live email/model/provider calls, spending, permissions, production deployment, auto-approve/merge, Goal or monitoring. Existing roles/TTLs/limits remain; no domain autojoin/external identity fabrication/central console/organisation-owned agents."
+  ],
+  "escalate_when": [
+    "Actual source conflict, missing effective registration/manual integration, required additional path or substantive contract change, unsafe data, unavailable validation or repeated unexplained failure."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex /root through haseebulhaque/id30074430; APBRA-DEVOPS0.1; human initiator Haseeb Ul Haque",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "2d7fd0f2121c4bc6a6be6aa70ece317428168c28",
+  "branch": "agent/APBRA-DEVOPS/APBRA-185-development-dependency-maintenance",
+  "source_ids": [
+    "apbra-185-accepted-technical-contract-v1"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "NOT_YET_EFFECTIVE: accepted technical authority only. Requires qualified registration actually manually merged on real main. Before product edits issue fresh execution context against actual new main/base/head; preserve this predecessor anchor and literal scope, no fabricated future SHA.",
+  "dependencies": [
+    "Accepted technical Confluence19496962v1 (owner decision recorded, not runtime acceptance)",
+    "Independent exact-head review, full mandatory controls and required hostedCI of registration; Haseeb manual merge and actual-main readback",
+    "Fresh execution issuance bound to real implementation base/head before edits; separately qualified candidate and Haseeb manual merge"
+  ]
+}

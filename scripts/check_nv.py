@@ -110,7 +110,7 @@ def strip_public_dispatch_test(source):
     return source.replace(after,before,1)
 
 # Exact finite-stage inverse; historical fixtures need no future helper.
-FINITE_BOOT_HOOK = "        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 184\n"
+FINITE_BOOT_HOOK = "        nt,nf=pn['stage_authorities'](root,catalog,schema_errors,task_errors,active_task_id,active_branch,changed_paths) if pn else ((),[]);errors+=nf;bound_authorities=bound_authorities+nt  # 184,185\n"
 _finite_prior_strip_public_bootstrap = strip_public_bootstrap
 
 def strip_public_bootstrap(source):
