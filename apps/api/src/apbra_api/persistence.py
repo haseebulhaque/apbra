@@ -107,6 +107,50 @@ class MembershipRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class NativeInvitationRow(Base):
+    __tablename__ = "native_invitations"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    company_id: Mapped[UUID] = mapped_column(ForeignKey("companies.id"))
+    issued_by_membership_id: Mapped[UUID] = mapped_column()
+    issuer_account_id: Mapped[UUID] = mapped_column(ForeignKey("password_accounts.id"))
+    issuer_epoch: Mapped[int] = mapped_column()
+    delivery_key: Mapped[str] = mapped_column(String(320))
+    delivery_address: Mapped[str] = mapped_column(String(320))
+    recipient_account_id: Mapped[UUID | None] = mapped_column(ForeignKey("password_accounts.id"))
+    recipient_epoch: Mapped[int | None] = mapped_column()
+    role: Mapped[str] = mapped_column(String(32))
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    settings_version_id: Mapped[UUID] = mapped_column()
+    delivery_state: Mapped[str] = mapped_column(String(16))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoke_reason: Mapped[str | None] = mapped_column(String(40))
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consumed_by_account_id: Mapped[UUID | None] = mapped_column(ForeignKey("password_accounts.id"))
+    target_membership_id: Mapped[UUID | None] = mapped_column()
+
+
+class NativeInvitationCommandRow(Base):
+    __tablename__ = "native_invitation_commands"
+    company_id: Mapped[UUID] = mapped_column(primary_key=True)
+    issuer_identity_id: Mapped[UUID] = mapped_column(primary_key=True)
+    command_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    payload_digest: Mapped[str] = mapped_column(String(64))
+    invitation_id: Mapped[UUID] = mapped_column(ForeignKey("native_invitations.id"), unique=True)
+
+
+class NativeInvitationAuditRow(Base):
+    __tablename__ = "native_invitation_audit"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    event: Mapped[str] = mapped_column(String(40))
+    company_id: Mapped[UUID | None] = mapped_column(ForeignKey("companies.id"))
+    invitation_id: Mapped[UUID | None] = mapped_column(ForeignKey("native_invitations.id"))
+    account_id: Mapped[UUID | None] = mapped_column(ForeignKey("password_accounts.id"))
+    membership_id: Mapped[UUID | None] = mapped_column()
+
+
 class TenantSecretRow(Base):
     __tablename__ = "tenant_secret_records"
     __table_args__ = (
@@ -1917,6 +1961,64 @@ class ApplicationSession(Session):
             .order_by(MembershipRow.created_at)
         ).all()
         return [(row[0], row[1]) for row in rows]
+
+    def accepted_native_invitation_addresses(self, company_id: UUID) -> dict[UUID, str]:
+        rows = self.execute(
+            select(NativeInvitationRow.target_membership_id, NativeInvitationRow.delivery_address)
+            .where(
+                NativeInvitationRow.company_id == company_id,
+                NativeInvitationRow.consumed_at.is_not(None),
+                NativeInvitationRow.target_membership_id.is_not(None),
+            )
+        )
+        return {
+            membership_id: address
+            for membership_id, address in rows
+            if membership_id is not None
+        }
+
+    def pending_native_grants(self, company_id: UUID, membership_id: UUID) -> list[UUID]:
+        # Historical external memberships cannot issue native grants. This also
+        # preserves their behaviour on database revisions predating native accounts.
+        native = self.scalar(
+            select(MembershipRow.id)
+            .join(ExternalIdentityRow)
+            .where(
+                MembershipRow.id == membership_id,
+                MembershipRow.company_id == company_id,
+                ExternalIdentityRow.issuer.is_(None),
+                ExternalIdentityRow.subject.is_(None),
+            )
+        )
+        if native is None:
+            return []
+        return list(
+            self.scalars(
+                select(NativeInvitationRow.id)
+                .where(
+                    NativeInvitationRow.company_id == company_id,
+                    NativeInvitationRow.issued_by_membership_id == membership_id,
+                    NativeInvitationRow.consumed_at.is_(None),
+                    NativeInvitationRow.revoked_at.is_(None),
+                )
+                .order_by(NativeInvitationRow.id)
+                .with_for_update()
+            )
+        )
+
+    def revoke_native_grants(self, invitation_ids: list[UUID], actor: Actor, reason: str) -> None:
+        for invitation_id in invitation_ids:
+            row = self.get_one(NativeInvitationRow, invitation_id)
+            row.revoked_at = utcnow()
+            row.revoke_reason = reason
+            self.add(
+                NativeInvitationAuditRow(
+                    event="REVOKED",
+                    company_id=actor.company_id,
+                    invitation_id=row.id,
+                    membership_id=actor.membership_id,
+                )
+            )
 
     def lock_company_membership(
         self, company_id: UUID, membership_id: UUID

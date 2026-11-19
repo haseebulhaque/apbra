@@ -41,12 +41,12 @@ export default defineConfig({
   use:{baseURL:`http://127.0.0.1:${webPort}`,trace:'retain-on-failure'},
   webServer:[
     {
-      command:`../api/.venv/bin/alembic -c ../api/alembic.ini downgrade base && ../api/.venv/bin/alembic -c ../api/alembic.ini upgrade head && ../api/.venv/bin/python -m apbra_api.bootstrap && /bin/sh -c 'while true; do ../api/.venv/bin/uvicorn apbra_api.main:app --host 127.0.0.1 --port ${apiPort} --no-access-log & child=$!; echo $child > ${apiPidPath}; wait $child; done'`,
+      command:`../api/.venv/bin/alembic -c ../api/alembic.ini downgrade base && ../api/.venv/bin/alembic -c ../api/alembic.ini upgrade head && ../api/.venv/bin/python -m apbra_api.bootstrap && /bin/sh -c 'while true; do ../api/.venv/bin/uvicorn --app-dir ../api/tests --factory native_browser_app:create_browser_app --host 127.0.0.1 --port ${apiPort} --no-access-log & child=$!; echo $child > ${apiPidPath}; wait $child; done'`,
       url:`http://127.0.0.1:${apiPort}/api/health`,
       cwd:'.',
       reuseExistingServer:false,
       timeout:60_000,
-      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true',APBRA_EVIDENCE_ROOT:'/tmp/apbra-164-e2e-evidence',APBRA_ARTIFACT_ROOT:'/tmp/apbra-164-e2e-artifacts',APBRA_REFERENCE_ROOT:'/tmp/apbra-171-e2e-references',APBRA_SEMANTIC_BRIDGE_PATH:'/tmp/apbra-semantic-bridge.mjs',APBRA_GENERATION_BRIDGE_PATH:'/tmp/apbra-generation-bridge.mjs',APBRA_SEMANTIC_NODE_PATH:process.execPath,APBRA_SEMANTIC_TIMEOUT_SECONDS:'30',APBRA_GENERATION_TIMEOUT_SECONDS:'60',APBRA_UPLOAD_POLICY_JSON:syntheticTestUploadPolicy,APBRA_CLARIFICATION_POLICY_JSON:syntheticTestClarificationPolicy,APBRA_GENERATION_POLICY_JSON:syntheticTestGenerationPolicy,APBRA_AUTOMATIC_GENERATION_ENABLED:'false',APBRA_QUALIFIED_PROVIDER_PROFILES_JSON:syntheticQualifiedProfiles,APBRA_TENANT_SECRET_KEYRING_JSON:syntheticTestKeyring,APBRA_TEST_SEMANTIC_SIMULATOR_ENABLED:'true'},
+      env:{APBRA_PROFILE:'test',APBRA_DATABASE_URL:databaseUrl,APBRA_PUBLIC_ORIGIN:`http://127.0.0.1:${webPort}`,APBRA_API_ORIGIN:`http://127.0.0.1:${apiPort}`,APBRA_SESSION_SECRET:sessionSecret,APBRA_BOOTSTRAP_ENABLED:'true',APBRA_EVIDENCE_ROOT:'/tmp/apbra-164-e2e-evidence',APBRA_ARTIFACT_ROOT:'/tmp/apbra-164-e2e-artifacts',APBRA_REFERENCE_ROOT:'/tmp/apbra-171-e2e-references',APBRA_SEMANTIC_BRIDGE_PATH:process.env.APBRA_SEMANTIC_BRIDGE_OUT||'/tmp/apbra-semantic-bridge.mjs',APBRA_GENERATION_BRIDGE_PATH:process.env.APBRA_GENERATION_BRIDGE_OUT||'/tmp/apbra-generation-bridge.mjs',APBRA_SEMANTIC_NODE_PATH:process.execPath,APBRA_SEMANTIC_TIMEOUT_SECONDS:'30',APBRA_GENERATION_TIMEOUT_SECONDS:'60',APBRA_UPLOAD_POLICY_JSON:syntheticTestUploadPolicy,APBRA_CLARIFICATION_POLICY_JSON:syntheticTestClarificationPolicy,APBRA_GENERATION_POLICY_JSON:syntheticTestGenerationPolicy,APBRA_AUTOMATIC_GENERATION_ENABLED:'false',APBRA_QUALIFIED_PROVIDER_PROFILES_JSON:syntheticQualifiedProfiles,APBRA_TENANT_SECRET_KEYRING_JSON:syntheticTestKeyring,APBRA_TEST_SEMANTIC_SIMULATOR_ENABLED:'true'},
     },
     {
       command:`npm run dev -- --port ${webPort} --strictPort`,
@@ -54,7 +54,7 @@ export default defineConfig({
       cwd:'.',
       reuseExistingServer:false,
       timeout:60_000,
-      env:{APBRA_API_URL:`http://127.0.0.1:${apiPort}`},
+      env:{APBRA_BROWSER_TEST_INBOX:'1',APBRA_API_URL:`http://127.0.0.1:${apiPort}`},
     },
   ],
 });
