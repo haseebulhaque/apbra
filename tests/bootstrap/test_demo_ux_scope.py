@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -20,32 +21,52 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+VITE_PATH = "apps/web/vite.config.ts"
+DEMO_UX_BASE = "6ad7ee7e2d6a16fb71cc8f05ebf35f3affaf49a7"
+
+
+def historical_vite_bytes():
+    original = subprocess.check_output(
+        ["git", "show", f"{DEMO_UX_BASE}:{VITE_PATH}"],
+        cwd=ROOT, timeout=10,
+    )
+    if hashlib.sha256(original).hexdigest() != c.DEMO_UX_VITE_ORIGINAL_SHA256:
+        raise ValueError("Historical APBRA-160 Vite fixture differs")
+    return original
+
+
+def copy_demo_ux_repository(root):
+    """Build a historical demo UX fixture while retaining today's other inputs."""
+    original = historical_vite_bytes()
+    names = {file.relative_to(ROOT).as_posix() for file in c.repo_files(ROOT)}
+    names.update(c.DEMO_UX_PATHS)
+    names.update(c.DEMO_UX_REGISTRATION_PATHS)
+    for name in names:
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = ROOT / name
+        if name == VITE_PATH:
+            target.write_bytes(original)
+        elif source.exists():
+            shutil.copyfile(source, target)
+        else:
+            target.write_text("APBRA-160 fixture\n")
+
+
 class DemoUXScopeTests(unittest.TestCase):
     def setUp(self):
         self.task_path = "tasks/APBRA-160-demo-ux.json"
         self.task = json.loads((ROOT / self.task_path).read_text())
         self.sources = json.loads((ROOT / "docs/source-register.json").read_text())
 
-    def copy_repository(self, root):
-        names = {file.relative_to(ROOT).as_posix() for file in c.repo_files(ROOT)}
-        names.update(c.DEMO_UX_PATHS)
-        names.update(c.DEMO_UX_REGISTRATION_PATHS)
-        for name in names:
-            target = root / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            source = ROOT / name
-            if name == "apps/web/vite.config.ts" and source.exists():
-                current = source.read_bytes()
-                before = b"'/api/tenant-settings':proxy,'/api/health':proxy"
-                after = b"'/api/tenant-settings':proxy,'^/api/workspace/branding(?:\\\\?|$)':proxy,'/api/health':proxy"
-                self.assertIn(hashlib.sha256(current).hexdigest(),
-                              {c.DEMO_UX_VITE_ORIGINAL_SHA256, c.DEMO_UX_VITE_PROXY_SHA256})
-                # Both accepted pre/post-product trees use the original registration fixture.
-                target.write_bytes(current.replace(after, before))
-            elif source.exists():
-                shutil.copyfile(source, target)
-            else:
-                target.write_text("APBRA-160 fixture\n")
+    def test_historical_vite_fixture_fails_closed(self):
+        missing = subprocess.CalledProcessError(128, ["git", "show"])
+        with patch.object(subprocess, "check_output", side_effect=missing):
+            with self.assertRaises(subprocess.CalledProcessError):
+                historical_vite_bytes()
+        with patch.object(subprocess, "check_output", return_value=b"wrong fixture"):
+            with self.assertRaisesRegex(ValueError, "Historical APBRA-160 Vite fixture differs"):
+                historical_vite_bytes()
 
     def check(self, root, paths, branch=None):
         return c.check(
@@ -90,7 +111,7 @@ class DemoUXScopeTests(unittest.TestCase):
     def test_registration_and_implementation_remain_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             self.assertEqual(self.check(root, c.DEMO_UX_REGISTRATION_PATHS,
                                         c.DEMO_UX_REGISTRATION_BRANCH), [])
             original = (root / "apps/web/vite.config.ts").read_bytes()
@@ -119,7 +140,7 @@ class DemoUXScopeTests(unittest.TestCase):
     def test_proxy_exception_allows_only_exact_bindings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             path = root / "apps/web/vite.config.ts"
             original = path.read_bytes()
             proposed = self.proxy_bytes(original)
@@ -167,7 +188,7 @@ class DemoUXScopeTests(unittest.TestCase):
         self.assertIn("no combined governance/product diff", self.task["dependencies"][-1])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             self.assertEqual(self.check(root, c.DEMO_UX_REGISTRATION_PATHS,
                                         c.DEMO_UX_REGISTRATION_BRANCH), [])
 
@@ -186,7 +207,7 @@ class DemoUXScopeTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             for section, before, after in mutations:
                 with self.subTest(section=section, boundary=before):
                     changed = copy.deepcopy(self.task)
@@ -215,7 +236,7 @@ class DemoUXScopeTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             for paths in mutations:
                 with self.subTest(paths=paths):
                     changed = copy.deepcopy(self.task)
@@ -227,7 +248,7 @@ class DemoUXScopeTests(unittest.TestCase):
     def test_security_and_review_gates_fail_with_recomputed_task_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             for section, needle in (
                 ("requirements", "A$10 total cap"),
                 ("requirements", "does not resubmit unrelated AI"),
@@ -250,7 +271,7 @@ class DemoUXScopeTests(unittest.TestCase):
     def test_source_binding_and_history_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            self.copy_repository(root)
+            copy_demo_ux_repository(root)
             changed = copy.deepcopy(self.task)
             changed["source_ids"] = changed["source_ids"][:-1]
             (root / self.task_path).write_text(json.dumps(changed))
