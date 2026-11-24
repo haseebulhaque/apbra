@@ -119,3 +119,13 @@ def strip_public_bootstrap(source):
             raise ValueError("Finite stage bootstrap hook missing, duplicate or inexact")
         source=source.replace(FINITE_BOOT_HOOK,"",1)
     return _finite_prior_strip_public_bootstrap(source)
+
+# APBRA-160 v7 native historical inverse.
+_pre_v7_public_bootstrap = strip_public_bootstrap
+
+
+def strip_public_bootstrap(source):
+    if "V7_REGISTRATION_BRANCH" in source:
+        public = Path(__file__).with_name("check_recovered_native_registration.py")
+        source = runpy.run_path(public)["remove_v7_bootstrap_hook"](source)
+    return _pre_v7_public_bootstrap(source)
