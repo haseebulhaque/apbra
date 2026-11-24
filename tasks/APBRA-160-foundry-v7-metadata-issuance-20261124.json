@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-V7-METADATA-ISSUANCE-20261124",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Issue only the previously registered two-file Foundry v7 metadata product lane after this separate governance amendment is manually merged.",
+  "requirements": [
+    "Owner approval APBRA-160 comment 11094 authorizes the separate five-file governance amendment. PR186 was manually merged. Control remains Confluence 03.07 v119, 01.10 v93 and 03.08 v29.",
+    "Qualify a distinct tagged v7 metadata path. Preserve the original v6 entry point, consent, identity/window binding, checks and transports.",
+    "Both isolated parent and child verify the same live plan before admitting only metadata GETs to the exact consented agent, version 7 and approved knowledge metadata. Deny redirects, wrong identity, audience, selectors, endpoint or stale proof. Emit redacted allowlisted metadata only.",
+    "Effective authority is limited to implementation and its synthetic qualification under a separately issued actual-main plan. Live owner-private authentication and metadata requests require separate exact approval."
+  ],
+  "adrs": ["docs/decisions/foundry-v7-qualification.md"],
+  "architecture_refs": [
+    "PR186 merge 65945fb410ed439497487fbe1c5ff990c847d39a and exact source register apbra-160-v7-registration-acceptance.",
+    "Accepted solo-owner process, repository controls and retained historical exact-source verification."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/foundry_owner_metadata.py",
+    "apps/api/tests/test_foundry_owner_metadata.py"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/**",
+    "infra/**",
+    ".env*",
+    "**/.env",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "The governance amendment and its actual manual merge are independently verified before this branch can admit the literal two metadata paths. Neither runtime nor report workflow is issued.",
+    "Metadata eligibility remains exact to the approved case-independent plan, identity, scope, transport, version and purpose. Unexpected or unreadable fields fail closed without reporting private instructions or data.",
+    "Historical verified releases retain their exact data and guard checks. Current metadata successor recognition is limited to exact issued or verified release ancestry."
+  ],
+  "verification_required": [
+    "Refresh actual main and record the distinct metadata product execution, actor, exact base and approval before implementing.",
+    "Run focused offline positive and negative metadata checks, preserved v6 tests, applicable API, complete policy, canonical and bootstrap, and pinned Linux scanner checks.",
+    "Obtain separate exact-base/head review and successful required hosted CI before Haseeb's manual merge. Verify actual main and retained current-source readback after merge before dependent work."
+  ],
+  "out_of_scope": [
+    "Runtime and report workflow, inference, knowledge contents or report data, paid use, live authentication, credentials, grants, routes, provider setup, deployment, preview/owner data and automatic merge."
+  ],
+  "escalate_when": [
+    "Plan or released source proof is unavailable, any additional path or permission is required, route metadata differs, or effective caller and consent cannot be verified."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex /root via GitHub haseebulhaque (30074430), logical APBRA-DEVOPS 0.1",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "65945fb410ed439497487fbe1c5ff990c847d39a",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-v7-metadata",
+  "source_ids": ["apbra-160-v7-registration-acceptance"],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Product authority requires the manual merge of the exact separate issuance amendment, effective released contract and refresh of actual main. This contract issues neither the other product lanes nor provider execution.",
+  "dependencies": [
+    "Separate five-file issuance draft, local checks, exact independent review, all required hosted CI and Haseeb manual merge.",
+    "Fresh actual-main readback and distinct issued execution record before metadata implementation; subsequent operational confirmation before live metadata."
+  ]
+}
