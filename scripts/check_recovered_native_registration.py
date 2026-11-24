@@ -422,3 +422,131 @@ def qualified_paths(root, checker, identity, active_branch, paths, overlap, cand
         )
     except (OSError, ValueError, KeyError, TypeError):
         return set()
+
+# APBRA-160 v7 metadata issuance. Preserve the original registration and inverses.
+METADATA_ISSUANCE_MARKER = b"\n# APBRA-160 v7 metadata issuance. Preserve the original registration and inverses.\n"
+METADATA_BOOT_HOOK = "        if pn and active_task_id=='APBRA-160' and pn['issued_v7_branch'](active_branch):registered_tasks['APBRA-160']=next((t for t,_ in nt if t['branch']==active_branch),None)\n"
+METADATA_BOOT_PREIMAGE = "b720e986c000c4e11f91ae5acb499cf717c11c16e0e52d029d96d7a969fc9bdd"
+METADATA_RECOVERED_PREIMAGE = "428ee9f72b746e2b9cec2893395b40a0c16a7da300c5695cf714973d4696a0cf"
+METADATA_SCOPE_HELPER = "scripts/check_foundry_v7_metadata_issuance.py"
+METADATA_SCOPE_SHA = "7bbd876b39323f56374febeda3748857ef5c5517910181f3049cf43e3c0b5b85"
+METADATA_PACKET = {
+    METADATA_SCOPE_HELPER,
+    "tasks/APBRA-160-foundry-v7-metadata-issuance-20261124.json",
+    "tests/bootstrap/test_foundry_v7_metadata_issuance.py",
+}
+METADATA_PRODUCT_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v7-metadata"
+METADATA_ISSUANCE_BRANCH = METADATA_PRODUCT_BRANCH + "-issuance"
+_pre_metadata_remove_v7_hook = remove_v7_bootstrap_hook
+_pre_metadata_stage_authorities = stage_authorities
+_pre_metadata_qualified_paths = qualified_paths
+_metadata_modules = {}
+
+
+def issued_v7_branch(branch):
+    return branch in (METADATA_ISSUANCE_BRANCH, METADATA_PRODUCT_BRANCH)
+
+
+def remove_metadata_bootstrap_hook(source):
+    if source.count(METADATA_BOOT_HOOK) != 1:
+        raise ValueError("Metadata issuance bootstrap hook missing, duplicate or inexact")
+    return source.replace(METADATA_BOOT_HOOK, "", 1)
+
+
+def remove_v7_bootstrap_hook(source):
+    # Structural projections must retain unrelated mutations for historical AST tests.
+    if "issued_v7_branch" in source:
+        source = remove_metadata_bootstrap_hook(source)
+    return _pre_metadata_remove_v7_hook(source)
+
+
+def strip_metadata_bootstrap(source):
+    restored = remove_metadata_bootstrap_hook(source.decode()).encode()
+    if hashlib.sha256(restored).hexdigest() != METADATA_BOOT_PREIMAGE:
+        raise ValueError("Metadata issuance canonical preimage differs")
+    return restored
+
+
+def strip_metadata_recovered(source):
+    if source.count(METADATA_ISSUANCE_MARKER) != 1:
+        raise ValueError("Metadata issuance recovered marker missing or duplicate")
+    restored = source.split(METADATA_ISSUANCE_MARKER, 1)[0]
+    if hashlib.sha256(restored).hexdigest() != METADATA_RECOVERED_PREIMAGE:
+        raise ValueError("Metadata issuance recovered preimage differs")
+    return restored
+
+
+def metadata_packet_present(root, active_branch, paths):
+    return (
+        issued_v7_branch(active_branch)
+        or bool(paths and paths & METADATA_PACKET)
+        or any((root / name).exists() or (root / name).is_symlink() for name in METADATA_PACKET)
+    )
+
+
+def metadata_module(root):
+    if not all(safe(root, name) for name in METADATA_PACKET | {
+        "scripts/check_bootstrap.py", "scripts/check_recovered_native_registration.py",
+    }):
+        raise ValueError("Metadata issuance packet missing or unsafe")
+    strip_metadata_bootstrap((root / "scripts/check_bootstrap.py").read_bytes())
+    strip_metadata_recovered((root / "scripts/check_recovered_native_registration.py").read_bytes())
+    helper = root / METADATA_SCOPE_HELPER
+    if hashlib.sha256(helper.read_bytes()).hexdigest() != METADATA_SCOPE_SHA:
+        raise ValueError("Metadata issuance helper bytes differ")
+    if not safe(root, V7_HELPER) or hashlib.sha256((root / V7_HELPER).read_bytes()).hexdigest() != V7_HELPER_SHA:
+        raise ValueError("Original v7 scope helper bytes differ")
+    key = str(root.resolve())
+    if key not in _metadata_modules:
+        _metadata_modules[key] = __import__("runpy").run_path(helper)
+    if key not in _v7_modules:
+        _v7_modules[key] = __import__("runpy").run_path(root / V7_HELPER)
+    return _metadata_modules[key], _v7_modules[key]
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    authorities, faults = _pre_metadata_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    if not metadata_packet_present(root, branch, paths):
+        return authorities, faults
+    try:
+        module, old = metadata_module(root)
+        selected, errors = module["bind"](root, old, catalog, schema_errors, task_errors, identity, branch, paths)
+        if branch == METADATA_PRODUCT_BRANCH and selected and not errors:
+            # The unmodified registration remains dormant on its own.
+            if faults.count(module["UNISSUED"]) != 1:
+                raise ValueError("Original v7 metadata denial differs")
+            faults = [fault for fault in faults if fault != module["UNISSUED"]]
+        return authorities + selected, faults + errors
+    except (OSError, ValueError, KeyError, TypeError):
+        return authorities, faults + ["Foundry v7 metadata issuance packet or exact integration differs"]
+
+
+def qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate):
+    if not metadata_packet_present(root, active_branch, paths):
+        return _pre_metadata_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+    try:
+        if active_branch == METADATA_ISSUANCE_BRANCH:
+            # Populate and verify the immutable registration before projecting current sources.
+            catalog = json.loads((root / "agents/catalog.json").read_text())
+            _, faults = stage_authorities(
+                root, catalog, checker["schema_errors"], checker["task_errors"], identity, active_branch, paths,
+            )
+            if faults or not v3_safe(root):
+                return set()
+            module, old = metadata_module(root)
+            projections = {
+                "scripts/check_bootstrap.py": strip_metadata_bootstrap,
+                "scripts/check_recovered_native_registration.py": strip_metadata_recovered,
+            }
+            return module["prior_application"](
+                root, checker, (identity, active_branch, paths), overlap, candidate, old, V3, projections,
+            )
+        prior = _pre_metadata_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+        if not prior or prior != set(overlap):
+            return prior
+        module, old = metadata_module(root)
+        return prior | module["metadata_successor"](root, checker, (identity, active_branch, paths), old)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()
