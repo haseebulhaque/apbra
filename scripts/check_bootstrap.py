@@ -2890,6 +2890,7 @@ set(private_content_storage_task['allowed_paths']) != PRIVATE_CONTENT_STORAGE_PA
 )
         if pn and active_task_id=='APBRA-160' and active_branch==pn['V7_REGISTRATION_BRANCH']:
             registered_tasks['APBRA-160']=next((t for t,_ in nt if t['branch']==active_branch),None)
+        if pn and pn['browser_maintenance_branch'](active_branch):registered_tasks[active_task_id]=next((t for t,_ in nt if t['branch']==active_branch),None)
         if pn and active_task_id=='APBRA-183':registered_tasks['APBRA-183']=pg if active_branch==pn['R'] else na if active_branch==pn['branch'](root,'N') else None
         if pn and active_task_id=='APBRA-160' and active_branch==pn['branch'](root,'Q'):registered_tasks['APBRA-160']=pa
         if changed_paths is not None and changed_paths:

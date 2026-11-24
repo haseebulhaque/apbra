@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-164",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-164-20261124-BROWSER-STABILISATION-01",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Split the existing protected-report browser scenario into shorter independent scenarios with its original 30-second timeout and all substantive real actions and positive and negative assertions retained.",
+  "requirements": [
+    "APBRA-85 registration PLAN 11098 and APBRA-164 one-file conditional scope 11099.",
+    "Preserve durable build, recovery, draft download, role and tenant separation, and stale-design requalification checks."
+  ],
+  "adrs": [
+    "ADR-041",
+    "ADR-048",
+    "ADR-051",
+    "Keep the complete recovered V3 snapshot and immutable historical pins."
+  ],
+  "architecture_refs": [
+    "03.07 v119 Business-User Self-Service Generation and Hosted Preview Direction",
+    "01.10 v93 MVP Scope and Product Boundaries",
+    "03.08 v29 Model-Led Clarification, Flexible Generation and Delivery Contract",
+    "APBRA-164 protected generation, output artifacts and durable history"
+  ],
+  "allowed_paths": [
+    "apps/web/e2e/protected-generation.spec.ts"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "scripts/**",
+    "tasks/**",
+    "tests/bootstrap/**",
+    "apps/api/**",
+    "apps/web/src/**",
+    ".env*",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Exact GitHub main and initial actual manual registration merge are verified. The new task uses a fresh exact-base PLAN.",
+    "Only the existing protected-generation browser spec changes, with a traceable mapping of original actions and assertions and isolated real fixtures.",
+    "The same 30-second overall limit and all protected role, isolation, failure, reload, restart, history and stale-design checks remain."
+  ],
+  "verification_required": [
+    "Canonical policy, bootstrap and pinned Linux secret scanner on complete fetched history",
+    "Type-check and run the complete unchanged Playwright runner on isolated PostgreSQL and local synthetic fixtures",
+    "Independent exact-head review and required hosted CI before Haseeb manual merge"
+  ],
+  "out_of_scope": [
+    "Production application, API, dependencies, workflow and timeout changes",
+    "Provider calls, owner data and current preview processes",
+    "Automatic merge and native approval"
+  ],
+  "escalate_when": [
+    "Exact actual-main authority, required checks or independent review are absent",
+    "Any approved path, original assertion or immutable source pin would need to change"
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex via haseebulhaque GitHub account 30074430 and authorized Jira/Confluence connections",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "65945fb410ed439497487fbe1c5ff990c847d39a",
+  "branch": "agent/APBRA-DEVOPS/APBRA-164-protected-report-browser-stabilisation",
+  "source_ids": [
+    "mvp1-protected-generation-output-history",
+    "mvp1-protected-generation-output-history-bootstrap-compatibility-amendment"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "APBRA-164 protected-report browser maintenance",
+  "dependencies": [
+    "Haseeb manually merges the exact APBRA-85 governance registration into protected main before issuance of any product execution.",
+    "Use the actual refreshed main and exact subject/branch for both qualified PRs. PR187 remains separate and on hold.",
+    "Preserve both original PR187 hosted browser failures and all historical manifest and test evidence."
+  ]
+}
