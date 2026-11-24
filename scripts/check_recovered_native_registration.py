@@ -422,3 +422,128 @@ def qualified_paths(root, checker, identity, active_branch, paths, overlap, cand
         )
     except (OSError, ValueError, KeyError, TypeError):
         return set()
+
+# Separate APBRA-85 registration for the APBRA-164 browser test successor.
+BROWSER_REG_BRANCH = "agent/APBRA-DEVOPS/APBRA-85-protected-report-browser-registration"
+BROWSER_PRODUCT_BRANCH = "agent/APBRA-DEVOPS/APBRA-164-protected-report-browser-stabilisation"
+BROWSER_MARKER = b"\n# Separate APBRA-85 registration for the APBRA-164 browser test successor.\n"
+BROWSER_BOOT_HOOK = "        if pn and pn['browser_maintenance_branch'](active_branch):registered_tasks[active_task_id]=next((t for t,_ in nt if t['branch']==active_branch),None)\n"
+BROWSER_BOOT_PREIMAGE = "b720e986c000c4e11f91ae5acb499cf717c11c16e0e52d029d96d7a969fc9bdd"
+BROWSER_RECOVERED_PREIMAGE = "428ee9f72b746e2b9cec2893395b40a0c16a7da300c5695cf714973d4696a0cf"
+BROWSER_HELPER = "scripts/check_protected_report_browser_registration.py"
+BROWSER_HELPER_SHA = "08ae498ec47f5d85dee481ace67d7b1628b8c72cf8481c0bdf5ccbbff6c45f46"
+BROWSER_PACKET = {
+    BROWSER_HELPER,
+    "tasks/APBRA-164-protected-report-browser-stabilisation-20261124.json",
+    "tests/bootstrap/test_protected_report_browser_registration.py",
+}
+_pre_browser_remove_v7_bootstrap = remove_v7_bootstrap_hook
+_pre_browser_strip_v7_recovered = strip_v7_recovered
+_pre_browser_stage_authorities = stage_authorities
+_pre_browser_qualified_paths = qualified_paths
+_browser_modules = {}
+
+
+def browser_maintenance_branch(branch):
+    return branch in (BROWSER_REG_BRANCH, BROWSER_PRODUCT_BRANCH)
+
+
+def remove_browser_bootstrap_hook(source):
+    if source.count(BROWSER_BOOT_HOOK) != 1:
+        raise ValueError("Browser registration canonical hook missing, duplicate or inexact")
+    return source.replace(BROWSER_BOOT_HOOK, "", 1)
+
+
+def remove_v7_bootstrap_hook(source):
+    if "browser_maintenance_branch" in source:
+        source = remove_browser_bootstrap_hook(source)
+    return _pre_browser_remove_v7_bootstrap(source)
+
+
+def strip_browser_bootstrap(source):
+    restored = remove_browser_bootstrap_hook(source.decode()).encode()
+    if hashlib.sha256(restored).hexdigest() != BROWSER_BOOT_PREIMAGE:
+        raise ValueError("Browser registration canonical preimage differs")
+    return restored
+
+
+def strip_browser_recovered(source):
+    if source.count(BROWSER_MARKER) != 1:
+        raise ValueError("Browser registration recovered marker missing or duplicate")
+    restored = source.split(BROWSER_MARKER, 1)[0]
+    if hashlib.sha256(restored).hexdigest() != BROWSER_RECOVERED_PREIMAGE:
+        raise ValueError("Browser registration recovered preimage differs")
+    return restored
+
+
+def strip_v7_recovered(source):
+    if BROWSER_MARKER.decode() in source:
+        source = strip_browser_recovered(source.encode()).decode()
+    return _pre_browser_strip_v7_recovered(source)
+
+
+def browser_packet_present(root, branch, paths):
+    return (
+        browser_maintenance_branch(branch)
+        or bool(paths and paths & BROWSER_PACKET)
+        or any((root / name).exists() or (root / name).is_symlink() for name in BROWSER_PACKET)
+    )
+
+
+def browser_module(root):
+    if not all(safe(root, name) for name in BROWSER_PACKET | {
+        "scripts/check_bootstrap.py", "scripts/check_recovered_native_registration.py", V7_HELPER,
+    }):
+        raise ValueError("Browser registration packet missing or unsafe")
+    strip_browser_bootstrap((root / "scripts/check_bootstrap.py").read_bytes())
+    strip_browser_recovered((root / "scripts/check_recovered_native_registration.py").read_bytes())
+    helper = root / BROWSER_HELPER
+    if hashlib.sha256(helper.read_bytes()).hexdigest() != BROWSER_HELPER_SHA:
+        raise ValueError("Browser registration helper bytes differ")
+    if hashlib.sha256((root / V7_HELPER).read_bytes()).hexdigest() != V7_HELPER_SHA:
+        raise ValueError("Original v7 helper bytes differ")
+    key = str(root.resolve())
+    if key not in _browser_modules:
+        _browser_modules[key] = __import__("runpy").run_path(helper)
+    if key not in _v7_modules:
+        _v7_modules[key] = __import__("runpy").run_path(root / V7_HELPER)
+    return _browser_modules[key], _v7_modules[key]["raw"]
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    authorities, faults = _pre_browser_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    if not browser_packet_present(root, branch, paths):
+        return authorities, faults
+    try:
+        module, raw = browser_module(root)
+        selected, errors = module["bind"](
+            root, raw, V3, catalog, schema_errors, task_errors, identity, branch, paths,
+        )
+        return authorities + selected, faults + errors
+    except (OSError, ValueError, KeyError, TypeError):
+        return authorities, faults + ["Protected-report browser registration packet or exact integration differs"]
+
+
+def qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate):
+    if not browser_packet_present(root, active_branch, paths):
+        return _pre_browser_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+    try:
+        module, raw = browser_module(root)
+        # For prior registered lanes, preserve their own verified evidence whenever it applies.
+        if not browser_maintenance_branch(active_branch):
+            prior = _pre_browser_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+            if prior:
+                return prior
+        if not v3_safe(root):
+            return set()
+        projections = {
+            "scripts/check_bootstrap.py": strip_browser_bootstrap,
+            "scripts/check_recovered_native_registration.py": strip_browser_recovered,
+        }
+        return module["qualified"](
+            root, checker, raw, V3, projections, (identity, active_branch, paths), overlap, candidate,
+        )
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()
