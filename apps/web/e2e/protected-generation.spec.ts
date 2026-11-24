@@ -1,4 +1,4 @@
-import {expect,test,type Page} from '@playwright/test';
+import {expect,test,type Browser,type Page,type TestInfo} from '@playwright/test';
 import {chmodSync,existsSync,readFileSync,statSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -161,11 +161,20 @@ function reviewedSyntheticDesign(contract:any){
   return {artifact_kind:'ReportDesign',schema_version:2,projectName:'ReviewedSyntheticCandidate',overview:contract.objective,audience:contract.audience,dataModel:{factTables:tableNames.filter((name:string)=>factNames.has(name)),dimensionTables:tableNames.filter((name:string)=>!factNames.has(name)),relationships:schema.relationships},measures,pages,filters:[...new Set(contract.obligations.filter((item:any)=>item.kind==='FILTER').flatMap((item:any)=>item.fields))],branding:{themeName:'Reviewed Synthetic',primary:'#005A9C',accent:'#2D7D9A'},accessibility:['Every test visual has a text alternative.'],standardsApplied:[{citation:'local-knowledge:report-design-standards.md@1.0.0#RD-001',decision:'Reviewed synthetic visual choice for validation only.'}],assumptions:[],warnings:['LOCAL_DETERMINISTIC_NO_MODEL_CALL: synthetic reviewed test design.'],generationRequirements:['Validate the supplied design through the canonical pipeline.']};
 }
 
-test('current app with synthetic native lifecycle + retained compiler/backend: confirmed meaning and expert-reviewed plan build durable private candidates across reload',async({page,browser},testInfo)=>{
-  await exerciseCurrentPrimary(page,'success');
+async function grantReportAccess(page:Page,member:string,level:'EDITOR'|'VIEWER'){
+  await page.getByLabel('Company member').selectOption({label:member});
+  await page.getByLabel('Report permission').selectOption(level);
+  await page.getByRole('button',{name:'Grant report access'}).click();
+  const subject=member.split(' · ').at(-1);
+  await expect(page.getByRole('listitem').filter({hasText:subject+' · '+level.toLowerCase()})).toBeVisible();
+}
+
+// Each retained-component test creates a real report. Existing company membership
+// can survive between tests, so either observe the expert role or accept a real invitation.
+async function setupReviewedReport(page:Page,browser:Browser,capture?:TestInfo){
   await signIn(page);
   await page.getByRole('button',{name:'Create report'}).first().click();
-  const request='Compare completed inspections by facility.';
+  const request='Compare completed inspections by facility. '+randomUUID().slice(0,8);
   await page.getByLabel('Your reporting goal').fill(request);
   await page.locator('.new-report-card').getByRole('button',{name:'Continue to supporting information',exact:true}).click();
   await openStep(page,'Information');
@@ -186,54 +195,56 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
   await page.getByRole('button',{name:'Confirm requirements'}).click();
   const confirmed=(await (await confirmationResponse).json()).confirmed_contract.contract;
   await expect(page.getByText('Your report requirements are confirmed')).toBeVisible();
-  if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('confirmed-understanding.png'),fullPage:true});
+  if(capture&&process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:capture.outputPath('confirmed-understanding.png'),fullPage:true});
   const design=JSON.stringify(reviewedSyntheticDesign(confirmed));
   await openStep(page,'Build');
   await expect(page.getByText('Create the report design',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
 
   const expertContext=await browser.newContext();
-  const expert=await expertContext.newPage();
-  await signIn(expert,'uninvited');
-  const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'}).or(expert.getByRole('heading',{name:'Create Company / Workspace'}));
-  const expertAccount=expert.getByRole('button',{name:/^Account menu for /});await expect(invitationRequired.or(expertAccount)).toBeVisible();
-  if(await expertAccount.isVisible()){await expertAccount.click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');}
-  if(await invitationRequired.isVisible()){
-    await page.goto('/');
-    await page.getByRole('button',{name:'Administration'}).click();
-    await page.getByRole('button',{name:'User management',exact:true}).click();
-    await page.getByText('Invite a user',{exact:true}).click();
-    await page.getByLabel('Provider subject').fill('dev-uninvited');
-    await page.getByLabel('Application role').selectOption('EXPERT');
-    await page.getByRole('button',{name:'Issue invitation'}).click();
-    const invitationLink=await page.getByLabel('Private invitation link').inputValue();
-    await expert.goto(invitationLink);
-    await expert.getByRole('button',{name:'Accept invitation'}).click();
-    await expect(expert.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
-  }
-  await expert.getByRole('button',{name:/^Account menu for /}).click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');
-  await page.reload();
-  await page.getByRole('button',{name:new RegExp(request)}).first().click();
-  await openActualReport(page,request);
-  await page.getByText('Manage private report access').click();
-  await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
-  await page.getByLabel('Report permission').selectOption('EDITOR');
-  await page.getByRole('button',{name:'Grant report access'}).click();
-  await expert.reload();
-  await expert.getByRole('button',{name:new RegExp(request)}).first().click();
-  await openStep(expert,'Build');
-  await expert.getByText('Details for experts').last().click();
-  await expert.getByLabel('Expert report design JSON').fill(design);
-  await expert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
-  await expect(expert.getByLabel('Eligible report design')).toBeVisible();
-  await expertContext.close();
+  try{
+    const expert=await expertContext.newPage();
+    await signIn(expert,'uninvited');
+    const invitationRequired=expert.getByRole('heading',{name:'An invitation is required'}).or(expert.getByRole('heading',{name:'Create Company / Workspace'}));
+    const expertAccount=expert.getByRole('button',{name:/^Account menu for /});await expect(invitationRequired.or(expertAccount)).toBeVisible();
+    if(await expertAccount.isVisible()){await expertAccount.click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');}
+    if(await invitationRequired.isVisible()){
+      await page.goto('/');
+      await page.getByRole('button',{name:'Administration'}).click();
+      await page.getByRole('button',{name:'User management',exact:true}).click();
+      await page.getByText('Invite a user',{exact:true}).click();
+      await page.getByLabel('Provider subject').fill('dev-uninvited');
+      await page.getByLabel('Application role').selectOption('EXPERT');
+      await page.getByRole('button',{name:'Issue invitation'}).click();
+      const invitationLink=await page.getByLabel('Private invitation link').inputValue();
+      await expert.goto(invitationLink);
+      await expert.getByRole('button',{name:'Accept invitation'}).click();
+      await expect(expert.getByText('Invitation accepted. Your APBRA membership is active.')).toBeVisible();
+    }
+    await expert.getByRole('button',{name:/^Account menu for /}).click();await expect(expert.locator('.account-identity')).toContainText('expert');await expert.keyboard.press('Escape');
+    await page.reload();
+    await page.getByRole('button',{name:new RegExp(request)}).first().click();
+    await openActualReport(page,request);
+    await page.getByText('Manage private report access').click();
+    await grantReportAccess(page,'Uma Uninvited · dev-uninvited','EDITOR');
+    await expert.reload();
+    await expert.getByRole('button',{name:new RegExp(request)}).first().click();
+    await openStep(expert,'Build');
+    await expert.getByText('Details for experts').last().click();
+    await expert.getByLabel('Expert report design JSON').fill(design);
+    await expert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
+    await expect(expert.getByLabel('Eligible report design')).toBeVisible();
+  }finally{await expertContext.close();}
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await openStep(page,'Build');
   await expect(page.getByLabel('Eligible report design')).toBeVisible();
   await expect(page.getByLabel('Expert report design JSON')).toHaveCount(0);
-  if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('reviewed-build-readiness.png'),fullPage:true});
+  if(capture&&process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:capture.outputPath('reviewed-build-readiness.png'),fullPage:true});
+  return request;
+}
 
+async function retryFailedReport(page:Page,request:string){
   const artifactRoot='/tmp/apbra-164-e2e-artifacts';
   const actor=await page.evaluate(async()=>await (await fetch('/api/auth/session',{credentials:'same-origin'})).json() as {actor:{company_id:string}});
   const reports=await page.evaluate(async()=>await (await fetch('/api/cases',{credentials:'same-origin'})).json() as {items:Array<{id:string;current_request:{request_text:string}}>});
@@ -246,9 +257,9 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
     // An earlier E2E run may already have created a company subtree. Block the
     // nearest existing parent so the new attempt cannot be published there.
     chmodSync(blockedRoot,0o500);
-  await openStep(page,'Build');
+    await openStep(page,'Build');
     await page.getByRole('button',{name:'Build report'}).click();
-  await openStep(page,'Report');
+    await openStep(page,'Report');
     await openRetainedReportHistory(page);
     await expect(page.locator('.generation-history li').filter({hasText:'Version 1'})).toContainText('Build failed');
   }finally{chmodSync(blockedRoot,previousMode)}
@@ -256,10 +267,13 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
   await page.getByRole('button',{name:'Retry failed build'}).click();
   await openStep(page,'Report');
   await expect(page.locator('.generation-history li').filter({hasText:'Version 2'})).toContainText('Report ready');
+}
+
+async function downloadCurrentArtifact(page:Page,capture?:TestInfo){
   await openStep(page,'Report');
   const download=page.getByRole('button',{name:'Download current report candidate'});
   await expect(download).toBeVisible();
-  if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('current-report.png'),fullPage:true});
+  if(capture&&process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:capture.outputPath('current-report.png'),fullPage:true});
   const artifactResponse=page.waitForResponse(response=>response.url().endsWith('/artifact')&&response.request().method()==='GET');
   const savedDownload=page.waitForEvent('download');
   await download.click();
@@ -269,18 +283,47 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toContain('application/zip');
   expect((await response.body()).subarray(0,2).toString()).toBe('PK');
+  return {artifactPath,download};
+}
+
+async function verifyForeignArtifactDenial(page:Page,browser:Browser,request:string,artifactPath:string){
+  const foreignContext=await browser.newContext();
+  try{
+    const foreign=await foreignContext.newPage();
+    await signIn(foreign,'foreign');
+    await expect(foreign.getByRole('button',{name:new RegExp(request)})).toHaveCount(0);
+    const packageCOrigin=new URL(page.url()).origin;
+    expect(new URL(foreign.url()).origin).toBe(packageCOrigin);
+    const denied=await foreign.request.get(new URL(artifactPath,packageCOrigin).toString());
+    expect(denied.status()).toBe(404);
+  }finally{await foreignContext.close();}
+}
+
+test('current app with synthetic native lifecycle: confirms, generates and reopens a protected download',async({page})=>{
+  await exerciseCurrentPrimary(page,'success');
+});
+
+test('retained compiler/backend: recovers a failed build and retries an unavailable protected download',async({page,browser},testInfo)=>{
+  const request=await setupReviewedReport(page,browser,testInfo);
+  await retryFailedReport(page,request);
+  const {download}=await downloadCurrentArtifact(page,testInfo);
   await page.route('**/generation/*/artifact',route=>route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:{code:'ARTIFACT_NOT_FOUND',message:'internal detail'}})}));
-  await download.click();
-  await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).toContainText('This report file is unavailable or you no longer have access.');
-  await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).not.toContainText('internal detail');
-  await expect(page.getByLabel('Current report')).toContainText('This completed build has no available file.');
-  await expect(page.getByLabel('Current report')).not.toContainText('Editable first draft recorded');
-  await page.unroute('**/generation/*/artifact');
+  try{
+    await download.click();
+    await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).toContainText('This report file is unavailable or you no longer have access.');
+    await expect(page.getByRole('alert').filter({hasText:'This report file is unavailable'})).not.toContainText('internal detail');
+    await expect(page.getByLabel('Current report')).toContainText('This completed build has no available file.');
+    await expect(page.getByLabel('Current report')).not.toContainText('Editable first draft recorded');
+  }finally{await page.unroute('**/generation/*/artifact');}
   const retriedDownload=page.waitForEvent('download');
   await page.getByRole('button',{name:'Try current report download again'}).click();
   expect((await retriedDownload).suggestedFilename()).toMatch(/\.zip$/);
   await expect(page.getByLabel('Current report')).toContainText('Editable first draft recorded');
+});
 
+test('retained compiler/backend: restarts the API and retains failed, current and earlier build history',async({page,browser},testInfo)=>{
+  const request=await setupReviewedReport(page,browser);
+  await retryFailedReport(page,request);
   const apiPid=Number(readFileSync('/tmp/apbra-164-e2e-api.pid','utf8').trim());
   process.kill(apiPid,'SIGTERM');
   await expect.poll(async()=>{
@@ -304,22 +347,56 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
   await expect(page.getByRole('button',{name:'Download current report candidate'})).toHaveCount(1);
   await expect(page.getByRole('button',{name:'Download earlier report candidate'})).toHaveCount(1);
   if(process.env.APBRA_VISUAL_CAPTURE)await page.screenshot({path:testInfo.outputPath('report-history.png'),fullPage:true});
+});
+
+test('retained compiler/backend: viewer and revoked editor access keep report actions protected',async({page,browser})=>{
+  const request=await setupReviewedReport(page,browser);
+  await retryFailedReport(page,request);
+  const {artifactPath}=await downloadCurrentArtifact(page);
+  await openStep(page,'Build');
+  await page.getByRole('button',{name:'Build another version'}).click();
+  await openStep(page,'Report');
+  await expect(page.locator('.generation-history li').filter({hasText:'Version 3'})).toContainText('Report ready');
   await openActualReport(page,request);
   await page.getByText('Manage private report access').click();
-  await page.getByLabel('Company member').selectOption({label:'Morgan Member · dev-member'});
-  await page.getByLabel('Report permission').selectOption('VIEWER');
-  await page.getByRole('button',{name:'Grant report access'}).click();
+  await grantReportAccess(page,'Morgan Member · dev-member','VIEWER');
   const viewerContext=await browser.newContext();
-  const viewer=await viewerContext.newPage();
-  await viewer.goto('/api/auth/login?'+new URLSearchParams({identity:'member',return_to:'/'}));
-  await viewer.getByRole('button',{name:new RegExp(request)}).first().click();
-  await openStep(viewer,'Build');
-  await expect(viewer.getByLabel('Eligible report design')).toBeVisible();
-  await expect(viewer.getByText('building or cancelling requires editor access')).toBeVisible();
-  await expect(viewer.getByRole('button',{name:'Build another version'})).toHaveCount(0);
-  await expect(viewer.getByRole('button',{name:'Retry failed build'})).toHaveCount(0);
-  await viewerContext.close();
+  try{
+    const viewer=await viewerContext.newPage();
+    await viewer.goto('/api/auth/login?'+new URLSearchParams({identity:'member',return_to:'/'}));
+    await viewer.getByRole('button',{name:new RegExp(request)}).first().click();
+    await openStep(viewer,'Build');
+    await expect(viewer.getByLabel('Eligible report design')).toBeVisible();
+    await expect(viewer.getByText('building or cancelling requires editor access')).toBeVisible();
+    await expect(viewer.getByRole('button',{name:'Build another version'})).toHaveCount(0);
+    await expect(viewer.getByRole('button',{name:'Retry failed build'})).toHaveCount(0);
+  }finally{await viewerContext.close();}
+  await openActualReport(page,request);
+  await page.getByText('Manage private report access').click();
+  await page.getByRole('listitem').filter({hasText:'dev-uninvited · editor'}).getByRole('button',{name:'Revoke'}).click();
+  await expect(page.getByRole('listitem').filter({hasText:'dev-uninvited · editor'})).toHaveCount(0);
+  await grantReportAccess(page,'Uma Uninvited · dev-uninvited','VIEWER');
+  const viewerExpertContext=await browser.newContext();
+  try{
+    const viewerExpert=await viewerExpertContext.newPage();
+    await signIn(viewerExpert,'uninvited');
+    await viewerExpert.getByRole('button',{name:new RegExp(request)}).first().click();
+    await openStep(viewerExpert,'Build');
+    await viewerExpert.getByText('Details for experts').last().click();
+    await expect(viewerExpert.getByText('Design submission requires expert edit access')).toBeVisible();
+    await expect(viewerExpert.getByLabel('Expert report design JSON')).toHaveCount(0);
+  }finally{await viewerExpertContext.close();}
+  await verifyForeignArtifactDenial(page,browser,request,artifactPath);
+});
 
+test('retained compiler/backend: changed goal and evidence require reconfirmation and a fresh expert design',async({page,browser})=>{
+  const request=await setupReviewedReport(page,browser);
+  await retryFailedReport(page,request);
+  const {artifactPath}=await downloadCurrentArtifact(page);
+  await openStep(page,'Build');
+  await page.getByRole('button',{name:'Build another version'}).click();
+  await openStep(page,'Report');
+  await expect(page.locator('.generation-history li').filter({hasText:'Version 3'})).toContainText('Report ready');
   await openStep(page,'Goal');
   await page.getByLabel('Current business request').fill(`${request} Show the total completed by facility.`);
   await page.getByRole('button',{name:'Save new version'}).click();
@@ -349,45 +426,22 @@ test('current app with synthetic native lifecycle + retained compiler/backend: c
   await expect(page.getByLabel('Current report')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
   const currentExpertContext=await browser.newContext();
-  const currentExpert=await currentExpertContext.newPage();
-  await signIn(currentExpert,'uninvited');
-  await currentExpert.getByRole('button',{name:new RegExp(request)}).first().click();
-  await openStep(currentExpert,'Build');
-  await currentExpert.getByText('Details for experts').last().click();
-  await currentExpert.getByLabel('Expert report design JSON').fill(JSON.stringify(reviewedSyntheticDesign(newContract)));
-  await currentExpert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
-  await expect(currentExpert.getByLabel('Eligible report design')).toBeVisible();
-  await currentExpertContext.close();
+  try{
+    const currentExpert=await currentExpertContext.newPage();
+    await signIn(currentExpert,'uninvited');
+    await currentExpert.getByRole('button',{name:new RegExp(request)}).first().click();
+    await openStep(currentExpert,'Build');
+    await currentExpert.getByText('Details for experts').last().click();
+    await currentExpert.getByLabel('Expert report design JSON').fill(JSON.stringify(reviewedSyntheticDesign(newContract)));
+    await currentExpert.getByRole('button',{name:'Submit expert-reviewed design'}).click();
+    await expect(currentExpert.getByLabel('Eligible report design')).toBeVisible();
+  }finally{await currentExpertContext.close();}
   await page.reload();
   await page.getByRole('button',{name:new RegExp(request)}).first().click();
   await openStep(page,'Build');
   await expect(page.getByRole('button',{name:'Build report',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Build another version'})).toHaveCount(0);
-  await openActualReport(page,request);
-  await page.getByText('Manage private report access').click();
-  await page.getByRole('listitem').filter({hasText:'dev-uninvited · editor'}).getByRole('button',{name:'Revoke'}).click();
-  await page.getByLabel('Company member').selectOption({label:'Uma Uninvited · dev-uninvited'});
-  await page.getByLabel('Report permission').selectOption('VIEWER');
-  await page.getByRole('button',{name:'Grant report access'}).click();
-  const viewerExpertContext=await browser.newContext();
-  const viewerExpert=await viewerExpertContext.newPage();
-  await signIn(viewerExpert,'uninvited');
-  await viewerExpert.getByRole('button',{name:new RegExp(request)}).first().click();
-  await openStep(viewerExpert,'Build');
-  await viewerExpert.getByText('Details for experts').last().click();
-  await expect(viewerExpert.getByText('Design submission requires expert edit access')).toBeVisible();
-  await expect(viewerExpert.getByLabel('Expert report design JSON')).toHaveCount(0);
-  await viewerExpertContext.close();
-
-  const foreignContext=await browser.newContext();
-  const foreign=await foreignContext.newPage();
-  await signIn(foreign,'foreign');
-  await expect(foreign.getByRole('button',{name:new RegExp(request)})).toHaveCount(0);
-  const packageCOrigin=new URL(page.url()).origin;
-  expect(new URL(foreign.url()).origin).toBe(packageCOrigin);
-  const denied=await foreign.request.get(new URL(artifactPath,packageCOrigin).toString());
-  expect(denied.status()).toBe(404);
-  await foreignContext.close();
+  await verifyForeignArtifactDenial(page,browser,request,artifactPath);
 });
 
 // These recovery fixtures intercept every API request, including commands. They
