@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "historical_source_register": "docs/source-register.json",
+  "historical_source_register_sha256": "086e26d0f83e76347ab709d8859dd013513240a4e86ee9861af2086f38bb0f3e",
+  "sources": [
+    {
+      "id": "apbra-160-v7-registration-acceptance",
+      "content_id": "11085",
+      "version": 1,
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-160?focusedCommentId=11085",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb Ul Haque approved the exact eight-file governance registration on 24 November 2026. This acceptance is limited to registration and preserves the selected active v7 route.",
+      "repository_decision": "docs/decisions/foundry-v7-qualification.md",
+      "repository_decision_sha256": "016401fadf78e113faf7aac7d0b7915188f8235256b16a85d669300a40b00602"
+    }
+  ],
+  "controlling_source_versions": {
+    "8519682": 119,
+    "4063307": 93,
+    "9404417": 29
+  },
+  "related_jira_comments": [
+    "11080",
+    "11082",
+    "11083",
+    "11084",
+    "11085"
+  ]
+}

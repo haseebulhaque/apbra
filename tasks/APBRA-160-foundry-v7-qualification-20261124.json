@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-V7-REG-20261124",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register the finite Foundry v7 metadata, one-case runtime and explicit report workflow scopes without activating product work.",
+  "requirements": [
+    "Owner accepted governance scope in APBRA-160 Jira plan 11083 and exact eight-file amendment 11085. Current source versions: Confluence 8519682 v119, 4063307 v93 and 9404417 v29.",
+    "Preserve the shared active v7 route and historical v6 and October controls. This registration records the future gates and changes no product bytes.",
+    "Bind the approved three literal product inventories without issuing an implementation execution or provider permission."
+  ],
+  "adrs": [
+    "docs/decisions/foundry-v7-qualification.md"
+  ],
+  "architecture_refs": [
+    "Existing agent-specific Responses v1 adapter, owner-private memory lease, archive-backed ReportDesign v2 validation and deterministic protected compiler.",
+    "Preserve the accepted solo-owner release process and historical bootstrap inverses."
+  ],
+  "allowed_paths": [
+    "docs/decisions/foundry-v7-qualification.md",
+    "docs/source-register-apbra160-v7.json",
+    "scripts/check_bootstrap.py",
+    "scripts/check_foundry_v7_scope.py",
+    "scripts/check_nv.py",
+    "scripts/check_recovered_native_registration.py",
+    "tasks/APBRA-160-foundry-v7-qualification-20261124.json",
+    "tests/bootstrap/test_foundry_v7_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    "packages/**",
+    "workers/**",
+    "infrastructure/**",
+    ".github/**",
+    ".env*",
+    "**/.env",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Only the exact literal registration scope may change relative to actual main, with every historical pin and policy preserved.",
+    "Recognize only the registered source provenance, approved decision, exact role, issue, branch and registration ancestry. Reject mixed stages, unknown paths and tampering.",
+    "Preserve the separation of metadata, independent provider admission, one-attempt spending review, explicit user action, and protected report compilation."
+  ],
+  "verification_required": [
+    "CI policy, exact main/branch ancestry, canonical checker, full bootstrap tests and pinned Linux scan against the exact final source.",
+    "Separate exact-base and exact-head review and all required hosted GitHub CI before Haseeb manual merge.",
+    "After actual registration merge, refresh main and issue distinct product executions with new evidence.",
+    "Undo only the exact v7 hook layers and verify both complete historical preimages across the independent inverse routes. Respect the existing 262076-byte canonical ceiling."
+  ],
+  "out_of_scope": [
+    "Product or migration changes, preview or owner data changes, Azure or provider calls, credentials, route or permission changes, deployment, spending, and automatic merge."
+  ],
+  "escalate_when": [
+    "Any additional path or permission is required, a historical pin would change, or exact required checks and owner approval are unavailable."
+  ],
+  "task_mode": "SPECIFICATION",
+  "readiness": "READY_FOR_SPECIFICATION",
+  "actual_authenticated_actor": "Codex /root via GitHub haseebulhaque (30074430), logical APBRA-DEVOPS 0.1",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "b30ede8f7235e50561f7d4c49146830901ecb99d",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-v7-registration",
+  "source_ids": [
+    "apbra-160-v7-registration-acceptance"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Governance registration only after Haseeb manually merges the independently reviewed, fully qualified exact draft. No product execution is issued here.",
+  "dependencies": [
+    "Actual main and accepted sources refreshed before registration. Required hosted CI, exact independent review, and Haseeb manual merge.",
+    "Future metadata, runtime and web slices must have separately issued task scopes for actual main. Paid dispatch requires an independently established current cost and one-case approval."
+  ]
+}

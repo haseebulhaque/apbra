@@ -299,3 +299,126 @@ def qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate)
         if identity=='APBRA-'+module['KEY'] and active_branch in (module['R'],module['B']):
             return module['qualified_paths'](root,checker,identity,active_branch,paths,overlap,candidate)
     return _finite_prior_qualified_paths(root,checker,identity,active_branch,paths,overlap,candidate)
+
+# APBRA-160 v7 registration extension. The existing inverses still verify their original hashes.
+V7_REGISTRATION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v7-registration"
+V7_BOOT_HOOK = "        if pn and active_task_id=='APBRA-160' and active_branch==pn['V7_REGISTRATION_BRANCH']:\n            registered_tasks['APBRA-160']=next((t for t,_ in nt if t['branch']==active_branch),None)\n"
+V7_BOOT_PREIMAGE = "52645c0d15c915b3e95e92575411434a9e1f766f73e6ac264c8b804f2e6d1313"
+V7_NV_MARKER = "\n# APBRA-160 v7 native historical inverse.\n"
+V7_NV_PREIMAGE = "8656ae1ba85d2a0be6d612630ae4f08782f8f22c93b9652da4e18f1c452e43fd"
+V7_NV_ADDEND = "9eaecb3dd4ec1bd836b7d4b030bbfe14c1d4ac0f8ddc7e41957017cb5013d617"
+V7_HELPER = "scripts/check_foundry_v7_scope.py"
+V7_HELPER_SHA = "ab2efab7f487f342f05e4bf1bd32bdbe66e668a29212a21b11925e6a47002b33"
+V7_FILES = {
+    V7_HELPER,
+    "docs/decisions/foundry-v7-qualification.md",
+    "docs/source-register-apbra160-v7.json",
+    "tasks/APBRA-160-foundry-v7-qualification-20261124.json",
+    "tests/bootstrap/test_foundry_v7_scope.py",
+}
+_pre_v7_finite_bootstrap = finite_strip_bootstrap
+_pre_v7_finite_nv = finite_strip_nv
+_pre_v7_stage_authorities = stage_authorities
+_v7_modules = {}
+
+
+def remove_v7_bootstrap_hook(source):
+    if source.count(V7_BOOT_HOOK) != 1:
+        raise ValueError("v7 canonical hook missing, duplicate or inexact")
+    return source.replace(V7_BOOT_HOOK, "", 1)
+
+
+def strip_v7_bootstrap(source):
+    restored = remove_v7_bootstrap_hook(source)
+    if hashlib.sha256(restored.encode()).hexdigest() != V7_BOOT_PREIMAGE:
+        raise ValueError("v7 canonical hook inverse changed the previous bytes")
+    return restored
+
+
+def strip_v7_nv(source):
+    if source.count(V7_NV_MARKER) != 1:
+        raise ValueError("v7 native hook missing, duplicate or inexact")
+    restored, marker, tail = source.partition(V7_NV_MARKER)
+    if (hashlib.sha256(restored.encode()).hexdigest() != V7_NV_PREIMAGE
+            or hashlib.sha256((marker + tail).encode()).hexdigest() != V7_NV_ADDEND):
+        raise ValueError("v7 native hook or its previous bytes differ")
+    return restored
+
+
+def finite_strip_bootstrap(source):
+    if "V7_REGISTRATION_BRANCH" in source:
+        source = strip_v7_bootstrap(source)
+    return _pre_v7_finite_bootstrap(source)
+
+
+def finite_strip_nv(source):
+    if V7_NV_MARKER in source:
+        source = strip_v7_nv(source)
+    return _pre_v7_finite_nv(source)
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    authorities, faults = _pre_v7_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    if not (any((root / path).exists() or (root / path).is_symlink() for path in V7_FILES)
+            or (branch or "").startswith("agent/APBRA-DEVOPS/APBRA-160-foundry-v7-")):
+        return authorities, faults
+    try:
+        if not all(safe(root, path) for path in V7_FILES | {
+            "scripts/check_bootstrap.py", "scripts/check_nv.py",
+            "scripts/check_recovered_native_registration.py",
+        }):
+            raise ValueError("Missing or unsafe v7 governance path")
+        strip_v7_bootstrap((root / "scripts/check_bootstrap.py").read_text())
+        strip_v7_nv((root / "scripts/check_nv.py").read_text())
+        helper = root / V7_HELPER
+        if hashlib.sha256(helper.read_bytes()).hexdigest() != V7_HELPER_SHA:
+            raise ValueError("v7 scope helper hash differs")
+        key = str(root.resolve())
+        if key not in _v7_modules:
+            _v7_modules[key] = __import__("runpy").run_path(helper)
+        bound, errors = _v7_modules[key]["bind"](
+            root, catalog, schema_errors, task_errors, identity, branch, paths,
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return authorities, faults + ["APBRA-160 v7 exact authority or historical integration differs"]
+    return authorities + bound, faults + errors
+
+
+V7_RECOVERED_MARKER = '\n# APBRA-160 v7 registration extension. The existing inverses still verify their original hashes.\n'
+V7_RECOVERED_PREIMAGE = "ac236229b06da685e248b98b1f39dfde20cb313d99e2376e5db625e311f75610"
+_pre_v7_qualified_paths = qualified_paths
+
+
+def strip_v7_recovered(source):
+    if source.count(V7_RECOVERED_MARKER) != 1:
+        raise ValueError("v7 recovered hook missing, duplicate or inexact")
+    previous, _, _ = source.partition(V7_RECOVERED_MARKER)
+    if hashlib.sha256(previous.encode()).hexdigest() != V7_RECOVERED_PREIMAGE:
+        raise ValueError("v7 recovered hook inverse changed the previous bytes")
+    return previous
+
+
+def qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate):
+    if active_branch != V7_REGISTRATION_BRANCH:
+        return _pre_v7_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+    if not v3_safe(root):
+        return set()
+    try:
+        helper = root / V7_HELPER
+        if not safe(root, V7_HELPER) or hashlib.sha256(helper.read_bytes()).hexdigest() != V7_HELPER_SHA:
+            return set()
+        origin = str(root.resolve())
+        if origin not in _v7_modules:
+            _v7_modules[origin] = __import__("runpy").run_path(helper)
+        project = {
+            "scripts/check_bootstrap.py": strip_v7_bootstrap,
+            "scripts/check_nv.py": strip_v7_nv,
+            "scripts/check_recovered_native_registration.py": strip_v7_recovered,
+        }
+        return _v7_modules[origin]["qualified_prior_release"](
+            root, checker, identity, active_branch, paths, overlap, candidate, V3, project,
+        )
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
