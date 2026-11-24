@@ -1511,3 +1511,500 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# Owner v7 metadata extension. Preserve the released v6 module above verbatim.
+def _fixed_v7_binding() -> OwnerMetadataPlan:
+    from dataclasses import replace
+
+    return replace(OwnerMetadataPlan(), agent_version="7")
+
+
+_V7_BINDING = _fixed_v7_binding()
+
+
+@dataclass(frozen=True, repr=False)
+class OwnerV7MetadataApproval:
+    """Expected principal and linked origin for a separately approved private read."""
+
+    home_account_id: str
+    search_origin: str
+    knowledge_sources: tuple[str, ...]
+    expires_at: float
+
+
+def _v7_remaining(approval: OwnerV7MetadataApproval) -> float:
+    if (
+        type(approval) is not OwnerV7MetadataApproval
+        or type(approval.home_account_id) is not str
+        or not re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", approval.home_account_id)
+        or type(approval.search_origin) is not str
+        or not re.fullmatch(
+            r"https://[a-z0-9][a-z0-9-]*\.search\.windows\.net", approval.search_origin
+        )
+        or type(approval.expires_at) not in {int, float}
+        or not math.isfinite(approval.expires_at)
+    ):
+        raise _qualification_error()
+    remaining = approval.expires_at - time.time()
+    if remaining <= 0:
+        raise _qualification_error()
+    return remaining
+
+
+def _v7_descriptor(approval: OwnerV7MetadataApproval) -> dict[str, Any]:
+    if _V7_BINDING != _fixed_v7_binding():
+        raise _qualification_error()
+    _v7_remaining(approval)
+    names = approval.knowledge_sources
+    if (
+        type(names) is not tuple
+        or not 1 <= len(names) <= _V7_BINDING.max_projection_items
+        or not all(
+            type(name) is str
+            and len(name) <= _V7_BINDING.max_projection_string_characters
+            and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", name)
+            for name in names
+        )
+        or len(set(names)) != len(names)
+    ):
+        raise _qualification_error()
+    return {
+        "version": _V7_BINDING.agent_version,
+        "project": _V7_BINDING.project_endpoint,
+        "agent": _V7_BINDING.agent_name,
+        "tenant": _V7_BINDING.tenant_id,
+        "client": _V7_BINDING.client_id,
+        "knowledgeBase": _V7_BINDING.knowledge_base,
+        "homeAccount": approval.home_account_id,
+        "searchOrigin": approval.search_origin,
+        "knowledgeSources": list(names),
+        "expiresAt": approval.expires_at,
+    }
+
+
+def _v7_digest(plan: dict[str, Any]) -> str:
+    import hashlib
+
+    return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _v7_audiences(approval: OwnerV7MetadataApproval) -> dict[str, str]:
+    binding = _V7_BINDING
+    agent = binding.project_endpoint + "/agents/" + binding.agent_name
+    return {
+        agent + "?api-version=" + binding.agent_api_version: _SCOPE,
+        (agent + "/versions/" + binding.agent_version + "?api-version="
+         + binding.agent_api_version): _SCOPE,
+        approval.search_origin + "/knowledgebases('" + binding.knowledge_base
+        + "')?api-version=" + binding.search_api_version: _SEARCH_SCOPE,
+    }
+
+
+def _unique_metadata_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _qualification_error()
+        result[key] = value
+    return result
+
+
+def _v7_worker_request(
+    packet: dict[str, Any], commitment: bytes
+) -> tuple[OwnerV7MetadataApproval, float]:
+    import hmac
+
+    if (
+        type(packet) is not dict
+        or set(packet) != {"method", "plan", "audience", "url", "bearer", "timeout", "cap"}
+        or packet["method"] != "GET"
+        or type(packet["plan"]) is not dict
+        or type(packet["url"]) is not str
+        or type(packet["audience"]) is not str
+        or type(packet["bearer"]) is not str
+        or not packet["bearer"]
+        or type(packet["cap"]) is not int
+        or packet["cap"] != _V7_BINDING.max_metadata_response_bytes
+        or type(packet["timeout"]) not in {int, float}
+        or not math.isfinite(packet["timeout"])
+        or not 0 < packet["timeout"] <= _V7_BINDING.request_timeout_seconds
+    ):
+        raise _qualification_error()
+    plan = packet["plan"]
+    if type(plan.get("knowledgeSources")) is not list:
+        raise _qualification_error()
+    approval = OwnerV7MetadataApproval(
+        plan["homeAccount"], plan["searchOrigin"], tuple(plan["knowledgeSources"]),
+        plan["expiresAt"],
+    )
+    expected = _v7_descriptor(approval)
+    if (
+        plan != expected
+        or not hmac.compare_digest(commitment, _v7_digest(expected).encode("ascii"))
+        or _v7_audiences(approval).get(packet["url"]) != packet["audience"]
+        or packet["audience"] not in {_SCOPE, _SEARCH_SCOPE}
+    ):
+        raise _qualification_error()
+    return approval, min(packet["timeout"], _v7_remaining(approval))
+
+
+def _metadata_v7_worker(factory: Callable[..., httpx.Client] | None = None) -> None:
+    output = os.dup(1)
+    null = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(null, 1)
+    os.dup2(null, 2)
+    os.close(null)
+    logging.disable(sys.maxsize)
+    commitment = bytearray()
+    raw = bytearray()
+    data = bytearray()
+    packet: dict[str, Any] = {}
+    try:
+        _blocking_write(output, b"R")
+        commitment = _blocking_exact(0, 64)
+        size = struct.unpack("!I", _blocking_exact(0, 4))[0]
+        if not 0 < size <= _V7_BINDING.max_metadata_response_bytes:
+            raise _qualification_error()
+        raw = _blocking_exact(0, size)
+        packet = json.loads(raw, object_pairs_hook=_unique_metadata_fields)
+        raw.clear()
+        approval, timeout = _v7_worker_request(packet, bytes(commitment))
+        data = _read_http_metadata(packet["url"], packet["bearer"], timeout, packet["cap"], factory)
+        _v7_remaining(approval)
+        _blocking_write(output, struct.pack("!I", len(data) + 1))
+        _blocking_write(output, b"S")
+        _blocking_write(output, data)
+    except BaseException:
+        try:
+            _blocking_write(output, struct.pack("!I", 1) + b"E")
+        except BaseException:
+            data.clear()  # No private child/IPC error is ever logged.
+    finally:
+        commitment.clear()
+        data.clear()
+        raw.clear()
+        packet.clear()
+        os.close(output)
+
+
+def _v7_worker_command() -> list[str]:
+    command = _worker_command()
+    command[-2] = (
+        "import sys;sys.path.insert(0,sys.argv[1]);"
+        "from apbra_api.foundry_owner_metadata import _metadata_v7_worker;_metadata_v7_worker()"
+    )
+    return command
+
+
+class _V7GetOperation(_GetOperation):
+    def _spawn(self) -> None:
+        try:
+            process = subprocess.Popen(  # noqa: S603 - same isolated owned interpreter as v6
+                _v7_worker_command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, close_fds=True, cwd="/", env={},
+            )
+            with self._lock:
+                self.process = process
+                if self._cancelled:
+                    self._reap(process)
+                else:
+                    assert process.stdin is not None and process.stdout is not None
+                    os.set_blocking(process.stdin.fileno(), False)
+                    os.set_blocking(process.stdout.fileno(), False)
+        except BaseException:
+            self._startup_failed = True
+        finally:
+            self._startup_done.set()
+
+
+def _run_v7_owned_get(
+    url: str,
+    bearer: str,
+    timeout: float,
+    cap: int,
+    factory: Callable[..., httpx.Client] | None,
+    memory: _V7OwnerMemory,
+    buffer: bytearray,
+) -> None:
+    operation = _V7GetOperation(timeout)
+    frame = bytearray()
+    header = bytearray()
+    try:
+        memory.register_operation(operation)
+        if factory is not None or len(url) + len(bearer) > cap:
+            raise _qualification_error()
+        approval = memory.require_approval()
+        plan = _v7_descriptor(approval)
+        audience = _v7_audiences(approval).get(url)
+        if audience is None or memory._tokens.get(audience, ("", 0))[0] != bearer:
+            raise _qualification_error()
+        body = json.dumps({
+            "method": "GET", "plan": plan, "audience": audience, "url": url,
+            "bearer": bearer, "timeout": timeout, "cap": cap,
+        }, allow_nan=False).encode()
+        if not 0 < len(body) <= cap:
+            raise _qualification_error()
+        memory.register_buffer(frame)
+        # The trusted parent commits the descriptor separately from the request.
+        # The child independently derives the eligible addresses and compares both.
+        memory.append_private(frame, _v7_digest(plan).encode("ascii"))
+        memory.append_private(frame, struct.pack("!I", len(body)))
+        memory.append_private(frame, body)
+        del body
+        plan.clear()
+        operation.start()
+        process = operation.process
+        assert process is not None and process.stdin is not None and process.stdout is not None
+        memory.register_buffer(header)
+        operation.transfer(process.stdout.fileno(), None, 1, memory, header)
+        if header != b"R":
+            raise _qualification_error()
+        header.clear()
+        operation.transfer(process.stdin.fileno(), frame, len(frame), memory, header)
+        frame.clear()
+        operation.transfer(process.stdout.fileno(), None, 4, memory, header)
+        size = struct.unpack("!I", header)[0]
+        if not 1 <= size <= cap + 1:
+            raise _qualification_error()
+        operation.transfer(process.stdout.fileno(), None, size, memory, buffer)
+        operation.finish()
+        memory.guard()
+        if buffer[:1] != b"S":
+            raise _qualification_error()
+        del buffer[:1]
+    finally:
+        frame.clear()
+        header.clear()
+        try:
+            operation.cancel()
+        finally:
+            memory.unregister_operation(operation)
+
+
+class _V7OwnerMemory(_OwnerMemory):
+    def __init__(self, approval: OwnerV7MetadataApproval) -> None:
+        super().__init__(_V7_BINDING)
+        self._v7_approval: OwnerV7MetadataApproval | None = approval
+
+    def require_approval(self) -> OwnerV7MetadataApproval:
+        if self._v7_approval is None:
+            raise _qualification_error()
+        _v7_remaining(self._v7_approval)
+        return self._v7_approval
+
+    def guard(self, *, confirmed: bool = True) -> None:
+        with self._lock:
+            approval = self.require_approval()
+            if (
+                self._closed
+                or self.binding != _fixed_v7_binding()
+                or (self._sdk is not None and not self._private_approved)
+                or (confirmed and (not self._confirmed or self._record is None))
+                or any(expiry <= time.time() for _, expiry in self._tokens.values())
+            ):
+                raise _qualification_error()
+            if self._record is not None:
+                identity = (self._record.tenant_id, self._record.client_id,
+                            self._record.home_account_id)
+                if self._account != identity or identity != (
+                    self.binding.tenant_id, self.binding.client_id, approval.home_account_id
+                ):
+                    raise _qualification_error()
+
+    def confirm_search(self, origin: str) -> None:
+        if self.require_approval().search_origin != origin:
+            raise _qualification_error()
+        super().confirm_search(origin)
+
+    def _get(
+        self, url: str, scope: str, client_factory: Callable[..., httpx.Client] | None
+    ) -> dict[str, Any]:
+        self.guard()
+        approval = self.require_approval()
+        with self._lock:
+            if (
+                _v7_audiences(approval).get(url) != scope
+                or url in self._requested
+                or scope not in self._tokens
+                or (scope == _SEARCH_SCOPE and self._search_origin != approval.search_origin)
+            ):
+                raise _qualification_error()
+            self._requested.add(url)
+            bearer, expiry = self._tokens[scope]
+        timeout = min(self.binding.request_timeout_seconds, expiry - time.time(),
+                      _v7_remaining(approval))
+        if timeout <= 0:
+            raise _qualification_error()
+        data = bytearray()
+        self.register_buffer(data)
+        _run_v7_owned_get(
+            url, bearer, timeout, self.binding.max_metadata_response_bytes, client_factory,
+            self, data,
+        )
+        self.guard()
+
+        def invalid_constant(value: str) -> None:
+            raise _qualification_error()
+
+        document = json.loads(
+            data, object_pairs_hook=_unique_metadata_fields, parse_constant=invalid_constant
+        )
+        if type(document) is not dict:
+            raise _qualification_error()
+        with self._lock:
+            self.guard()
+            self._documents.append(document)
+            data.clear()
+        return document
+
+    def close(self) -> None:
+        super().close()
+        with self._lock:
+            self._v7_approval = None
+
+
+def _verify_v7_agent(
+    properties: dict[str, Any], observation: dict[str, Any], search_origin: str | None,
+    approval: OwnerV7MetadataApproval,
+) -> None:
+    endpoint = properties.get("agent_endpoint")
+    protocols = endpoint.get("protocol_configuration") if type(endpoint) is dict else None
+    schemes = endpoint.get("authorization_schemes") if type(endpoint) is dict else None
+    tools = observation.get("tools")
+    accepted_schemes = {"AzureRbac", "Entra", "BotServiceRbac", "BotServiceTenant"}
+    if (
+        observation.get("observedEndpointSelector")
+        != [{"type": "FixedRatio", "version": "7", "trafficPercentage": 100}]
+        or type(protocols) is not dict
+        or protocols.get("responses") != {}
+        or not all(key in {"responses", "activity", "a2a", "invocations"} and type(value) is dict
+                   for key, value in protocols.items())
+        or type(schemes) is not list
+        or not 1 <= len(schemes) <= _V7_BINDING.max_projection_items
+        or not all(type(scheme) is dict and set(scheme) == {"type"} and type(scheme["type"]) is str
+                   and scheme["type"] in accepted_schemes
+                   for scheme in schemes)
+        or not any(scheme["type"] in {"AzureRbac", "Entra"} for scheme in schemes)
+        or type(observation.get("modelDeployment")) is not str
+        or "metadataWarnings" in observation
+        or type(tools) is not list
+        or len(tools) != 1
+        or type(tools[0]) is not dict
+        or tools[0].get("type") != "mcp"
+        or tools[0].get("allowedTools") != ["knowledge_base_retrieve"]
+        or search_origin != approval.search_origin
+    ):
+        raise _qualification_error()
+
+
+def _project_v7_knowledge(
+    knowledge: dict[str, Any], binding: OwnerMetadataPlan, approval: OwnerV7MetadataApproval,
+) -> dict[str, Any]:
+    projected = _knowledge_observation(knowledge, binding)
+    sources = knowledge.get("knowledgeSources")
+    expected_sources = set(approval.knowledge_sources)
+    if (
+        "knowledgeMetadataWarnings" in projected
+        or projected.get("outputMode") not in {"extractiveData", "answerSynthesis"}
+        or (projected["outputMode"] == "answerSynthesis" and not projected.get("models"))
+        or type(sources) is not list
+        or len(sources) != len(expected_sources)
+        or any(type(source) is not dict or type(source.get("name")) is not str
+               for source in sources)
+        or {source["name"] for source in sources} != expected_sources
+    ):
+        raise _qualification_error()
+    return projected
+
+
+def run_owner_metadata_v7(
+    approval: OwnerV7MetadataApproval,
+    *,
+    credential_factory: Callable[..., _DeviceCredential] | None = None,
+    client_factory: Callable[..., httpx.Client] | None = None,
+) -> dict[str, Any]:
+    """Separately approved private v7 metadata entry point, without a default live plan."""
+    stage = "BINDING"
+    memory: _V7OwnerMemory | None = None
+    try:
+        _v7_descriptor(approval)
+        binding = _V7_BINDING
+        stage = "TERMINAL_OPEN"
+        with _private_sdk_logging(), _qualification_terminal(binding) as terminal:
+            memory = _V7OwnerMemory(approval)
+            stage = "PRIVATE_CONFIRMATION"
+            _confirm_private(
+                terminal, binding,
+                "Use your separately approved unrecorded owner terminal for version 7 metadata.",
+                "CONFIRM PRIVATE TERMINAL",
+            )
+            memory._private_approved = True
+            memory.guard(confirmed=False)
+            remaining = min(binding.request_timeout_seconds, _v7_remaining(approval))
+            if int(remaining) < 1:
+                raise _qualification_error()
+            stage = "SDK_CONSTRUCTION"
+            sdk = _quiet_call(
+                credential_factory or _browser_credential,
+                tenant_id=binding.tenant_id, client_id=binding.client_id,
+                authority="login.microsoftonline.com", additionally_allowed_tenants=[],
+                disable_automatic_authentication=True, cache_persistence_options=None,
+                enable_support_logging=False, logging_enable=False, timeout=int(remaining),
+                connection_timeout=remaining, read_timeout=remaining, retry_total=0,
+            )
+            stage = "SDK_INSTALLATION"
+            memory.install_sdk(sdk)
+            del sdk
+            stage = "ACCOUNT_VALIDATION"
+            label = memory.authenticate()
+            memory.guard(confirmed=False)
+            stage = "ACCOUNT_CONFIRMATION"
+            _confirm_private(terminal, binding, "Selected existing account: " + label,
+                             "CONFIRM ACCOUNT")
+            del label
+            memory.confirm_account()
+            stage = "AI_TOKEN"
+            memory.acquire(_SCOPE)
+            addresses = tuple(_v7_audiences(approval))
+            stage = "AGENT_PROPERTIES_GET"
+            properties = memory.get(addresses[0], _SCOPE, client_factory)
+            stage = "AGENT_VERSION_GET"
+            version = memory.get(addresses[1], _SCOPE, client_factory)
+            stage = "AGENT_PROJECTION"
+            observation, search_origin = _agent_observation(properties, version, binding)
+            _verify_v7_agent(properties, observation, search_origin, approval)
+            memory.guard()
+            stage = "SEARCH_CONFIRMATION"
+            _confirm_private(
+                terminal, binding,
+                "Confirm exact existing Search origin: " + approval.search_origin, "CONFIRM SEARCH",
+            )
+            stage = "SEARCH_BINDING"
+            memory.confirm_search(approval.search_origin)
+            stage = "SEARCH_TOKEN"
+            memory.acquire(_SEARCH_SCOPE)
+            stage = "KNOWLEDGE_GET"
+            knowledge = memory.get(addresses[2], _SEARCH_SCOPE, client_factory)
+            stage = "KNOWLEDGE_PROJECTION"
+            projected = _project_v7_knowledge(knowledge, binding, approval)
+            stage = "FINAL_GUARD"
+            memory.guard()
+            return {
+                "status": "METADATA_OBSERVED_ONLY",
+                **{key: value for key, value in observation.items() if key != "searchOrigin"},
+                **projected,
+                "routingVerified": False, "groundingVerified": False,
+                "tenantIsolationVerified": False, "runtimeActivated": False,
+            }
+    except BaseException as error:
+        raise _safe_failure(stage, "QUALIFICATION_REJECTED", error) from None
+    finally:
+        if memory is not None:
+            try:
+                memory.close()
+                if not memory._cleanup_verified:
+                    raise _qualification_error()
+            except BaseException as error:
+                raise _safe_failure("CLEANUP", "CLEANUP_FAILED", error) from None
