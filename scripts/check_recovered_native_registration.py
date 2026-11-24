@@ -628,3 +628,164 @@ def qualified_paths(root, checker, identity, branch, paths, overlap, candidate):
         )
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
         return set()
+
+# APBRA-160 v7 metadata issuance. Preserve the original registration and inverses.
+METADATA_ISSUANCE_MARKER = b"\n# APBRA-160 v7 metadata issuance. Preserve the original registration and inverses.\n"
+METADATA_BOOT_HOOK = "        if pn and pn['issued_v7_branch'](active_branch):registered_tasks[active_task_id]=pn['metadata_task'](nt,active_branch)\n"
+METADATA_BOOT_PREIMAGE = 'fbee1b21f7a17cff347227c2ec820b7e3f764a57302f4eea483bda112ab69b2f'
+METADATA_RECOVERED_PREIMAGE = '61ac9f362a90082a69d33d9f0cb4b27e47073813dbe860df4deb18480093e091'
+METADATA_SCOPE_HELPER = "scripts/check_foundry_v7_metadata_issuance.py"
+METADATA_SCOPE_SHA = "b003b23f838bafe4b5f17d7d8657c46f7ac22e81ef065a5b9b49b441e674e86e"
+METADATA_PACKET = {
+    METADATA_SCOPE_HELPER,
+    "tasks/APBRA-160-foundry-v7-metadata-issuance-20261124.json",
+    "tests/bootstrap/test_foundry_v7_metadata_issuance.py",
+}
+METADATA_PRODUCT_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v7-metadata"
+METADATA_ISSUANCE_BRANCH = METADATA_PRODUCT_BRANCH + "-issuance-post-browser"
+_pre_metadata_remove_browser_hook = remove_browser_bootstrap_hook
+_pre_metadata_stage_authorities = stage_authorities
+_pre_metadata_qualified_paths = qualified_paths
+_metadata_modules = {}
+
+
+def issued_v7_branch(branch):
+    return branch in (METADATA_ISSUANCE_BRANCH, METADATA_PRODUCT_BRANCH)
+
+
+def metadata_task(authorities, branch):
+    return next((task for task, _ in authorities if task['branch'] == branch), None)
+
+
+def remove_metadata_bootstrap_hook(source):
+    if source.count(METADATA_BOOT_HOOK) != 1:
+        raise ValueError("Metadata issuance bootstrap hook missing, duplicate or inexact")
+    return source.replace(METADATA_BOOT_HOOK, "", 1)
+
+
+def remove_browser_bootstrap_hook(source):
+    # Restore the specific next selector before the earlier structural inverse.
+    if "issued_v7_branch" in source:
+        source = remove_metadata_bootstrap_hook(source)
+    return _pre_metadata_remove_browser_hook(source)
+
+
+def strip_metadata_bootstrap(source):
+    restored = remove_metadata_bootstrap_hook(source.decode()).encode()
+    if hashlib.sha256(restored).hexdigest() != METADATA_BOOT_PREIMAGE:
+        raise ValueError("Metadata issuance canonical preimage differs")
+    return restored
+
+
+def strip_metadata_recovered(source):
+    if source.count(METADATA_ISSUANCE_MARKER) != 1:
+        raise ValueError("Metadata issuance recovered marker missing or duplicate")
+    restored = source.split(METADATA_ISSUANCE_MARKER, 1)[0]
+    if hashlib.sha256(restored).hexdigest() != METADATA_RECOVERED_PREIMAGE:
+        raise ValueError("Metadata issuance recovered preimage differs")
+    return restored
+
+
+def metadata_packet_present(root, active_branch, paths):
+    return (
+        issued_v7_branch(active_branch)
+        or bool(paths and paths & METADATA_PACKET)
+        or any((root / name).exists() or (root / name).is_symlink() for name in METADATA_PACKET)
+    )
+
+
+def metadata_module(root):
+    if not all(safe(root, name) for name in METADATA_PACKET | {
+        "scripts/check_bootstrap.py", "scripts/check_recovered_native_registration.py",
+    }):
+        raise ValueError("Metadata issuance packet missing or unsafe")
+    strip_metadata_bootstrap((root / "scripts/check_bootstrap.py").read_bytes())
+    strip_metadata_recovered((root / "scripts/check_recovered_native_registration.py").read_bytes())
+    helper = root / METADATA_SCOPE_HELPER
+    if hashlib.sha256(helper.read_bytes()).hexdigest() != METADATA_SCOPE_SHA:
+        raise ValueError("Metadata issuance helper bytes differ")
+    if not safe(root, V7_HELPER) or hashlib.sha256((root / V7_HELPER).read_bytes()).hexdigest() != V7_HELPER_SHA:
+        raise ValueError("Original v7 scope helper bytes differ")
+    key = str(root.resolve())
+    if key not in _metadata_modules:
+        _metadata_modules[key] = __import__("runpy").run_path(helper)
+    if key not in _v7_modules:
+        _v7_modules[key] = __import__("runpy").run_path(root / V7_HELPER)
+    return _metadata_modules[key], _v7_modules[key]
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    authorities, faults = _pre_metadata_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    if not metadata_packet_present(root, branch, paths):
+        return authorities, faults
+    try:
+        module, old = metadata_module(root)
+        selected, errors = module["bind"](root, old, catalog, schema_errors, task_errors, identity, branch, paths)
+        if branch == METADATA_PRODUCT_BRANCH and selected and not errors:
+            # The unmodified registration remains dormant on its own.
+            if faults.count(module["UNISSUED"]) != 1:
+                raise ValueError("Original v7 metadata denial differs")
+            faults = [fault for fault in faults if fault != module["UNISSUED"]]
+        return authorities + selected, faults + errors
+    except (OSError, ValueError, KeyError, TypeError):
+        return authorities, faults + ["Foundry v7 metadata issuance packet or exact integration differs"]
+
+
+def metadata_browser_witness(root, checker, context, overlap, candidate, module, old):
+    """Retain the verified browser release across the independently bound v7 layer."""
+    branch, paths = context[1:]
+    if branch == METADATA_ISSUANCE_BRANCH:
+        if paths != module["ISSUANCE_PATHS"] or module["ref"](root, module["MAIN"]) != module["BASE"]:
+            return set()
+        if not module["candidate_head"](root, module["BASE"], paths, old["raw"]):
+            return set()
+    elif not module["released_issuance"](root, old["raw"]):
+        return set()
+
+    browser, original, raw = browser_context_module(root)
+    wrapper = "scripts/check_recovered_native_registration.py"
+    canonical = "scripts/check_bootstrap.py"
+    projections = {
+        wrapper: (METADATA_ISSUANCE_MARKER, strip_metadata_recovered),
+        canonical: (METADATA_BOOT_HOOK.encode(), strip_metadata_bootstrap),
+    }
+
+    def projected_raw(origin, name):
+        current = raw(origin, name)
+        return projections[name][1](current) if name in projections else current
+
+    def matches(origin, selected, commit, read):
+        # Compare the two strictly governed prefixes and every other source.
+        # The exact next issuance layer was already verified above.
+        for name in selected & projections.keys():
+            current = original["git"](origin, "show", commit + ":" + name)
+            mode = original["git"](origin, "ls-tree", commit, "--", name).split(b" ", 1)[0]
+            marker, inverse = projections[name]
+            if marker in current:
+                current = inverse(current)
+            if mode != b"100644" or current != read(origin, name):
+                return False
+        return original["matches"](origin, selected - projections.keys(), commit, read)
+
+    previous = dict(original, matches=matches)
+    return browser["qualified"](
+        root, previous, projected_raw, V3, checker, context, overlap, candidate,
+    )
+
+
+def qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate):
+    if not metadata_packet_present(root, active_branch, paths):
+        return _pre_metadata_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+    try:
+        module, old = metadata_module(root)
+        if not v3_safe(root):
+            return set()
+        context = (identity, active_branch, paths)
+        prior = metadata_browser_witness(root, checker, context, overlap, candidate, module, old)
+        if prior != set(overlap):
+            return set()
+        return prior | module["metadata_successor"](root, checker, context, old)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()
