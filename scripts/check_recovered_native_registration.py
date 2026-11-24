@@ -547,3 +547,84 @@ def qualified_paths(root, checker, identity, active_branch, paths, overlap, cand
         )
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
         return set()
+
+# APBRA-85 browser delivery context correction. Keep the entire PR188 prefix.
+BROWSER_CONTEXT_MARKER = b"\n# APBRA-85 browser delivery context correction. Keep the entire PR188 prefix.\n"
+BROWSER_CONTEXT_BASE_SHA = "d0ffc959dfcfe515c43d1c7f8c7bd3cc8701802b59aee7dbeb6a838eca8c9873"
+BROWSER_CONTEXT_BRANCH = "agent/APBRA-DEVOPS/APBRA-85-browser-delivery-context"
+BROWSER_CONTEXT_HELPER = "scripts/check_protected_report_browser_context.py"
+BROWSER_CONTEXT_HELPER_SHA = "4ce3991701f9073890aabf63743eb668aee7b8438783705d7dc0466fd737d54d"
+BROWSER_CONTEXT_FILES = {BROWSER_CONTEXT_HELPER, "tests/bootstrap/test_protected_report_browser_context.py"}
+_pre_context_browser_branch = browser_maintenance_branch
+_pre_context_stage_authorities = stage_authorities
+_pre_context_qualified_paths = qualified_paths
+_browser_context_modules = {}
+
+
+def browser_maintenance_branch(branch):
+    return branch == BROWSER_CONTEXT_BRANCH or _pre_context_browser_branch(branch)
+
+
+def browser_context_present(root, branch, paths):
+    return (
+        branch == BROWSER_CONTEXT_BRANCH
+        or bool(paths and paths & BROWSER_CONTEXT_FILES)
+        or any((root / name).exists() or (root / name).is_symlink() for name in BROWSER_CONTEXT_FILES)
+    )
+
+
+def strip_browser_context(source):
+    if source.count(BROWSER_CONTEXT_MARKER) != 1:
+        raise ValueError("Browser delivery context marker missing or duplicate")
+    prefix = source.split(BROWSER_CONTEXT_MARKER, 1)[0]
+    if hashlib.sha256(prefix).hexdigest() != BROWSER_CONTEXT_BASE_SHA:
+        raise ValueError("Browser delivery context PR188 preimage differs")
+    return prefix
+
+
+def browser_context_module(root):
+    if not all(safe(root, name) for name in BROWSER_CONTEXT_FILES):
+        raise ValueError("Missing or unsafe browser delivery context packet")
+    old, raw = browser_module(root)
+    strip_browser_context(raw(root, "scripts/check_recovered_native_registration.py"))
+    helper = root / BROWSER_CONTEXT_HELPER
+    if hashlib.sha256(helper.read_bytes()).hexdigest() != BROWSER_CONTEXT_HELPER_SHA:
+        raise ValueError("Browser delivery context helper bytes differ")
+    key = str(root.resolve())
+    if key not in _browser_context_modules:
+        _browser_context_modules[key] = __import__("runpy").run_path(helper)
+    return _browser_context_modules[key], old, raw
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    if not browser_context_present(root, branch, paths):
+        return _pre_context_stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    authorities, faults = _pre_browser_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    try:
+        module, old, raw = browser_context_module(root)
+        selected, errors = module["bind"](
+            root, old, raw, V3, catalog, schema_errors, task_errors, identity, branch, paths,
+        )
+        return authorities + selected, faults + errors
+    except (OSError, ValueError, KeyError, TypeError):
+        return authorities, faults + ["Browser delivery context packet or exact integration differs"]
+
+
+def qualified_paths(root, checker, identity, branch, paths, overlap, candidate):
+    if not browser_context_present(root, branch, paths):
+        return _pre_context_qualified_paths(root, checker, identity, branch, paths, overlap, candidate)
+    try:
+        module, old, raw = browser_context_module(root)
+        if not browser_maintenance_branch(branch):
+            prior = _pre_context_qualified_paths(root, checker, identity, branch, paths, overlap, candidate)
+            if prior:
+                return prior
+        if not v3_safe(root):
+            return set()
+        return module["qualified"](
+            root, old, raw, V3, checker, (identity, branch, paths), overlap, candidate,
+        )
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()
