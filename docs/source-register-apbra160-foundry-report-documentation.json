@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "github_issue": 193,
+  "historical_source_register": "docs/source-register.json",
+  "historical_source_register_sha256": "086e26d0f83e76347ab709d8859dd013513240a4e86ee9861af2086f38bb0f3e",
+  "sources": [
+    {
+      "id": "apbra-160-foundry-report-docs-8519682",
+      "content_id": "8519682",
+      "version": 120,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "title": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction",
+      "decision_excerpt_sha256": "419c819ceaa113b4d304cfed242d8def36d6ec89256a8f2b74c9ad55f8937766"
+    },
+    {
+      "id": "apbra-160-foundry-report-docs-4063307",
+      "content_id": "4063307",
+      "version": 94,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "title": "01.10 - MVP Scope & Product Boundaries",
+      "decision_excerpt_sha256": "5fbab9459d7ed7779c25ee27f402cdc514a6294293309309e3b9d01965038784"
+    },
+    {
+      "id": "apbra-160-foundry-report-docs-9404417",
+      "content_id": "9404417",
+      "version": 30,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417",
+      "status": "ACCEPTED",
+      "title": "03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract",
+      "decision_excerpt_sha256": "694c90405a00ebc5f66ce4b139db764eec6eb39c8c49ed78e19be6c0ba5f8bf7"
+    }
+  ],
+  "accepted_direction": "Foundry and its authorised tools generate and compile the complete downloadable artifact. APBRA supplies confirmed permitted inputs and instructions, validates the artifact, records provenance and controls access and delivery. Prior APBRA compiler evidence is historical. Actual exact-version APP generation, returned artifact, protected download, Power BI open and fidelity acceptance are pending.",
+  "registration_authority": "Owner selected the exact four-file registration for GitHub issue 193. APBRA-160 PLAN 11116 records scope; actual owner merge is required before the separate eight-file application of the approved Markdown patch.",
+  "approved_patch_sha256": "cc41fab307718dbcd7cfa43298397c7ac6dc54bb1a3dfce8608f1be30f450f31",
+  "approved_markdown": {
+    "AI-RAG-SPEC.md": {
+      "preimage_sha256": "a27635d364a5b8f8eeb5f96dcabe8052e596d27fe1cbbcc4b6865ad3a95bcb87",
+      "approved_sha256": "ee227220d0f647edb798f595ea286e5aad8a012b86988e86dc67b8c7895e9aac"
+    },
+    "ARCHITECTURE.md": {
+      "preimage_sha256": "f15c28c41556d3f42be5caae0b369c82d98dbdbcfc9ec348c400ae2a7ade36a7",
+      "approved_sha256": "3a8bbb338b589e892ffad312d1def8a74ba5d862ada2faf06e09f513564a9aac"
+    },
+    "MVP-ACCEPTANCE-CRITERIA.md": {
+      "preimage_sha256": "1dba5ba9c50ee77ccbc7215a7ba9f5da490d0345d65cdb4d827dbad6975da83f",
+      "approved_sha256": "49385dde692740d1ecaa8e0ddc6a681c6d3470976ed668c4f8b8c725ef31fef6"
+    },
+    "POWERBI-GENERATION-SPEC.md": {
+      "preimage_sha256": "5f974a0c4b8a9af4209d8873b93521ab4265c44573c47826147f0ea78453e392",
+      "approved_sha256": "96e71557995236dadb1fadaa751b25bcf7cf37d4a03d31eeeae0aad2dcc46026"
+    },
+    "README.md": {
+      "preimage_sha256": "f39a991507c4a835548a70c44fb839b46366ae036e74c5bf192c4adf5b83df3e",
+      "approved_sha256": "7fd9f5b9913ba12988ae7929217b214dcf074bcc321bebd15d7c92e29b6e0579"
+    },
+    "REQUIREMENTS.md": {
+      "preimage_sha256": "96104fdefdfd303aa9fa0528d18d23d12b39bf3be9decf70787debaef78058f5",
+      "approved_sha256": "733eb9d269c41ab5cb57d474db9583a8723b79b4121a06f276d057ce8531f761"
+    },
+    "docs/decisions/implementation-baseline.md": {
+      "preimage_sha256": "dd7d66f0bbb3815db27f2130b4988c2e04473119dc86db5f1de19d1809ef125d",
+      "approved_sha256": "297ff8bdfff2007bccad42f14502a3c492060d006549895b0b29a2473afc3715"
+    },
+    "docs/engineering/codex-handoff.md": {
+      "preimage_sha256": "daa2d8044b9451565b821710fa02e3d727af3f958db16884378cd8773a88bfa0",
+      "approved_sha256": "738883e60421674bfbf997a64ffb69acf67f810b62dade62fd66bbbf86f282a9"
+    }
+  }
+}

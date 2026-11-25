@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261125-DOCS-193-IMPLEMENTATION",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DOCS",
+  "agent_card_version": "0.1",
+  "risk_class": "R3",
+  "objective": "Reconcile the eight exact Markdown documents with the current approved Foundry report artifact direction in GitHub issue 193.",
+  "requirements": [
+    "Apply the issue 193 owner-supplied patch with SHA-256 cc41fab307718dbcd7cfa43298397c7ac6dc54bb1a3dfce8608f1be30f450f31. Preserve all historical implementation, earlier compiler and test evidence.",
+    "Foundry and its authorised tools generate and compile the full report artifact. APBRA supplies the confirmed permitted inputs and instructions, validates the resulting artifact, records provenance and controls protected download.",
+    "Document the pending exact-version live APP generation, download, Power BI open and fidelity acceptance. Local and synthetic evidence does not complete live acceptance."
+  ],
+  "adrs": [
+    "Owner-selected Foundry generation and compilation boundary accepted on 25 November 2026; runtime architecture and implementation require a separate issued task."
+  ],
+  "architecture_refs": [
+    "Confluence 03.07 v120, 01.10 v94 and 03.08 v30.",
+    "Confluence 22.05 v10 and accepted solo-owner merge controls. Preserve all historical source pins."
+  ],
+  "allowed_paths": [
+    "AI-RAG-SPEC.md",
+    "ARCHITECTURE.md",
+    "MVP-ACCEPTANCE-CRITERIA.md",
+    "POWERBI-GENERATION-SPEC.md",
+    "README.md",
+    "REQUIREMENTS.md",
+    "docs/decisions/implementation-baseline.md",
+    "docs/engineering/codex-handoff.md"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    "scripts/**",
+    "tests/**",
+    "tasks/**",
+    ".github/**",
+    "infra/**",
+    ".env*",
+    "local-data/**",
+    "docs/source-register*"
+  ],
+  "acceptance_criteria": [
+    "Actual protected-main ordinary merge of the exact separate four-file registration. Review and record the actual docs execution base before applying the approved Markdown patch.",
+    "An exact clean eight-document candidate with approved preimages, approved results, original regular file modes, and no governance/runtime changes.",
+    "Later verified ordinary documentation merge and exact change readback keep the registered context, protected metadata and invitation controls intact."
+  ],
+  "verification_required": [
+    "Verify GitHub issue 193, source versions, actual protected main and effective registered contract before the fresh documents execution.",
+    "Verify exact patch digest, Markdown preimages and postimages, only eight changed paths, CI policy, canonical, complete bootstrap and pinned history scan.",
+    "Obtain independent review and required hosted CI for the exact documents base/head before Haseeb's manual ordinary merge."
+  ],
+  "out_of_scope": [
+    "Runtime, provider execution, grants, deployment, production, spending, privilege changes, live artifact or preview changes.",
+    "Historical source/contract changes and widening the registered paths or approved patch."
+  ],
+  "escalate_when": [
+    "Any approved preimage, result, source version, exact path or effective registration ancestry differs."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Codex /root via GitHub haseebulhaque (30074430). Registration is APBRA-DEVOPS 0.1; eventual Markdown execution is APBRA-DOCS 0.1.",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "a15e393a4c8dc789d210c905dd885a0a6c650e84",
+  "branch": "agent/APBRA-DOCS/APBRA-160-foundry-report-delivery-docs",
+  "source_ids": [
+    "apbra-160-foundry-report-docs-8519682",
+    "apbra-160-foundry-report-docs-4063307",
+    "apbra-160-foundry-report-docs-9404417"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Separate actual ordinary four-file registration merge and refreshed exact-main execution are required before this implementation. This contract issues no live or runtime authorization.",
+  "dependencies": [
+    "Actual PR194 ordinary merge and passed retained metadata/invitation controls.",
+    "Separate four-file registration and its exact base/head independent review, full policy/tests/scans, required hosted CI and Haseeb manual merge.",
+    "Refresh and record exact current main, effective registration and accepted document preimages before the Markdown-only candidate."
+  ]
+}
