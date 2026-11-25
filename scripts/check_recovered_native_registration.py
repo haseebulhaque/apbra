@@ -1058,3 +1058,249 @@ def qualified_paths(root, checker, identity, active_branch, paths, overlap, cand
         return witness | metadata["metadata_successor"](root, checker, context, old)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
         return set()
+
+# APBRA-160 issue 193 documentation registration. Keep the PR194 prefix exact.
+REPORT_DOCS_MARKER = b"\n# APBRA-160 issue 193 documentation registration. Keep the PR194 prefix exact.\n"
+REPORT_DOCS_ANCHOR = "a15e393a4c8dc789d210c905dd885a0a6c650e84"
+REPORT_DOCS_ANCHOR_TREE = "0ff18a113dccc4a21c23c89748ab14519b287ba8"
+REPORT_DOCS_WRAPPER_SHA = "3a641ba3480c9c57cb5fcb2d023b57bbed6b3cd5aa20fd3ec6286460ad702f26"
+REPORT_DOCS_ISSUE = "APBRA-160"
+REPORT_DOCS_BRANCH = "agent/APBRA-DOCS/APBRA-160-foundry-report-delivery-docs"
+REPORT_DOCS_REGISTRATION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-report-delivery-docs-registration"
+REPORT_DOCS_BRANCHES = frozenset({REPORT_DOCS_BRANCH, REPORT_DOCS_REGISTRATION_BRANCH})
+REPORT_DOCS_TASK = "tasks/APBRA-160-foundry-report-documentation-20261125.json"
+REPORT_DOCS_SOURCE = "docs/source-register-apbra160-foundry-report-documentation.json"
+REPORT_DOCS_TEST = "tests/bootstrap/test_foundry_report_documentation_scope.py"
+REPORT_DOCS_ADDITIONS = frozenset({REPORT_DOCS_TASK, REPORT_DOCS_SOURCE, REPORT_DOCS_TEST})
+REPORT_DOCS_REGISTRATION = REPORT_DOCS_ADDITIONS | {INVITATION_READBACK_WRAPPER}
+REPORT_DOCS_PATHS = frozenset({
+    "AI-RAG-SPEC.md", "ARCHITECTURE.md", "MVP-ACCEPTANCE-CRITERIA.md",
+    "POWERBI-GENERATION-SPEC.md", "README.md", "REQUIREMENTS.md",
+    "docs/decisions/implementation-baseline.md", "docs/engineering/codex-handoff.md",
+})
+REPORT_DOCS_METADATA_BLOBS = (
+    b"100644 blob e7e37f77f98323c090dfa5f8feda7d74d74df460\tapps/api/src/apbra_api/foundry_owner_metadata.py\x00"
+    b"100644 blob 410620efbdf2f25fe8c97fd1f78d643d3c206a16\tapps/api/tests/test_foundry_owner_metadata.py\x00"
+)
+_report_docs_previous_branch = issued_v7_branch
+_report_docs_previous_authorities = stage_authorities
+_report_docs_previous_readback = invitation_readback_context
+
+
+def issued_v7_branch(branch):
+    return branch in REPORT_DOCS_BRANCHES or _report_docs_previous_branch(branch)
+
+
+def strip_report_docs_wrapper(source):
+    if source.count(REPORT_DOCS_MARKER) != 1:
+        raise ValueError("Documentation registration marker is missing or duplicate")
+    prefix = source.split(REPORT_DOCS_MARKER, 1)[0]
+    if hashlib.sha256(prefix).hexdigest() != REPORT_DOCS_WRAPPER_SHA:
+        raise ValueError("Documentation registration altered the PR194 wrapper")
+    return prefix
+
+
+def report_docs_packet_present(root):
+    return any((root / path).exists() or (root / path).is_symlink()
+               for path in REPORT_DOCS_ADDITIONS)
+
+
+def report_docs_packet(root):
+    if not all(safe(root, path) for path in REPORT_DOCS_REGISTRATION):
+        raise ValueError("Incomplete or unsafe documentation registration packet")
+    strip_report_docs_wrapper((root / INVITATION_READBACK_WRAPPER).read_bytes())
+    sources = (root / REPORT_DOCS_SOURCE).read_bytes()
+    task = (root / REPORT_DOCS_TASK).read_bytes()
+    if (
+        hashlib.sha256(sources).hexdigest() != "70326567649ec96191a88aa704c5a030a5ae69e0b5cae668dcb304ef517a53aa"
+        or hashlib.sha256(task).hexdigest() != "16d803dce1f497884d42a488c6ed51ba129fa6344656ff88eca4e03fe3db3705"
+    ):
+        raise ValueError("Exact documentation task or source pin differs")
+    source = json.loads(sources)
+    historical = source["historical_source_register"]
+    if (
+        historical != "docs/source-register.json" or not safe(root, historical)
+        or hashlib.sha256((root / historical).read_bytes()).hexdigest() != source["historical_source_register_sha256"]
+    ):
+        raise ValueError("Historical source register differs")
+    return json.loads(task), source
+
+
+def report_docs_registration_base(root, readback, metadata, base):
+    if base == REPORT_DOCS_ANCHOR:
+        return True
+    parents = readback["parents"](root, metadata["git"], base)
+    return (
+        len(parents) == 2 and parents[0] == REPORT_DOCS_ANCHOR
+        and metadata["owner_merge"](root, base, METADATA_PRODUCT_BRANCH, metadata["PRODUCT_PATHS"])
+        and readback["entries"](root, metadata, base, metadata["PRODUCT_PATHS"]) == REPORT_DOCS_METADATA_BLOBS
+    )
+
+
+def report_docs_registration_state(root, readback, metadata, raw):
+    """Verify the exact registration commit or its ordinary release from trusted main."""
+    readback["require_checkout"](root, metadata)
+    ref, ancestor = metadata["ref"], metadata["ancestor"]
+    main = ref(root, metadata["MAIN"])
+    if (
+        ref(root, REPORT_DOCS_ANCHOR + "^{tree}") != REPORT_DOCS_ANCHOR_TREE
+        or not all(ancestor(root, REPORT_DOCS_ANCHOR, target) for target in (main, "HEAD"))
+    ):
+        raise ValueError("Documentation registration requires the actual PR194 anchor")
+    release = readback["first_touch"](root, metadata, REPORT_DOCS_ANCHOR, main, REPORT_DOCS_REGISTRATION)
+    if release is None:
+        if (
+            report_docs_registration_base(root, readback, metadata, main)
+            and readback["actual_branch"](root, metadata, REPORT_DOCS_REGISTRATION_BRANCH)
+            and metadata["candidate_head"](root, main, REPORT_DOCS_REGISTRATION, raw)
+        ):
+            return main, None
+        raise ValueError("Documentation registration requires its exact four-file candidate on allowed main")
+    parents = readback["parents"](root, metadata["git"], release)
+    if (
+        len(parents) != 2 or not report_docs_registration_base(root, readback, metadata, parents[0])
+        or not metadata["owner_merge"](root, release, REPORT_DOCS_REGISTRATION_BRANCH, REPORT_DOCS_REGISTRATION)
+        or not ancestor(root, release, "HEAD")
+        or not all(metadata["matches_commit"](root, REPORT_DOCS_REGISTRATION, commit, raw)
+                   for commit in (release, main, "HEAD"))
+    ):
+        raise ValueError("Documentation registration requires an ordinary release with its exact packet")
+    return main, release
+
+
+def invitation_readback_context(root):
+    if not report_docs_packet_present(root):
+        return _report_docs_previous_readback(root)
+
+    readback, metadata, old = invitation_readback_sources(root)
+    raw = old["raw"]
+    main, release = report_docs_registration_state(root, readback, metadata, raw)
+
+    def matches(origin, paths, revision, read):
+        commit = metadata["ref"](origin, revision)
+        prior_readback = paths == readback["SCOPE"] and commit == REPORT_DOCS_ANCHOR
+        prospective_main = (
+            release is None and commit == main
+            and paths in (readback["SCOPE"], metadata["ISSUANCE_PATHS"])
+        )
+        # Compare the original packets against PR194 and against the still
+        # unamended protected main only when the doc registration is prospective.
+        if not (prior_readback or prospective_main):
+            return metadata["matches_commit"](origin, paths, commit, read)
+        if metadata["ref"](origin, metadata["MAIN"]) != main:
+            return False
+
+        def previous_raw(checkout, path):
+            source = read(checkout, path)
+            return strip_report_docs_wrapper(source) if path == INVITATION_READBACK_WRAPPER else source
+
+        return metadata["matches_commit"](origin, paths, commit, previous_raw)
+
+    readback_metadata = dict(metadata, matches_commit=matches)
+    state = readback["amendment_state"](root, readback_metadata, raw)
+    inverses = {
+        INVITATION_READBACK_WRAPPER: lambda source: strip_invitation_readback_wrapper(strip_report_docs_wrapper(source)),
+        METADATA_SCOPE_HELPER: strip_invitation_readback_metadata,
+    }
+    return readback, state, readback["metadata_view"](readback_metadata, state, inverses), old
+
+
+def report_docs_markdown_matches(root, metadata, commit, source, expected, *, raw=None):
+    git = metadata["git"]
+    for path in sorted(REPORT_DOCS_PATHS):
+        mode = git(root, "ls-tree", commit, "--", path).split(b" ", 1)[0]
+        blob = git(root, "show", commit + ":" + path)
+        if mode != b"100644" or hashlib.sha256(blob).hexdigest() != source["approved_markdown"][path][expected]:
+            return False
+        if raw is not None and (raw(root, path) != blob or (root / path).stat().st_mode & 0o111):
+            return False
+    return True
+
+
+def report_docs_current_markdown(root, metadata, raw, main, source, expected):
+    head = metadata["ref"](root, "HEAD")
+    return (
+        (head == main or report_docs_markdown_matches(root, metadata, main, source, expected))
+        and report_docs_markdown_matches(root, metadata, head, source, expected, raw=raw)
+    )
+
+
+def report_docs_product_authority(root, readback, metadata, raw, source, main, registration, branch):
+    if not registration:
+        return False
+
+    recent = readback["first_touch"](root, metadata, registration, main, REPORT_DOCS_PATHS)
+    if recent:
+        parents = readback["parents"](root, metadata["git"], recent)
+        if (
+            len(parents) != 2
+            or not metadata["owner_merge"](root, recent, REPORT_DOCS_BRANCH, REPORT_DOCS_PATHS)
+            or not metadata["ancestor"](root, recent, "HEAD")
+            or not report_docs_markdown_matches(root, metadata, parents[0], source, "preimage_sha256")
+            or not report_docs_markdown_matches(root, metadata, recent, source, "approved_sha256")
+            or not report_docs_current_markdown(root, metadata, raw, main, source, "approved_sha256")
+        ):
+            raise ValueError("Effective issue 193 documentation merge or continued approved bytes differ")
+        return False
+
+    if branch != REPORT_DOCS_BRANCH:
+        if not report_docs_current_markdown(root, metadata, raw, main, source, "preimage_sha256"):
+            raise ValueError("Registered issue 193 preimages must remain exact before the documentation release")
+        return False
+    return (
+        readback["actual_branch"](root, metadata, REPORT_DOCS_BRANCH)
+        and metadata["candidate_head"](root, main, REPORT_DOCS_PATHS, raw)
+        and report_docs_markdown_matches(root, metadata, main, source, "preimage_sha256")
+        and report_docs_markdown_matches(root, metadata, "HEAD", source, "approved_sha256", raw=raw)
+    )
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    authorities, faults = _report_docs_previous_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    if branch not in REPORT_DOCS_BRANCHES and not report_docs_packet_present(root):
+        return authorities, faults
+
+    try:
+        task, source = report_docs_packet(root)
+        schema = json.loads((root / "contracts/engineering/task-contract.schema.json").read_bytes())
+        if schema_errors(schema, task) or task_errors(task, catalog, source):
+            raise ValueError("Issue 193 documentation task contract is invalid")
+        registration = dict(
+            task, assigned_agent="APBRA-DEVOPS", branch=REPORT_DOCS_REGISTRATION_BRANCH,
+            execution_id="APBRA-160-20261125-DOCS-193-REG-01",
+            allowed_paths=sorted(REPORT_DOCS_REGISTRATION),
+            restricted_paths=["apps/**", ".github/**", "infra/**", ".env*", "local-data/**"],
+            task_mode="SPECIFICATION", readiness="READY_FOR_SPECIFICATION",
+        )
+        if not (root / ".git").exists():
+            # Historical source-only fixtures can inventory the exact packet.
+            # Effective branch authority always requires a physical Git checkout.
+            if branch in REPORT_DOCS_BRANCHES or paths and paths & REPORT_DOCS_ADDITIONS:
+                raise ValueError("Documentation authority requires its own Git checkout")
+            return authorities + ((registration, REPORT_DOCS_REGISTRATION),), faults
+
+        readback, metadata, old = invitation_readback_sources(root)
+        main, release = report_docs_registration_state(root, readback, metadata, old["raw"])
+        if branch == REPORT_DOCS_REGISTRATION_BRANCH:
+            if (
+                identity != REPORT_DOCS_ISSUE or paths != REPORT_DOCS_REGISTRATION or release is not None
+                or not report_docs_markdown_matches(root, metadata, main, source, "preimage_sha256")
+            ):
+                raise ValueError("Issue 193 registration requires its exact branch, scope and eight preimages")
+            return authorities + ((dict(registration, base_commit=main), REPORT_DOCS_REGISTRATION),), faults
+
+        if paths and paths & REPORT_DOCS_REGISTRATION:
+            raise ValueError("Issue 193 registration paths require their separate branch")
+        authorities += ((registration, REPORT_DOCS_REGISTRATION),)
+        product_admitted = report_docs_product_authority(
+            root, readback, metadata, old["raw"], source, main, release, branch,
+        )
+        if branch == REPORT_DOCS_BRANCH:
+            if identity != REPORT_DOCS_ISSUE or paths != REPORT_DOCS_PATHS or not product_admitted:
+                raise ValueError("Issue 193 requires a released registration and exact approved documentation bytes")
+            authorities += ((dict(task, base_commit=main), REPORT_DOCS_PATHS),)
+        return authorities, faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return authorities, faults + ["APBRA-160 issue 193 documentation scope denied: " + str(error)]
