@@ -823,3 +823,238 @@ def qualified_paths(root, checker, identity, active_branch, paths, overlap, cand
         return prior | module["metadata_successor"](root, checker, context, old)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
         return set()
+
+# APBRA-85 invitation release readback. Retain the complete PR192 sources.
+INVITATION_READBACK_MARKER = b"\n# APBRA-85 invitation release readback. Retain the complete PR192 sources.\n"
+INVITATION_READBACK_BASE = "b58dbf6825dabbdf3c007aca672d1e38615ca5e8"
+INVITATION_READBACK_BRANCH = "agent/APBRA-DEVOPS/APBRA-85-native-invitation-release-readback"
+INVITATION_READBACK_WRAPPER_SHA = "06273888ff552a742320efbf51777923d65ecf0eaf49bf856910105db05ae6bd"
+INVITATION_READBACK_METADATA_SHA = "9e611ddd17553bcbc6c9e541225102e68bc5e79bed36745b0990553b381a781d"
+INVITATION_READBACK_HELPER = "scripts/check_native_invitation_release_readback.py"
+INVITATION_READBACK_HELPER_SHA = "7c40af1fcfccd4eca4d3a7df8f16b4b67feb8c53bc830e039a5e3cfd9021a37b"
+INVITATION_READBACK_TESTS = "tests/bootstrap/test_native_invitation_release_readback.py"
+INVITATION_READBACK_ADDITIONS = {INVITATION_READBACK_HELPER, INVITATION_READBACK_TESTS}
+INVITATION_READBACK_WRAPPER = "scripts/check_recovered_native_registration.py"
+_pre_readback_browser_branch = browser_maintenance_branch
+_pre_readback_metadata_module = metadata_module
+_pre_readback_stage_authorities = stage_authorities
+_pre_readback_qualified_paths = qualified_paths
+_invitation_readback_modules = {}
+
+
+def browser_maintenance_branch(branch):
+    return branch == INVITATION_READBACK_BRANCH or _pre_readback_browser_branch(branch)
+
+
+def strip_invitation_readback_wrapper(source):
+    if source.count(INVITATION_READBACK_MARKER) != 1:
+        raise ValueError("Invitation readback wrapper marker missing or duplicate")
+    previous = source.split(INVITATION_READBACK_MARKER, 1)[0]
+    if hashlib.sha256(previous).hexdigest() != INVITATION_READBACK_WRAPPER_SHA:
+        raise ValueError("Invitation readback wrapper PR192 preimage differs")
+    return previous
+
+
+def strip_invitation_readback_metadata(source):
+    changes = (
+        (b"def released_issuance(root, raw, *, issuance_matches=matches_commit):",
+         b"def released_issuance(root, raw):", 1),
+        (b"and issuance_matches(root, ISSUANCE_PATHS,", b"and matches_commit(root, ISSUANCE_PATHS,", 2),
+        (b"identity, branch, paths,\n         *, issuance_matches=matches_commit):",
+         b"identity, branch, paths):", 1),
+        (b"def metadata_successor(root, checker, context, old, *, issuance_matches=matches_commit):",
+         b"def metadata_successor(root, checker, context, old):", 1),
+        (b'released_issuance(root, old["raw"], issuance_matches=issuance_matches)',
+         b'released_issuance(root, old["raw"])', 2),
+    )
+    for added, previous, count in changes:
+        if source.count(added) != count:
+            raise ValueError("Invitation readback metadata inverse differs")
+        source = source.replace(added, previous)
+    if hashlib.sha256(source).hexdigest() != METADATA_SCOPE_SHA:
+        raise ValueError("Invitation readback metadata PR192 preimage differs")
+    return source
+
+
+def invitation_readback_present(root, branch, paths):
+    return (branch == INVITATION_READBACK_BRANCH
+            or bool(paths and paths & INVITATION_READBACK_ADDITIONS)
+            or any((root / name).exists() or (root / name).is_symlink()
+                   for name in INVITATION_READBACK_ADDITIONS))
+
+
+def invitation_readback_metadata_sources(root):
+    packet = METADATA_PACKET | {"scripts/check_bootstrap.py", INVITATION_READBACK_WRAPPER, V7_HELPER}
+    if not all(safe(root, name) for name in packet):
+        raise ValueError("Invitation readback metadata packet missing or unsafe")
+    strip_metadata_bootstrap((root / "scripts/check_bootstrap.py").read_bytes())
+    wrapper = strip_invitation_readback_wrapper((root / INVITATION_READBACK_WRAPPER).read_bytes())
+    strip_metadata_recovered(wrapper)
+    source = (root / METADATA_SCOPE_HELPER).read_bytes()
+    if hashlib.sha256(source).hexdigest() != INVITATION_READBACK_METADATA_SHA:
+        raise ValueError("Invitation readback metadata helper bytes differ")
+    strip_invitation_readback_metadata(source)
+    if hashlib.sha256((root / V7_HELPER).read_bytes()).hexdigest() != V7_HELPER_SHA:
+        raise ValueError("Original v7 scope helper bytes differ")
+    key = str(root.resolve())
+    metadata_key = (key, INVITATION_READBACK_METADATA_SHA)
+    if metadata_key not in _metadata_modules:
+        _metadata_modules[metadata_key] = __import__("runpy").run_path(root / METADATA_SCOPE_HELPER)
+    if key not in _v7_modules:
+        _v7_modules[key] = __import__("runpy").run_path(root / V7_HELPER)
+    return _metadata_modules[metadata_key], _v7_modules[key]
+
+
+def invitation_readback_sources(root):
+    metadata, old = invitation_readback_metadata_sources(root)
+    if not all(safe(root, name) for name in INVITATION_READBACK_ADDITIONS):
+        raise ValueError("Incomplete or unsafe invitation readback packet")
+    helper = root / INVITATION_READBACK_HELPER
+    if hashlib.sha256(helper.read_bytes()).hexdigest() != INVITATION_READBACK_HELPER_SHA:
+        raise ValueError("Invitation readback helper bytes differ")
+    key = str(root.resolve())
+    if key not in _invitation_readback_modules:
+        _invitation_readback_modules[key] = __import__("runpy").run_path(helper)
+    return _invitation_readback_modules[key], metadata, old
+
+
+def invitation_readback_context(root):
+    readback, metadata, old = invitation_readback_sources(root)
+    state = readback["amendment_state"](root, metadata, old["raw"])
+    inverses = {
+        INVITATION_READBACK_WRAPPER: strip_invitation_readback_wrapper,
+        METADATA_SCOPE_HELPER: strip_invitation_readback_metadata,
+    }
+    return readback, state, readback["metadata_view"](metadata, state, inverses), old
+
+
+def metadata_module(root):
+    if invitation_readback_present(root, None, None):
+        if not (root / ".git").exists():
+            # Older static source checks copy the tracked tree without Git.
+            # Keep their original inventory and no-ref metadata behaviour.
+            _, metadata, old = invitation_readback_sources(root)
+        else:
+            _, _, metadata, old = invitation_readback_context(root)
+        return metadata, old
+
+    helper = root / METADATA_SCOPE_HELPER
+    wrapper = root / INVITATION_READBACK_WRAPPER
+    has_readback_marker = (
+        safe(root, INVITATION_READBACK_WRAPPER)
+        and INVITATION_READBACK_MARKER in wrapper.read_bytes()
+    )
+    amended_metadata = (
+        safe(root, METADATA_SCOPE_HELPER)
+        and hashlib.sha256(helper.read_bytes()).hexdigest() == INVITATION_READBACK_METADATA_SHA
+    )
+    if not (has_readback_marker or amended_metadata):
+        return _pre_readback_metadata_module(root)
+    metadata, old = invitation_readback_metadata_sources(root)
+    # The original PR192 tests build an earlier five-file issuance from
+    # current sources and omit later packet files. Keep the original
+    # matcher's exact-byte behaviour in those historical Git contexts.
+    if not (root / ".git").exists() or not metadata["approved_base"](root):
+        raise ValueError("Incomplete invitation readback has no historical scope")
+    for revision in ("HEAD", metadata["MAIN"]):
+        status = subprocess.run(
+            ["git", "--no-replace-objects", "-C", str(root), "merge-base", "--is-ancestor",
+             INVITATION_READBACK_BASE, revision], stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=10,
+        )
+        if status.returncode == 0:
+            raise ValueError("Incomplete invitation readback on or after actual PR192")
+    return metadata, old
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    if not invitation_readback_present(root, branch, paths):
+        return _pre_readback_stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    if not (root / ".git").exists():
+        live_branches = {INVITATION_READBACK_BRANCH, METADATA_PRODUCT_BRANCH, METADATA_ISSUANCE_BRANCH}
+        scope = INVITATION_READBACK_ADDITIONS | {INVITATION_READBACK_WRAPPER, METADATA_SCOPE_HELPER}
+        if branch in live_branches or paths and paths & scope:
+            return (), ["Native invitation release readback packet or exact authority differs"]
+        return _pre_readback_stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    authorities, faults = _pre_metadata_stage_authorities(
+        root, catalog, schema_errors, task_errors, identity, branch, paths,
+    )
+    try:
+        readback, state, metadata, old = invitation_readback_context(root)
+        scope = readback["SCOPE"]
+        candidate = branch == INVITATION_READBACK_BRANCH
+        if candidate:
+            if identity != readback["ISSUE"] or paths != scope or state[1] is not None:
+                raise ValueError("Invitation readback candidate identity or scope differs")
+        elif paths and paths & readback["ADDITIONS"]:
+            raise ValueError("New invitation readback files require their exact governance branch")
+        selected, errors = metadata["bind"](
+            root, old, catalog, schema_errors, task_errors, identity, branch, None if candidate else paths,
+        )
+        if branch == METADATA_PRODUCT_BRANCH and selected and not errors:
+            if faults.count(metadata["UNISSUED"]) != 1:
+                raise ValueError("Original v7 metadata denial differs")
+            faults = [fault for fault in faults if fault != metadata["UNISSUED"]]
+        if candidate and selected and not errors:
+            authority = readback["issuance_authority"](selected[0][0])
+            selected += ((authority, scope),)
+        return authorities + selected, faults + errors
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        return authorities, faults + ["Native invitation release readback packet or exact authority differs"]
+
+
+def released_invitation_browser_witness(root, checker, context, overlap, candidate, readback,
+                                        invitation, prior):
+    browser, original, raw = browser_context_module(root)
+    canonical = "scripts/check_bootstrap.py"
+    projections = {
+        INVITATION_READBACK_WRAPPER: (METADATA_ISSUANCE_MARKER, strip_metadata_recovered),
+        canonical: (METADATA_BOOT_HOOK.encode(), strip_metadata_bootstrap),
+    }
+
+    def projected_raw(origin, name):
+        current = raw(origin, name)
+        return projections[name][1](current) if name in projections else current
+
+    def matches(origin, selected, commit, read):
+        for name in selected & projections.keys():
+            current = original["git"](origin, "show", commit + ":" + name)
+            mode = original["git"](origin, "ls-tree", commit, "--", name).split(b" ", 1)[0]
+            marker, inverse = projections[name]
+            if marker in current:
+                current = inverse(current)
+            if mode != b"100644" or current != read(origin, name):
+                return False
+        return original["matches"](origin, selected - projections.keys(), commit, read)
+
+    protected = original["protected_snapshot"](root, V3).keys()
+    historical = readback["historical_with_invitation"](V3, invitation["P"], prior, protected)
+    return browser["qualified"](
+        root, dict(original, matches=matches), projected_raw, historical, checker, context, overlap, candidate,
+    )
+
+
+def qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate):
+    if not invitation_readback_present(root, active_branch, paths):
+        return _pre_readback_qualified_paths(root, checker, identity, active_branch, paths, overlap, candidate)
+    try:
+        readback, state, metadata, old = invitation_readback_context(root)
+        if not v3_safe(root) or not metadata["released_issuance"](root, old["raw"]):
+            return set()
+        context = (identity, active_branch, paths)
+        modules, faults = finite_modules(root)
+        invitation = next((module for module in modules if module["KEY"] == "184"), None)
+        if faults or invitation is None:
+            return set()
+        prior = readback["invitation_release_before"](root, metadata, state, invitation, old["raw"])
+        if prior is None:
+            witness = metadata_browser_witness(root, checker, context, overlap, candidate, metadata, old)
+        else:
+            witness = released_invitation_browser_witness(
+                root, checker, context, overlap, candidate, readback, invitation, prior,
+            )
+        if witness != set(overlap):
+            return set()
+        return witness | metadata["metadata_successor"](root, checker, context, old)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError, RecursionError):
+        return set()

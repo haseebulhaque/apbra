@@ -110,7 +110,7 @@ def owner_merge(root, commit, branch, paths):
     )
 
 
-def released_issuance(root, raw):
+def released_issuance(root, raw, *, issuance_matches=matches_commit):
     if not approved_base(root):
         return None
     commits = git(root, "rev-list", "--first-parent", "--reverse", BASE + ".." + MAIN).decode().split()
@@ -121,8 +121,8 @@ def released_issuance(root, raw):
         ref(root, merge + "^1") == BASE
         and owner_merge(root, merge, ISSUANCE_BRANCH, ISSUANCE_PATHS)
         and ancestor(root, merge, "HEAD")
-        and matches_commit(root, ISSUANCE_PATHS, merge, raw)
-        and matches_commit(root, ISSUANCE_PATHS, MAIN, raw)
+        and issuance_matches(root, ISSUANCE_PATHS, merge, raw)
+        and issuance_matches(root, ISSUANCE_PATHS, MAIN, raw)
     ):
         return None
     return merge
@@ -153,7 +153,8 @@ def exact_task(root, old, catalog, schema_errors, task_errors):
     return task
 
 
-def bind(root, old, catalog, schema_errors, task_errors, identity, branch, paths):
+def bind(root, old, catalog, schema_errors, task_errors, identity, branch, paths,
+         *, issuance_matches=matches_commit):
     """Select only authorized stages, separately from any operational use."""
     try:
         task = exact_task(root, old, catalog, schema_errors, task_errors)
@@ -173,7 +174,7 @@ def bind(root, old, catalog, schema_errors, task_errors, identity, branch, paths
             return ((issuance_authority(task), ISSUANCE_PATHS),), []
         if paths != PRODUCT_PATHS:
             return (), ["Foundry v7 metadata requires the exact issued two-file product scope"]
-        issuance = released_issuance(root, old["raw"])
+        issuance = released_issuance(root, old["raw"], issuance_matches=issuance_matches)
         base = ref(root, MAIN)
         if (
             not issuance or first_metadata_change(root, issuance) is not None
@@ -194,13 +195,13 @@ def issuance_authority(product):
     )
 
 
-def metadata_successor(root, checker, context, old):
+def metadata_successor(root, checker, context, old, *, issuance_matches=matches_commit):
     """Allow only the current issued candidate or its exact, already merged bytes."""
     try:
         identity, branch, paths = context
         if checker["delivery_context"](root) != context:
             return set()
-        issuance = released_issuance(root, old["raw"])
+        issuance = released_issuance(root, old["raw"], issuance_matches=issuance_matches)
         if not issuance:
             return set()
         merge = first_metadata_change(root, issuance)
