@@ -25,6 +25,21 @@ BASE = "ad236e098199bfd1500f1010535e4f5a2317fc38"
 CANARY = "synthetic-private-canary"
 
 
+def _released_v6_source() -> str:
+    """Prove the full current v6 prefix before applying each historical inverse."""
+    marker = b"\n\n# Owner v7 metadata extension. Preserve the released v6 module above verbatim.\n"
+    current = Path(module.__file__).read_bytes()
+    assert current.count(marker) == 1
+    prefix, _, extension = current.partition(marker)
+    expected = subprocess.check_output(  # noqa: S603 - immutable released public source
+        ["/usr/bin/git", "show",
+         "b58dbf6825dabbdf3c007aca672d1e38615ca5e8:apps/api/src/apbra_api/foundry_owner_metadata.py"],
+        cwd=ROOT,
+    )
+    assert prefix == expected and extension
+    return prefix.decode("utf-8")
+
+
 @pytest.fixture
 def flow(monkeypatch: pytest.MonkeyPatch) -> Any:
     events: list[str] = []
@@ -2081,7 +2096,7 @@ def test_callback_guard_order_and_original_predicates_are_exactly_preserved() ->
             text=True,
         )
     )
-    current = _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
+    current = _restore_complete_uri_extension(ast.parse(_released_v6_source()))
     original = next(
         node
         for node in ast.walk(old)
@@ -2469,7 +2484,7 @@ def test_h13_source_restores_after_only_declared_rejected_uri_diagnostics() -> N
             text=True,
         )
     )
-    new = _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
+    new = _restore_complete_uri_extension(ast.parse(_released_v6_source()))
     original_stages = next(
         node
         for node in old.body
@@ -2728,7 +2743,7 @@ def test_complete_uri_extension_preserves_all_other_h14_source_ast() -> None:
         )
     )
     assert ast.dump(
-        _restore_complete_uri_extension(ast.parse(Path(module.__file__).read_text()))
+        _restore_complete_uri_extension(ast.parse(_released_v6_source()))
     ) == ast.dump(old)
 
 
@@ -3090,7 +3105,7 @@ def test_browser_default_preserves_all_other_source_ast() -> None:
         )
     )
     assert ast.dump(
-        _restore_browser_route(ast.parse(Path(module.__file__).read_text()))
+        _restore_browser_route(ast.parse(_released_v6_source()))
     ) == ast.dump(old)
 
 
@@ -3537,7 +3552,7 @@ def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> No
         cwd=ROOT,
     )
     assert ast.dump(
-        _restore_projection_reason_extension(ast.parse(Path(module.__file__).read_text()))
+        _restore_projection_reason_extension(ast.parse(_released_v6_source()))
     ) == ast.dump(ast.parse(before))
     before_main = subprocess.check_output(  # noqa: S603 - Fixed public source only.
         [
@@ -3574,7 +3589,7 @@ def test_projection_helper_all_other_source_ast_and_main_bytes_preserved() -> No
 def test_projection_preservation_inverse_rejects_unexpected_source_mutations(
     original: str, replacement: str
 ) -> None:
-    source = Path(module.__file__).read_text()
+    source = _released_v6_source()
     assert source.count(original) == 1
     mutated = ast.parse(source.replace(original, replacement, 1))
     before = subprocess.check_output(  # noqa: S603 - Fixed public source only.
@@ -4255,7 +4270,7 @@ def test_documented_knowledge_reasoning_and_future_unknown(flow: Any, kind: str)
 def test_owner_observation_inverse_preserves_entire_released_helper() -> None:
     before=subprocess.check_output(["/usr/bin/git","show",
           "998cd35:apps/api/src/apbra_api/foundry_owner_metadata.py"],cwd=ROOT,text=True)  # noqa: S603
-    after=_restore_owner_observation_extension(ast.parse(Path(module.__file__).read_text()))
+    after=_restore_owner_observation_extension(ast.parse(_released_v6_source()))
     assert ast.dump(after)==ast.dump(ast.parse(before))
 
 
@@ -4319,3 +4334,279 @@ def test_unresolved_documented_mcp_connection_variants_are_never_destinations(
     assert not any("search.azure.com" in event for event in flow.events)
     assert CANARY not in json.dumps(result)
     cleanup(flow)
+
+
+@pytest.fixture
+def v7_flow(flow: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.setattr(module, "_run_v7_owned_get", module._run_owned_get)
+    original = module._V7OwnerMemory
+
+    class Memory(original):
+        def __init__(self, approval: module.OwnerV7MetadataApproval) -> None:
+            super().__init__(approval)
+            flow.memories.append(self)
+
+    monkeypatch.setattr(module, "_V7OwnerMemory", Memory)
+    flow.approval = module.OwnerV7MetadataApproval(
+        "synthetic-account", "https://synthetic.search.windows.net", (CANARY,), flow.clock + 200,
+    )
+    flow.version["version"] = "7"
+    endpoint = flow.properties["agent_endpoint"]
+    endpoint["version_selector"]["version_selection_rules"][0]["agent_version"] = "7"
+    endpoint["protocol_configuration"] = {"responses": {}, "activity": {}}
+    endpoint["authorization_schemes"] = [
+        {"type": "AzureRbac"}, {"type": "BotServiceRbac"}
+    ]
+    return flow
+
+
+def run_v7(flow: Any) -> dict[str, Any]:
+    return module.run_owner_metadata_v7(
+        flow.approval, credential_factory=flow.factory, client_factory=flow.client
+    )
+
+
+def test_tagged_v7_reads_only_confirmed_metadata_and_retains_redaction(v7_flow: Any) -> None:
+    result = run_v7(v7_flow)
+    assert result["observedVersion"] == "7"
+    assert result["modelDeployment"] == "synthetic-model"
+    assert result["knowledgeSourceCount"] == 1
+    assert result["routingVerified"] is False
+    assert result["runtimeActivated"] is False
+    assert result["groundingVerified"] is False
+    assert result["tenantIsolationVerified"] is False
+    assert "searchOrigin" not in result
+    assert CANARY not in json.dumps(result)
+    gets = [event for event in v7_flow.events if event.startswith("GET:")]
+    assert len(gets) == 3 and gets[1].endswith("/versions/7")
+    assert v7_flow.events.index("CONFIRM SEARCH") < v7_flow.events.index(gets[2])
+    assert v7_flow.events.count("TOKEN:" + module._SCOPE) == 1
+    assert v7_flow.events.count("TOKEN:" + module._SEARCH_SCOPE) == 1
+    cleanup(v7_flow)
+    assert all(memory._v7_approval is None for memory in v7_flow.memories)
+
+
+@pytest.mark.parametrize(
+    "fault", ["wrong-version", "partially-routed", "wrong-version-route", "unknown-route",
+              "no-responses", "wrong-rbac", "unknown-rbac", "no-model", "extra-tool", "no-tool",
+              "unreadable-tool", "wrong-search", "unapproved-tool", "wrong-account",
+              "expired", "wrong-tenant", "wrong-client", "no-approval", "search-consent-denied",
+              "redirect", "wrong-knowledge", "partial-knowledge", "missing-source-name",
+              "changed-source", "duplicate-source", "unapproved-source-plan", "missing-output-mode",
+              "answer-without-model"],
+)
+def test_v7_refuses_unqualified_routes_and_private_values(
+    v7_flow: Any, fault: str, capsys: Any,
+) -> None:
+    flow = v7_flow
+    endpoint = flow.properties["agent_endpoint"]
+    rules = endpoint["version_selector"]["version_selection_rules"]
+    tools = flow.version["definition"]["tools"]
+    if fault == "wrong-version":
+        flow.version["version"] = "6"
+    elif fault == "partially-routed":
+        rules[0]["traffic_percentage"] = 99
+        rules.append({"type": "FixedRatio", "agent_version": "6", "traffic_percentage": 1})
+    elif fault == "wrong-version-route":
+        rules[0]["agent_version"] = "6"
+    elif fault == "unknown-route":
+        del endpoint["version_selector"]
+    elif fault == "no-responses":
+        del endpoint["protocol_configuration"]["responses"]
+    elif fault == "wrong-rbac":
+        endpoint["authorization_schemes"] = [{"type": "BotServiceRbac"}]
+    elif fault == "unknown-rbac":
+        endpoint["authorization_schemes"].append({"type": CANARY})
+    elif fault == "no-model":
+        del flow.version["definition"]["model"]
+    elif fault == "extra-tool":
+        tools.append({"type": "code_interpreter"})
+    elif fault == "no-tool":
+        tools.clear()
+    elif fault == "unreadable-tool":
+        tools[0] = CANARY
+    elif fault == "wrong-search":
+        tools[0]["server_url"] = tools[0]["server_url"].replace("synthetic", "other", 1)
+    elif fault == "unapproved-tool":
+        tools[0]["allowed_tools"] = ["other"]
+    elif fault in {"wrong-account", "wrong-tenant", "wrong-client"}:
+        field = {"wrong-account": "home_account_id", "wrong-tenant": "tenant_id",
+                 "wrong-client": "client_id"}[fault]
+        setattr(flow.sdk.record, field, CANARY)
+    elif fault == "expired":
+        flow.clock = flow.approval.expires_at
+    elif fault == "no-approval":
+        flow.approval = None
+    elif fault == "search-consent-denied":
+        flow.denied = "CONFIRM SEARCH"
+    elif fault == "redirect":
+        flow.response = lambda request: httpx.Response(
+            302, headers={"location": "https://unapproved.invalid/" + CANARY}
+        )
+    elif fault == "wrong-knowledge":
+        flow.knowledge["name"] = CANARY
+    elif fault == "partial-knowledge":
+        del flow.knowledge["knowledgeSources"]
+    elif fault == "missing-source-name":
+        flow.knowledge["knowledgeSources"] = [{}]
+    elif fault == "changed-source":
+        flow.knowledge["knowledgeSources"][0]["name"] = "different-knowledge-source"
+    elif fault == "duplicate-source":
+        flow.knowledge["knowledgeSources"] *= 2
+    elif fault == "unapproved-source-plan":
+        from dataclasses import replace
+
+        flow.approval = replace(flow.approval, knowledge_sources=())
+    elif fault == "missing-output-mode":
+        del flow.knowledge["outputMode"]
+    elif fault == "answer-without-model":
+        del flow.knowledge["models"]
+    with pytest.raises(ProviderConfigurationError) as caught:
+        run_v7(flow)
+    assert CANARY not in json.dumps(module._failure_output(caught.value))
+    output = capsys.readouterr()
+    assert CANARY not in output.out + output.err
+    gets = [event for event in flow.events if event.startswith("GET:")]
+    if fault in {"wrong-account", "wrong-client", "wrong-tenant", "expired", "no-approval",
+                 "unapproved-source-plan"}:
+        assert not gets
+        assert not any(event.startswith("TOKEN:") for event in flow.events)
+    elif fault == "redirect":
+        assert len(gets) == 1
+    elif fault in {"wrong-knowledge", "partial-knowledge", "missing-source-name", "changed-source",
+                   "duplicate-source", "missing-output-mode", "answer-without-model"}:
+        assert len(gets) == 3
+    else:
+        assert len(gets) == 2
+        assert "TOKEN:" + module._SEARCH_SCOPE not in flow.events
+    cleanup(flow)
+
+
+class V7WorkerFactory(SpawnFakeFactory):
+    """Record only whether the independent worker reached the offline transport."""
+
+    def __init__(self, marker: str) -> None:
+        super().__init__("success")
+        self.marker = Path(marker)
+
+    def __call__(self, **kwargs: Any) -> httpx.Client:
+        self.marker.write_text("synthetic transport reached")
+        return super().__call__(**kwargs)
+
+
+def v7_child_command(marker: Path) -> list[str]:
+    code = (
+        "import sys;sys.path.insert(0,sys.argv[1]);sys.path.insert(0,sys.argv[2]);"
+        "from test_foundry_owner_metadata import V7WorkerFactory;"
+        "from apbra_api.foundry_owner_metadata import _metadata_v7_worker;"
+        "_metadata_v7_worker(V7WorkerFactory(sys.argv[3]))"
+    )
+    return [sys.executable, "-I", "-B", "-c", code, str(ROOT / "apps/api/src"),
+            str(Path(__file__).parent), str(marker)]
+
+
+def v7_test_approval() -> module.OwnerV7MetadataApproval:
+    return module.OwnerV7MetadataApproval(
+        "synthetic", "https://synthetic.search.windows.net", ("synthetic-source",),
+        module.time.time() + 60,
+    )
+
+
+@pytest.mark.parametrize(
+    "fault", [None, "method", "wrong-version", "wrong-version-plan", "wrong-principal",
+              "wrong-tenant-plan", "wrong-audience", "other-search", "expired",
+              "unmatched-plan", "unmatched-sources", "v6-envelope", "duplicate-key"],
+)
+def test_real_v7_child_independently_validates_private_plan_and_scope(
+    fault: str | None, tmp_path: Path,
+) -> None:
+    import struct
+
+    marker = tmp_path / "child-transport"
+    approval = v7_test_approval()
+    plan = module._v7_descriptor(approval)
+    paths = module._v7_audiences(approval)
+    version_url = next(url for url in paths if "/versions/" in url)
+    search_url = next(url for url, audience in paths.items() if audience == module._SEARCH_SCOPE)
+    packet: dict[str, Any] = {"method": "GET", "plan": plan, "audience": module._SCOPE,
+                              "url": version_url, "bearer": CANARY, "timeout": 2,
+                              "cap": module._PLAN.max_metadata_response_bytes}
+    if fault == "method":
+        packet["method"] = "POST"
+    elif fault == "wrong-version":
+        packet["url"] = version_url.replace("/versions/7", "/versions/6")
+    elif fault == "wrong-version-plan":
+        plan["version"] = "6"
+    elif fault == "wrong-principal":
+        plan["homeAccount"] = "bad principal"
+    elif fault == "wrong-tenant-plan":
+        plan["tenant"] = CANARY
+    elif fault == "wrong-audience":
+        packet["audience"] = module._SEARCH_SCOPE
+    elif fault == "other-search":
+        packet["url"] = search_url.replace("synthetic", "unapproved", 1)
+        packet["audience"] = module._SEARCH_SCOPE
+    elif fault == "expired":
+        plan["expiresAt"] = module.time.time() - 1
+    elif fault == "v6-envelope":
+        packet = {key: packet[key] for key in ("url", "bearer", "timeout", "cap")}
+        packet["url"] = search_url
+    expected = module._v7_digest(plan).encode("ascii")
+    if fault == "unmatched-plan":
+        plan["homeAccount"] = "different-synthetically-valid-account"
+    elif fault == "unmatched-sources":
+        plan["knowledgeSources"] = ["different-synthetic-source"]
+    body = json.dumps(packet).encode()
+    if fault == "duplicate-key":
+        body = b'{"method":"POST",' + body[1:]
+    frame = expected + struct.pack("!I", len(body)) + body
+    result = subprocess.run(  # noqa: S603 - fixed isolated interpreter and test-only child
+        v7_child_command(marker), input=frame, capture_output=True, env={}, cwd="/",
+        timeout=12, check=True,
+    )
+    assert CANARY.encode() not in result.stdout + result.stderr
+    if fault is None:
+        assert marker.is_file()
+        assert result.stdout[:1] == b"R"
+        assert result.stdout[5:6] == b"S"
+        assert json.loads(result.stdout[6:]) == {"synthetic": True}
+    else:
+        assert not marker.exists()
+        assert result.stdout == b"R\x00\x00\x00\x01E"
+
+
+def test_owned_v7_parent_child_transport_and_process_cleanup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    marker = tmp_path / "paired-transport"
+    monkeypatch.setattr(module, "_v7_worker_command", lambda: v7_child_command(marker))
+    approval = v7_test_approval()
+    binding = module._V7_BINDING
+    memory = module._V7OwnerMemory(approval)
+    memory._record = SimpleNamespace(
+        tenant_id=binding.tenant_id, client_id=binding.client_id,
+        home_account_id=approval.home_account_id,
+    )
+    memory._account = (binding.tenant_id, binding.client_id, approval.home_account_id)
+    memory._confirmed = memory._private_approved = True
+    memory._tokens[module._SCOPE] = (CANARY, approval.expires_at)
+    project = next(url for url in module._v7_audiences(approval) if "/versions/" in url)
+    try:
+        assert memory.get(project, module._SCOPE, None) == {"synthetic": True}
+        assert marker.is_file()
+        assert memory._operation is None
+        with pytest.raises(ProviderConfigurationError):
+            memory.get(project, module._SCOPE, None)
+    finally:
+        memory.close()
+    assert memory._closed and memory._cleanup_verified and memory._v7_approval is None
+
+
+def test_v7_extracts_explicit_model_free_knowledge_metadata(v7_flow: Any) -> None:
+    v7_flow.knowledge["outputMode"] = "extractiveData"
+    del v7_flow.knowledge["models"]
+    result = run_v7(v7_flow)
+    assert result["outputMode"] == "extractiveData"
+    assert result["models"] is None and result["knowledgeSourceCount"] == 1
+    assert CANARY not in json.dumps(result)
+    cleanup(v7_flow)
