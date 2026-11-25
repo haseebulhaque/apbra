@@ -1082,13 +1082,27 @@ REPORT_DOCS_METADATA_BLOBS = (
     b"100644 blob e7e37f77f98323c090dfa5f8feda7d74d74df460\tapps/api/src/apbra_api/foundry_owner_metadata.py\x00"
     b"100644 blob 410620efbdf2f25fe8c97fd1f78d643d3c206a16\tapps/api/tests/test_foundry_owner_metadata.py\x00"
 )
+import os
+
+
+DOCS_CORRECTION_BASE = "3b5ca7a840b40bdcb3571a1e4aca4809bcd33256"
+DOCS_CORRECTION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-issue193-checkout-correction"
+DOCS_CORRECTION_PATHS = frozenset({INVITATION_READBACK_WRAPPER, REPORT_DOCS_TEST})
+DOCS_CORRECTION_WRAPPER_SHA = "0c062e8cfd73c26b650748fe5e8e0a667683a6104ef54687563f36cbc377ad60"
+DOCS_CORRECTION_TEST_SHA = "c165a7d7cbdaa538f6404329353287bc6de5600dbfd401edae336505d1cc2bb7"
+DOCS_ORIGINAL_DIGESTS = {
+    INVITATION_READBACK_WRAPPER: "8579cfa859587f34b0e7fe1d82bfadb2e1cdf2ba12fb740462129a8d66debc20",
+    REPORT_DOCS_TEST: "9ffafe1af9e8ae2f9b5d00253c7f55863689bc15a2522df7e028429c5a39499b",
+}
+
+
 _report_docs_previous_branch = issued_v7_branch
 _report_docs_previous_authorities = stage_authorities
 _report_docs_previous_readback = invitation_readback_context
 
 
 def issued_v7_branch(branch):
-    return branch in REPORT_DOCS_BRANCHES or _report_docs_previous_branch(branch)
+    return branch == DOCS_CORRECTION_BRANCH or branch in REPORT_DOCS_BRANCHES or _report_docs_previous_branch(branch)
 
 
 def strip_report_docs_wrapper(source):
@@ -1137,6 +1151,68 @@ def report_docs_registration_base(root, readback, metadata, base):
     )
 
 
+def docs_checkout_candidate(root, readback, metadata, raw, main, branch, paths):
+    """Distinguish a named direct child from the CI checkout of that same child."""
+    git = metadata["git"]
+    attached = git(root, "branch", "--show-current").decode().strip()
+    parents = readback["parents"](root, git, "HEAD")
+    reported = os.environ.get("GITHUB_HEAD_REF")
+    if attached:
+        if attached != branch or parents != [main]:
+            return False
+        if reported and (reported != branch or os.environ.get("GITHUB_BASE_REF") != "main"):
+            return False
+    elif (
+        len(parents) != 2 or reported != branch or os.environ.get("GITHUB_BASE_REF") != "main"
+        or os.environ.get("PR_HEAD_SHA") != parents[1]
+    ):
+        return False
+    return metadata["candidate_head"](root, main, paths, raw)
+
+
+def original_docs_file(root, metadata, path):
+    original = metadata["git"](root, "show", DOCS_CORRECTION_BASE + ":" + path)
+    if hashlib.sha256(original).hexdigest() != DOCS_ORIGINAL_DIGESTS[path]:
+        raise ValueError("PR196 original governance source differs")
+    return original
+
+
+def docs_correction_state(root, readback, metadata, raw, main):
+    """Verify the independent two-file change against the real PR196 merge."""
+    actual = {path: raw(root, path) for path in DOCS_CORRECTION_PATHS}
+    if any((root / path).stat().st_mode & 0o111 for path in actual):
+        raise ValueError("Issue 193 governance sources must remain regular 100644 files")
+    release = readback["first_touch"](root, metadata, DOCS_CORRECTION_BASE, main, DOCS_CORRECTION_PATHS)
+    if not release and all(hashlib.sha256(data).hexdigest() == DOCS_ORIGINAL_DIGESTS[path]
+                           for path, data in actual.items()):
+        return False
+    # Normalize only the checksum value in its one declaration. This binds the
+    # complete checker and the test digest without a circular source checksum.
+    source = actual[INVITATION_READBACK_WRAPPER]
+    declaration = ('DOCS_CORRECTION_WRAPPER_SHA = "' + DOCS_CORRECTION_WRAPPER_SHA + '"').encode()
+    template = declaration.replace(DOCS_CORRECTION_WRAPPER_SHA.encode(), b"0" * 64)
+    if (
+        source.count(declaration) != 1
+        or hashlib.sha256(source.replace(declaration, template)).hexdigest() != DOCS_CORRECTION_WRAPPER_SHA
+        or hashlib.sha256(actual[REPORT_DOCS_TEST]).hexdigest() != DOCS_CORRECTION_TEST_SHA
+    ):
+        raise ValueError("Exact issue 193 correction sources differ")
+    if not release:
+        if main != DOCS_CORRECTION_BASE or not docs_checkout_candidate(
+            root, readback, metadata, raw, main, DOCS_CORRECTION_BRANCH, DOCS_CORRECTION_PATHS
+        ):
+            raise ValueError("Issue 193 correction requires its clean direct or hosted candidate on PR196")
+    elif (
+        readback["parents"](root, metadata["git"], release)[0] != DOCS_CORRECTION_BASE
+        or not metadata["owner_merge"](root, release, DOCS_CORRECTION_BRANCH, DOCS_CORRECTION_PATHS)
+        or not metadata["ancestor"](root, release, "HEAD")
+        or not all(metadata["matches_commit"](root, DOCS_CORRECTION_PATHS, commit, raw)
+                   for commit in (release, main, "HEAD"))
+    ):
+        raise ValueError("Issue 193 correction release or continued two-file packet differs")
+    return True
+
+
 def report_docs_registration_state(root, readback, metadata, raw):
     """Verify the exact registration commit or its ordinary release from trusted main."""
     readback["require_checkout"](root, metadata)
@@ -1154,18 +1230,27 @@ def report_docs_registration_state(root, readback, metadata, raw):
             and readback["actual_branch"](root, metadata, REPORT_DOCS_REGISTRATION_BRANCH)
             and metadata["candidate_head"](root, main, REPORT_DOCS_REGISTRATION, raw)
         ):
-            return main, None
+            return main, None, False
         raise ValueError("Documentation registration requires its exact four-file candidate on allowed main")
+    corrected = release == DOCS_CORRECTION_BASE and docs_correction_state(root, readback, metadata, raw, main)
+
+    def registration_matches(commit):
+        def read(origin, path):
+            if corrected and commit == DOCS_CORRECTION_BASE and path in DOCS_CORRECTION_PATHS:
+                return original_docs_file(origin, metadata, path)
+            return raw(origin, path)
+
+        return metadata["matches_commit"](root, REPORT_DOCS_REGISTRATION, commit, read)
+
     parents = readback["parents"](root, metadata["git"], release)
     if (
         len(parents) != 2 or not report_docs_registration_base(root, readback, metadata, parents[0])
         or not metadata["owner_merge"](root, release, REPORT_DOCS_REGISTRATION_BRANCH, REPORT_DOCS_REGISTRATION)
         or not ancestor(root, release, "HEAD")
-        or not all(metadata["matches_commit"](root, REPORT_DOCS_REGISTRATION, commit, raw)
-                   for commit in (release, main, "HEAD"))
+        or not all(registration_matches(commit) for commit in (release, main, "HEAD"))
     ):
         raise ValueError("Documentation registration requires an ordinary release with its exact packet")
-    return main, release
+    return main, release, corrected
 
 
 def invitation_readback_context(root):
@@ -1174,10 +1259,17 @@ def invitation_readback_context(root):
 
     readback, metadata, old = invitation_readback_sources(root)
     raw = old["raw"]
-    main, release = report_docs_registration_state(root, readback, metadata, raw)
+    main, release, corrected = report_docs_registration_state(root, readback, metadata, raw)
 
     def matches(origin, paths, revision, read):
         commit = metadata["ref"](origin, revision)
+        if corrected and commit == DOCS_CORRECTION_BASE and paths in (readback["SCOPE"], metadata["ISSUANCE_PATHS"]):
+            def pr196_read(checkout, path):
+                if path == INVITATION_READBACK_WRAPPER:
+                    return original_docs_file(checkout, metadata, path)
+                return read(checkout, path)
+
+            return metadata["matches_commit"](origin, paths, commit, pr196_read)
         prior_readback = paths == readback["SCOPE"] and commit == REPORT_DOCS_ANCHOR
         prospective_main = (
             release is None and commit == main
@@ -1225,7 +1317,7 @@ def report_docs_current_markdown(root, metadata, raw, main, source, expected):
     )
 
 
-def report_docs_product_authority(root, readback, metadata, raw, source, main, registration, branch):
+def report_docs_product_authority(root, readback, metadata, raw, source, main, registration, branch, corrected):
     if not registration:
         return False
 
@@ -1243,23 +1335,35 @@ def report_docs_product_authority(root, readback, metadata, raw, source, main, r
             raise ValueError("Effective issue 193 documentation merge or continued approved bytes differ")
         return False
 
-    if branch != REPORT_DOCS_BRANCH:
-        if not report_docs_current_markdown(root, metadata, raw, main, source, "preimage_sha256"):
-            raise ValueError("Registered issue 193 preimages must remain exact before the documentation release")
+    if branch != REPORT_DOCS_BRANCH and report_docs_current_markdown(
+        root, metadata, raw, main, source, "preimage_sha256"
+    ):
         return False
-    return (
-        readback["actual_branch"](root, metadata, REPORT_DOCS_BRANCH)
-        and metadata["candidate_head"](root, main, REPORT_DOCS_PATHS, raw)
-        and report_docs_markdown_matches(root, metadata, main, source, "preimage_sha256")
+    if corrected:
+        admitted = docs_checkout_candidate(root, readback, metadata, raw, main, REPORT_DOCS_BRANCH, REPORT_DOCS_PATHS)
+    else:
+        admitted = (
+            readback["actual_branch"](root, metadata, REPORT_DOCS_BRANCH)
+            and metadata["candidate_head"](root, main, REPORT_DOCS_PATHS, raw)
+        )
+    admitted = (
+        admitted and report_docs_markdown_matches(root, metadata, main, source, "preimage_sha256")
         and report_docs_markdown_matches(root, metadata, "HEAD", source, "approved_sha256", raw=raw)
     )
+    if branch != REPORT_DOCS_BRANCH:
+        if not (corrected and admitted):
+            raise ValueError("Registered issue 193 preimages must remain exact before the documentation release")
+        # The actual checkout has proved the approved eight outputs. A query
+        # about a historical branch receives only its normal historical scope.
+        return False
+    return admitted
 
 
 def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
     authorities, faults = _report_docs_previous_authorities(
         root, catalog, schema_errors, task_errors, identity, branch, paths,
     )
-    if branch not in REPORT_DOCS_BRANCHES and not report_docs_packet_present(root):
+    if branch != DOCS_CORRECTION_BRANCH and branch not in REPORT_DOCS_BRANCHES and not report_docs_packet_present(root):
         return authorities, faults
 
     try:
@@ -1277,12 +1381,23 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
         if not (root / ".git").exists():
             # Historical source-only fixtures can inventory the exact packet.
             # Effective branch authority always requires a physical Git checkout.
-            if branch in REPORT_DOCS_BRANCHES or paths and paths & REPORT_DOCS_ADDITIONS:
+            if branch == DOCS_CORRECTION_BRANCH or branch in REPORT_DOCS_BRANCHES or paths and paths & REPORT_DOCS_ADDITIONS:
                 raise ValueError("Documentation authority requires its own Git checkout")
             return authorities + ((registration, REPORT_DOCS_REGISTRATION),), faults
 
         readback, metadata, old = invitation_readback_sources(root)
-        main, release = report_docs_registration_state(root, readback, metadata, old["raw"])
+        main, release, corrected = report_docs_registration_state(root, readback, metadata, old["raw"])
+        if branch == DOCS_CORRECTION_BRANCH:
+            if not (
+                corrected and main == DOCS_CORRECTION_BASE and identity == REPORT_DOCS_ISSUE
+                and paths == DOCS_CORRECTION_PATHS
+                and report_docs_current_markdown(root, metadata, old["raw"], main, source, "preimage_sha256")
+            ):
+                raise ValueError("Issue 193 correction requires its exact candidate, identity and two paths")
+            amendment = dict(registration, branch=DOCS_CORRECTION_BRANCH, base_commit=main,
+                             execution_id="APBRA-160-20261126-ISSUE193-CONTEXT",
+                             allowed_paths=sorted(DOCS_CORRECTION_PATHS))
+            return authorities + ((registration, REPORT_DOCS_REGISTRATION), (amendment, DOCS_CORRECTION_PATHS)), faults
         if branch == REPORT_DOCS_REGISTRATION_BRANCH:
             if (
                 identity != REPORT_DOCS_ISSUE or paths != REPORT_DOCS_REGISTRATION or release is not None
@@ -1295,7 +1410,7 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
             raise ValueError("Issue 193 registration paths require their separate branch")
         authorities += ((registration, REPORT_DOCS_REGISTRATION),)
         product_admitted = report_docs_product_authority(
-            root, readback, metadata, old["raw"], source, main, release, branch,
+            root, readback, metadata, old["raw"], source, main, release, branch, corrected,
         )
         if branch == REPORT_DOCS_BRANCH:
             if identity != REPORT_DOCS_ISSUE or paths != REPORT_DOCS_PATHS or not product_admitted:

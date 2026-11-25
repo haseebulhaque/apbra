@@ -25,6 +25,11 @@ DOCS_BRANCH = SCOPE["REPORT_DOCS_BRANCH"]
 PRIOR_DOCS_BRANCH = "agent/APBRA-DEVOPS/APBRA-148-post-capstone-product-reconciliation"
 SOURCE = SCOPE["REPORT_DOCS_SOURCE"]
 TASK = SCOPE["REPORT_DOCS_TASK"]
+PR196 = "3b5ca7a840b40bdcb3571a1e4aca4809bcd33256"
+CORRECTION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-issue193-checkout-correction"
+CORRECTION = {WRAPPER, SCOPE["REPORT_DOCS_TEST"]}
+# Git tree entries for the eight approved files in the retained documentation candidate.
+APPROVED_DOC_ENTRIES_SHA256 = "1d960d4e79117fe91499a368ce7985131683578cd9d8a36ea7c45c7e71fb077d"
 DIRECTION = {'AI-RAG-SPEC.md': 'Versioned system instructions specify the required report structure, confirmed '
                    'business requirements and permitted inputs. The configured Foundry LLM and its '
                    'authorised tools must generate and compile the complete downloadable report. A '
@@ -113,7 +118,8 @@ def fixture():
         for name in REGISTRATION:
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes((ROOT / name).read_bytes())
+            # Rebuild this historical registration from its reviewed, released packet.
+            target.write_bytes(git(ROOT, "show", PR196 + ":" + name))
         head = commit(root, REGISTRATION, "Synthetic four-file issue 193 registration")
         checker = runpy.run_path(root / CHECKER)
         yield root, head, checker
@@ -277,3 +283,128 @@ class FoundryReportDocumentationScope(unittest.TestCase):
             git(root, "restore", "--source", tree, "--staged", "--worktree", "--", *sorted(REGISTRATION))
             git(root, "commit", "-m", "Synthetic registration after different metadata bytes")
             self.assertTrue(self.faults(root, checker))
+
+
+@contextmanager
+def correction_fixture():
+    with tempfile.TemporaryDirectory(prefix="apbra-issue193-correction-") as directory:
+        root = Path(directory)
+        git(root, "init", "-q", "-b", "main")
+        git(root, "fetch", "--no-tags", str(ROOT), PR196 + ":" + MAIN,
+            FROZEN + ":refs/fixtures/frozen-invitation")
+        git(root, "reset", "--hard", PR196)
+        git(root, "switch", "-c", CORRECTION_BRANCH)
+        for name in CORRECTION:
+            (root / name).write_bytes((ROOT / name).read_bytes())
+        head = commit(root, CORRECTION, "Synthetic two-file issue 193 compatibility correction")
+        yield root, head, runpy.run_path(root / CHECKER)
+
+
+def check_query(root, checker, identity, branch, paths):
+    return checker["check"](root, active_task_id=identity, active_branch=branch, changed_paths=paths)[0]
+
+
+def hosted_checkout(root, base, head):
+    merge = ancestry_commit(root, ref(root, head + "^{tree}"), [base, head], "Synthetic PR merge checkout")
+    git(root, "switch", "--detach", merge)
+
+
+@patch.dict(os.environ, GITHUB_HEAD_REF="", GITHUB_BASE_REF="", PR_HEAD_SHA="")
+class FoundryReportDocumentationCheckout(unittest.TestCase):
+    def test_correction_accepts_exact_branch_and_github_checkout(self):
+        with correction_fixture() as (root, head, checker):
+            context = ("APBRA-160", CORRECTION_BRANCH, CORRECTION)
+            self.assertEqual(checker["delivery_context"](root), context)
+            self.assertEqual(check_query(root, checker, *context), [])
+            self.assertTrue(check_query(root, checker, "APBRA-160", CORRECTION_BRANCH, CORRECTION | DOCS))
+            self.assertTrue(check_query(root, checker, "APBRA-85", CORRECTION_BRANCH, CORRECTION))
+            hosted_checkout(root, PR196, head)
+            with patch.dict(os.environ, GITHUB_HEAD_REF=CORRECTION_BRANCH, GITHUB_BASE_REF="main",
+                            PR_HEAD_SHA=head):
+                self.assertEqual(checker["delivery_context"](root), context)
+                self.assertEqual(check_query(root, checker, *context), [])
+                with patch.dict(os.environ, PR_HEAD_SHA=PR196):
+                    self.assertTrue(check_query(root, checker, *context))
+
+            forged_release = ancestry_commit(root, ref(root, head + "^{tree}"), [PR196, head],
+                                            "Different correction merge subject")
+            point_main(root, forged_release)
+            self.assertTrue(check_query(root, checker, None, "main", set()))
+            release = ordinary(root, PR196, head, 9860, CORRECTION_BRANCH)
+            self.assertEqual(check_query(root, checker, None, "main", set()), [])
+            path = SCOPE["REPORT_DOCS_TEST"]
+            (root / path).write_bytes((root / path).read_bytes() + b"\n# Unexpected amendment drift\n")
+            changed = commit(root, {path}, "Synthetic effective test drift")
+            point_main(root, changed)
+            self.assertTrue(check_query(root, checker, None, "main", set()))
+            self.assertNotEqual(changed, release)
+
+    def test_historical_queries_on_exact_direct_and_hosted_documentation_checkout(self):
+        with correction_fixture() as (root, head, checker):
+            release = ordinary(root, PR196, head, 9860, CORRECTION_BRANCH)
+            docs = docs_candidate(root)
+            entries = git(root, "ls-tree", "-rz", docs, "--", *sorted(DOCS))
+            self.assertEqual(hashlib.sha256(entries).hexdigest(), APPROVED_DOC_ENTRIES_SHA256)
+            legacy = runpy.run_path(root / "scripts/check_agent_details_20261013.py")
+            legacy_context = ("APBRA-160", legacy["B"], legacy["P"])
+
+            def assert_qualified_checkout():
+                self.assertEqual(check_query(root, checker, *checker["delivery_context"](root)), [])
+                self.assertEqual(check_query(root, checker, *legacy_context), [])
+                self.assertEqual(checker["check"](root)[0], [])
+                self.assertTrue(check_query(root, checker, "APBRA-160", legacy["B"], legacy["P"] | DOCS))
+
+            assert_qualified_checkout()
+            hosted_checkout(root, release, docs)
+            with patch.dict(os.environ, GITHUB_HEAD_REF=DOCS_BRANCH, GITHUB_BASE_REF="main", PR_HEAD_SHA=docs):
+                assert_qualified_checkout()
+                for wrong in ({"PR_HEAD_SHA": release}, {"GITHUB_BASE_REF": "other"},
+                              {"GITHUB_HEAD_REF": PRIOR_DOCS_BRANCH}):
+                    with self.subTest(wrong=wrong), patch.dict(os.environ, wrong):
+                        self.assertTrue(check_query(root, checker, *legacy_context))
+
+                wrong_tree = ancestry_commit(root, ref(root, release + "^{tree}"), [release, docs],
+                                             "Synthetic merge with a different tree")
+                git(root, "switch", "--detach", wrong_tree)
+                self.assertTrue(check_query(root, checker, "APBRA-160", DOCS_BRANCH, DOCS))
+                git(root, "switch", "--detach", docs)
+                self.assertTrue(check_query(root, checker, *legacy_context))
+
+    def test_legacy_query_does_not_exempt_foreign_or_dirty_docs_checkouts(self):
+        with correction_fixture() as (root, head, checker):
+            release = ordinary(root, PR196, head, 9860, CORRECTION_BRANCH)
+            docs = docs_candidate(root)
+            legacy = runpy.run_path(root / "scripts/check_agent_details_20261013.py")
+            context = ("APBRA-160", legacy["B"], legacy["P"])
+
+            def assert_denied():
+                errors = check_query(root, checker, *context)
+                self.assertTrue(errors, "A historical query accepted an unqualified checkout")
+
+            git(root, "switch", "-c", PRIOR_DOCS_BRANCH)
+            assert_denied()
+            with patch.dict(os.environ, GITHUB_HEAD_REF=DOCS_BRANCH, GITHUB_BASE_REF="main", PR_HEAD_SHA=docs):
+                assert_denied()
+            git(root, "switch", DOCS_BRANCH)
+            readme = root / "README.md"
+            readme.chmod(0o755)
+            assert_denied()
+            readme.chmod(0o644)
+            readme.write_bytes(readme.read_bytes() + b"\nWrong bytes.\n")
+            assert_denied()
+            git(root, "add", "--", "README.md")
+            assert_denied()
+            git(root, "restore", "--source", docs, "--staged", "--worktree", "--", "README.md")
+            readme.unlink()
+            readme.symlink_to("ARCHITECTURE.md")
+            assert_denied()
+            git(root, "restore", "--worktree", "--", "README.md")
+            extra = root / "unexpected.txt"
+            extra.write_text("Synthetic extra path.\n")
+            assert_denied()
+            commit(root, {extra.name}, "Synthetic extra commit and path")
+            assert_denied()
+            # One child of current main with all approved entries plus a foreign path.
+            mixed = ancestry_commit(root, ref(root, "HEAD^{tree}"), [release], "Synthetic mixed docs")
+            git(root, "reset", "--hard", mixed)
+            assert_denied()
