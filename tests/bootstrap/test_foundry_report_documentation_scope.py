@@ -1,6 +1,7 @@
 """Verify exact issue 193 scope and preserved release authority in isolated Git fixtures."""
 from contextlib import contextmanager
 import hashlib
+import json
 import os
 from pathlib import Path
 import runpy
@@ -26,6 +27,7 @@ PRIOR_DOCS_BRANCH = "agent/APBRA-DEVOPS/APBRA-148-post-capstone-product-reconcil
 SOURCE = SCOPE["REPORT_DOCS_SOURCE"]
 TASK = SCOPE["REPORT_DOCS_TASK"]
 PR196 = "3b5ca7a840b40bdcb3571a1e4aca4809bcd33256"
+PR197 = "902febd064bba46006dfecd985659766973aedc9"
 CORRECTION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-issue193-checkout-correction"
 CORRECTION = {WRAPPER, SCOPE["REPORT_DOCS_TEST"]}
 # Git tree entries for the eight approved files in the retained documentation candidate.
@@ -295,7 +297,7 @@ def correction_fixture():
         git(root, "reset", "--hard", PR196)
         git(root, "switch", "-c", CORRECTION_BRANCH)
         for name in CORRECTION:
-            (root / name).write_bytes((ROOT / name).read_bytes())
+            (root / name).write_bytes(git(ROOT, "show", PR197 + ":" + name))
         head = commit(root, CORRECTION, "Synthetic two-file issue 193 compatibility correction")
         yield root, head, runpy.run_path(root / CHECKER)
 
@@ -408,3 +410,175 @@ class FoundryReportDocumentationCheckout(unittest.TestCase):
             mixed = ancestry_commit(root, ref(root, "HEAD^{tree}"), [release], "Synthetic mixed docs")
             git(root, "reset", "--hard", mixed)
             assert_denied()
+
+
+V10_BASE = "c0952cfcd30aa4ef05b0d2eb96ddf8374febd9d0"
+V10_REGISTRATION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-transport-registration"
+V10_PRODUCT_BRANCH = "agent/APBRA-DEV-BE/APBRA-160-foundry-v10-report-transport"
+V10_SOURCE = "docs/source-register-apbra160-v10-report-transport.json"
+V10_TASK = "tasks/APBRA-160-foundry-v10-report-transport-20261126.json"
+V10_REGISTRATION = frozenset({
+    "docs/decisions/foundry-v10-report-transport.md", V10_SOURCE, V10_TASK,
+    WRAPPER, "tests/bootstrap/test_foundry_report_documentation_scope.py",
+})
+V10_RESERVED = frozenset({
+    "apps/api/src/apbra_api/foundry_v10_report_transport.py",
+    "apps/api/tests/test_foundry_v10_report_transport.py",
+})
+
+
+@contextmanager
+def v10_fixture():
+    with tempfile.TemporaryDirectory(prefix="apbra-v10-transport-scope-") as directory:
+        root = Path(directory)
+        git(root, "init", "-q", "-b", "main")
+        git(root, "fetch", "--no-tags", str(ROOT), V10_BASE + ":" + MAIN,
+            FROZEN + ":refs/fixtures/frozen-invitation")
+        git(root, "reset", "--hard", V10_BASE)
+        git(root, "switch", "-c", V10_REGISTRATION_BRANCH)
+        # Once the registration is merged, keep exercising its original five files.
+        release = git(ROOT, "log", "--first-parent", "--diff-filter=A", "--format=%H",
+                      MAIN, "--", V10_TASK).decode().splitlines()
+        for name in V10_REGISTRATION:
+            content = git(ROOT, "show", release[-1] + ":" + name) if release else (ROOT / name).read_bytes()
+            (root / name).write_bytes(content)
+        head = commit(root, V10_REGISTRATION, "Synthetic v10 transport registration")
+        yield root, head, runpy.run_path(root / CHECKER)
+
+
+@patch.dict(os.environ, GITHUB_HEAD_REF="", GITHUB_BASE_REF="", PR_HEAD_SHA="")
+class FoundryV10TransportRegistration(unittest.TestCase):
+    def assert_allowed(self, root, checker, context):
+        self.assertEqual(checker["delivery_context"](root), context)
+        self.assertEqual(check_query(root, checker, *context), [])
+
+    def assert_v10_denied(self, root, checker, context):
+        errors = check_query(root, checker, *context)
+        self.assertTrue(any("v10" in error.lower() for error in errors), errors)
+
+    def test_five_path_candidate_and_its_detached_merge_checkout(self):
+        with v10_fixture() as (root, head, checker):
+            context = ("APBRA-160", V10_REGISTRATION_BRANCH, V10_REGISTRATION)
+            self.assert_allowed(root, checker, context)
+            source = json.loads((root / V10_SOURCE).read_bytes())
+            self.assertEqual(sorted(source["reserved_product_paths"]), sorted(V10_RESERVED))
+            self.assertIs(source["product_execution_issued"], False)
+            for query in (
+                ("APBRA-85", V10_REGISTRATION_BRANCH, V10_REGISTRATION),
+                ("APBRA-160", DOCS_BRANCH, V10_REGISTRATION),
+                ("APBRA-160", V10_REGISTRATION_BRANCH, V10_REGISTRATION - {V10_TASK}),
+                ("APBRA-160", V10_REGISTRATION_BRANCH, V10_REGISTRATION | V10_RESERVED),
+            ):
+                with self.subTest(query=query):
+                    self.assertTrue(check_query(root, checker, *query))
+
+            git(root, "switch", "-c", "agent/APBRA-DEVOPS/APBRA-160-wrong-checkout")
+            self.assertTrue(check_query(root, checker, *context))
+            hosted_checkout(root, V10_BASE, head)
+            with patch.dict(os.environ, GITHUB_HEAD_REF=V10_REGISTRATION_BRANCH, GITHUB_BASE_REF="main",
+                            PR_HEAD_SHA=head):
+                self.assert_allowed(root, checker, context)
+                for wrong in ({"PR_HEAD_SHA": V10_BASE}, {"GITHUB_BASE_REF": "another-base"},
+                              {"GITHUB_HEAD_REF": DOCS_BRANCH}):
+                    with self.subTest(wrong=wrong), patch.dict(os.environ, wrong):
+                        self.assertTrue(check_query(root, checker, *context))
+                tree = ref(root, head + "^{tree}")
+                for parents, candidate_tree in (
+                    ([head, V10_BASE], tree), ([PR197, head], tree),
+                    ([V10_BASE, head], ref(root, V10_BASE + "^{tree}")),
+                ):
+                    with self.subTest(parents=parents, tree=candidate_tree):
+                        revision = ancestry_commit(root, candidate_tree, parents, "Synthetic mismatched merge")
+                        git(root, "switch", "--detach", revision)
+                        self.assertTrue(check_query(root, checker, *context))
+
+    def test_registration_rejects_changed_bytes_mode_and_extra_path(self):
+        with v10_fixture() as (root, head, checker):
+            context = ("APBRA-160", V10_REGISTRATION_BRANCH, V10_REGISTRATION)
+            for path in (V10_SOURCE, V10_TASK, "tests/bootstrap/test_foundry_report_documentation_scope.py"):
+                with self.subTest(path=path):
+                    target = root / path
+                    target.write_bytes(target.read_bytes() + b"\n")
+                    self.assertTrue(check_query(root, checker, *context))
+                    git(root, "restore", "--", path)
+            target = root / V10_SOURCE
+            target.chmod(0o755)
+            git(root, "add", "--", V10_SOURCE)
+            changed = ancestry_commit(root, git(root, "write-tree").decode().strip(),
+                                      [V10_BASE], "Synthetic executable source register")
+            git(root, "reset", "--hard", changed)
+            self.assertTrue(check_query(root, checker, *context))
+            git(root, "reset", "--hard", head)
+            extra = root / sorted(V10_RESERVED)[0]
+            extra.write_text("# Synthetic extra product path\n")
+            git(root, "add", "--", str(extra.relative_to(root)))
+            mixed = ancestry_commit(root, git(root, "write-tree").decode().strip(),
+                                    [V10_BASE], "Synthetic mixed registration and product")
+            git(root, "reset", "--hard", mixed)
+            self.assertTrue(check_query(root, checker, *context))
+            self.assertTrue(check_query(root, checker, *checker["delivery_context"](root)))
+
+    def test_only_an_ordinary_registration_merge_is_effective(self):
+        with v10_fixture() as (root, head, checker):
+            tree = ref(root, head + "^{tree}")
+            title = "Merge pull request #9891 from haseebulhaque/" + V10_REGISTRATION_BRANCH
+            for parents, message, github in (
+                ([V10_BASE], title, True), ([V10_BASE, head], title + "-other", True),
+                ([V10_BASE, head], title, False),
+            ):
+                with self.subTest(parents=parents, message=message, github=github):
+                    forged = ancestry_commit(root, tree, parents, message, github=github)
+                    point_main(root, forged)
+                    self.assertTrue(check_query(root, checker, None, "main", set()))
+            release = ordinary(root, V10_BASE, head, 9891, V10_REGISTRATION_BRANCH)
+            self.assert_allowed(root, checker, (None, "main", set()))
+            git(root, "switch", "-c", V10_PRODUCT_BRANCH)
+            for path in V10_RESERVED:
+                (root / path).write_text("# Synthetic unissued v10 transport candidate\n")
+            commit(root, V10_RESERVED, "Synthetic application of both reserved paths")
+            context = checker["delivery_context"](root)
+            self.assertEqual(context, ("APBRA-160", V10_PRODUCT_BRANCH, V10_RESERVED))
+            self.assert_v10_denied(root, checker, context)
+            point_main(root, release)
+            target = root / V10_SOURCE
+            target.write_bytes(target.read_bytes() + b"\n")
+            drift = commit(root, {V10_SOURCE}, "Synthetic drift after registration merge")
+            point_main(root, drift)
+            self.assertTrue(check_query(root, checker, None, "main", set()))
+
+    def test_released_registration_preserves_documentation_metadata_and_frozen_invitation(self):
+        with v10_fixture() as (root, head, checker):
+            release = ordinary(root, V10_BASE, head, 9891, V10_REGISTRATION_BRANCH)
+            invite = invitation_candidate(root, release)
+            self.assert_allowed(root, checker, ("APBRA-184", INVITE, INVITE_PATHS))
+            merged = invitation_merge(root, release, invite)
+            point_main(root, merged)
+            self.assert_allowed(root, checker, (None, "main", set()))
+            for paths, original in ((DOCS, V10_BASE), (PRODUCT_PATHS, V10_BASE), (INVITE_PATHS, FROZEN)):
+                with self.subTest(original=original, paths=paths):
+                    args = ("--", *sorted(paths))
+                    self.assertEqual(git(root, "ls-tree", "-rz", "HEAD", *args),
+                                     git(root, "ls-tree", "-rz", original, *args))
+
+    def test_reserved_paths_cannot_be_hidden_after_entering_protected_main(self):
+        with v10_fixture() as (root, head, checker):
+            release = ordinary(root, V10_BASE, head, 9891, V10_REGISTRATION_BRANCH)
+            main_context = (None, "main", set())
+            for name in sorted(V10_RESERVED):
+                with self.subTest(path=name):
+                    point_main(root, release)
+                    self.assert_allowed(root, checker, main_context)
+                    target = root / name
+                    target.write_text("# Synthetic unissued implementation on main\n")
+                    introduced = commit(root, {name}, "Synthetic introduction of a reserved file")
+                    point_main(root, introduced)
+                    self.assert_v10_denied(root, checker, main_context)
+
+                    target.unlink()
+                    self.assertTrue(git(root, "ls-tree", "HEAD", "--", name))
+                    self.assert_v10_denied(root, checker, main_context)
+
+                    removed = commit(root, {name}, "Synthetic removal of the unissued file")
+                    point_main(root, removed)
+                    self.assertEqual(ref(root, removed + "^{tree}"), ref(root, release + "^{tree}"))
+                    self.assert_v10_denied(root, checker, main_context)

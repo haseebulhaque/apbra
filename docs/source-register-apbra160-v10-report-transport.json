@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "historical_source_register": "docs/source-register.json",
+  "historical_source_register_sha256": "086e26d0f83e76347ab709d8859dd013513240a4e86ee9861af2086f38bb0f3e",
+  "sources": [
+    {
+      "id": "apbra-160-v10-transport-registration-owner",
+      "content_id": "11130",
+      "version": 1,
+      "url": "https://arkitektz.atlassian.net/browse/APBRA-160?focusedCommentId=11130",
+      "status": "ACCEPTED",
+      "acceptance": "Haseeb Ul Haque approved the five-file registration and requested a draft PR for manual merge. The two product paths are reserved for separate issuance.",
+      "repository_decision": "docs/decisions/foundry-v10-report-transport.md",
+      "repository_decision_sha256": "912915e273b20f609552ca3a168cc2adc1b5e760d52468ebaacf415a12f186d6"
+    },
+    {
+      "id": "apbra-160-v10-contract-9404417",
+      "content_id": "9404417",
+      "version": 30,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417",
+      "status": "ACCEPTED",
+      "title": "03.08 - Model-Led Clarification, Flexible Generation & Delivery Contract"
+    },
+    {
+      "id": "apbra-160-v10-direction-8519682",
+      "content_id": "8519682",
+      "version": 120,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/8519682",
+      "status": "ACCEPTED",
+      "title": "03.07 - Business-User Self-Service Generation & Hosted Preview Direction"
+    },
+    {
+      "id": "apbra-160-v10-scope-4063307",
+      "content_id": "4063307",
+      "version": 94,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4063307",
+      "status": "ACCEPTED",
+      "title": "01.10 - MVP Scope & Product Boundaries"
+    },
+    {
+      "id": "apbra-160-v10-governance-4391060",
+      "content_id": "4391060",
+      "version": 10,
+      "url": "https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4391060",
+      "status": "ACCEPTED",
+      "title": "22.05 - GitHub Agent Branch, Commit & PR Governance"
+    }
+  ],
+  "approved_plan_sha256": "0e7b4c86b7710ffffc12028089ed6d8c253a1f69afe3a8903fddb45560bf3cd8",
+  "planning_review_sha256": "3ee1391b896a76494862d24af05efac8df1f18577a0f94bea7d1770da34ea579",
+  "qualification_jira_comment": "11129",
+  "registration_base": "c0952cfcd30aa4ef05b0d2eb96ddf8374febd9d0",
+  "reserved_product_paths": [
+    "apps/api/src/apbra_api/foundry_v10_report_transport.py",
+    "apps/api/tests/test_foundry_v10_report_transport.py"
+  ],
+  "reserved_product_branch": "agent/APBRA-DEV-BE/APBRA-160-foundry-v10-report-transport",
+  "product_execution_issued": false
+}

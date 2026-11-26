@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261126-V10-TRANSPORT-REGISTRATION",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Register a two-path reservation for the isolated Foundry v10 transport and its tests.",
+  "requirements": [
+    "Apply the five governance paths accepted in APBRA-160 PLAN 11130 on the verified PR198 main.",
+    "Keep the shared v7 endpoint active. Preserve v10 as a separate saved version with Code Interpreter.",
+    "Reserve exactly the two product paths named in the source record. Keep both unissued until separate implementation authority exists."
+  ],
+  "adrs": [
+    "docs/decisions/foundry-v10-report-transport.md"
+  ],
+  "architecture_refs": [
+    "Confluence 03.08 v30, 03.07 v120, 01.10 v94 and 22.05 v10.",
+    "Solo-owner release policy, PR197 historical checker correction and PR198 full-report documentation."
+  ],
+  "allowed_paths": [
+    "docs/decisions/foundry-v10-report-transport.md",
+    "docs/source-register-apbra160-v10-report-transport.json",
+    "scripts/check_recovered_native_registration.py",
+    "tasks/APBRA-160-foundry-v10-report-transport-20261126.json",
+    "tests/bootstrap/test_foundry_report_documentation_scope.py"
+  ],
+  "restricted_paths": [
+    "apps/**",
+    "packages/**",
+    "workers/**",
+    ".github/**",
+    "infra/**",
+    ".env*",
+    "**/.env",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "Only the five registered regular files may change on the named registration branch, with the exact base or its corresponding GitHub test merge.",
+    "Preserve PR197 historical assertions, PR198 documentation, released metadata and the frozen invitation witness. Detect unexpected paths, modes, content and lineage.",
+    "Ordinary manual registration merge records the reservation. The two product paths still lack implementation authority."
+  ],
+  "verification_required": [
+    "Verify actual base and head and run policy, canonical, full bootstrap and the pinned Linux secret scan.",
+    "Exercise the direct branch, GitHub merge checkout, ordinary post-merge release and prospective and ordinary invitation states. Retain negative and original failure evidence.",
+    "Obtain separate APBRA-SEC and APBRA-REVIEW assessments on the exact final revisions and passing required hosted CI before Haseeb's manual ordinary merge."
+  ],
+  "out_of_scope": [
+    "Transport implementation, signed-in receiver integration, private operator setup, migrations and application changes.",
+    "Cloud changes, credentials, live invocation, spending, owner previews and data, and automatic merge."
+  ],
+  "escalate_when": [
+    "The final candidate needs another path, unsupported source, changed historical expectation or broader authority.",
+    "Actual main, review, required checks or provenance no longer match the candidate."
+  ],
+  "task_mode": "SPECIFICATION",
+  "readiness": "READY_FOR_SPECIFICATION",
+  "actual_authenticated_actor": "Codex /root via GitHub haseebulhaque (30074430), logical APBRA-DEVOPS 0.1",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "c0952cfcd30aa4ef05b0d2eb96ddf8374febd9d0",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-transport-registration",
+  "source_ids": [
+    "apbra-160-v10-transport-registration-owner",
+    "apbra-160-v10-contract-9404417",
+    "apbra-160-v10-direction-8519682",
+    "apbra-160-v10-scope-4063307",
+    "apbra-160-v10-governance-4391060"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "After Haseeb's ordinary manual merge, record only the exact two-path reservation. A separately issued implementation execution on actual main is required before product changes.",
+  "dependencies": [
+    "Owner-approved technical proposal and actual manual PR198 merge.",
+    "Candidate-bound local checks, separate exact-head review and required hosted CI."
+  ]
+}
