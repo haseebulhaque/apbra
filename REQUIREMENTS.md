@@ -1,5 +1,11 @@
 # APBRA current and target requirements map
 
+## Current MVP report-generation direction
+
+The MVP requires the configured Foundry LLM and its authorised tools to produce the complete downloadable report from confirmed requirements and permitted inputs. APBRA provides the structural instructions and owns authorisation, artifact validation and delivery. Use this requirement where earlier sections describe an APBRA-owned compiler.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## Current APBRA-174 implemented slice
 
 The protected case experience permits zero or optional model-generated clarification questions and explicit bounded Clarify/Enhance cycles. The seeded tenant policy is two clarification rounds per cycle and ten rounds overall; durable server state enforces the active settings version. A ready interpretation may be accepted with optional questions unanswered, but unresolved mandatory blockers cannot be bypassed. Supported partial scope and omissions are shown before exact acceptance; material changes stale earlier acceptance.

@@ -1,5 +1,11 @@
 # APBRA engineering handoff — protected local/CI foundation and portable target
 
+## Current MVP report-generation direction
+
+Next report-runtime work must follow the owner-selected Foundry generation and compilation requirement. Preserve previous compiler receipts, qualify exact agent and artifact-return capability, then record a live generation, authenticated download, Power BI open and result check.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## Historical APBRA-176 documentation checkpoint
 
 Registration PR #79 was manually merged by Haseeb on 2 October 2026. The APBRA-176 documentation branch starts from verified main `9b1569f2b955aab523f4bacbdcefed2d582ebe0a` and is governed by Jira [APBRA-176](https://arkitektz.atlassian.net/browse/APBRA-176). The sources controlling that historical APBRA-176 snapshot were Confluence [10.03 v4](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/4030847) and [02.01 v7](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/3932362), cross-checked against the 2 October product/roadmap/tenancy updates.
