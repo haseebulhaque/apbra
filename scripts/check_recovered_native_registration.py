@@ -1754,3 +1754,333 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
         return authorities, faults
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         return (), ["APBRA-160 v10 transport issuance denied: " + str(error)]
+
+# APBRA-160 issue the signed-in demo on the actual v10 transport release.
+SIGNEDIN_BASE = "959f39a89911b05e278feedd0cdc8edd8e1d77d9"
+SIGNEDIN_BASE_TREE = "5429c192037029c4c58661a3d49f2b79a712e2db"
+SIGNEDIN_TRANSPORT_ISSUANCE = "bfb87010d2a4f7571069522ce57438a35f720391"
+SIGNEDIN_TRANSPORT_HEAD = "5f4f082fb17358ed77d3c119d8f46ccd628ac179"
+SIGNEDIN_PRIOR_CHECKER_SHA = "43c35665513434c9c20a89f3ab37fca71916ed91a8f7d897504e6dbedf3bd4e0"
+SIGNEDIN_ISSUER = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-signed-in-demo-issuance"
+SIGNEDIN_PRODUCT = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-signed-in-demo"
+SIGNEDIN_TASK = "tasks/APBRA-160-foundry-v10-signed-in-demo-20261126.json"
+SIGNEDIN_TEST = "tests/bootstrap/test_foundry_v10_signed_in_demo_scope.py"
+SIGNEDIN_PACKET = frozenset({INVITATION_READBACK_WRAPPER, SIGNEDIN_TASK, SIGNEDIN_TEST})
+SIGNEDIN_NEW = frozenset({
+    "apps/api/src/apbra_api/foundry_v10_demo_receiver.py",
+    "apps/api/tests/test_foundry_v10_demo_receiver.py",
+})
+SIGNEDIN_PATHS = SIGNEDIN_NEW | {
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/native_response_api.py",
+    "apps/api/src/apbra_api/request_outputs.py",
+    "apps/api/tests/test_native_response_integration.py",
+    "apps/web/e2e/native-outputs.spec.ts",
+    "apps/web/src/BusinessReportJourney.test.tsx",
+    "apps/web/src/BusinessReportJourney.tsx",
+    "apps/web/src/api.ts",
+}
+SIGNEDIN_INVITE_SHARED = frozenset({"apps/api/src/apbra_api/api.py", "apps/web/src/api.ts"})
+SIGNEDIN_TASK_SHA = "c81c95e385ba9f5878746cb22ede4c0f53b19213178e7baef8b9be54c60562c7"
+SIGNEDIN_TEST_SHA = "3c892820e95baae2e5fa794b0ee71dcc79f4089cda2689c76b44a9e2c2f1a830"
+SIGNEDIN_CHECKER_SHA = "6d2d30d29aea998a3b9f48262053638c9ee2ae43c8c5681313b5900dee73863f"
+_before_signedin_packet = v10_packet
+_before_signedin_transport = v10_issuance_state
+_before_signedin_context = invitation_readback_context
+_before_signedin_browser = metadata_browser_witness
+_before_signedin_stage = stage_authorities
+_before_signedin_branch = issued_v7_branch
+
+
+def signedin_present(root):
+    return any(os.path.lexists(root / path) for path in (SIGNEDIN_TASK, SIGNEDIN_TEST))
+
+
+def issued_v7_branch(branch):
+    return branch in (SIGNEDIN_ISSUER, SIGNEDIN_PRODUCT) or _before_signedin_branch(branch)
+
+
+def signedin_packet(root, checker_bytes=None):
+    pins = {**V10_PACKET_PINS, V10_ISSUANCE_TASK: V10_ISSUANCE_TASK_SHA,
+            V10_ISSUANCE_TEST: V10_ISSUANCE_TEST_SHA,
+            SIGNEDIN_TASK: SIGNEDIN_TASK_SHA, SIGNEDIN_TEST: SIGNEDIN_TEST_SHA}
+    if not all(safe(root, path) and not (root / path).stat().st_mode & 0o111
+               for path in pins.keys() | {INVITATION_READBACK_WRAPPER}):
+        raise ValueError("Unsafe or incomplete signed-in registration or predecessor")
+    for path, expected in pins.items():
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != expected:
+            raise ValueError("Signed-in registration or predecessor bytes differ: " + path)
+    checker = (root / INVITATION_READBACK_WRAPPER).read_bytes() if checker_bytes is None else checker_bytes
+    marker = b"\n# APBRA-160 issue the signed-in demo on the actual v10 transport release.\n"
+    declaration = ('SIGNEDIN_CHECKER_SHA = "' + SIGNEDIN_CHECKER_SHA + '"').encode()
+    zero = declaration.replace(SIGNEDIN_CHECKER_SHA.encode(), b"0" * 64)
+    if (checker.count(marker) != 1 or checker.count(declaration) != 1
+            or hashlib.sha256(checker.partition(marker)[0]).hexdigest() != SIGNEDIN_PRIOR_CHECKER_SHA
+            or hashlib.sha256(checker.replace(declaration, zero)).hexdigest() != SIGNEDIN_CHECKER_SHA):
+        raise ValueError("Signed-in checker or original transport checker differs")
+
+
+def v10_packet(root):
+    if signedin_present(root):
+        return signedin_packet(root)
+    return _before_signedin_packet(root)
+
+
+def signedin_invitation(root, reader, metadata, base, revision, paths, *, released):
+    """The frozen 28-path branch may contribute the two shared preimages first."""
+    git, ref = metadata["git"], metadata["ref"]
+    parents = reader["parents"]
+    delta = metadata["changed"]
+    frozen = reader["FROZEN"]
+    if released:
+        pair = parents(root, git, revision)
+        expected = "Merge pull request #185 from haseebulhaque/" + reader["INVITATION_BRANCH"]
+        if (len(pair) != 2 or pair[0] != base
+                or git(root, "show", "-s", "--format=%cn <%ce>%n%s", revision).decode().splitlines()
+                != ["GitHub <noreply@github.com>", expected]):
+            raise ValueError("Signed-in predecessor is not the original ordinary invitation merge")
+        child = pair[1]
+    else:
+        branch = reader["INVITATION_BRANCH"]
+        if not reader["actual_branch"](root, metadata, branch):
+            raise ValueError("Invitation proposal requires its original branch")
+        attached = git(root, "branch", "--show-current").decode().strip()
+        child = revision if attached else os.environ.get("PR_HEAD_SHA", "")
+        if (attached and (attached != branch or os.environ.get("PR_HEAD_SHA") not in (None, "", child))
+                or not attached and parents(root, git, revision) != [base, child]
+                or git(root, "status", "--porcelain", "--untracked-files=all", "-z")):
+            raise ValueError("Invitation proposal checkout differs")
+    if (ref(root, frozen + "^{tree}") != reader["FROZEN_TREE"]
+            or parents(root, git, frozen) != [reader["FROZEN_PARENT"]]
+            or parents(root, git, child) != [frozen, base]
+            or ref(root, revision + "^{tree}") != ref(root, child + "^{tree}")
+            or delta(root, base, revision) != paths
+            or reader["entries"](root, metadata, revision, paths)
+            != reader["entries"](root, metadata, frozen, paths)):
+        raise ValueError("Invitation ancestry or its 28 frozen entries differ")
+
+
+def signedin_state(root, readback, metadata, raw):
+    """Prove the actual transport release and record only the first legitimate transitions."""
+    readback["require_checkout"](root, metadata)
+    git, ref, changed = metadata["git"], metadata["ref"], metadata["changed"]
+    parents, entries = readback["parents"], readback["entries"]
+    main, head = ref(root, metadata["MAIN"]), ref(root, "HEAD")
+    if (ref(root, SIGNEDIN_BASE + "^{tree}") != SIGNEDIN_BASE_TREE
+            or parents(root, git, SIGNEDIN_BASE) != [SIGNEDIN_TRANSPORT_ISSUANCE, SIGNEDIN_TRANSPORT_HEAD]
+            or not metadata["owner_merge"](root, SIGNEDIN_BASE, V10_PRODUCT_BRANCH, V10_RESERVED)
+            or not metadata["ancestor"](root, SIGNEDIN_BASE, main) or not metadata["ancestor"](root, main, head)):
+        raise ValueError("Signed-in issuance requires the actual PR201 merge on protected main")
+    invite_paths = changed(root, readback["FROZEN_PARENT"], readback["FROZEN"])
+    if len(invite_paths) != 28 or invite_paths & SIGNEDIN_PATHS != SIGNEDIN_INVITE_SHARED:
+        raise ValueError("Invitation source overlap differs")
+
+    issuer = product = invitation = None
+    for revision in git(root, "rev-list", "--first-parent", "--reverse", SIGNEDIN_BASE + ".." + main).decode().split():
+        base = parents(root, git, revision)[0]
+        delta = changed(root, base, revision)
+        if delta & SIGNEDIN_PACKET:
+            if (issuer or base != SIGNEDIN_BASE
+                    or not metadata["owner_merge"](root, revision, SIGNEDIN_ISSUER, SIGNEDIN_PACKET)
+                    or not metadata["matches_commit"](root, SIGNEDIN_PACKET, revision, raw)):
+                raise ValueError("Signed-in issuance requires the original three-file ordinary release")
+            issuer = revision
+        if delta & (SIGNEDIN_PATHS | invite_paths):
+            if delta == SIGNEDIN_PATHS and issuer and not product:
+                if not metadata["owner_merge"](root, revision, SIGNEDIN_PRODUCT, SIGNEDIN_PATHS):
+                    raise ValueError("Signed-in implementation requires its ordinary twelve-file release")
+                product = revision
+            elif delta == invite_paths and not invitation and not product:
+                signedin_invitation(root, readback, metadata, base, revision, invite_paths, released=True)
+                invitation = revision
+            else:
+                raise ValueError("Unissued change to signed-in or frozen invitation entries")
+
+    physical = None
+    delta = changed(root, main, head)
+    if not issuer:
+        if (main != SIGNEDIN_BASE or not docs_checkout_candidate(root, readback, metadata, raw, main,
+                                                                SIGNEDIN_ISSUER, SIGNEDIN_PACKET)):
+            raise ValueError("Signed-in issuance requires its exact clean three-file PR201 child")
+        physical = SIGNEDIN_ISSUER
+    elif (not metadata["matches_commit"](root, SIGNEDIN_PACKET, head, raw)
+          or entries(root, metadata, issuer, SIGNEDIN_PACKET) != entries(root, metadata, head, SIGNEDIN_PACKET)):
+        raise ValueError("Current signed-in issuer entries differ")
+
+    if delta & (SIGNEDIN_PATHS | invite_paths):
+        if delta == SIGNEDIN_PATHS and issuer and not product:
+            if not docs_checkout_candidate(root, readback, metadata, raw, main, SIGNEDIN_PRODUCT, SIGNEDIN_PATHS):
+                raise ValueError("Signed-in implementation requires its exact clean twelve-file candidate")
+            physical = SIGNEDIN_PRODUCT
+        elif delta == invite_paths and not invitation and not product:
+            signedin_invitation(root, readback, metadata, main, head, invite_paths, released=False)
+            if not metadata["matches_commit"](root, invite_paths, head, raw):
+                raise ValueError("Physical invitation entries differ")
+        else:
+            raise ValueError("Checkout changes signed-in or invitation entries outside its issued scope")
+
+    expected_existing = SIGNEDIN_PATHS if product or physical == SIGNEDIN_PRODUCT else SIGNEDIN_PATHS - SIGNEDIN_NEW
+    if (not all(safe(root, path) and not (root / path).stat().st_mode & 0o111 for path in expected_existing)
+            or not metadata["matches_commit"](root, expected_existing, head, raw)
+            or any(os.path.lexists(root / path) for path in SIGNEDIN_PATHS - expected_existing)):
+        raise ValueError("Working signed-in source differs from the authenticated Git entries")
+    if product and entries(root, metadata, product, SIGNEDIN_PATHS) != entries(root, metadata, head, SIGNEDIN_PATHS):
+        raise ValueError("Effective twelve-file product differs from its ordinary release")
+    return main, head, issuer, product, physical
+
+
+def v10_issuance_state(root, readback, metadata, raw):
+    if not signedin_present(root):
+        return _before_signedin_transport(root, readback, metadata, raw)
+    v10_packet(root)
+    main, head, issuer, _, _ = signedin_state(root, readback, metadata, raw)
+    shared = {INVITATION_READBACK_WRAPPER}
+
+    def previous_entries(checkout, sources, revision, paths):
+        result = readback["entries"](checkout, sources, revision, paths)
+        if paths == V10_ISSUANCE_PATHS and sources["ref"](checkout, revision) == head:
+            current = readback["entries"](checkout, sources, revision, shared)
+            before = readback["entries"](checkout, sources, SIGNEDIN_BASE, shared)
+            if not current or result.count(current) != 1:
+                raise ValueError("Actual transport checker entry differs")
+            return result.replace(current, before, 1)
+        return result
+
+    def previous_touch(checkout, sources, lower, upper, paths):
+        found = readback["first_touch"](checkout, sources, lower, upper, paths)
+        if issuer and found == issuer and paths & SIGNEDIN_PACKET == shared:
+            return readback["first_touch"](checkout, sources, issuer, upper, paths)
+        return found
+
+    def previous_raw(checkout, path):
+        if path == INVITATION_READBACK_WRAPPER:
+            return metadata["git"](checkout, "show", SIGNEDIN_BASE + ":" + path)
+        return raw(checkout, path)
+
+    return _before_signedin_transport(
+        root, dict(readback, entries=previous_entries, first_touch=previous_touch), metadata, previous_raw,
+    )
+
+
+def signedin_product_parent(root):
+    reader, metadata, original = _v10_previous_sources(root)
+    main, _, _, product, physical = signedin_state(root, reader, metadata, original["raw"])
+    if product:
+        return reader["parents"](root, metadata["git"], product)[0], product
+    return (main, None) if physical == SIGNEDIN_PRODUCT else (None, None)
+
+
+def invitation_readback_context(root):
+    readback, state, metadata, old = _before_signedin_context(root)
+    if not signedin_present(root) or not all(safe(root, path) for path in SIGNEDIN_NEW):
+        return readback, state, metadata, old
+    before, released = signedin_product_parent(root)
+    if not before:
+        return readback, state, metadata, old
+
+    def prior(checkout, sources, historical_state, invitation, raw):
+        # The original reader still verifies the complete frozen invitation at
+        # its release. Its two shared files have a separately proved successor.
+        git, ref = sources["git"], sources["ref"]
+        if invitation["P"] & SIGNEDIN_PATHS != SIGNEDIN_INVITE_SHARED:
+            raise ValueError("Signed-in invitation intersection differs")
+
+        def changed(origin, lower, upper):
+            delta = sources["changed"](origin, lower, upper)
+            if released and (lower, upper) == (before, released) and delta == SIGNEDIN_PATHS:
+                return delta - SIGNEDIN_INVITE_SHARED
+            return delta
+
+        def historical_git(origin, *args):
+            result = git(origin, *args)
+            if (args[:2] == ("ls-tree", "-rz") and args[3:] == ("--", *sorted(invitation["P"]))
+                    and ref(origin, args[2]) in {ref(origin, "HEAD"), ref(origin, sources["MAIN"])}
+                    and ref(origin, args[2]) != before):
+                for path in sorted(SIGNEDIN_INVITE_SHARED):
+                    current = readback["entries"](origin, sources, args[2], {path})
+                    earlier = readback["entries"](origin, sources, before, {path})
+                    if not current or not earlier or result.count(current) != 1:
+                        raise ValueError("Effective signed-in invitation entry differs")
+                    result = result.replace(current, earlier, 1)
+            return result
+
+        return readback["invitation_release_before"](
+            checkout, dict(sources, git=historical_git, changed=changed), historical_state, invitation, raw,
+        )
+
+    def historical(original, paths, parent, protected):
+        project = readback["historical_with_invitation"]
+        earlier = project(original, paths, parent, protected)
+        return project(earlier, SIGNEDIN_PATHS - paths, before, protected)
+
+    return dict(readback, invitation_release_before=prior, historical_with_invitation=historical), state, metadata, old
+
+
+def metadata_browser_witness(root, checker, context, overlap, candidate, module, old):
+    if not signedin_present(root) or not all(safe(root, path) for path in SIGNEDIN_NEW):
+        return _before_signedin_browser(root, checker, context, overlap, candidate, module, old)
+    before, _ = signedin_product_parent(root)
+    if not before or not module["released_issuance"](root, old["raw"]):
+        return set()
+    readback, _, _, _ = _before_signedin_context(root)
+    return released_invitation_browser_witness(
+        root, checker, context, overlap, candidate, readback, {"P": SIGNEDIN_PATHS}, before,
+    )
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    selected = branch in (SIGNEDIN_ISSUER, SIGNEDIN_PRODUCT)
+    additions = {SIGNEDIN_TASK, SIGNEDIN_TEST} | SIGNEDIN_NEW
+    if not signedin_present(root):
+        if selected or paths and paths & additions:
+            return (), ["Signed-in demo issuance is absent"]
+        return _before_signedin_stage(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    try:
+        v10_packet(root)
+        task = json.loads((root / SIGNEDIN_TASK).read_bytes())
+        source = json.loads((root / V10_SOURCE).read_bytes())
+        schema = json.loads((root / "contracts/engineering/task-contract.schema.json").read_bytes())
+        if (schema_errors(schema, task) or task_errors(task, catalog, source)
+                or task["task_id"] != REPORT_DOCS_ISSUE or task["branch"] != SIGNEDIN_PRODUCT
+                or task["assigned_agent"] != "APBRA-DEVOPS" or task["base_commit"] != SIGNEDIN_BASE
+                or task["execution_id"] != "APBRA-160-20261126-V10-SIGNED-IN-DEMO"
+                or task["task_mode"] != "IMPLEMENTATION" or task["readiness"] != "READY_FOR_IMPLEMENTATION"
+                or task["owner_acceptance"] != "RECORDED" or len(task["allowed_paths"]) != 12
+                or set(task["allowed_paths"]) != SIGNEDIN_PATHS):
+            raise ValueError("Signed-in demo implementation contract differs")
+        expected = SIGNEDIN_PACKET if branch == SIGNEDIN_ISSUER else SIGNEDIN_PATHS
+        if selected and (identity != REPORT_DOCS_ISSUE or paths != expected):
+            raise ValueError("Signed-in demo requires its issued identity and exact path set")
+        if not selected and paths and paths & additions:
+            raise ValueError("Signed-in demo additions require their exact issued branch")
+        main, product, physical = None, None, None
+        inventory = False
+        if os.path.lexists(root / ".git"):
+            readback, metadata, old = _v10_previous_sources(root)
+            main, _, _, product, physical = signedin_state(root, readback, metadata, old["raw"])
+        else:
+            # Historical static inventories carry no live branch authority.
+            inventory = any(os.path.lexists(root / path) for path in SIGNEDIN_NEW)
+            if inventory and not all(safe(root, path) and not (root / path).stat().st_mode & 0o111
+                                     for path in SIGNEDIN_PATHS):
+                raise ValueError("Incomplete signed-in source inventory")
+        if selected and physical != branch:
+            raise ValueError("Signed-in demo requires its actual clean Git checkout")
+        authorities, faults = _before_signedin_stage(
+            root, catalog, schema_errors, task_errors, identity, None if selected else branch,
+            None if selected else paths,
+        )
+        registration = json.loads((root / V10_TASK).read_bytes())
+        issuer = dict(registration, branch=SIGNEDIN_ISSUER, base_commit=SIGNEDIN_BASE,
+                      execution_id="APBRA-160-20261126-V10-SIGNED-IN-DEMO-ISSUANCE",
+                      allowed_paths=sorted(SIGNEDIN_PACKET))
+        authorities += ((issuer, SIGNEDIN_PACKET),)
+        if inventory:
+            authorities += ((task, SIGNEDIN_PATHS),)
+        elif physical == SIGNEDIN_PRODUCT or product:
+            authorities += ((dict(task, base_commit=main), SIGNEDIN_PATHS),)
+        return authorities, faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return (), ["APBRA-160 signed-in demo issuance denied: " + str(error)]
