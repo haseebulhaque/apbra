@@ -1,5 +1,11 @@
 # APBRA bounded MVP architecture
 
+## Current MVP report-generation direction
+
+Target MVP artifact flow: confirmed requirements and permitted inputs → Foundry generation and compilation → APBRA validation, provenance and protected download. The current implementation described below includes the earlier APBRA compiler. The target runtime and the exact agent capability remain to be qualified.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## Current protected APBRA-174 slice
 
 The durable FastAPI/PostgreSQL application is distinct from the historical browser-only Capstone described below. An active tenant resolves an immutable current settings version at the server boundary; Owner/Admin edits and restores create new versions, audit the actor, and use optimistic concurrency. Fixed compiler/security invariants remain code contracts. Provider credentials are encrypted behind a provider-neutral secret-store interface using a deployment-supplied keyring and are never returned by settings reads. A missing credential cannot activate intelligent generation.

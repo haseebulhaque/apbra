@@ -1,5 +1,11 @@
 # MVP acceptance and evidence status
 
+## Current MVP report-generation direction
+
+Report-generation acceptance requires a recorded run on the configured Foundry agent version that generates and compiles the finished report, then an authenticated download, successful Power BI open and verification that the report answers the confirmed request. The earlier synthetic APBRA compiler run provides build and download evidence for that earlier route.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 Capstone is complete/submitted. The bounded MVP baseline is working and product development continues. This is not a production-readiness claim.
 
 ## Current protected local/CI foundation

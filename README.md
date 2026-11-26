@@ -1,5 +1,11 @@
 # AI-Powered Power BI Report Automation (APBRA)
 
+## Current MVP report-generation direction
+
+The Foundry LLM and its authorised tools generate and compile the complete downloadable Power BI report. APBRA supplies instructions and confirmed inputs, validates the returned artifact and provides the protected download. Current implementation descriptions below record the earlier APBRA compiler route. Live Foundry generation remains unverified.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## Current APBRA-174 implementation boundary
 
 The protected invited-case application now has versioned tenant settings, an Owner/Admin settings surface, and protected tenant credential references. Deployment bootstrap supplies the keyring; tenant settings select a qualified provider profile and enable it only when a usable tenant credential is present. No provider, model, region, credential, or business meaning is chosen by default. A disabled provider leaves intelligent generation unavailable without blocking case access.

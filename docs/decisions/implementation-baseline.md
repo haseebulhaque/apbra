@@ -1,5 +1,11 @@
 # APBRA implementation and product baseline
 
+## Current MVP report-generation direction
+
+The owner selected generation and compilation of the complete downloadable report by Foundry. APBRA provides instructions, access controls, artifact validation and delivery. The existing compiler is implementation and test history for the earlier route. Record the updated architecture and issue a bounded task before changing the runtime.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 This file separates current implementation evidence, accepted product/architecture intent and historical proposals. They must not be collapsed into one claim.
 
 | Layer | Current authority | Meaning |

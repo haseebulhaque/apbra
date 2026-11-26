@@ -1,5 +1,11 @@
 # AI and governed retrieval specification
 
+## Current MVP report-generation direction
+
+Versioned system instructions specify the required report structure, confirmed business requirements and permitted inputs. The configured Foundry LLM and its authorised tools must generate and compile the complete downloadable report. A standalone ReportDesign is intermediate evidence. APBRA validates the finished artifact and controls delivery.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## APBRA-174 current protected application
 
 The qualified model analyzes the current request, schema, accepted answers, reference metadata, and tenant settings. It may return zero clarification questions; optional questions are visible but do not force human review or prevent acceptance of otherwise ready meaning. An explicit Clarify/Enhance request starts a durable bounded cycle. Tenant policy seeds two clarification rounds per cycle and ten rounds overall; counts are enforced server-side across restart and duplicate commands. The model does not acquire business or authorization authority from a question, retrieval result, or prompt.

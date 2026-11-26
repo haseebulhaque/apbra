@@ -1,5 +1,11 @@
 # Power BI generation and assurance contract
 
+## Current MVP report-generation direction
+
+Foundry generates and compiles the complete Power BI project artifact. APBRA supplies the required structure and checks the resulting package for safety, compatibility and fidelity to the confirmed request. The technical constraints and existing compiler evidence below retain their original scope.
+
+[Confluence generation and acceptance contract](https://arkitektz.atlassian.net/wiki/spaces/APBRA/pages/9404417)
+
 ## APBRA-174 protected candidate behavior
 
 The canonical candidate path validates the exact confirmed interpretation and tenant settings version before compiling. Supported partial scope retains explicit omissions and limitations; unsupported mandatory obligations stop. The six-slot compiler capacity and supported trend grains are fixed capabilities validated against tenant policy. The model chooses business objects; deterministic normalization may only preserve exact object meanings and bindings.
