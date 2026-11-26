@@ -1419,3 +1419,158 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
         return authorities, faults
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         return authorities, faults + ["APBRA-160 issue 193 documentation scope denied: " + str(error)]
+
+# APBRA-160 isolated v10 transport registration after the exact PR198 release.
+V10_BASE = "c0952cfcd30aa4ef05b0d2eb96ddf8374febd9d0"
+V10_BASE_TREE = "665cc5652e5e8adb2df66b66b0a00310fbedb399"
+V10_REGISTRATION_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-transport-registration"
+V10_PRODUCT_BRANCH = "agent/APBRA-DEV-BE/APBRA-160-foundry-v10-report-transport"
+V10_ADR = "docs/decisions/foundry-v10-report-transport.md"
+V10_SOURCE = "docs/source-register-apbra160-v10-report-transport.json"
+V10_TASK = "tasks/APBRA-160-foundry-v10-report-transport-20261126.json"
+V10_ADDITIONS = frozenset({V10_ADR, V10_SOURCE, V10_TASK})
+V10_REGISTRATION = V10_ADDITIONS | DOCS_CORRECTION_PATHS
+V10_RESERVED = frozenset({
+    "apps/api/src/apbra_api/foundry_v10_report_transport.py",
+    "apps/api/tests/test_foundry_v10_report_transport.py",
+})
+V10_PACKET_PINS = {
+    V10_ADR: "912915e273b20f609552ca3a168cc2adc1b5e760d52468ebaacf415a12f186d6",
+    V10_SOURCE: "72a9d06e2fbf97e51b24c8ec691f2c1da0852f0698de4e1511675218101a2aa0",
+    V10_TASK: "02c07d305bf069c5149fb0154fa100e08f213b828c8b5cec8af862e9435ff630",
+    REPORT_DOCS_TEST: "b2894f28867914ba29f337c5b31e1f7ad089046268364347a528abb44a9acda9",
+}
+V10_WRAPPER_SHA = "5af26d0c60afaed49a643bc4d4104c3e1dec08698eb33a0c9e30d3b688be68d2"
+_v10_previous_branch = issued_v7_branch
+_v10_previous_stage = stage_authorities
+_v10_previous_sources = invitation_readback_sources
+
+
+def issued_v7_branch(branch):
+    return branch in (V10_REGISTRATION_BRANCH, V10_PRODUCT_BRANCH) or _v10_previous_branch(branch)
+
+
+def v10_packet_present(root):
+    return any(os.path.lexists(root / path) for path in V10_ADDITIONS)
+
+
+def v10_packet(root):
+    if not all(safe(root, path) and not (root / path).stat().st_mode & 0o111
+               for path in V10_REGISTRATION):
+        raise ValueError("Incomplete or unsafe v10 registration packet")
+    for path, expected in V10_PACKET_PINS.items():
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != expected:
+            raise ValueError("v10 registration source differs: " + path)
+    source = (root / INVITATION_READBACK_WRAPPER).read_bytes()
+    declaration = ('V10_WRAPPER_SHA = "' + V10_WRAPPER_SHA + '"').encode()
+    normalized = declaration.replace(V10_WRAPPER_SHA.encode(), b"0" * 64)
+    if (source.count(declaration) != 1
+            or hashlib.sha256(source.replace(declaration, normalized)).hexdigest() != V10_WRAPPER_SHA):
+        raise ValueError("v10 registration checker differs")
+    if any(os.path.lexists(root / path) for path in V10_RESERVED):
+        raise ValueError("v10 product execution has not been issued")
+
+
+def v10_registration_state(root, readback, metadata, raw):
+    """Prove the physical candidate or the ordinary registration on protected main."""
+    v10_packet(root)
+    readback["require_checkout"](root, metadata)
+    ref, ancestor = metadata["ref"], metadata["ancestor"]
+    main = ref(root, metadata["MAIN"])
+    head = ref(root, "HEAD")
+    if (ref(root, V10_BASE + "^{tree}") != V10_BASE_TREE
+            or not all(ancestor(root, V10_BASE, revision) for revision in (main, head))):
+        raise ValueError("v10 registration requires the actual PR198 base")
+    # A reservation must hold in Git even when the working copy omits a path.
+    for revision in {main, head}:
+        if metadata["git"](root, "ls-tree", "-z", revision, "--", *sorted(V10_RESERVED)):
+            raise ValueError("Unissued v10 transport path is present in the Git tree")
+    if main == V10_BASE:
+        if not docs_checkout_candidate(
+            root, readback, metadata, raw, main, V10_REGISTRATION_BRANCH, V10_REGISTRATION
+        ):
+            raise ValueError("v10 registration requires its exact clean direct or hosted PR198 child")
+        return main, head, None
+    release = readback["first_touch"](root, metadata, V10_BASE, main, V10_REGISTRATION)
+    if (not release or readback["parents"](root, metadata["git"], release)[0] != V10_BASE
+            or not metadata["owner_merge"](root, release, V10_REGISTRATION_BRANCH, V10_REGISTRATION)
+            or not ancestor(root, release, head)
+            or readback["first_touch"](root, metadata, release, main, V10_REGISTRATION | V10_RESERVED)
+            or not all(metadata["matches_commit"](root, V10_REGISTRATION, commit, raw)
+                       for commit in (release, main, head))):
+        raise ValueError("v10 registration requires its exact ordinary release and continued packet")
+    return main, head, release
+
+
+def invitation_readback_sources(root):
+    readback, metadata, old = _v10_previous_sources(root)
+    if not v10_packet_present(root) or not (root / ".git").exists():
+        return readback, metadata, old
+
+    main, head, release = v10_registration_state(root, readback, metadata, old["raw"])
+    # The two changed PR197 files are restored only in the historical readers.
+    # Each new byte and every relevant checkout tree entry has already been
+    # verified above. Historical callers still run their original hash checks.
+    preimages = {
+        path: metadata["git"](root, "show", V10_BASE + ":" + path)
+        for path in DOCS_CORRECTION_PATHS
+    }
+
+    def previous_raw(origin, path):
+        if path in preimages:
+            return preimages[path]
+        return old["raw"](origin, path)
+
+    def previous_matches(origin, paths, revision, read):
+        overlap = paths & DOCS_CORRECTION_PATHS
+        if overlap and metadata["ref"](origin, revision) in {main, head, release}:
+            return (metadata["matches_commit"](origin, overlap, V10_BASE, read)
+                    and metadata["matches_commit"](origin, paths - overlap, revision, read))
+        return metadata["matches_commit"](origin, paths, revision, read)
+
+    return readback, dict(metadata, matches_commit=previous_matches), dict(old, raw=previous_raw)
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    selected = branch == V10_REGISTRATION_BRANCH
+    if (not v10_packet_present(root) and not selected and branch != V10_PRODUCT_BRANCH
+            and not (paths and paths & (V10_RESERVED | V10_ADDITIONS))):
+        return _v10_previous_stage(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    try:
+        v10_packet(root)
+        task = json.loads((root / V10_TASK).read_bytes())
+        source = json.loads((root / V10_SOURCE).read_bytes())
+        schema = json.loads((root / "contracts/engineering/task-contract.schema.json").read_bytes())
+        historical = source["historical_source_register"]
+        if (historical != "docs/source-register.json" or not safe(root, historical)
+                or hashlib.sha256((root / historical).read_bytes()).hexdigest()
+                != source["historical_source_register_sha256"]
+                or schema_errors(schema, task) or task_errors(task, catalog, source)
+                or set(task["allowed_paths"]) != V10_REGISTRATION
+                or set(source["reserved_product_paths"]) != V10_RESERVED
+                or source["product_execution_issued"] is not False):
+            raise ValueError("v10 registration task, source or reservation differs")
+        if branch == V10_PRODUCT_BRANCH or paths and paths & V10_RESERVED:
+            raise ValueError("v10 transport implementation requires a separately issued execution")
+        if selected:
+            if identity != REPORT_DOCS_ISSUE or paths != V10_REGISTRATION:
+                raise ValueError("v10 registration requires APBRA-160 and its exact five paths")
+        elif paths and paths & V10_REGISTRATION:
+            raise ValueError("v10 registration files require their exact branch")
+        if (root / ".git").exists():
+            readback, metadata, old = _v10_previous_sources(root)
+            _, _, release = v10_registration_state(root, readback, metadata, old["raw"])
+            if selected and release is not None:
+                raise ValueError("v10 registration has already been released")
+        elif selected:
+            raise ValueError("v10 registration requires a physical Git checkout")
+
+        # Both the physical checkout and the five declared changes were proved.
+        # The earlier registrations inventory their original files without being
+        # asked to authorize a change to the two files shared across stages.
+        authorities, faults = _v10_previous_stage(
+            root, catalog, schema_errors, task_errors, identity, branch, None if selected else paths,
+        )
+        return authorities + ((task, V10_REGISTRATION),), faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return (), ["APBRA-160 v10 transport registration denied: " + str(error)]
