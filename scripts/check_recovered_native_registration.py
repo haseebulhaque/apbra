@@ -1574,3 +1574,183 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
         return authorities + ((task, V10_REGISTRATION),), faults
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         return (), ["APBRA-160 v10 transport registration denied: " + str(error)]
+
+# APBRA-160 issue the reserved v10 transport on the verified PR199 merge.
+V10_ISSUANCE_BASE = "7312873d998efa7b420115114ae2f43535123d2c"
+V10_ISSUANCE_BASE_TREE = "daf30fa9363a73fe81cd81d2fbad212e7739f184"
+V10_REGISTRATION_HEAD = "de0b8a1cf3c2719d00e8aa7dc907a220f1cf7e00"
+V10_REGISTRATION_CHECKER_SHA = "8aa9200fd69dc8cb8e172e72185fa1b2fbd159a6a3277acb4959514402aeebd8"
+V10_ISSUANCE_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-transport-issuance"
+V10_ISSUANCE_TASK = "tasks/APBRA-160-foundry-v10-transport-issuance-20261126.json"
+V10_ISSUANCE_TEST = "tests/bootstrap/test_foundry_v10_transport_issuance.py"
+V10_ISSUANCE_PATHS = frozenset({INVITATION_READBACK_WRAPPER, V10_ISSUANCE_TASK, V10_ISSUANCE_TEST})
+V10_ISSUANCE_TASK_SHA = "a0c41dfa67e42d5f32cd2094cc5446622ae37b538bd77407e36fae51a485fb2e"
+V10_ISSUANCE_TEST_SHA = "efdae8a951d15f1016fed06077746f4d70e10f47aab94296d3b8914f15c66819"
+V10_ISSUANCE_WRAPPER_SHA = "1aeb7b33d40675f812e6a01ad4756383040a509fdb252f68991f5cefc7203d36"
+_v10_registration_packet = v10_packet
+_v10_registration_state = v10_registration_state
+_v10_registration_stage = stage_authorities
+_v10_registration_branch = issued_v7_branch
+
+
+def issued_v7_branch(branch):
+    return branch == V10_ISSUANCE_BRANCH or _v10_registration_branch(branch)
+
+
+def v10_issuance_present(root):
+    return any(os.path.lexists(root / path) for path in (V10_ISSUANCE_TASK, V10_ISSUANCE_TEST))
+
+
+def v10_packet(root):
+    if not v10_issuance_present(root):
+        return _v10_registration_packet(root)
+    for path in V10_ISSUANCE_PATHS | V10_REGISTRATION:
+        if not safe(root, path) or (root / path).stat().st_mode & 0o111:
+            raise ValueError("Incomplete or unsafe v10 issuance source: " + path)
+    pins = {**V10_PACKET_PINS, V10_ISSUANCE_TASK: V10_ISSUANCE_TASK_SHA,
+            V10_ISSUANCE_TEST: V10_ISSUANCE_TEST_SHA}
+    for path, expected in pins.items():
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != expected:
+            raise ValueError("v10 issuance source differs: " + path)
+    checker = (root / INVITATION_READBACK_WRAPPER).read_bytes()
+    boundary = b"\n# APBRA-160 issue the reserved v10 transport on the verified PR199 merge.\n"
+    if (checker.count(boundary) != 1
+            or hashlib.sha256(checker.partition(boundary)[0]).hexdigest() != V10_REGISTRATION_CHECKER_SHA):
+        raise ValueError("Historical v10 registration checker differs")
+    declaration = ('V10_ISSUANCE_WRAPPER_SHA = "' + V10_ISSUANCE_WRAPPER_SHA + '"').encode()
+    normalized = declaration.replace(V10_ISSUANCE_WRAPPER_SHA.encode(), b"0" * 64)
+    if (checker.count(declaration) != 1
+            or hashlib.sha256(checker.replace(declaration, normalized)).hexdigest() != V10_ISSUANCE_WRAPPER_SHA):
+        raise ValueError("v10 transport issuance checker differs")
+
+
+def v10_working_product(root):
+    present = {path for path in V10_RESERVED if os.path.lexists(root / path)}
+    if present and (present != V10_RESERVED or not all(
+            safe(root, path) and not (root / path).stat().st_mode & 0o111 for path in present)):
+        raise ValueError("v10 transport requires both regular files")
+    return bool(present)
+
+
+def v10_issuance_state(root, readback, metadata, raw):
+    """Prove the actual registration, issuance and product in their first-parent order."""
+    readback["require_checkout"](root, metadata)
+    git, ref = metadata["git"], metadata["ref"]
+    main, head = ref(root, metadata["MAIN"]), ref(root, "HEAD")
+    first_touch, parents = readback["first_touch"], readback["parents"]
+    ancestor, owner_merge = metadata["ancestor"], metadata["owner_merge"]
+    matches = metadata["matches_commit"]
+    historical = (V10_REGISTRATION - {INVITATION_READBACK_WRAPPER}) | REPORT_DOCS_PATHS | metadata["PRODUCT_PATHS"]
+    protected = historical | V10_ISSUANCE_PATHS | V10_RESERVED
+    if (ref(root, V10_ISSUANCE_BASE + "^{tree}") != V10_ISSUANCE_BASE_TREE
+            or parents(root, git, V10_ISSUANCE_BASE) != [V10_BASE, V10_REGISTRATION_HEAD]
+            or not owner_merge(root, V10_ISSUANCE_BASE, V10_REGISTRATION_BRANCH, V10_REGISTRATION)
+            or not ancestor(root, V10_ISSUANCE_BASE, main) or not ancestor(root, main, head)
+            or first_touch(root, metadata, V10_BASE, main, protected) != V10_ISSUANCE_BASE
+            or git(root, "ls-tree", "-z", V10_ISSUANCE_BASE, "--", *sorted(V10_RESERVED))):
+        raise ValueError("v10 issuance requires the actual first ordinary PR199 release")
+    # Verify the historical checker against the retained merge, then its four
+    # companion files and the current working copies of the continued products.
+    if (hashlib.sha256(git(root, "show", V10_ISSUANCE_BASE + ":" + INVITATION_READBACK_WRAPPER)).hexdigest()
+            != V10_REGISTRATION_CHECKER_SHA):
+        raise ValueError("Retained PR199 checker differs")
+    if (not all(safe(root, path) and not (root / path).stat().st_mode & 0o111 for path in historical)
+            or not matches(root, historical, V10_ISSUANCE_BASE, raw)
+            or readback["entries"](root, metadata, head, historical)
+            != readback["entries"](root, metadata, V10_ISSUANCE_BASE, historical)):
+        raise ValueError("Continued documentation, metadata or registration entries differ")
+
+    issuance = first_touch(root, metadata, V10_ISSUANCE_BASE, main, protected)
+    working_product = v10_working_product(root)
+    head_product = git(root, "ls-tree", "-z", head, "--", *sorted(V10_RESERVED))
+    if issuance is None:
+        if (main != V10_ISSUANCE_BASE or working_product or head_product
+                or not docs_checkout_candidate(root, readback, metadata, raw, main,
+                                               V10_ISSUANCE_BRANCH, V10_ISSUANCE_PATHS)):
+            raise ValueError("v10 transport issuance requires its clean three-path PR199 child")
+        return main, head, None, None, V10_ISSUANCE_BRANCH
+    if (parents(root, git, issuance)[0] != V10_ISSUANCE_BASE
+            or not owner_merge(root, issuance, V10_ISSUANCE_BRANCH, V10_ISSUANCE_PATHS)
+            or not matches(root, V10_ISSUANCE_PATHS, issuance, raw)
+            or readback["entries"](root, metadata, issuance, V10_ISSUANCE_PATHS)
+            != readback["entries"](root, metadata, head, V10_ISSUANCE_PATHS)):
+        raise ValueError("v10 transport requires its exact ordinary three-path issuance")
+
+    product = first_touch(root, metadata, issuance, main, protected)
+    if product is not None:
+        if (not owner_merge(root, product, V10_PRODUCT_BRANCH, V10_RESERVED)
+                or first_touch(root, metadata, product, main, protected)
+                or not working_product or not matches(root, V10_RESERVED, product, raw)
+                or readback["entries"](root, metadata, head, V10_RESERVED)
+                != readback["entries"](root, metadata, product, V10_RESERVED)):
+            raise ValueError("v10 transport product release or continued entries differ")
+        return main, head, issuance, product, None
+    if working_product or head_product:
+        if (not working_product
+                or not docs_checkout_candidate(root, readback, metadata, raw, main, V10_PRODUCT_BRANCH, V10_RESERVED)):
+            raise ValueError("v10 transport requires its exact clean two-path candidate on issued main")
+        return main, head, issuance, None, V10_PRODUCT_BRANCH
+    return main, head, issuance, None, None
+
+
+def v10_registration_state(root, readback, metadata, raw):
+    if not v10_issuance_present(root):
+        return _v10_registration_state(root, readback, metadata, raw)
+    v10_packet(root)
+    main, head, _, _, _ = v10_issuance_state(root, readback, metadata, raw)
+    return main, head, V10_ISSUANCE_BASE
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    new_paths = {V10_ISSUANCE_TASK, V10_ISSUANCE_TEST}
+    if not v10_issuance_present(root):
+        if branch == V10_ISSUANCE_BRANCH or paths and paths & new_paths:
+            return (), ["APBRA-160 v10 transport issuance is absent"]
+        return _v10_registration_stage(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    try:
+        v10_packet(root)
+        task = json.loads((root / V10_ISSUANCE_TASK).read_bytes())
+        source = json.loads((root / V10_SOURCE).read_bytes())
+        schema = json.loads((root / "contracts/engineering/task-contract.schema.json").read_bytes())
+        if (schema_errors(schema, task) or task_errors(task, catalog, source)
+                or task["task_id"] != REPORT_DOCS_ISSUE or task["branch"] != V10_PRODUCT_BRANCH
+                or task["assigned_agent"] != "APBRA-DEV-BE" or task["base_commit"] != V10_ISSUANCE_BASE
+                or task["execution_id"] != "APBRA-160-20261126-V10-REPORT-TRANSPORT"
+                or task["task_mode"] != "IMPLEMENTATION" or task["readiness"] != "READY_FOR_IMPLEMENTATION"
+                or task["owner_acceptance"] != "RECORDED" or set(task["allowed_paths"]) != V10_RESERVED):
+            raise ValueError("v10 transport implementation contract differs")
+        selected = branch in (V10_ISSUANCE_BRANCH, V10_PRODUCT_BRANCH)
+        expected = V10_ISSUANCE_PATHS if branch == V10_ISSUANCE_BRANCH else V10_RESERVED
+        if selected and (identity != REPORT_DOCS_ISSUE or paths != expected):
+            raise ValueError("v10 transport requires its issued identity and exact path set")
+        if not selected and paths and paths & (V10_ISSUANCE_PATHS | V10_RESERVED):
+            raise ValueError("v10 transport paths require their exact issued branch")
+        main, product, physical_branch = None, None, None
+        source_inventory = False
+        if os.path.lexists(root / ".git"):
+            readback, metadata, old = _v10_previous_sources(root)
+            main, _, _, product, physical_branch = v10_issuance_state(root, readback, metadata, old["raw"])
+        else:
+            # Historical static checks copy all tracked files without Git. Only
+            # inventory the exact regular pair; these copies cannot select a stage.
+            source_inventory = v10_working_product(root)
+        if selected and physical_branch != branch:
+            raise ValueError("v10 transport requires its actual clean issued Git checkout")
+        # The earlier registration remains individually inventoried. Its own
+        # five-path execution cannot be selected again after its release.
+        authorities, faults = _v10_registration_stage(
+            root, catalog, schema_errors, task_errors, identity, None if selected else branch,
+            None if selected else paths,
+        )
+        registration = json.loads((root / V10_TASK).read_bytes())
+        issuer = dict(registration, branch=V10_ISSUANCE_BRANCH, base_commit=V10_ISSUANCE_BASE,
+                      execution_id="APBRA-160-20261126-V10-TRANSPORT-ISSUANCE",
+                      allowed_paths=sorted(V10_ISSUANCE_PATHS))
+        authorities += ((issuer, V10_ISSUANCE_PATHS),)
+        if source_inventory:
+            authorities += ((task, V10_RESERVED),)
+        elif physical_branch == V10_PRODUCT_BRANCH or product:
+            authorities += ((dict(task, base_commit=main), V10_RESERVED),)
+        return authorities, faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return (), ["APBRA-160 v10 transport issuance denied: " + str(error)]
