@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261126-HOME-PAGINATION-CHEVRON",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEV-FE",
+  "agent_card_version": "0.1",
+  "risk_class": "R1",
+  "objective": "Inset the page-size arrow on the signed-in Home reports list, preserving the native select's behaviour.",
+  "requirements": [
+    "Apply only the owner-selected 16-line pagination rule recorded in Jira 11139 and 11142. The retained patch SHA-256 is f148954094cdf71b53fc0177c5dab3bc202d362aec57080d67172181126abf44.",
+    "Keep the 12px trailing inset, RTL mirroring, native forced-colours behaviour, keyboard selection and existing page-size controls.",
+    "Use only the approved regular stylesheet transition. Before invitation integration aa9fbdcf08939765496366619cbe2d833fa0b86c becomes 661c55c3dd7e7f4312863e95e693fd53f09c42a4. After invitation integration df910c2cd12ba284d5ccb1fcc7df78c895dddd89 becomes 5d640d25164f952a1aeceb1924f488fec7a8218e."
+  ],
+  "adrs": [
+    "Accepted Screen, Form and Interaction Specifications, Confluence 03.04 v5."
+  ],
+  "architecture_refs": [
+    "03.04 v5, 03.07 v120, 03.08 v30, 01.10 v94 and 22.05 v10.",
+    "Jira APBRA-160 selected maintenance proposal 11142 and actual-base governance PLAN 11147.",
+    "Verified PR201 transport release 959f39a89911b05e278feedd0cdc8edd8e1d77d9 and ordinary PR202 signed-in registration a1ec568eefae3e4e8d41cafe6be239dc7c84fb20, reviewed head 4d1314abc121bda921db2aee11d73897a38ee2a6, tree 011c81985aaa480494743f5a843ea456aa2d2660. Jira PLAN 11159 binds this registration to the actual PR202 merge and supersedes the unpublished PR201 execution."
+  ],
+  "allowed_paths": [
+    "apps/web/src/style.css"
+  ],
+  "restricted_paths": [
+    "apps/api/**",
+    "scripts/**",
+    "tests/**",
+    ".github/**",
+    "tasks/**",
+    "docs/**",
+    "infra/**",
+    ".env*",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "The signed-in Home Rows per page control displays the selected inset in both themes on the supported narrow and desktop layouts.",
+    "Keyboard selection changes the page size, and the native forced-colours control remains available.",
+    "Both permissible ordinary release orders preserve the original PR185 source, its other 27 entries and the separately authorised stylesheet bytes."
+  ],
+  "verification_required": [
+    "Verify protected main, actual invitation state and the effective ordinary issuance before posting the product PLAN.",
+    "Run web, build, keyboard and responsive browser checks, policy, canonical, bootstrap and the pinned Linux scanner. Preserve initial failures, skips and warnings.",
+    "Obtain independent APBRA-QA and APBRA-REVIEW on the final base/head, required hosted CI, then Haseeb's manual merge.",
+    "Preserve the actual signed-in registration and its product eligibility. Rehearse both product orders, and require a fresh plan, new exact base and fresh qualification if another product merges before this registration."
+  ],
+  "out_of_scope": [
+    "Invitation behaviour, other controls, Foundry, shared preview settings or data, dependencies, deployment and permissions."
+  ],
+  "escalate_when": [
+    "The input/output pair, current invitation or transport custody, live design or issued scope differs."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Issuance by Codex /root/pagination_delivery via GitHub haseebulhaque (30074430) as APBRA-DEVOPS 0.1. Refresh the FE execution actor after the real issuance merge.",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "a1ec568eefae3e4e8d41cafe6be239dc7c84fb20",
+  "branch": "agent/APBRA-DEV-FE/APBRA-160-workspace-pagination-chevron",
+  "source_ids": [
+    "apbra-160-screen-interactions",
+    "apbra-160-v10-direction-8519682",
+    "apbra-160-v10-contract-9404417",
+    "apbra-160-v10-scope-4063307",
+    "apbra-160-v10-governance-4391060"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "The ordinary three-file governance merge issues this single FE path. Product implementation requires its own PLAN, independent review, hosted CI and manual merge.",
+  "dependencies": [
+    "The ordinary PR201 transport release, the ordinary PR202 signed-in registration and its retained checker/task/test, owner selection 11142/11147 and fresh PLAN 11159; ordinary independent three-file Home issuance."
+  ]
+}
