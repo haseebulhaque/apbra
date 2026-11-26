@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "task_id": "APBRA-160",
+  "work_item_system": "jira",
+  "execution_id": "APBRA-160-20261126-V10-SIGNED-IN-DEMO",
+  "human_owner": "Haseeb Ul Haque",
+  "assigned_agent": "APBRA-DEVOPS",
+  "agent_card_version": "0.1",
+  "risk_class": "R4",
+  "objective": "Connect the normal signed-in report journey to the released isolated v10 transport for one disposable organisation and one private six-row synthetic work-order case.",
+  "requirements": [
+    "Haseeb selected the eight application files, four tests and authenticated setup in the disposable organisation in Jira APBRA-160 comment 11132. Comment 11137 approves the separate three-file registration. PLAN 11153 records the executing actor, actual merged transport and source versions.",
+    "Bind the current company, actor, native session, active membership, private case, request and context versions, tenant settings, granted purpose and complete input digest on the server. Configure the selected isolated tenant through authenticated versioned settings. Admit only a mutually qualified private host and receiver for explicit saved agent version 10, using the released transport. Preserve shared v7 and the historical handoff and reservation contracts.",
+    "Allow deliberate, separate browser actions for requirement analysis and full report generation, with ordinary human confirmation between them. Atomically claim each durable case/stage slot before dispatch. Recheck authority, expiry and current inputs immediately before dispatch and during retrieval. Navigation, reload, replay, concurrent clients, new client keys and process restart cannot replenish a consumed slot. Retain uncertain or failed attempts.",
+    "Keep the full-report purpose and fingerprints in the immutable admission before dispatch. Send the full permitted source and current confirmed requirements. Foundry and its authorised tools generate and compile the complete editable project. Keep legacy analysis and design receipt meanings and guard the legacy design intake.",
+    "Associate the qualified response, producing tool and original native file with the same admitted operation. Validate actual case access, original bytes, bounds, safe package contents and provenance before protected save and download. Present service authorship, local validation, authenticated download, Desktop verification and business acceptance separately. Keep ambiguous receipts and supporting files accurately labelled.",
+    "Any later paid demonstration requires independent analysis and report opportunities, actual current runtime identity and rights, approved current-period exposure and expiry, and a fresh case-specific host attestation. This registration performs no live operation and grants no new spending or cloud permissions."
+  ],
+  "adrs": [
+    "docs/decisions/foundry-v10-report-transport.md"
+  ],
+  "architecture_refs": [
+    "Confluence 03.08 v30 (9404417), 03.07 v120 (8519682), 01.10 v94 (4063307) and 22.05 v10 (4391060), re-read for PLAN 11153. The original v10 source register identifies the four controlling sources.",
+    "Ordinary PR201 merge 959f39a89911b05e278feedd0cdc8edd8e1d77d9 with parents bfb87010d2a4f7571069522ce57438a35f720391 and 5f4f082fb17358ed77d3c119d8f46ccd628ac179, tree 5429c192037029c4c58661a3d49f2b79a712e2db. PR200 issued the two released transport paths.",
+    "Approved proposal SHA-256 055add9eaed475357fd52be90d662179dd09b1b930c65f45765bbf59420e4394 and separate scope review 174480f3889271dea829dbd1b19d7de4fa2f1079adf042edd2a4b22ba639c3b1, recorded in Jira 11132. The separate registration selection is recorded in 11137."
+  ],
+  "allowed_paths": [
+    "apps/api/src/apbra_api/api.py",
+    "apps/api/src/apbra_api/native_response_api.py",
+    "apps/api/src/apbra_api/foundry_v10_demo_receiver.py",
+    "apps/api/src/apbra_api/foundry_browser_handoff.py",
+    "apps/api/src/apbra_api/foundry_memory_handoff.py",
+    "apps/api/src/apbra_api/request_outputs.py",
+    "apps/web/src/api.ts",
+    "apps/web/src/BusinessReportJourney.tsx",
+    "apps/api/tests/test_foundry_v10_demo_receiver.py",
+    "apps/api/tests/test_native_response_integration.py",
+    "apps/web/src/BusinessReportJourney.test.tsx",
+    "apps/web/e2e/native-outputs.spec.ts"
+  ],
+  "restricted_paths": [
+    ".github/**",
+    "docs/**",
+    "tasks/**",
+    "scripts/**",
+    "tests/bootstrap/**",
+    "apps/web/src/style.css",
+    "apps/api/alembic/**",
+    "packages/**",
+    "workers/**",
+    "infra/**",
+    ".env*",
+    "**/.env",
+    "local-data/**"
+  ],
+  "acceptance_criteria": [
+    "The exact twelve-path product branch becomes eligible only after the verified three-file registration has actually been manually merged. Historical receipts, task records, frozen invitation bytes and prior governance expectations remain verifiable at their own releases. Incompatible later integration needs explicit and separately reviewed authority.",
+    "Through the normal signed-in product path demonstrate two deliberate user actions and explicit confirmation, durable one-use admission, complete original input, version-specific output, current private case access, original file integrity and truthful recovery on denial, failure, ambiguous origin or expiry.",
+    "Demonstrate isolation and replay handling across independent sessions, processes, cases and settings, including revoked access, unsigned or stale handoffs and supporting-file false positives. Establish the offline behavior using disposable data; separately record actual service generation, authenticated byte-identical download and Power BI Desktop open, edit, save/reopen and six-row fidelity when observed."
+  ],
+  "verification_required": [
+    "Refresh protected main, Jira, controlling sources, actual actor and the exact product execution in a fresh PLAN after the ordinary registration merge. Require canonical governance in direct, GitHub merge and ordinary release contexts, policy, full bootstrap and the unmodified pinned full-history Linux scan.",
+    "Exercise signed-in API and PostgreSQL concurrency, stage admission, runtime handoffs and protected native files. Run full API and migrations, lint, types, both bridges, web tests/build, complete browser suite and normal keyboard/mobile download checks. Preserve raw failed attempts and all skips and warnings.",
+    "Obtain genuinely separate security and exact-revision release review on final base/head; record applicable QA and required hosted CI before Haseeb's manual merge. Use disposable resources isolated from existing previews."
+  ],
+  "out_of_scope": [
+    "Shared v7 routing, agent changes, Azure role grants, other tenants or cases, owner data and existing preview mutation, schema migrations, dependency edits, release/deployment into production, and automatic merge.",
+    "Any broader UI changes, invitation composition, Home dropdown registration or stylesheet edits, model-controlled permissions and APBRA compilation of a substitute report."
+  ],
+  "escalate_when": [
+    "An additional path, source decision, tenant, privilege, allowance or unsupported file-provenance mechanism is needed.",
+    "A protected release, candidate, review or active execution grant differs from its evidence, or either browser action cannot enforce its security and financial boundary."
+  ],
+  "task_mode": "IMPLEMENTATION",
+  "readiness": "READY_FOR_IMPLEMENTATION",
+  "actual_authenticated_actor": "Registration by Codex /root, signin_checker and signin_tests through GitHub haseebulhaque (30074430), APBRA-DEVOPS 0.1. Refresh the actual product actor in the post-merge PLAN.",
+  "human_initiator": "Haseeb Ul Haque",
+  "base_commit": "959f39a89911b05e278feedd0cdc8edd8e1d77d9",
+  "branch": "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-signed-in-demo",
+  "source_ids": [
+    "apbra-160-v10-contract-9404417",
+    "apbra-160-v10-direction-8519682",
+    "apbra-160-v10-scope-4063307",
+    "apbra-160-v10-governance-4391060"
+  ],
+  "owner_acceptance": "RECORDED",
+  "effective_release": "Only a verified ordinary manual merge of this three-file issuance enables the separate twelve-path product execution. A reviewed product and observed live evidence are distinct prerequisites for the owner demo.",
+  "dependencies": [
+    "Verified PR199, PR200 and reviewed two-file PR201 releases, accepted transport ADR, Jira 11132 and 11137 and actual-main registration PLAN 11153.",
+    "Passing exact-head reviews and hosted CI, Haseeb's ordinary manual merge, actual-main product PLAN and case-specific qualified runtime for any later live demonstration."
+  ]
+}
