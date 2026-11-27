@@ -15,6 +15,10 @@ from unittest.mock import patch
 
 import yaml
 
+from test_recovered_native_registration_scope import (
+    ACCOUNT_RELEASE, REGISTRATION_RELEASE, historical_git_blob,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 H = runpy.run_path(ROOT / 'scripts/check_ci_browser_registration_v3.py')
 P = runpy.run_path(ROOT / 'scripts/check_recovered_native_registration.py')
@@ -31,15 +35,12 @@ def render(value):
     return yaml.safe_dump(value, sort_keys=False)
 
 def registration_fixture_blob(name):
-    """Resolve the hash-frozen Reg7 phase without an unpublished commit identity."""
-    expected=H['manifest'](ROOT)['registration_fixture_files'][name]
-    current=(ROOT/name).read_bytes()
-    if hashlib.sha256(current).hexdigest()==expected:return current
-    commits=subprocess.check_output(['git','log','--format=%H','HEAD','--',name],cwd=ROOT,text=True).splitlines()
-    for commit in commits:
-        raw=subprocess.check_output(['git','show',commit+':'+name],cwd=ROOT)
-        if hashlib.sha256(raw).hexdigest()==expected:return raw
-    raise AssertionError('Exact Reg7 historical fixture is unavailable: '+name)
+    """Read one Reg7 fixture from its public release and confirm its original pin."""
+    expected = H['manifest'](ROOT)['registration_fixture_files'][name]
+    source = historical_git_blob(REGISTRATION_RELEASE, name)
+    if hashlib.sha256(source).hexdigest() != expected:
+        raise AssertionError('Exact Reg7 historical fixture differs: ' + name)
+    return source
 
 
 @contextmanager
@@ -209,12 +210,15 @@ class CiBrowserRegistration(unittest.TestCase):
         self.assertEqual(H['G'] & H['Q'], H['REG_FIXTURES'])
         self.assertFalse(H['G'] & H['N'])
         self.assertFalse(any(name.startswith(('apps/api/src/', 'apps/web/')) for name in H['G']))
-        frozen=H['manifest'](ROOT);current={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in H['REG_FIXTURES']}
-        registration=frozen['registration_fixture_files'];product={name:frozen['account_files'][name] for name in H['REG_FIXTURES']} if frozen['product_status']=='FROZEN' else None
-        self.assertTrue(current==registration or current==product)
+        frozen = H['manifest'](ROOT)
+        self.assertEqual(frozen['product_status'], 'FROZEN')
+        for name in H['REG_FIXTURES']:
+            self.assertEqual(hashlib.sha256(registration_fixture_blob(name)).hexdigest(),
+                             frozen['registration_fixture_files'][name])
+            account = historical_git_blob(ACCOUNT_RELEASE, name)
+            self.assertEqual(hashlib.sha256(account).hexdigest(), frozen['account_files'][name])
         faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
-        if current==registration:self.assertEqual(faults,[])
-        else:self.assertIn('V3 registration test-fixture phase differs',faults)
+        self.assertIn('V3 registration test-fixture phase differs',faults)
         for name, expected in H['IMMUTABLE_V2'].items():
             self.assertEqual(hashlib.sha256((ROOT / name).read_bytes()).hexdigest(), expected)
         for name in H['G']:
@@ -378,6 +382,13 @@ class CiBrowserRegistration(unittest.TestCase):
         for main,expected in [('missing',False),('registration',True),('account',True),('native',True),('partial',False),('bad-governance',False),('bad-fixture',False)]:
             with self.subTest(main=main),frozen_release_model(main,'native') as state:
                 self.assertEqual(H['registration_published'](state['root']),expected)
+        with frozen_release_model('registration', 'registration') as state:
+            root = state['root']
+            self.assertEqual(H['errors'](root, None, None, {}, H['R'], H['G']), [])
+            name = 'apps/api/tests/test_native_response_integration.py'
+            (root / name).write_bytes(registration_fixture_blob(name) + b'\n')
+            self.assertIn('V3 registration test-fixture phase differs',
+                          H['errors'](root, None, None, {}, H['R'], H['G']))
 
     def test_exact_historical_adapters_restore_647_bytes_and_reject_missing_duplicate_or_inexact(self):
         for name in H['HISTORICAL_COPY_MODULES']:

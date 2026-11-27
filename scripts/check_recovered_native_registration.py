@@ -2460,3 +2460,361 @@ def signedin_state(root, readback, metadata, raw):
     return _prior_signedin_state_for_pager(
         root, dict(readback, entries=previous_entry), dict(metadata, changed=changed, matches_commit=matches), raw,
     )
+
+# APBRA-160 preserve historical fixture assertions through the signed-in demo.
+from contextvars import ContextVar
+from functools import wraps
+
+HISTORICAL_FIXTURE_MARKER = (
+    b"\n# APBRA-160 preserve historical fixture assertions " b"through the signed-in demo.\n"
+)
+HISTORICAL_FIXTURE_BASE = "083c47e9d274f5c955dbf37d4368c1682044bacc"
+HISTORICAL_FIXTURE_HOME_HEAD = "cc7bdc600c98997291a6866c16b68dfd5e07f9b8"
+HISTORICAL_FIXTURE_HOME_TREE = "cd21a34b0ce663117686aa1a64ee9a2a66988b5e"
+HISTORICAL_FIXTURE_BRANCH = "agent/APBRA-DEVOPS/APBRA-160-foundry-v10-historical-fixtures"
+HISTORICAL_FIXTURE_RECEIVER_TEST = "apps/api/tests/test_foundry_memory_handoff.py"
+HISTORICAL_FIXTURE_TEST_DIGESTS = {
+    HISTORICAL_FIXTURE_RECEIVER_TEST: "e1ee35345936152e1d09cc1227b5e8550c19d0469f3b2cfc48f4a8aacf82af43",
+    "tests/bootstrap/test_recovered_native_registration_scope.py": "64d79dfd6207262f530a88ff76f1d626b66b4b5bdba39bd64758f7bad89210fd",
+    "tests/bootstrap/test_ci_browser_registration_v3_scope.py": "049e83c3e801a1b52e83c538b09758e306cb744bb2174871f417b850a20b2f35",
+}
+HISTORICAL_FIXTURE_PATHS = frozenset(HISTORICAL_FIXTURE_TEST_DIGESTS) | {INVITATION_READBACK_WRAPPER}
+HISTORICAL_FIXTURE_ORIGINALS = {
+    INVITATION_READBACK_WRAPPER: "40d05c012efb74d5382848b78bcd5d3d71948d6468c5864108c8b702d15f65cb",
+    HISTORICAL_FIXTURE_RECEIVER_TEST: "c5866aa20e4fa8557aee56967bb319385d38b675bec232414660d04aedaecd77",
+    "tests/bootstrap/test_recovered_native_registration_scope.py": "101db1fc1b584acd8e601f9bf062cfe5dda46e45c92b03be7767fddc3c198bf9",
+    "tests/bootstrap/test_ci_browser_registration_v3_scope.py": "3e217e4c3a14310c876f5969b8f1b0bd9684371373b20f4e9a6daec6078762ef",
+}
+HISTORICAL_FIXTURE_CHECKER_SHA = "f1ed7781cfa32ed828f77ff038989659ef54e3359fac9c7eb1e16bb845791a99"
+_before_historical_fixture_branch = issued_v7_branch
+_before_historical_fixture_packet = v10_packet
+_before_historical_fixture_pager = pager_state
+_before_historical_fixture_signedin = signedin_state
+_before_historical_fixture_v10_issuance = v10_issuance_state
+_before_historical_fixture_stage = stage_authorities
+_before_historical_fixture_browser = metadata_browser_witness
+_before_historical_fixture_released_browser = released_invitation_browser_witness
+_before_historical_fixture_qualified = qualified_paths
+_historical_fixture_invocation = ContextVar("historical_fixture_invocation", default=None)
+
+
+def historical_fixture_invocation(check):
+    @wraps(check)
+    def run(root, *args, **kwargs):
+        active = _historical_fixture_invocation.get()
+        if active is not None and active[0] == root:
+            return check(root, *args, **kwargs)
+        token = _historical_fixture_invocation.set((root, {}))
+        try:
+            return check(root, *args, **kwargs)
+        finally:
+            _historical_fixture_invocation.reset(token)
+
+    return run
+
+
+def historical_fixture_proof(root, key, verify):
+    # A single checker traversal calls the same physical readers through
+    # several earlier modules. Reuse their proved results only in that
+    # traversal. Separate checker calls always reread refs and working bytes.
+    active = _historical_fixture_invocation.get()
+    if active is None or active[0] != root:
+        return verify()
+    proofs = active[1]
+    if key not in proofs:
+        proofs[key] = verify()
+    return proofs[key]
+
+
+def issued_v7_branch(branch):
+    return branch == HISTORICAL_FIXTURE_BRANCH or _before_historical_fixture_branch(branch)
+
+
+def historical_fixture_present(root):
+    if (not safe(root, INVITATION_READBACK_WRAPPER)
+            or HISTORICAL_FIXTURE_MARKER not in (root / INVITATION_READBACK_WRAPPER).read_bytes()):
+        return False
+    if pager_present(root):
+        return True
+    if not os.path.lexists(root / ".git"):
+        return False
+
+    def checkout_reaches_base():
+        # Earlier fixtures intentionally use the current wrapper without the
+        # later packet. A real PR203 descendant cannot opt out by deleting it.
+        return any(subprocess.run(
+            ["git", "--no-replace-objects", "-C", str(root), "merge-base", "--is-ancestor",
+             HISTORICAL_FIXTURE_BASE, target],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+        ).returncode == 0 for target in ("refs/remotes/origin/main", "HEAD"))
+
+    return historical_fixture_proof(root, "checkout_reaches_base", checkout_reaches_base)
+
+
+def historical_fixture_packet(root):
+    for path in HISTORICAL_FIXTURE_PATHS:
+        if not safe(root, path) or (root / path).stat().st_mode & 0o111:
+            raise ValueError("Unsafe or incomplete historical fixture correction: " + path)
+    checker = (root / INVITATION_READBACK_WRAPPER).read_bytes()
+    declaration = ('HISTORICAL_FIXTURE_CHECKER_SHA = "' + HISTORICAL_FIXTURE_CHECKER_SHA + '"').encode()
+    normalized = b'HISTORICAL_FIXTURE_CHECKER_SHA = "' + b"0" * 64 + b'"'
+    prefix = checker.partition(HISTORICAL_FIXTURE_MARKER)[0]
+    if (checker.count(HISTORICAL_FIXTURE_MARKER) != 1 or checker.count(declaration) != 1
+            or hashlib.sha256(prefix).hexdigest() != HISTORICAL_FIXTURE_ORIGINALS[INVITATION_READBACK_WRAPPER]
+            or hashlib.sha256(checker.replace(declaration, normalized, 1)).hexdigest()
+            != HISTORICAL_FIXTURE_CHECKER_SHA):
+        raise ValueError("Historical fixture correction or retained PR203 checker bytes differ")
+    for path, expected in HISTORICAL_FIXTURE_TEST_DIGESTS.items():
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != expected:
+            raise ValueError("Historical fixture correction test bytes differ: " + path)
+    return prefix
+
+
+def v10_packet(root):
+    if not historical_fixture_present(root):
+        return _before_historical_fixture_packet(root)
+    prefix = historical_fixture_packet(root)
+    pager_packet(root, checker_bytes=prefix)
+    marker = b"\n# APBRA-160 issue the one-file Home pagination " b"correction on the actual PR202 merge.\n"
+    return signedin_packet(root, checker_bytes=prefix.partition(marker)[0])
+
+
+def historical_fixture_checkout_changed(root, readback, metadata, main, head):
+    if head == main:
+        return False
+    paths = HISTORICAL_FIXTURE_PATHS
+    changed, git, ref = metadata["changed"], metadata["git"], metadata["ref"]
+    if changed(root, main, head) & paths:
+        return True
+    frozen, branch = readback["FROZEN"], readback["INVITATION_BRANCH"]
+    if (readback["parents"](root, git, head) == [frozen, main]
+            and git(root, "branch", "--show-current").decode().strip() == branch
+            and readback["actual_branch"](root, metadata, branch)
+            and os.environ.get("PR_HEAD_SHA") in (None, "", head)
+            and os.environ.get("GITHUB_BASE_REF") in (None, "", "main")):
+        # PR185's exact direct refresh adds a single merge to main through its
+        # second parent. Its frozen first-parent history predates this proof.
+        invitation = changed(root, readback["FROZEN_PARENT"], frozen)
+        style = pager_style(root, metadata, head)
+        if (len(invitation) == 28 and PAGER_CSS in invitation
+                and ref(root, frozen + "^{tree}") == readback["FROZEN_TREE"]
+                and style in (INVITE_BEFORE, INVITE_AFTER)
+                and not git(root, "status", "--porcelain", "--untracked-files=all", "-z")):
+            pager_invitation_head(root, metadata, readback, main, head, invitation, style)
+            return False
+    return bool(readback["first_touch"](root, metadata, main, head, paths))
+
+
+def historical_fixture_correction_state(root, readback, metadata, raw):
+    """Authenticate the exact Home merge and correction before using either historical view."""
+    readback["require_checkout"](root, metadata)
+    git, ref, ancestor = metadata["git"], metadata["ref"], metadata["ancestor"]
+    base, paths = HISTORICAL_FIXTURE_BASE, HISTORICAL_FIXTURE_PATHS
+    main, head = ref(root, metadata["MAIN"]), ref(root, "HEAD")
+    parents = readback["parents"]
+    if (ref(root, base + "^{tree}") != HISTORICAL_FIXTURE_HOME_TREE
+            or parents(root, git, base) != [PAGER_PRIOR_RELEASE, HISTORICAL_FIXTURE_HOME_HEAD]
+            or git(root, "show", "-s", "--format=%s", base).decode().strip()
+            != "Merge pull request #203 from haseebulhaque/" + PAGER_ISSUER
+            or not metadata["owner_merge"](root, base, PAGER_ISSUER, PAGER_PATHS)
+            or not ancestor(root, base, main) or not ancestor(root, main, head)):
+        raise ValueError("Historical fixture correction requires the original PR203 merge on protected main")
+    historical_fixture_packet(root)
+    for path, expected in HISTORICAL_FIXTURE_ORIGINALS.items():
+        mode = git(root, "ls-tree", base, "--", path).split(b" ", 1)[0]
+        if mode != b"100644" or hashlib.sha256(git(root, "show", base + ":" + path)).hexdigest() != expected:
+            raise ValueError("Original historical fixture entry differs: " + path)
+    if main == base:
+        if not docs_checkout_candidate(root, readback, metadata, raw, base, HISTORICAL_FIXTURE_BRANCH, paths):
+            raise ValueError("Historical fixture correction requires its clean direct or hosted four-file candidate")
+        return main, head, None
+
+    first_touch = readback["first_touch"]
+    release = first_touch(root, metadata, base, main, paths)
+    if (release is None or parents(root, git, release)[0] != base
+            or not metadata["owner_merge"](root, release, HISTORICAL_FIXTURE_BRANCH, paths)
+            or (release != main and first_touch(root, metadata, release, main, paths))
+            or historical_fixture_checkout_changed(root, readback, metadata, main, head)
+            or not all(metadata["matches_commit"](root, paths, revision, raw)
+                       for revision in dict.fromkeys((release, main, head)))):
+        raise ValueError("Historical fixture correction requires its ordinary merge and continued exact entries")
+    return main, head, release
+
+
+def historical_fixture_state(root):
+    """Use the unprojected Git reader to authenticate the correction transition."""
+    def verify():
+        readback, metadata, original = _v10_previous_sources(root)
+        return historical_fixture_correction_state(root, readback, metadata, original["raw"])
+
+    return historical_fixture_proof(root, "correction", verify)
+
+
+def historical_fixture_previous_changes(metadata, release):
+    changed = metadata["changed"]
+
+    def before(root, lower, upper):
+        delta = changed(root, lower, upper)
+        if release and upper == release and lower == HISTORICAL_FIXTURE_BASE:
+            return delta - {INVITATION_READBACK_WRAPPER}
+        return delta
+
+    return dict(metadata, changed=before)
+
+
+def pager_state(root, readback, metadata, raw):
+    if not historical_fixture_present(root):
+        return _before_historical_fixture_pager(root, readback, metadata, raw)
+    return historical_fixture_proof(root, "pager", lambda: historical_fixture_pager_state(root))
+
+
+def historical_fixture_pager_state(root):
+    # These are physical states. Use the real reader here so that a projected
+    # caller cannot supply weaker ancestry, comparison or filesystem checks.
+    readback, metadata, original = _v10_previous_sources(root)
+    raw = original["raw"]
+    _, head, release = historical_fixture_state(root)
+    wrapper = {INVITATION_READBACK_WRAPPER}
+    previous_checker = historical_fixture_packet(root)
+    matches = metadata["matches_commit"]
+
+    def previous_matches(origin, paths, revision, read):
+        if paths == PAGER_PATHS and metadata["ref"](origin, revision) == HISTORICAL_FIXTURE_BASE:
+            return (matches(origin, wrapper, revision, lambda _root, _path: previous_checker)
+                    and matches(origin, paths - wrapper, revision, read))
+        return matches(origin, paths, revision, read)
+
+    def previous_entries(origin, sources, revision, paths):
+        entries = readback["entries"]
+        if paths == PAGER_PATHS and sources["ref"](origin, revision) == head:
+            return entries(origin, sources, HISTORICAL_FIXTURE_BASE, wrapper) + entries(
+                origin, sources, revision, paths - wrapper,
+            )
+        return entries(origin, sources, revision, paths)
+
+    projected = historical_fixture_previous_changes(metadata, release)
+    return _before_historical_fixture_pager(
+        root, dict(readback, entries=previous_entries), dict(projected, matches_commit=previous_matches), raw,
+    )
+
+
+def signedin_state(root, readback, metadata, raw):
+    if not historical_fixture_present(root):
+        return _before_historical_fixture_signedin(root, readback, metadata, raw)
+
+    def verify():
+        reader, source, original = _v10_previous_sources(root)
+        _, _, release = historical_fixture_state(root)
+        return _before_historical_fixture_signedin(
+            root, reader, historical_fixture_previous_changes(source, release), original["raw"],
+        )
+
+    return historical_fixture_proof(root, "signedin", verify)
+
+
+def v10_issuance_state(root, readback, metadata, raw):
+    if historical_fixture_present(root):
+        _, _, release = historical_fixture_state(root)
+        metadata = historical_fixture_previous_changes(metadata, release)
+    return _before_historical_fixture_v10_issuance(root, readback, metadata, raw)
+
+
+@historical_fixture_invocation
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    selected = branch == HISTORICAL_FIXTURE_BRANCH
+    if not historical_fixture_present(root):
+        if selected:
+            return (), ["APBRA-160 historical fixture correction packet is absent"]
+        return _before_historical_fixture_stage(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    try:
+        v10_packet(root)
+        bootstrap_tests = HISTORICAL_FIXTURE_PATHS - {
+            INVITATION_READBACK_WRAPPER, HISTORICAL_FIXTURE_RECEIVER_TEST,
+        }
+        if paths and paths & bootstrap_tests and not selected:
+            raise ValueError("Historical fixture correction tests require their exact selected branch")
+        physical = os.path.lexists(root / ".git")
+        # The earlier memory/runtime checkers still evaluate their original
+        # literal task scopes. Any real receiver-test change is ruled out by
+        # the same exact correction checkout proof as the bootstrap files.
+        release = historical_fixture_state(root)[2] if physical else None
+        if selected:
+            if not physical or identity != "APBRA-160" or paths != HISTORICAL_FIXTURE_PATHS:
+                raise ValueError("Historical fixture correction requires its issued identity, exact scope and Git checkout")
+            if release:
+                raise ValueError("Historical fixture correction was already released")
+        authorities, faults = _before_historical_fixture_stage(
+            root, catalog, schema_errors, task_errors, identity, None if selected else branch,
+            None if selected else paths,
+        )
+        if not selected:
+            return authorities, faults
+        task = dict(
+            json.loads((root / V10_TASK).read_bytes()),
+            branch=HISTORICAL_FIXTURE_BRANCH, base_commit=HISTORICAL_FIXTURE_BASE,
+            execution_id="APBRA-160-20261127-HISTORICAL-FIXTURE-CORRECTION",
+            objective="Run historical assertions on immutable sources and keep current product validation separate.",
+            allowed_paths=sorted(HISTORICAL_FIXTURE_PATHS),
+            restricted_paths=[".github/**", "docs/**", "tasks/**", "infra/**", "packages/**", "workers/**",
+                              ".env*", "**/.env", "local-data/**"],
+            actual_authenticated_actor="Codex through GitHub haseebulhaque (30074430), APBRA-DEVOPS 0.1.",
+        )
+        return authorities + ((task, HISTORICAL_FIXTURE_PATHS),), faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return (), ["APBRA-160 historical fixture correction denied: " + str(error)]
+
+
+def released_invitation_browser_witness(root, checker, context, overlap, candidate, readback,
+                                        invitation, prior):
+    if historical_fixture_present(root):
+        historical_fixture_state(root)
+        previous_projection = readback["historical_with_invitation"]
+
+        def project(original, paths, previous, protected):
+            preserved = previous_projection(original, paths, previous, protected)
+
+            def files_match(origin, expected, ref=None):
+                if ref not in (None, "refs/remotes/origin/main") or HISTORICAL_FIXTURE_RECEIVER_TEST not in expected:
+                    return preserved["files_match"](origin, expected, ref)
+                retained = {HISTORICAL_FIXTURE_RECEIVER_TEST: expected[HISTORICAL_FIXTURE_RECEIVER_TEST]}
+                others = {path: digest for path, digest in expected.items() if path not in retained}
+                return (preserved["files_match"](origin, others, ref)
+                        and original["files_match"](origin, retained, HISTORICAL_FIXTURE_BASE))
+
+            return dict(preserved, files_match=files_match)
+
+        readback = dict(readback, historical_with_invitation=project)
+    return _before_historical_fixture_released_browser(
+        root, checker, context, overlap, candidate, readback, invitation, prior,
+    )
+
+
+def metadata_browser_witness(root, checker, context, overlap, candidate, module, old):
+    witness = _before_historical_fixture_browser(root, checker, context, overlap, candidate, module, old)
+    if witness or not historical_fixture_present(root):
+        return witness
+    if (context != checker["delivery_context"](root) or context[1] == METADATA_ISSUANCE_BRANCH
+            or not module["released_issuance"](root, old["raw"])):
+        return set()
+    readback, metadata, actual = _v10_previous_sources(root)
+    main, _, _, _, invitation, _ = pager_state(root, readback, metadata, actual["raw"])
+    if invitation:
+        return set()
+    active_invitation = None
+    if context[0] == "APBRA-184":
+        modules, faults = finite_modules(root)
+        active_invitation = next((item for item in modules if item["KEY"] == "184"), None)
+        if faults or not active_invitation or context[1:] != (active_invitation["B"], active_invitation["P"]):
+            return set()
+    historical, _, _, _ = invitation_readback_context(root)
+    witness = released_invitation_browser_witness(
+        root, checker, context, overlap, candidate, historical, active_invitation or {"P": set()}, main,
+    )
+    if active_invitation and witness == set(overlap):
+        return active_invitation["qualified_paths"](root, checker, *context, overlap, candidate)
+    return witness
+
+
+@historical_fixture_invocation
+def qualified_paths(root, checker, identity, branch, paths, overlap, candidate):
+    return _before_historical_fixture_qualified(root, checker, identity, branch, paths, overlap, candidate)
