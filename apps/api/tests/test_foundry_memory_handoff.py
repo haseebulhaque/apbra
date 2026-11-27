@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
+import os
+import subprocess
 import threading
 import time
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -778,8 +782,72 @@ CATALOGUE_RECEIVER_EDITS = [
 ]
 
 
+# The original public receiver was released by the recovered-account integration.
+# The supported API checks run in full Git checkouts. Both physically supplied
+# receiver revisions must select exactly the same immutable release bytes.
+_RELEASED_RECEIVER_SHA256 = "d5468cb421963cba6482cee13a6228a513537da0d908b8031955d33a84107a3f"
+_SIGNED_IN_RECEIVER_SHA256 = "8da32e812747898452988f3e7ddf8161e983b24b69f817b2cd25d85b9bd2711e"
+
+
+def _historical_receiver_source(source: str, *, root: Path | None = None) -> str:
+    accepted = {_RELEASED_RECEIVER_SHA256, _SIGNED_IN_RECEIVER_SHA256}
+    if hashlib.sha256(source.encode("utf-8")).hexdigest() not in accepted:
+        raise ValueError("Unrecognized receiver source")
+    if hashlib.sha256(Path(m.__file__).read_bytes()).hexdigest() not in accepted:
+        raise ValueError("Unrecognized physical receiver bytes")
+    checkout = Path(__file__).resolve().parents[3] if root is None else root
+    try:
+        original = subprocess.check_output(
+            ["/usr/bin/git", "--no-replace-objects", "cat-file", "blob",
+             "5c5611cd59a4f4597c473a1fd7cc3982eb7a698e:"
+             "apps/api/src/apbra_api/foundry_memory_handoff.py"],
+            cwd=checkout, stderr=subprocess.PIPE,
+            env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                 "GIT_CEILING_DIRECTORIES": str(checkout.parent)},
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError("Historical receiver Git object unavailable") from exc
+    if hashlib.sha256(original).hexdigest() != _RELEASED_RECEIVER_SHA256:
+        raise ValueError("Historical receiver content differs")
+    return original.decode("utf-8")
+
+
+def test_historical_receiver_source_requires_exact_supplied_bytes(tmp_path: Path):
+    source = Path(m.__file__).read_text()
+    historical = _historical_receiver_source(source)
+    assert _historical_receiver_source(historical) == historical
+    for original in (source, historical):
+        for changed in (original[1:], original + original, original + "# unrelated edit\n"):
+            with pytest.raises(ValueError, match="Unrecognized receiver source"):
+                _historical_receiver_source(changed, root=tmp_path)
+    (tmp_path / ".git").write_text("gitdir: absent-object-database\n")
+    with pytest.raises(ValueError, match="Historical receiver Git object unavailable"):
+        _historical_receiver_source(historical, root=tmp_path)
+
+
+def test_historical_receiver_source_rechecks_returned_object(tmp_path: Path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: b"incorrect object")
+    with pytest.raises(ValueError, match="Historical receiver content differs"):
+        _historical_receiver_source(Path(m.__file__).read_text(), root=tmp_path)
+
+
+@pytest.mark.parametrize("line_ending", [b"\r\n", b"\r"])
+def test_historical_receiver_source_checks_physical_line_endings(
+    tmp_path: Path, monkeypatch, line_ending: bytes,
+):
+    original = Path(m.__file__).read_bytes()
+    receiver = tmp_path / "foundry_memory_handoff.py"
+    receiver.write_bytes(original.replace(b"\n", line_ending))
+    monkeypatch.setattr(m, "__file__", str(receiver))
+    assert receiver.read_text().encode("utf-8") == original
+    with pytest.raises(ValueError, match="Unrecognized physical receiver bytes"):
+        without_catalogue_receiver_changes(receiver.read_text())
+
+
 def without_catalogue_receiver_changes(source):
-    return _without_catalogue_stage(without_preview_receiver_changes(source))
+    historical = _historical_receiver_source(source)
+    return _without_catalogue_stage(without_preview_receiver_changes(historical))
 
 
 def _without_catalogue_stage(source):
@@ -794,7 +862,7 @@ def test_catalogue_receiver_expansion_preserves_exact_previous_historical_guard(
     import hashlib
     from pathlib import Path
 
-    current = Path(m.__file__).read_text()
+    current = _historical_receiver_source(Path(m.__file__).read_text())
     assert (
         hashlib.sha256(without_catalogue_receiver_changes(current).encode()).hexdigest()
         == "b2ca368368ff858174bb920ced15fee6d9f0b738e4f48fd11c933e37f2298559"
@@ -1217,7 +1285,7 @@ def test_preview_receiver_preserves_exact_previously_tested_receiver():
     import hashlib
     from pathlib import Path
 
-    current = Path(m.__file__).read_text()
+    current = _historical_receiver_source(Path(m.__file__).read_text())
     assert hashlib.sha256(without_preview_receiver_changes(current).encode()).hexdigest() == (
         "c718043e596e154bb4c1e9ffc7b58be660cb376e564b54770fe4ab4c82b0bf60"
     )

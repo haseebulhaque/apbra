@@ -1,10 +1,20 @@
 """Public canonical phases preserve historical intent without private ancestry."""
-import ast,copy,hashlib,json,re,runpy,shutil,subprocess,tempfile,unittest
+import ast,copy,hashlib,json,os,re,runpy,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[2]
 H=runpy.run_path(ROOT/'scripts/check_recovered_native_registration.py')
 C=runpy.run_path(ROOT/'scripts/check_bootstrap.py')
+REGISTRATION_RELEASE = '257695d3931830f340f313c1c9ebcd305e7ae11d'
+ACCOUNT_RELEASE = 'f3e241bbca1358b3cc24738f1a523cadc9a2066f'
+
+
+def historical_git_blob(revision, path):
+    return subprocess.check_output(
+        ['git', '--no-replace-objects', 'show', f'{revision}:{path}'], cwd=ROOT,
+    )
+
+
 class RecoveredNativePublicRegistration(unittest.TestCase):
     def test_current_canonical_governance_only_phase_and_literal_scope(self):
         self.assertEqual((len(H['G']),len(H['Q']),len(H['N'])),(21,75,17))
@@ -16,16 +26,19 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         self.assertTrue(all('*' not in n and '..' not in n.split('/') for n in H['G']|H['Q']|H['N']))
         frozen=H['manifest'](ROOT);registration=frozen['registration_fixture_files']
         product={name:frozen['account_files'][name] for name in H['REG_FIXTURES']}
-        current={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in H['REG_FIXTURES']}
-        self.assertIn(current,[registration,product])
+        # Each frozen map describes an earlier public release. The live tree is
+        # checked separately below when it claims that earlier authority.
+        for revision, expected in ((REGISTRATION_RELEASE, registration), (ACCOUNT_RELEASE, product)):
+            inventory = {name: hashlib.sha256(historical_git_blob(revision, name)).hexdigest()
+                         for name in H['REG_FIXTURES']}
+            self.assertEqual(inventory, expected, revision)
         faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['G'])[0]
         if H['v3_present'](ROOT):
             self.assertIn('V3 registration requires exact finite G41 CI/governance scope',faults)
             current_faults=C['check'](ROOT,active_task_id='APBRA-183',active_branch=H['R'],changed_paths=H['scope'](ROOT,'G'))[0]
-            if current==registration:self.assertEqual(current_faults,[])
-            else:self.assertIn('V3 registration test-fixture phase differs',current_faults)
-        elif current==registration:self.assertEqual(faults,[])
-        else:self.assertIn('Public registration test fixtures differ from their frozen phase',faults)
+            self.assertIn('V3 registration test-fixture phase differs',current_faults)
+        else:
+            self.assertIn('Public registration test fixtures differ from their frozen phase',faults)
     def test_every_registration_omission_foreign_product_and_branch_is_rejected(self):
         for name in H['G']:
             self.assertTrue(H['errors'](ROOT,{}, {},{},H['R'],H['G']-{name}),name)
@@ -173,15 +186,14 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         case='apps/api/tests/test_native_case_files.py';response='apps/api/tests/test_native_response_integration.py'
         marker='@pytest.mark.usefixtures("approved_report_authorization_clock")\n'
         module='\npytestmark = pytest.mark.usefixtures("approved_report_authorization_clock")\n'
+        frozen = H['manifest'](ROOT)
         for name,added in [(case,marker),(response,module)]:
-            frozen=H['manifest'](ROOT);current=(ROOT/name).read_bytes();expected=frozen['registration_fixture_files'][name]
-            self.assertIn(hashlib.sha256(current).hexdigest(),{expected,frozen['account_files'][name]})
-            commits=subprocess.check_output(['git','log','--format=%H','HEAD','--',name],cwd=ROOT,text=True).splitlines()
-            snapshots=[subprocess.check_output(['git','show',commit+':'+name],cwd=ROOT) for commit in commits]
-            snapshots=[raw for raw in snapshots if hashlib.sha256(raw).hexdigest()==expected]
-            self.assertTrue(snapshots,'Exact frozen Reg7 historical fixture snapshot is unavailable: '+name)
-            registration=snapshots[0].decode();self.assertEqual(registration.count(added),1)
-            before=subprocess.check_output(['git','show',H['BASE']+':'+name],cwd=ROOT,text=True)
+            snapshot = historical_git_blob(REGISTRATION_RELEASE, name)
+            account = historical_git_blob(ACCOUNT_RELEASE, name)
+            self.assertEqual(hashlib.sha256(snapshot).hexdigest(), frozen['registration_fixture_files'][name])
+            self.assertEqual(hashlib.sha256(account).hexdigest(), frozen['account_files'][name])
+            registration=snapshot.decode();self.assertEqual(registration.count(added),1)
+            before=historical_git_blob(H['BASE'], name).decode()
             self.assertEqual(registration.replace(added,'',1),before)
             self.assertIn(name,H['G']&H['Q']);self.assertNotIn(name,H['N'])
             # Exact frozen readback preserves all original bodies, assertions and signatures in every phase.
@@ -198,9 +210,8 @@ class RecoveredNativePublicRegistration(unittest.TestCase):
         self.assertEqual(H['digest'](frozen['registration_fixture_files']),'904b32abd66a61bf2da0272130edcb3f496d11db1c6567714579d7f3fca389b7')
         self.assertNotIn(extra,H['G']|H['N']);self.assertNotIn(ui,H['G']|H['N'])
         self.assertEqual(len(H['G']),21);self.assertEqual(len(H['REG_FIXTURES']),7)
-if __name__=='__main__':unittest.main()
 
-# Additive finite-stage cross-phase controls; all historical tests above remain unchanged.
+# Additive finite-stage cross-phase controls.
 class AcceptedFiniteStageCrossPhase184(unittest.TestCase):
     def test_original_source_and_v3_helper_remain_byte_exact(self):
         for name in ['docs/source-register.json','scripts/check_ci_browser_registration_v3.py',
@@ -214,3 +225,140 @@ class AcceptedFiniteStageCrossPhase184(unittest.TestCase):
         for foreign in ['apps/api/src/apbra_api/api.py','apps/web/package.json','infrastructure/unissued.json']:
             self.assertTrue(C['check'](ROOT,active_task_id='APBRA-184',active_branch=stage['R'],changed_paths=scope|{foreign})[0])
         self.assertTrue(C['check'](ROOT,active_task_id='APBRA-85',active_branch=stage['R'],changed_paths=scope)[0])
+
+
+@patch.dict(os.environ, GITHUB_HEAD_REF='', GITHUB_BASE_REF='', PR_HEAD_SHA='')
+class ReleasedHistoricalFixtureCorrection(unittest.TestCase):
+    def test_exact_correction_and_separate_signedin_product_on_physical_git_trees(self):
+        from test_foundry_report_documentation_scope import (
+            CHECKER, FROZEN, INVITE, INVITE_PATHS, MAIN, PRODUCT_PATHS, WRAPPER,
+            ancestry_commit, check_query, commit, git, hosted_checkout, invitation_candidate,
+            ordinary, point_main, ref,
+        )
+        from test_foundry_v10_signed_in_demo_scope import PRODUCT, SIGNED_IN, propose
+        from test_native_invitation_release_readback import OVERLAP, PIN
+
+        base = H['HISTORICAL_FIXTURE_BASE']
+        branch = H['HISTORICAL_FIXTURE_BRANCH']
+        paths = H['HISTORICAL_FIXTURE_PATHS']
+        memory_test = 'apps/api/tests/test_foundry_memory_handoff.py'
+        stylesheet = 'apps/web/src/style.css'
+        self.assertEqual(paths, {WRAPPER, memory_test, 'tests/bootstrap/test_recovered_native_registration_scope.py',
+                                 'tests/bootstrap/test_ci_browser_registration_v3_scope.py'})
+
+        with tempfile.TemporaryDirectory(prefix='apbra-fixture-release-') as directory:
+            root = Path(directory)
+            git(root, 'init', '-q', '-b', 'main')
+            git(root, 'fetch', '--no-tags', str(ROOT), base + ':' + MAIN, FROZEN + ':refs/fixtures/invitation')
+            git(root, 'reset', '--hard', base)
+            git(root, 'switch', '-c', branch)
+            releases = git(ROOT, 'log', '--first-parent', '--format=%H', f'{base}..{MAIN}',
+                           '--', WRAPPER).decode().splitlines()
+            for path in paths:
+                source = historical_git_blob(releases[-1], path) if releases else (ROOT / path).read_bytes()
+                (root / path).write_bytes(source)
+            head = commit(root, paths, 'Synthetic exact four-file fixture correction')
+            checker = runpy.run_path(root / CHECKER)
+            wrapper = runpy.run_path(root / WRAPPER)
+            correction = ('APBRA-160', branch, paths)
+            product = ('APBRA-160', PRODUCT, SIGNED_IN)
+            main = (None, 'main', set())
+            catalog = json.loads((root / 'agents/catalog.json').read_bytes())
+
+            def allow_with_browser_witness(context):
+                self.assertEqual(checker['delivery_context'](root), context)
+                self.assertEqual(check_query(root, checker, *context), [])
+                self.assertEqual(wrapper['qualified_paths'](root, checker, *context, OVERLAP, PIN),
+                                 set(OVERLAP) | PRODUCT_PATHS)
+
+            def allow_shape(context, protected, correction_release):
+                self.assertEqual(checker['delivery_context'](root), context)
+                self.assertEqual(wrapper['historical_fixture_state'](root),
+                                 (protected, ref(root), correction_release))
+
+            def deny_authority(context):
+                _, faults = wrapper['stage_authorities'](
+                    root, catalog, checker['schema_errors'], checker['task_errors'], *context,
+                )
+                self.assertTrue(faults, context)
+
+            allow_with_browser_witness(correction)
+            for wrong in (('APBRA-85', branch, paths), ('APBRA-160', branch, paths - {memory_test}),
+                          ('APBRA-160', branch, paths | {stylesheet}), product):
+                with self.subTest(context=wrong):
+                    deny_authority(wrong)
+            target = root / memory_test
+            target.write_bytes(target.read_bytes() + b'\n')
+            with self.assertRaisesRegex(ValueError, 'Historical fixture correction test bytes differ'):
+                wrapper['historical_fixture_state'](root)
+            git(root, 'restore', '--', memory_test)
+
+            hosted_checkout(root, base, head)
+            with patch.dict(os.environ, GITHUB_HEAD_REF=branch, GITHUB_BASE_REF='main', PR_HEAD_SHA=head):
+                allow_shape(correction, base, None)
+                with patch.dict(os.environ, PR_HEAD_SHA=base):
+                    with self.assertRaisesRegex(ValueError, 'clean direct or hosted four-file candidate'):
+                        wrapper['historical_fixture_state'](root)
+
+            tree = ref(root, head + '^{tree}')
+            wrong = ancestry_commit(root, tree, [head, base], f'Merge pull request #9961 from haseebulhaque/{branch}')
+            point_main(root, wrong)
+            with self.assertRaisesRegex(ValueError, 'requires its ordinary merge'):
+                wrapper['historical_fixture_state'](root)
+            released = ordinary(root, base, head, 9961, branch)
+            allow_shape(main, released, released)
+
+            # PR185's direct refresh intentionally brings the corrected main
+            # in as the second parent of the original frozen invitation.
+            refreshed = invitation_candidate(root, released)
+            self.assertEqual(git(root, 'show', '-s', '--format=%P', refreshed).decode().split(),
+                             [FROZEN, released])
+            allow_shape(('APBRA-184', INVITE, INVITE_PATHS), released, released)
+            entries = ('--', *sorted(paths))
+            self.assertEqual(git(root, 'ls-tree', '-rz', refreshed, *entries),
+                             git(root, 'ls-tree', '-rz', released, *entries))
+
+            git(root, 'switch', '-c', INVITE + '-unissued')
+            with self.assertRaisesRegex(ValueError, 'requires its ordinary merge'):
+                wrapper['historical_fixture_state'](root)
+            git(root, 'switch', INVITE)
+            target.write_bytes(target.read_bytes() + b'\n')
+            with self.assertRaisesRegex(ValueError, 'Historical fixture correction test bytes differ'):
+                wrapper['historical_fixture_state'](root)
+            git(root, 'restore', '--', memory_test)
+            altered_path = sorted(INVITE_PATHS - {stylesheet})[0]
+            altered = root / altered_path
+            altered.write_bytes(altered.read_bytes() + b'\n')
+            altered_head = commit(root, {altered_path}, 'Synthetic altered invitation source')
+            false_refresh = ancestry_commit(root, ref(root, altered_head + '^{tree}'),
+                                             [FROZEN, released], 'Synthetic false invitation refresh')
+            git(root, 'reset', '--hard', false_refresh)
+            with self.assertRaisesRegex(ValueError, 'Invitation refresh differs'):
+                wrapper['historical_fixture_state'](root)
+
+            git(root, 'switch', '-c', 'transient-fixture-drift', released)
+            target.write_bytes(target.read_bytes() + b'\n')
+            commit(root, {memory_test}, 'Synthetic transient correction edit')
+            git(root, 'restore', '--source', released, '--', memory_test)
+            reverted = commit(root, {memory_test}, 'Synthetic correction edit revert')
+            self.assertEqual(git(root, 'ls-tree', '-rz', reverted, *entries),
+                             git(root, 'ls-tree', '-rz', released, *entries))
+            with self.assertRaisesRegex(ValueError, 'requires its ordinary merge'):
+                wrapper['historical_fixture_state'](root)
+
+            candidate = propose(root, released)
+            allow_with_browser_witness(product)
+
+            hosted_checkout(root, released, candidate)
+            with patch.dict(os.environ, GITHUB_HEAD_REF=PRODUCT, GITHUB_BASE_REF='main', PR_HEAD_SHA=candidate):
+                allow_shape(product, released, released)
+                self.assertEqual(wrapper['signedin_product_parent'](root), (released, None))
+            product_release = ordinary(root, released, candidate, 9962, PRODUCT)
+            allow_shape(main, product_release, released)
+            self.assertEqual(wrapper['signedin_product_parent'](root), (released, product_release))
+            self.assertEqual(git(root, 'ls-tree', '-rz', 'HEAD', *entries),
+                             git(root, 'ls-tree', '-rz', released, *entries))
+
+
+if __name__ == '__main__':
+    unittest.main()
