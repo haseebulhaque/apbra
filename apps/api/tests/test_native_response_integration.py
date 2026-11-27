@@ -2,27 +2,41 @@
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from datetime import UTC, datetime
+from hashlib import sha256
+from io import BytesIO
 from types import SimpleNamespace
 from uuid import UUID, uuid4
+from zipfile import ZipFile
 
 import httpx
 import pytest
 import test_foundry_report_runtime as runtime_fixtures
 from conftest import csrf, sign_in
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select, table, text
+from sqlalchemy import event, func, select, table, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from test_foundry_report_runtime import approval, new_settings
 
 import apbra_api.native_response_api as native
 from apbra_api.api import create_app
+from apbra_api.auth_boundary import SESSION_COOKIE
+from apbra_api.authorization import resolve_session
 from apbra_api.foundry_report_runtime import ReportApproval, Reservations
+from apbra_api.foundry_v10_demo_receiver import V10DemoCase, V10DemoGrant, V10DemoReceiver
 from apbra_api.model_provider import FoundryAccess, FoundryBearer
+from apbra_api.native_contracts import digest
+from apbra_api.native_organisation import NativeWorkspaceSessionRow
 from apbra_api.native_response_archive import NativeResponseScope
 from apbra_api.native_response_index import DatabaseNativeResponseIndex, NativeResponseReceiptRow
 from apbra_api.native_response_probe import receive_native_response
 from apbra_api.native_response_runtime import native_application_factory
+from apbra_api.password_auth import COOKIE as PASSWORD_COOKIE
+from apbra_api.password_auth import PATH as PASSWORD_PATH
+from apbra_api.password_auth import CaptureMailer, PasswordAuthSettings
+from apbra_api.tenant_settings import current_settings
 
 saved_case = runtime_fixtures.saved
 
@@ -1042,3 +1056,482 @@ def test_goal_native_admission_and_confirmation_remain_private(integrated, ident
                           json={'interpretation_id':row['id'], 'expected_context_version':1})
     assert denied.status_code in {403, 404}, denied.text
     assert len(i.calls) == len(i.tokens) == 1
+
+
+@pytest.fixture
+def signed_in_v10(saved_case, monkeypatch):
+    return build_v10_demo(saved_case, monkeypatch)
+
+
+def build_v10_demo(s, monkeypatch):
+    from test_foundry_v10_report_transport import (
+        AGENT,
+        CSV,
+        FILE,
+        GOAL,
+        PROJECT,
+        profile,
+        service_response,
+    )
+    from test_native_contracts import analysis_fixture
+
+    p = profile()
+    csv = CSV.encode()
+    goal = GOAL
+    created = s.client.post("/api/cases", json={"request_text": goal},
+                           headers={**csrf(s.session), "Idempotency-Key": str(uuid4())})
+    assert created.status_code == 201, created.text
+    case_id = UUID(created.json()["case"]["id"])
+    path = f"/api/cases/{case_id}"
+    uploaded = s.client.post(path + "/evidence", params={"filename": "synthetic.csv",
+                                                       "expected_context_version": 1},
+                            content=csv, headers={**csrf(s.session),
+                                                  "Content-Type": "application/octet-stream"})
+    assert uploaded.status_code == 200, uploaded.text
+    evidence = uploaded.json()["evidence"]
+    with s.database.session() as db:
+        new_settings(db, s.company, {"provider_profile": p, "automatic_generation_enabled": True})
+        snapshot = current_settings(db, s.company)
+        account_session, actor = resolve_session(db, s.client.cookies.get(SESSION_COOKIE))
+        case = db.locked_case(case_id)
+        assert case is not None and account_session.membership_id is not None
+        config = V10DemoCase(
+            company_id=s.company, actor_id=actor.id, membership_id=account_session.membership_id,
+            session_id=account_session.id, case_id=case_id, settings_id=snapshot.id,
+            settings_digest=snapshot.digest, source_id=UUID(evidence["id"]),
+            request_version_id=case.current_request_version_id,
+            source_digest=sha256(csv).hexdigest(),
+            goal=goal, project_url=PROJECT, agent_name=AGENT, knowledge_binding="demo-kb",
+            knowledge_scope="SHARED_STANDARDS", profile_sha256=digest(p.model_dump(mode="json")),
+        )
+    monkeypatch.setattr(
+        s.settings, "qualified_provider_profiles_json", json.dumps([p.model_dump()]),
+    )
+    expires = time.time() + 600
+    now = datetime.fromtimestamp(time.time(), UTC)
+    month_end = datetime(now.year + (now.month == 12), now.month % 12 + 1, 1, tzinfo=UTC)
+    named_amount = "0.1"
+    grant = V10DemoGrant(
+        case=config, tenant_id=uuid4(), client_id=uuid4(), home_account_id="synthetic.identity",
+        period=now.strftime("%Y-%m"), expires=min(expires, month_end.timestamp()), posted_aud="0",
+        unposted_aud="0", outstanding_aud="0", ceiling_aud="1",
+        analysis_reserve_aud=named_amount, report_reserve_aud=named_amount,
+        runtime_evidence_sha256="1" * 64, rights_evidence_sha256="2" * 64,
+        analysis_bound_sha256="3" * 64, report_bound_sha256="4" * 64,
+    )
+    file = BytesIO()
+    with ZipFile(file, "w") as package:
+        for name, value in {
+            "Demo.pbip": {"version": "1.0", "artifacts": [{"report": {"path": "Demo.Report"}}]},
+            "Demo.Report/definition.pbir": {"version": "1.0", "datasetReference": {
+                "byPath": {"path": "../Demo.SemanticModel"},
+            }},
+            "Demo.Report/report.json": {"sections": [{"visualContainers": [{
+                "config": json.dumps({"singleVisual": {"visualType": "card",
+                    "projections": {"Values": [{"queryRef": "synthetic.completed"}]}}}),
+            }]}]},
+            "Demo.SemanticModel/definition.pbism": {"version": "1.0"},
+            "Demo.SemanticModel/model.bim": {"model": {"tables": [{
+                "name": "synthetic", "columns": [{"name": "completed"}],
+            }]}},
+        }.items():
+            package.writestr(name, json.dumps(value))
+        package.writestr("input.csv", csv)
+    fake = SimpleNamespace(
+        data=file.getvalue(), owner=True, unknown_origin=False,
+        revoke_before_content=False, authorize=True, disconnect_after_post=False,
+        calls=[], wire=[],
+    )
+
+    def response(request):
+        fake.calls.append((request.method, request.url.path))
+        if request.method == "POST":
+            if fake.disconnect_after_post:
+                raise httpx.ReadTimeout("synthetic disconnect")
+            body = json.loads(request.content)
+            actual = json.loads(body["input"][0]["content"])
+            fake.wire.append(actual)
+            task = actual["task"]
+            envelope = service_response(task)
+            if task == "REQUIREMENT_ANALYSIS":
+                understanding = json.loads(
+                    json.dumps(analysis_fixture()).replace("Amount", "completed")
+                    .replace("Division", "work_order_type")
+                )
+                understanding["standardsApplied"] = []
+                envelope["output"][0]["content"][0]["text"] = json.dumps(understanding)
+            elif fake.unknown_origin:
+                envelope["agent_reference"]["version"] = "7"
+            return httpx.Response(200, json=envelope)
+        if request.url.path.endswith("/content"):
+            return httpx.Response(200, content=fake.data)
+        if request.url.path.endswith("/files/" + FILE.file_id):
+            if fake.revoke_before_content:
+                fake.owner = False
+            return httpx.Response(200, json={
+                "object": "container.file", "id": FILE.file_id, "container_id": FILE.container_id,
+                "source": "assistant", "path": "/mnt/data/" + FILE.filename,
+                "bytes": len(fake.data), "created_at": 102,
+            })
+        return httpx.Response(200, json={
+            "object": "container", "id": FILE.container_id, "created_at": 101,
+        })
+
+    def dispatch_bearer():
+        return FoundryBearer("synthetic-analysis-and-generation-fixture", expires)
+
+    def read_bearer():
+        return FoundryBearer("synthetic-read-fixture", expires)
+
+    def build(connected=True, renewed=False):
+        def access(bearer):
+            return FoundryAccess(s.company, p.profile_id, p.configuration_id, bearer,
+                "demo-kb", "SHARED_STANDARDS", "10", qualification="OFFLINE_FIXTURE")
+
+        receiver = V10DemoReceiver(
+            grant.model_copy(update={"runtime_evidence_sha256": "5" * 64}) if renewed else grant,
+            access(dispatch_bearer), access(read_bearer), host_current=lambda: fake.owner,
+            authorize_stage=lambda operation: fake.authorize, exclusive_writer=lambda *args: True,
+            transport=httpx.MockTransport(response),
+        ) if connected else None
+        client = TestClient(create_app(
+            settings=s.settings, database=s.database, v10_demo_receiver=receiver,
+        ))
+        client.cookies.update(s.client.cookies)
+        return client
+
+    return SimpleNamespace(
+        source=csv, build=build, client=build(), path=path, fake=fake, actor=s.session,
+        payload={"expected_settings_id": str(snapshot.id),
+                 "expected_context_version": evidence["semantic_context_version"]},
+    )
+
+
+def v10_send(demo, *, client=None, **changes):
+    return (client or demo.client).post(demo.path + "/native-response-checks",
+        json={**demo.payload, "command_key": str(uuid4()), "explicit_demo_action": True, **changes},
+        headers=csrf(demo.actor))
+
+
+def v10_confirm(demo):
+    response = v10_send(demo)
+    assert response.status_code == 200, response.text
+    analysis = response.json()["native_response"]
+    assert analysis["provider_status"] == "completed", analysis
+    assert not demo.client.get(demo.path + "/acceptance").json()["confirmed_contract"]
+    receipt = f"{demo.path}/native-response-receipts/{analysis['receipt_id']}"
+    intake = demo.client.post(receipt + "/contract", json=demo.payload, headers=csrf(demo.actor))
+    assert intake.status_code == 200 and intake.json()["accepted"], intake.text
+    confirmation = demo.client.post(demo.path + "/confirm", headers=csrf(demo.actor), json={
+        "expected_context_version": demo.payload["expected_context_version"],
+        "interpretation_id": intake.json()["interpretation"]["id"],
+    })
+    assert confirmation.status_code == 200, confirmation.text
+    return confirmation.json()["confirmed_contract"]["id"]
+
+
+def test_v10_two_real_readiness_actions_and_byte_identical_private_get(signed_in_v10):
+    demo = signed_in_v10
+    readiness = demo.client.get(demo.path + "/native-response-input").json()
+    assert readiness["demo_mode"] == "FOUNDRY_V10" and readiness["receive_available"]
+    assert not demo.fake.calls
+    assert v10_send(demo, explicit_demo_action=None).status_code == 503
+    wrong_action = v10_send(demo, task="REPORT_DESIGN", confirmed_contract_id=str(uuid4()))
+    assert wrong_action.status_code == 503
+    assert v10_send(demo, task="FULL_REPORT_ARTIFACT",
+                    confirmed_contract_id=str(uuid4())).status_code == 409
+    assert not demo.fake.calls
+    confirmation = v10_confirm(demo)
+    assert len(demo.fake.calls) == 1
+    options = {"task": "FULL_REPORT_ARTIFACT", "confirmed_contract_id": confirmation}
+    report_ready = demo.client.get(demo.path + "/native-response-input", params=options).json()
+    assert report_ready["receive_available"]
+    assert report_ready["connection_id"] != readiness["connection_id"]
+    assert len(demo.fake.calls) == 1
+    result = v10_send(demo, **options)
+    assert result.status_code == 200, result.text
+    report = result.json()["native_response"]
+    assert report["task"] == "FULL_REPORT_ARTIFACT"
+    output = report["report_output"]
+    assert output["sha256"] == sha256(demo.fake.data).hexdigest()
+    assert output["delivery_kind"] == "V10_REPORT_ORIGINAL"
+    assert output["content_verification"] == "PACKAGE_CHECKED"
+    assert output["v10_provenance"] == "OFFLINE_FIXTURE"
+    assert len(demo.fake.calls) == 5
+    assert [wire["task"] for wire in demo.fake.wire] == [
+        "REQUIREMENT_ANALYSIS", "FULL_REPORT_ARTIFACT",
+    ]
+    assert all(wire["context"]["caseFiles"][0]["sourceText"].encode() == demo.source
+               for wire in demo.fake.wire)
+    assert demo.fake.wire[1]["context"]["confirmedRequirements"]
+    original = demo.path + f"/outputs/{output['id']}/download"
+    assert demo.client.get(original).content == demo.fake.data
+    assert v10_send(demo, **options).json() == result.json()
+    restarted = demo.build(connected=False)
+    listing = restarted.get(demo.path + "/outputs?page=1").json()
+    assert listing["demo_mode"] == "FOUNDRY_V10"
+    assert listing["current_report_available"] is True
+    assert listing["items"][0]["v10_provenance"] == "OFFLINE_FIXTURE"
+    assert restarted.get(original).content == demo.fake.data
+    restarted.cookies.clear()
+    assert restarted.get(original).status_code == 401
+    receipt = demo.path + f"/native-response-receipts/{report['receipt_id']}"
+    assert not demo.client.get(receipt + "/contract").json()["recognized"]
+    assert (demo.client.post(receipt + "/files/0/output", headers=csrf(demo.actor),
+        json={"command_key": str(uuid4()),
+              "expected_context_version": demo.payload["expected_context_version"]})
+        .status_code == 422)
+    assert len(demo.fake.calls) == 5
+
+
+def test_v10_saves_original_with_real_native_password_parent(settings, database, monkeypatch):
+    from test_password_auth import FIRST_PHRASE
+
+    mail = CaptureMailer()
+    native_client = TestClient(create_app(
+        settings=settings,
+        database=database,
+        password_mailer=mail,
+        password_settings=PasswordAuthSettings(_env_file=None, password_auth_enabled=True),
+    ))
+    challenge = native_client.get(PASSWORD_PATH + "/options").json()
+    headers = {"Origin": settings.public_origin, "X-Password-CSRF": challenge["csrf"]}
+    account = {"email": "native-v10-owner@example.org", "password": FIRST_PHRASE}
+    signup = native_client.post(PASSWORD_PATH + "/signup", json=account, headers=headers)
+    assert signup.status_code == 202, signup.text
+    assert len(mail.messages) == 1 and mail.messages[0][:2] == (account["email"], "verify")
+    verified = native_client.post(PASSWORD_PATH + "/verify", headers=headers, json={
+        "proof": mail.messages[0][2], "password": FIRST_PHRASE,
+    })
+    assert verified.status_code == 200, verified.text
+    signin = native_client.post(PASSWORD_PATH + "/signin", json=account, headers=headers)
+    assert signin.status_code == 200, signin.text
+    organisation = native_client.post(
+        PASSWORD_PATH + "/organisation",
+        headers={**headers, "Idempotency-Key": str(uuid4())},
+        json={"name": "Synthetic Native Report Workspace"},
+    )
+    assert organisation.status_code == 201, organisation.text
+    session = native_client.get("/api/auth/session").json()
+    assert session["authentication_kind"] == "NATIVE"
+    assert session["actor"]["company_id"] == organisation.json()["company"]["id"]
+    parent_token = native_client.cookies.get(PASSWORD_COOKIE)
+    assert parent_token
+    with database.session() as db:
+        workspace, _ = resolve_session(db, native_client.cookies.get(SESSION_COOKIE))
+        binding = db.get(NativeWorkspaceSessionRow, workspace.id)
+        assert binding is not None
+        assert binding.parent_digest == sha256(parent_token.encode()).hexdigest()
+
+    demo = build_v10_demo(SimpleNamespace(
+        settings=settings, database=database, client=native_client, session=session,
+        company=UUID(session["actor"]["company_id"]),
+    ), monkeypatch)
+    confirmation = v10_confirm(demo)
+    key = str(uuid4())
+    options = {"task": "FULL_REPORT_ARTIFACT", "confirmed_contract_id": confirmation}
+
+    def bound_row_wait(connection):
+        # A save transaction that opens a second native session writer will block itself.
+        connection.exec_driver_sql("SET LOCAL lock_timeout = '2s'")
+
+    event.listen(database.engine, "begin", bound_row_wait)
+    try:
+        generated = v10_send(demo, command_key=key, **options)
+    finally:
+        event.remove(database.engine, "begin", bound_row_wait)
+
+    assert generated.status_code == 200, generated.text
+    output = generated.json()["native_response"]["report_output"]
+    assert output["delivery_kind"] == "V10_REPORT_ORIGINAL"
+    assert output["sha256"] == sha256(demo.fake.data).hexdigest()
+    original = demo.path + f"/outputs/{output['id']}/download"
+    downloaded = demo.client.get(original)
+    assert downloaded.status_code == 200, downloaded.text
+    assert downloaded.content == demo.fake.data
+    for command_key in (key, str(uuid4())):
+        replay = v10_send(demo, command_key=command_key, **options)
+        assert replay.status_code == 200 and replay.json() == generated.json()
+    assert [wire["task"] for wire in demo.fake.wire] == [
+        "REQUIREMENT_ANALYSIS", "FULL_REPORT_ARTIFACT",
+    ]
+    passive = demo.build(connected=False)
+    assert passive.get(original).content == demo.fake.data
+    passive.cookies.clear()
+    assert passive.get(original).status_code == 401
+
+
+def test_v10_concurrent_different_commands_and_new_process_cannot_send_again(signed_in_v10):
+    demo = signed_in_v10
+    second = demo.build()
+    with ThreadPoolExecutor(2) as pool:
+        pending = [pool.submit(v10_send, demo, client=client) for client in (demo.client, second)]
+        attempts = [task.result(timeout=30) for task in pending]
+    assert all(attempt.status_code == 200 for attempt in attempts)
+    ids = {attempt.json()["native_response"]["operation_id"] for attempt in attempts}
+    assert len(ids) == len(demo.fake.calls) == 1
+    third = v10_send(demo, client=demo.build())
+    assert third.json()["native_response"]["operation_id"] in ids
+    changed = v10_send(demo, client=demo.build(renewed=True))
+    assert changed.status_code == 409
+    assert len(demo.fake.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "fault", ["foreign_origin", "unsafe_member", "supporting_archive", "empty_scaffolding",
+              "revoked_between_reads"],
+)
+def test_v10_preserves_original_response_without_claiming_failed_or_supporting_file(
+    signed_in_v10, fault,
+):
+    demo = signed_in_v10
+    confirmation = v10_confirm(demo)
+    if fault == "foreign_origin":
+        demo.fake.unknown_origin = True
+    elif fault == "revoked_between_reads":
+        demo.fake.revoke_before_content = True
+    else:
+        data = BytesIO()
+        with ZipFile(data, "w") as package:
+            if fault == "empty_scaffolding":
+                for member, value in {
+                    "Demo.pbip": {"artifacts": [{"report": {"path": "Demo.Report"}}]},
+                    "Demo.Report/definition.pbir": {
+                        "datasetReference": {"byPath": {"path": "../Demo.SemanticModel"}},
+                    },
+                    "Demo.Report/definition/report.json": {},
+                    "Demo.Report/definition/version.json": {},
+                    "Demo.Report/definition/pages/Page/page.json": {"name": "Page"},
+                    "Demo.Report/definition/pages/Page/visuals/empty/visual.json": {},
+                    "Demo.SemanticModel/definition.pbism": {"version": "4.0"},
+                }.items():
+                    package.writestr(member, json.dumps(value))
+                package.writestr("Demo.SemanticModel/definition/model.tmdl", "")
+                package.writestr("Demo.SemanticModel/definition/tables/Empty.tmdl", "")
+            else:
+                member = "../unsafe.txt" if fault == "unsafe_member" else "support.txt"
+                package.writestr(member, "demo")
+        demo.fake.data = data.getvalue()
+    options = {"task": "FULL_REPORT_ARTIFACT", "confirmed_contract_id": confirmation}
+    result = v10_send(demo, **options)
+    assert result.status_code == 200, result.text
+    response = result.json()["native_response"]
+    assert response["receipt_id"]
+    if fault in ("supporting_archive", "empty_scaffolding"):
+        output = response["report_output"]
+        assert output["delivery_kind"] == "V10_SUPPORTING_ORIGINAL"
+        assert output["content_verification"] == "NOT_RUN"
+        original = demo.path + f"/outputs/{output['id']}/download"
+        assert demo.client.get(original).content == demo.fake.data
+    else:
+        assert response["report_output"] is None
+    assert len(demo.fake.calls) == {"foreign_origin": 2, "revoked_between_reads": 4}.get(fault, 5)
+    assert v10_send(demo, **options).json() == result.json()
+    assert not demo.client.get(demo.path + "/outputs?page=1").json()["current_report_available"]
+
+
+def test_v10_grant_does_not_follow_owner_into_a_different_native_session(signed_in_v10):
+    demo = signed_in_v10
+    path = demo.path + "/native-response-checks"
+    command = {
+        **demo.payload, "command_key": str(uuid4()), "explicit_demo_action": True,
+    }
+    assert demo.client.post(path, json=command).status_code == 401
+    assert not demo.fake.calls
+    second = demo.build()
+    second.cookies.clear()
+    other_session = sign_in(second, "owner")
+    readiness = second.get(demo.path + "/native-response-input").json()
+    assert readiness["demo_mode"] == "FOUNDRY_V10" and not readiness["receive_available"]
+    denied = second.post(path, json=command, headers=csrf(other_session))
+    assert denied.status_code == 503 and not demo.fake.calls
+
+    second.cookies.clear()
+    unrelated = sign_in(second, "foreign")
+    denied = second.post(path, json=command, headers=csrf(unrelated))
+    assert denied.status_code in {403, 404} and not demo.fake.calls
+
+
+def test_v10_report_requires_analysis_under_the_same_grant(signed_in_v10):
+    demo = signed_in_v10
+    confirmation = v10_confirm(demo)
+    other = demo.build(renewed=True)
+    options = {"task": "FULL_REPORT_ARTIFACT", "confirmed_contract_id": confirmation}
+    assert other.get(demo.path + "/native-response-input", params=options).status_code == 409
+    assert v10_send(demo, client=other, **options).status_code == 409
+    assert len(demo.fake.calls) == 1
+    assert v10_send(demo, **options).json()["native_response"]["report_output"]
+    assert len(demo.fake.calls) == 5
+
+
+@pytest.mark.parametrize("representation", [
+    "enhanced", "null_report_document", "null_version_document", "bim_columns_string",
+    "bim_mixed_columns", "bim_columns_absent_for_measures_only",
+])
+def test_v10_package_structural_status_uses_typed_linked_definitions(signed_in_v10, representation):
+    demo = signed_in_v10
+    confirmation = v10_confirm(demo)
+    with ZipFile(BytesIO(demo.fake.data)) as original:
+        members = {item.filename: original.read(item) for item in original.infolist()}
+    if representation.startswith("bim_"):
+        name = "Demo.SemanticModel/model.bim"
+        model = json.loads(members[name])["model"]
+        other = {"name": "Measures"}
+        if representation != "bim_columns_absent_for_measures_only":
+            other["columns"] = "not a list"
+        if representation == "bim_columns_string":
+            model["tables"] = [other]
+        else:
+            model["tables"].append(other)
+        members[name] = json.dumps({"model": model}).encode()
+    else:
+        pbir = "Demo.Report/definition.pbir"
+        descriptor = json.loads(members[pbir])
+        descriptor["version"] = "4.0"
+        members[pbir] = json.dumps(descriptor).encode()
+        del members["Demo.Report/report.json"]
+        enhanced = "Demo.Report/definition/"
+        report = {"$schema": "https://developer.microsoft.com/json-schemas/"
+                             "fabric/item/report/definition/report/2.0.0/schema.json"}
+        entries = {
+            "report.json": None if representation == "null_report_document" else report,
+            "version.json": (None if representation == "null_version_document"
+                             else {"version": "2.0.0"}),
+            "pages/Overview/page.json": {"name": "Overview"},
+            "pages/Overview/visuals/Total/visual.json": {"visual": {
+                "visualType": "card", "query": {"queryState": {
+                    "Values": {"projections": [{"queryRef": "synthetic.completed"}]},
+                }},
+            }},
+        }
+        members.update({enhanced + name: json.dumps(value).encode()
+                        for name, value in entries.items()})
+    modified = BytesIO()
+    with ZipFile(modified, "w") as archive:
+        for name, contents in members.items():
+            archive.writestr(name, contents)
+    demo.fake.data = modified.getvalue()
+    result = v10_send(demo, task="FULL_REPORT_ARTIFACT", confirmed_contract_id=confirmation)
+    assert result.status_code == 200, result.text
+    output = result.json()["native_response"]["report_output"]
+    checked = representation in ("enhanced", "bim_columns_absent_for_measures_only")
+    expected = "V10_REPORT_ORIGINAL" if checked else "V10_SUPPORTING_ORIGINAL"
+    assert output["delivery_kind"] == expected
+    outputs = demo.client.get(demo.path + "/outputs?page=1").json()
+    assert outputs["current_report_available"] == checked
+    download = demo.path + f"/outputs/{output['id']}/download"
+    assert demo.client.get(download).content == demo.fake.data
+
+
+@pytest.mark.parametrize("accepted_by_service", [False, True])
+def test_v10_new_receiver_cannot_reopen_uncertain_dispatch(signed_in_v10, accepted_by_service):
+    demo = signed_in_v10
+    demo.fake.authorize = accepted_by_service
+    demo.fake.disconnect_after_post = accepted_by_service
+    first = v10_send(demo)
+    assert first.status_code == 200 and first.json()["native_response"]["state"] == "UNCERTAIN"
+    assert len(demo.fake.calls) == int(accepted_by_service)
+    demo.fake.authorize = True
+    demo.fake.disconnect_after_post = False
+    assert v10_send(demo, client=demo.build()).json() == first.json()
+    assert len(demo.fake.calls) == int(accepted_by_service)

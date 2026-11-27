@@ -198,9 +198,11 @@ export const observabilityApi={
   caseErrors:(caseId:string,filters:HistoryFilters={})=>request<HistoryPage<ProcessingError>>(`/api/cases/${encodeURIComponent(caseId)}/errors${historyQuery(filters)}`),
 };
 
-export type NativeReceipt={task?:NativeTask|null;operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
+export type DemoPurpose='REQUIREMENT_ANALYSIS'|'FULL_REPORT_ARTIFACT';
+export type NativePurpose=NativeTask|DemoPurpose;
+export type NativeReceipt={task?:NativePurpose|null;report_output?:RequestOutput|null;operation_id:string;state:string;context_version:number;http_status:number|null;provider_status:string|null;receipt_id:string|null;bytes:number|null;sha256:string|null};
 export type NativeAnswer={receipt_id:string;context_version:number;texts:string[];bytes:number;sha256:string};
-export type CaseFileAvailability={receive_available?:boolean;receive_reason?:string;connection_id?:string|null;ready:boolean;reason:string|null;scope:string;request_version_id:string;context_version:number;settings_id:string;input_characters:number|null;input_limit:number|null;files:Array<{id:string;filename:string;status:string;reason:string|null;bytes?:number;transport:string;contentDigest:string;serviceFileUploaded:false;processingVerified:false}>};
+export type CaseFileAvailability={demo_mode?:'FOUNDRY_V10';receive_available?:boolean;receive_reason?:string;connection_id?:string|null;ready:boolean;reason:string|null;scope:string;request_version_id:string;context_version:number;settings_id:string;input_characters:number|null;input_limit:number|null;files:Array<{id:string;filename:string;status:string;reason:string|null;bytes?:number;transport:string;contentDigest:string;serviceFileUploaded:false;processingVerified:false}>};
 export type NativeTask='REQUIREMENT_ANALYSIS'|'REPORT_DESIGN';
 export type NativeContractDiagnostic={code:string;phase:string;findings:Array<{path:string;reason:string}>};
 export type NativeAnalysisPreview={receipt_id:string;context_version:number;admission:'NOT_ADMITTED';ai_state:'NEEDS_CLARIFICATION'|'READY_FOR_CONFIRMATION';confirmation_summary:NonNullable<AcceptanceState['interpretation']>['confirmation_summary'];interpretation:Record<string,unknown>;questions:DurableQuestion[];unresolved_ambiguities:string[]};
@@ -208,17 +210,17 @@ export type NativeContractCheck={analysis_preview?:NativeAnalysisPreview|null;re
 export const savedAzureApi={
  list:(caseId:string)=>request<{items:NativeReceipt[]}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts`),
  view:(caseId:string,receiptId:string)=>request<NativeAnswer>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/view`),
- input:(caseId:string,task?:NativeTask,contractId?:string)=>request<CaseFileAvailability>(`/api/cases/${encodeURIComponent(caseId)}/native-response-input${task?'?'+new URLSearchParams({task,...(contractId?{confirmed_contract_id:contractId}:{})}):''}`),
- receive:(caseId:string,contextVersion:number,settingsId:string,commandKey:string,csrfToken:string,stage?:{task:NativeTask;confirmed_contract_id?:string})=>request<{native_response:NativeReceipt}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-checks`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId,command_key:commandKey,...stage})}),
+ input:(caseId:string,task?:NativePurpose,contractId?:string)=>request<CaseFileAvailability>(`/api/cases/${encodeURIComponent(caseId)}/native-response-input${task?'?'+new URLSearchParams({task,...(contractId?{confirmed_contract_id:contractId}:{})}):''}`),
+ receive:(caseId:string,contextVersion:number,settingsId:string,commandKey:string,csrfToken:string,stage?:{task:NativePurpose;confirmed_contract_id?:string;explicit_demo_action?:true})=>request<{native_response:NativeReceipt}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-checks`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId,command_key:commandKey,...stage})}),
  contract:(caseId:string,receiptId:string)=>request<NativeContractCheck>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`),
  intake:(caseId:string,receiptId:string,contextVersion:number,settingsId:string,csrfToken:string)=>request<{accepted:boolean;reason?:string;task?:NativeTask;interpretation?:DurableInterpretation;diagnostic?:NativeContractDiagnostic|null}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/contract`,{method:'POST',headers:{'X-CSRF-Token':csrfToken},body:JSON.stringify({expected_context_version:contextVersion,expected_settings_id:settingsId})}),
  download:(caseId:string,receiptId:string)=>`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}`,
 };
 
-export type RequestOutput={id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;native_task?:NativeTask|null;delivery_kind?:'GENERATED_FILE'|'RETAINED_OUTPUT';content_verification:'NOT_RUN';created_at:string};
-export type RequestOutputPage={company_id:string;case_id:string;items:RequestOutput[];page:number;page_size:number;total:number;pages:number;snapshot:string;as_of:string;current_context_version:number;current_report_available:boolean;maximum_bytes:number};
+export type RequestOutput={v10_provenance?:'OFFLINE_FIXTURE'|'LIVE_METADATA_VERIFIED';id:string;case_id:string;request_version_id:string;context_version:number;filename:string;origin:string;bytes:number;sha256:string;native_receipt_id:string|null;native_task?:NativePurpose|null;delivery_kind?:'GENERATED_FILE'|'RETAINED_OUTPUT'|'V10_REPORT_ORIGINAL'|'V10_SUPPORTING_ORIGINAL';content_verification:'NOT_RUN'|'PACKAGE_CHECKED';created_at:string};
+export type RequestOutputPage={demo_mode?:'FOUNDRY_V10';company_id:string;case_id:string;items:RequestOutput[];page:number;page_size:number;total:number;pages:number;snapshot:string;as_of:string;current_context_version:number;current_report_available:boolean;maximum_bytes:number};
 export function validRequestOutputPage(value:RequestOutputPage,caseId:string,contextVersion:number,companyId?:string){
- return value.case_id===caseId&&(!companyId||value.company_id===companyId)&&value.current_context_version===contextVersion&&typeof value.current_report_available==='boolean'&&Number.isSafeInteger(value.total)&&value.total>=0&&Number.isSafeInteger(value.page)&&value.page>=1&&[10,25,50,100].includes(value.page_size)&&value.pages===Math.max(1,Math.ceil(value.total/value.page_size))&&value.page<=value.pages&&typeof value.snapshot==='string'&&Array.isArray(value.items)&&value.items.length<=Math.min(value.total,value.page_size)&&value.items.every(item=>item.case_id===caseId);
+ return (value.demo_mode===undefined||value.demo_mode==='FOUNDRY_V10')&&value.case_id===caseId&&(!companyId||value.company_id===companyId)&&value.current_context_version===contextVersion&&typeof value.current_report_available==='boolean'&&Number.isSafeInteger(value.total)&&value.total>=0&&Number.isSafeInteger(value.page)&&value.page>=1&&[10,25,50,100].includes(value.page_size)&&value.pages===Math.max(1,Math.ceil(value.total/value.page_size))&&value.page<=value.pages&&typeof value.snapshot==='string'&&Array.isArray(value.items)&&value.items.length<=Math.min(value.total,value.page_size)&&value.items.every(item=>item.case_id===caseId);
 }
 export const requestOutputsApi={
  page:(caseId:string,page=1,limit=10,snapshot?:string)=>request<RequestOutputPage>(`/api/cases/${encodeURIComponent(caseId)}/outputs?${new URLSearchParams({page:String(page),limit:String(limit),...(snapshot?{snapshot}:{})})}`),
@@ -227,6 +229,17 @@ export const requestOutputsApi={
  saveNative:(caseId:string,receiptId:string,context:number,command:string,csrfToken:string)=>request<{output:RequestOutput;replayed:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/native-response-receipts/${encodeURIComponent(receiptId)}/output`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({expected_context_version:context,command_key:command})}),
  download:(caseId:string,id:string)=>`/api/cases/${encodeURIComponent(caseId)}/outputs/${encodeURIComponent(id)}/download`,
 };
+
+export async function verifiedReportDownload(caseId:string,file:RequestOutput):Promise<Blob>{
+ const response=await fetch(requestOutputsApi.download(caseId,file.id),{
+  credentials:'same-origin',redirect:'error',cache:'no-store',headers:{Accept:'application/octet-stream'},
+ });
+ if(!response.ok)throw new ApiError(response.status,'REPORT_DOWNLOAD_FAILED','The protected report could not be downloaded.');
+ const bytes=await response.arrayBuffer();
+ const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),byte=>byte.toString(16).padStart(2,'0')).join('');
+ if(bytes.byteLength!==file.bytes||digest!==file.sha256)throw new ApiError(409,'REPORT_DIGEST_MISMATCH','The downloaded bytes do not match the retained original.');
+ return new Blob([bytes],{type:'application/zip'});
+}
 
 export type NativeGeneratedFile={index:number;filename:string;savable:boolean};
 export const nativeFilesApi={

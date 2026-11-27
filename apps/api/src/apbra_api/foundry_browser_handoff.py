@@ -12,8 +12,9 @@ import subprocess
 import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager, redirect_stderr, redirect_stdout
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TYPE_CHECKING, Any, TextIO
 from uuid import UUID
 
 from .foundry_agent_details import _redacted_error_details
@@ -41,6 +42,9 @@ from .foundry_owner_metadata import (
 )
 
 _SCOPE = "https://ai.azure.com/.default"
+
+if TYPE_CHECKING:
+    from .foundry_v10_demo_receiver import V10DemoHost
 
 
 def _report_budget_disclosure(approval: Any | None = None) -> str:
@@ -87,6 +91,8 @@ class BrowserHandoffError(HandoffError):
 class DockerAttach:
     """Finite CLI operations on one explicit owner Unix socket/container/image."""
 
+    v10_public_verifier: str | None = None
+
     def __init__(
         self,
         plan: HandoffPlan,
@@ -96,6 +102,7 @@ class DockerAttach:
         container_id: str,
         image_id: str,
         runtime: bool = False,
+        v10_public_verifier: str | None = None,
         listen_host: str,
         listen_port: int,
         published_port: int,
@@ -128,6 +135,9 @@ class DockerAttach:
         self.listener = (listen_host, listen_port)
         self.published_port = published_port
         self.runtime = runtime
+        require(v10_public_verifier is None or (
+            not runtime and re.fullmatch(r"[a-f0-9]{64}", v10_public_verifier)))
+        self.v10_public_verifier = v10_public_verifier
         self.process: subprocess.Popen[bytes] | None = None
         self.identity: dict[str, Any] | None = None
         self.engine: str | None = None
@@ -205,6 +215,8 @@ class DockerAttach:
         ]
         if self.runtime:
             args.append("--runtime")
+        if self.v10_public_verifier is not None:
+            args.extend(["--v10-public-verifier", self.v10_public_verifier])
         require(
             value["id"] == self.container_id
             and value["image"] == self.image_id
@@ -308,6 +320,7 @@ def run_handoff(
     report_approval: Any | None = None,
     preparation: Any | None = None,
     catalogue_plan: Any | None = None,
+    v10_host: V10DemoHost | None = None,
 ) -> None:
     """Only independently owner-run private TTY; caller cannot supply persisted bearer."""
     sdk = None
@@ -319,11 +332,22 @@ def run_handoff(
     diagnostic: dict[str, Any] | None = None
     cleanup_errors: list[dict[str, Any]] = []
     private_values: list[str] = []
+    v10_grant = None
+    v10_lease = None
     try:
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             plan.validate()
             require(not (report_approval is not None and preparation is not None))
             report_mode = report_approval is not None or preparation is not None
+            if v10_host is not None:
+                from .foundry_v10_demo_receiver import V10DemoHost
+
+                require(type(v10_host) is V10DemoHost and not report_mode
+                        and catalogue_plan is None and hold is None
+                        and peer.v10_public_verifier == v10_host.verification_key)
+                v10_host.preflight()
+            else:
+                require(getattr(peer, "v10_public_verifier", None) is None)
             if catalogue_plan is not None:
                 from .foundry_catalogue_lease import CataloguePlan
 
@@ -364,7 +388,10 @@ def run_handoff(
                     + ("Directory-only: read agent metadata in the configured project for "
                        "your exact existing local owner identity. No agent definition, files "
                        "or report requests. " if catalogue_plan is not None else "")
-                    + ("No new consent, permissions or token persistence. "
+                    + ("The selected signed-in v10 demo requires separate approval of its "
+                       "bounded analysis and report opportunities. No request is sent at sign-in."
+                       if v10_host is not None else
+                       "No new consent, permissions or token persistence. "
                      "Sign-in itself sends no report request." if report_mode else
                      "No new consent, permissions, token persistence or paid calls."),
                     "YES" if preparation is not None else "CONFIRM PRIVATE MEMORY HANDOFF",
@@ -380,7 +407,9 @@ def run_handoff(
                 )
                 require(
                     type(challenge) is dict
-                    and set(challenge) == {"v", "nonce", "pid"}
+                    and (set(challenge) == {"v", "nonce", "pid"} if v10_host is None else
+                         set(challenge) == {"v", "nonce", "pid", "v10_public_verifier"}
+                         and challenge["v10_public_verifier"] == v10_host.verification_key)
                     and type(challenge["v"]) is int
                     and challenge["v"] == 1
                     and type(challenge["pid"]) is int
@@ -493,6 +522,34 @@ def run_handoff(
                         private_frame = b""
                     require(line(peer, plan.authorization_deadline) == b"REPORT_APPROVAL_ACCEPTED")
                     check()
+                if v10_host is not None:
+                    from .foundry_v10_demo_receiver import V10DemoGrant
+
+                    operation = "V10_PRIVATE_ATTESTATION"
+                    v10_grant = v10_host.qualify(record, sdk)
+                    require(type(v10_grant) is V10DemoGrant and v10_grant.current()
+                            and (str(v10_grant.tenant_id), str(v10_grant.client_id),
+                                 v10_grant.home_account_id) == account
+                            and account == (record.tenant_id, record.client_id,
+                                            record.home_account_id)
+                            and (v10_grant.case.company_id, v10_grant.expires)
+                            == (plan.company_id, plan.authorization_deadline))
+                    expiry = datetime.fromtimestamp(v10_grant.expires, UTC).isoformat()
+                    check()
+                    approval(terminal, terminal_plan,
+                             f"Authorise one analysis (A${v10_grant.analysis_reserve_aud}) and "
+                             f"one complete report (A${v10_grant.report_reserve_aud}) for case "
+                             f"{v10_grant.case.case_id} through {expiry}. "
+                             f"Period {v10_grant.period}, ceiling A${v10_grant.ceiling_aud}. "
+                             f"Posted A${v10_grant.posted_aud}, "
+                             f"unposted A${v10_grant.unposted_aud}, "
+                             f"other reservations A${v10_grant.outstanding_aud}. Failed and "
+                             "uncertain dispatches consume their opportunity. Azure billing may "
+                             "lag. Both actions require a deliberate signed-in request.",
+                             "CONFIRM TWO CASE OPPORTUNITIES")
+                    check()
+                    v10_lease = v10_host.send_grant(peer, challenge["nonce"], v10_grant)
+                    require(line(peer, plan.authorization_deadline) == b"V10_DEMO_GRANT_ACCEPTED")
                 if catalogue_plan is not None:
                     from .foundry_catalogue_lease import approval_payload
 
@@ -591,7 +648,10 @@ def run_handoff(
                 )
                 terminal.flush()
                 operation = "OWNER_MEMORY_LEASE_HOLD"
-                if hold is not None:
+                if v10_host is not None:
+                    assert v10_grant is not None and v10_lease is not None
+                    v10_host.serve_proofs(peer, v10_grant, v10_lease)
+                elif hold is not None:
                     hold()
                 else:
                     while time.time() < plan.authorization_deadline:

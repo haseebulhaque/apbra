@@ -1,30 +1,52 @@
 import {Pagination,usePagedItems,type PageSize} from './AdminUI';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {ApiError,validRequestOutputPage,acceptanceApi,conversationApi,nativeFilesApi,requestOutputsApi,savedAzureApi,type AcceptanceState,type CaseRecord,type DurableQuestion,type NativeAnswer,type NativeAnalysisPreview,type RequestOutput,type RequestOutputPage} from './api';
+import {ApiError,verifiedReportDownload,validRequestOutputPage,acceptanceApi,conversationApi,nativeFilesApi,requestOutputsApi,savedAzureApi,type AcceptanceState,type CaseRecord,type DurableQuestion,type DemoPurpose,type NativeReceipt,type NativeAnswer,type NativeAnalysisPreview,type RequestOutput,type RequestOutputPage} from './api';
 import {DurableConversation} from './durableConversation';
-import {BusinessJourneyError,requireCurrent,runBusinessAgent,nativeAnalysisPreview,discussionReply,answerDraft,canReviewNativeGoal} from './businessAgent';
+import {agentAvailabilityMessage,BusinessJourneyError,requireCurrent,runBusinessAgent,nativeAnalysisPreview,discussionReply,answerDraft,canReviewNativeGoal} from './businessAgent';
 
 type Step='goal'|'information'|'understanding'|'confirm'|'generate'|'report';
 const steps:Array<[Step,string]>=[['goal','Goal'],['information','Supporting information'],['understanding','Understanding'],['confirm','Confirm'],['generate','Generate'],['report','Download']];
 const empty:AcceptanceState={interpretation:null,confirmed_contract:null};
 export const currentAIUnderstanding=(state:AcceptanceState,version:number)=>Boolean(state.interpretation?.current&&state.interpretation.context_version===version&&state.interpretation.simulation==='QUALIFIED_SERVER_MODEL');
 export const canConfirmAIUnderstanding=(state:AcceptanceState,version:number,reviewed:boolean,unsaved:boolean)=>currentAIUnderstanding(state,version)&&state.interpretation?.state==='READY_FOR_CONFIRMATION'&&state.interpretation.questions.every(question=>!question.required)&&reviewed&&!unsaved;
+export function v10ReportSource(provenance:unknown):string|null{
+ if(provenance==='OFFLINE_FIXTURE')return 'Synthetic report package from an offline test fixture.';
+ if(provenance==='LIVE_METADATA_VERIFIED')return 'Verified service records identify Foundry v10 and its file tool as the source of this package.';
+ return null;
+}
+export function isCurrentV10Report(file:RequestOutput,record:CaseRecord,receiptId?:string){
+ return file.case_id===record.id&&file.request_version_id===record.current_request_version_id
+  &&file.context_version===record.semantic_context_version&&file.native_task==='FULL_REPORT_ARTIFACT'
+  &&v10ReportSource(file.v10_provenance)!==null
+  &&file.origin==='NATIVE_OUTPUT'&&file.delivery_kind==='V10_REPORT_ORIGINAL'&&file.content_verification==='PACKAGE_CHECKED'
+  &&typeof file.id==='string'&&file.id.length>0&&typeof file.filename==='string'&&file.filename.length>0
+  &&typeof file.native_receipt_id==='string'&&file.native_receipt_id.length>0
+  &&(receiptId===undefined||file.native_receipt_id===receiptId)
+  &&Number.isSafeInteger(file.bytes)&&file.bytes>0&&/^[a-f0-9]{64}$/.test(file.sha256);
+}
 export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialInformation=false,visible=true,unsavedGoal=false,onContextChanged,onReportReady,onError}:{record:CaseRecord;csrfToken:string;actorRole:string;goal:React.ReactNode;initialInformation?:boolean;visible?:boolean;unsavedGoal?:boolean;onContextChanged:(version:number)=>void;onReportReady:(ready:boolean)=>void;onError:(error:unknown)=>void}){
  const [informationPending,setInformationPending]=useState(false);
  const informationPendingChange=useCallback((value:boolean)=>setInformationPending(value),[]);
  const [step,setStep]=useState<Step>(initialInformation?'information':'goal'),[state,setState]=useState<AcceptanceState>(empty),[loaded,setLoaded]=useState(false),[analysisSaved,setAnalysisSaved]=useState(false),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState(''),[recheck,setRecheck]=useState(false),[reviewed,setReviewed]=useState(false),[answers,setAnswers]=useState<Record<string,string>>({}),[refinement,setRefinement]=useState(''),[original,setOriginal]=useState<NativeAnswer|null>(null),[outputs,setOutputs]=useState<RequestOutput[]>([]),[reportReceipts,setReportReceipts]=useState<string[]>([]),[filePage,setFilePage]=useState<RequestOutputPage|null>(null),[reportAvailable,setReportAvailable]=useState(false);
  const [preview,setPreview]=useState<NativeAnalysisPreview|null>(null);
+ const [route,setRoute]=useState<{binding:string;demo:boolean}|null>(null);
+ const [reportStarted,setReportStarted]=useState(false);
+ const [downloaded,setDownloaded]=useState('');
  const binding=[record.company_id,record.id,record.semantic_context_version,csrfToken,actorRole].join(':'),active=useRef(binding),mounted=useRef(false),flight=useRef(false),auto=useRef(''),pending=useRef<{signature:string;key:string}|null>(null),heading=useRef<HTMLHeadingElement>(null);
  const focusScope=[record.company_id,record.id,csrfToken,actorRole].join(':'),returnFocus=useRef<string|null>(null);
  active.current=binding;
  const admin=['COMPANY_OWNER','COMPANY_ADMIN'].includes(actorRole);
+ const routeKnown=route?.binding===binding;
+ const demo=routeKnown&&route.demo;
  const current=()=>mounted.current&&active.current===binding;
  function failure(value:unknown){if(!current())return;setStatus('');setRecheck(value instanceof BusinessJourneyError&&value.safeToRecheck);setError(value instanceof BusinessJourneyError?value.message:'This action could not be completed. Your saved work is safe. Ask your administrator to review the failure before trying again.');if(value instanceof ApiError&&[401,403,404].includes(value.status))onError(value);if(value instanceof BusinessJourneyError&&value.accessError)onError(value.accessError);}
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
- useEffect(()=>{let alive=true;setLoaded(false);setAnalysisSaved(false);setState(empty);setReviewed(false);setAnswers({});setOriginal(null);setPreview(null);setOutputs([]);setReportReceipts([]);setFilePage(null);setReportAvailable(false);setError('');setStatus('');onReportReady(false);
+ useEffect(()=>{let alive=true;setLoaded(false);setAnalysisSaved(false);setRoute(null);setReportStarted(false);setDownloaded('');setState(empty);setReviewed(false);setAnswers({});setOriginal(null);setPreview(null);setOutputs([]);setReportReceipts([]);setFilePage(null);setReportAvailable(false);setError('');setStatus('');onReportReady(false);
   void Promise.all([acceptanceApi.state(record.id),requestOutputsApi.page(record.id),admin?savedAzureApi.list(record.id):Promise.resolve({items:[]})]).then(async([acceptance,files,receipts])=>{
    if(!alive||!current())return;
    if(!validRequestOutputPage(files,record.id,record.semantic_context_version,record.company_id))throw new BusinessJourneyError('Saved file context changed. Reopen this report.');
+   setRoute({binding,demo:files.demo_mode==='FOUNDRY_V10'});
+   setReportStarted(receipts.items.some(item=>item.task==='FULL_REPORT_ARTIFACT'));
    let accepted=acceptance;
    // File history is independently retained; failed analysis recovery must not
    // hide already authorized downloads.
@@ -61,9 +83,10 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
  const confirmed=Boolean(interpretation&&state.confirmed_contract?.current&&state.confirmed_contract.interpretation_id===interpretation?.id);
  const acknowledgedPage=usePagedItems(outputs,binding);
  const displayedOutputs=filePage?outputs:acknowledgedPage.items;
- const readyOutputs=outputs.filter(item=>item.context_version===record.semantic_context_version&&item.delivery_kind==='GENERATED_FILE'&&(item.native_task==='REPORT_DESIGN'||!!item.native_receipt_id&&reportReceipts.includes(item.native_receipt_id)));
+ const readyOutputs=outputs.filter(item=>demo?isCurrentV10Report(item,record):item.context_version===record.semantic_context_version&&item.delivery_kind==='GENERATED_FILE'&&(item.native_task==='REPORT_DESIGN'||!!item.native_receipt_id&&reportReceipts.includes(item.native_receipt_id)));
  const displayedReadyOutputs=displayedOutputs.filter(item=>readyOutputs.some(ready=>ready.id===item.id));
- const hasReport=reportAvailable||readyOutputs.length>0;
+ const otherFiles=displayedOutputs.filter(file=>!readyOutputs.some(ready=>ready.id===file.id));
+ const hasReport=readyOutputs.length>0||reportAvailable&&(!demo||(filePage?.pages??0)>1);
  useEffect(()=>{onReportReady(hasReport)},[hasReport]);
  useEffect(()=>{if(visible)heading.current?.focus()},[step,visible]);
  useEffect(()=>{
@@ -71,24 +94,58 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
   if(returnFocus.current&&!busy&&loaded&&!flight.current){returnFocus.current=null;if(visible&&document.activeElement===document.body)heading.current?.focus()}
  });
  async function operate(action:()=>Promise<void>){if(flight.current)return;returnFocus.current=focusScope;flight.current=true;setBusy(true);setError('');setRecheck(false);try{await action()}catch(value){failure(value)}finally{flight.current=false;if(mounted.current)setBusy(false);if(current())setStatus('')}}
+ async function sendDemoAction(task:DemoPurpose,contractId?:string):Promise<NativeReceipt>{
+  const version=record.semantic_context_version;
+  const input=await savedAzureApi.input(record.id,task,contractId);requireCurrent(current);
+  if(input.demo_mode!=='FOUNDRY_V10'||input.context_version!==version||input.request_version_id!==record.current_request_version_id){
+   throw new BusinessJourneyError('This report or its connection has changed. Reopen the current report before continuing.');
+  }
+  const unavailable=agentAvailabilityMessage(input);
+  if(unavailable)throw new BusinessJourneyError(unavailable);
+  setStatus(task==='REQUIREMENT_ANALYSIS'?'Reviewing the saved goal and its source file…':'Generating the Power BI project from your confirmed requirements…');
+  if(task==='REQUIREMENT_ANALYSIS')setAnalysisSaved(true);else setReportStarted(true);
+  let receipt:NativeReceipt;
+  try{
+   const response=await savedAzureApi.receive(record.id,version,input.settings_id,crypto.randomUUID(),csrfToken,{
+    task,explicit_demo_action:true,...(contractId?{confirmed_contract_id:contractId}:{}),
+   });
+   receipt=response.native_response;
+  }catch(cause){
+   throw new BusinessJourneyError('The outcome of this request could not be confirmed. Reopen the report to check its saved history. No retry was sent.',false,cause instanceof ApiError&&[401,403,404].includes(cause.status)?cause:undefined);
+  }
+  requireCurrent(current);
+  if(receipt.task!==task||receipt.context_version!==version||receipt.state!=='RECEIVED'||receipt.http_status!==200||receipt.provider_status!=='completed'||!receipt.receipt_id){
+   throw new BusinessJourneyError('The requested step did not return a completed result for this report. Its recorded attempt can be inspected in the report history.');
+  }
+  return receipt;
+ }
  async function analyze(){
   if(!admin){setError('This AI workflow currently requires an authorized company administrator. Your requirements and files remain saved.');return;}
   await operate(async()=>{
-   const result=await runBusinessAgent({caseId:record.id,contextVersion:record.semantic_context_version,csrfToken,task:'REQUIREMENT_ANALYSIS',current,storage:sessionStorage,progress:setStatus});
-   setOriginal(result.answer);
-   const check=await savedAzureApi.contract(record.id,result.answer.receipt_id);requireCurrent(current);
-   if(!check.recognized||!check.current||check.task!=='REQUIREMENT_ANALYSIS'||check.context_version!==record.semantic_context_version)throw new BusinessJourneyError('AI returned an answer, shown below, but it could not be prepared for confirmation. It has been saved unchanged. Your administrator needs to resolve this response format; nothing was confirmed.');
-   if(check.analysis_preview){
-    setPreview(nativeAnalysisPreview(check,result.answer.receipt_id,record.semantic_context_version));setReviewed(false);return;
+   if(!routeKnown||demo&&analysisSaved)return;
+   let answer:NativeAnswer;
+   if(demo){
+    const receipt=await sendDemoAction('REQUIREMENT_ANALYSIS');
+    answer=await savedAzureApi.view(record.id,receipt.receipt_id!);requireCurrent(current);
+    if(answer.receipt_id!==receipt.receipt_id||answer.context_version!==record.semantic_context_version)throw new BusinessJourneyError('The saved analysis does not match the current request.');
+   }else{
+    const result=await runBusinessAgent({caseId:record.id,contextVersion:record.semantic_context_version,csrfToken,task:'REQUIREMENT_ANALYSIS',current,storage:sessionStorage,progress:setStatus});
+    answer=result.answer;
    }
-   const intake=await savedAzureApi.intake(record.id,result.answer.receipt_id,record.semantic_context_version,check.settings_id,csrfToken);requireCurrent(current);
+   setOriginal(answer);
+   const check=await savedAzureApi.contract(record.id,answer.receipt_id);requireCurrent(current);
+   if(!check.recognized||!check.current||check.task!=='REQUIREMENT_ANALYSIS'||check.receipt_id!==answer.receipt_id||check.context_version!==record.semantic_context_version)throw new BusinessJourneyError('AI returned an answer, shown below, but it could not be prepared for confirmation. It has been saved unchanged. Your administrator needs to resolve this response format; nothing was confirmed.');
+   if(check.analysis_preview){
+    setPreview(nativeAnalysisPreview(check,answer.receipt_id,record.semantic_context_version));setReviewed(false);return;
+   }
+   const intake=await savedAzureApi.intake(record.id,answer.receipt_id,record.semantic_context_version,check.settings_id,csrfToken);requireCurrent(current);
    if(!intake.accepted)throw new BusinessJourneyError('The AI answer remains saved, but it could not be used as the current understanding. Nothing was confirmed.');
    const next=await acceptanceApi.state(record.id);requireCurrent(current);
    if(!currentAIUnderstanding(next,record.semantic_context_version))throw new BusinessJourneyError('The AI understanding could not be verified for this request. Nothing was confirmed.');
    setState(next);setReviewed(false);
   });
  }
- useEffect(()=>{if(!visible||step!=='understanding'||!loaded||unsavedGoal||interpretation||preview||analysisSaved||busy||flight.current||auto.current===binding)return;auto.current=binding;void analyze()},[visible,step,loaded,binding,unsavedGoal,busy,analysisSaved]);
+ useEffect(()=>{if(!routeKnown||demo||!visible||step!=='understanding'||!loaded||unsavedGoal||interpretation||preview||analysisSaved||busy||flight.current||auto.current===binding)return;auto.current=binding;void analyze()},[visible,step,loaded,binding,unsavedGoal,busy,analysisSaved,routeKnown,demo]);
  async function addAnswer(question?:DurableQuestion,suggestion?:{id:string;label:string}){
   const text=(suggestion?.label??(question?answerDraft(answers,question.id):refinement)).trim();if(!text||unsavedGoal)return;
   const authoritative=Boolean(question&&interpretation);
@@ -126,6 +183,19 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
   });
  }
  async function generate(){if(!confirmed||unsavedGoal||!state.confirmed_contract)return;
+  if(!routeKnown)return;
+  if(demo){
+   if(reportStarted||hasReport)return;
+   await operate(async()=>{
+    const receipt=await sendDemoAction('FULL_REPORT_ARTIFACT',state.confirmed_contract!.id);
+    const file=receipt.report_output;
+    if(!file||!isCurrentV10Report(file,record,receipt.receipt_id!)){
+     throw new BusinessJourneyError('The response was recorded. It did not deliver a verified report package for these requirements. Check other saved files in Download.');
+    }
+    setFilePage(null);setOutputs([file]);setReportAvailable(true);setStep('report');
+   });
+   return;
+  }
   await operate(async()=>{const result=await runBusinessAgent({caseId:record.id,contextVersion:record.semantic_context_version,csrfToken,task:'REPORT_DESIGN',contractId:state.confirmed_contract!.id,current,storage:sessionStorage,progress:setStatus});setOriginal(result.answer);setReportReceipts(previous=>[...previous,result.answer.receipt_id]);
    const files=await nativeFilesApi.list(record.id,result.answer.receipt_id);requireCurrent(current);
    if(!files.retrieval_configured||!files.items.some(file=>file.savable))throw new BusinessJourneyError('AI returned an answer, but no downloadable report file is available. The answer is saved unchanged. Your administrator can review the delivery problem.');
@@ -137,6 +207,24 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
    if(files.items.some(file=>!file.savable))setError('Some files returned by AI could not be delivered. Available files are shown; your administrator can review the remaining delivery problem.');
   });
  }
+ async function downloadReport(file:RequestOutput){
+  await operate(async()=>{
+   setStatus('Checking your download against the original file…');
+   let blob:Blob;
+   try{blob=await verifiedReportDownload(record.id,file)}
+   catch(cause){
+    if(cause instanceof ApiError&&cause.code==='REPORT_DIGEST_MISMATCH')throw new BusinessJourneyError('The download did not match the original file. Reopen the report before downloading again.');
+    throw cause;
+   }
+   requireCurrent(current);
+   const url=URL.createObjectURL(blob);
+   try{
+    const link=document.createElement('a');link.href=url;link.download=file.filename;
+    document.body.append(link);link.click();link.remove();
+   }finally{window.setTimeout(()=>URL.revokeObjectURL(url),1000)}
+   setDownloaded(file.sha256);
+  });
+ }
  const index=steps.findIndex(([key])=>key===step);
  const display=interpretation??(admin&&preview?.context_version===record.semantic_context_version?preview:null);
  const summary=display?.confirmation_summary;
@@ -145,7 +233,7 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
   <div className="wizard-step-heading"><span className="eyebrow">Step {index+1} of {steps.length}</span><h2 ref={heading} tabIndex={-1}>{steps[index][1]}</h2></div>
   {unsavedGoal&&<p role="status" className="state-callout warning">Save your goal changes before AI reviews this request or you confirm it.</p>}
   {busy&&<div role="status" aria-live="polite" className="state-callout info"><span className="processing-spinner" aria-hidden="true"/>{status||'Working…'}</div>}
-  {error&&<p role="alert" className="state-callout danger">{error}</p>}{error&&recheck&&step==='understanding'&&<button disabled={busy||unsavedGoal||!admin} onClick={()=>void analyze()}>Continue AI review when available</button>}
+  {error&&<p role="alert" className="state-callout danger">{error}</p>}{error&&recheck&&!demo&&step==='understanding'&&<button disabled={busy||unsavedGoal||!admin} onClick={()=>void analyze()}>Continue AI review when available</button>}
   <div hidden={step!=='goal'}>{goal}</div>
   <div hidden={step!=='information'}><DurableConversation record={record} csrfToken={csrfToken} actorRole={actorRole} visibleStep="information" businessInformationOnly onInformationPendingChange={informationPendingChange} onContextChanged={onContextChanged} onError={onError}/></div>
   {['understanding','confirm'].includes(step)&&<section aria-label="AI understanding">
@@ -156,12 +244,33 @@ export function BusinessReportJourney({record,csrfToken,actorRole,goal,initialIn
    {display?.questions.map(question=><section key={question.id} className="clarification-panel"><h4>{question.question}</h4><p>{question.reason}</p>{question.suggestions.map(option=><button type="button" key={option.id} disabled={busy||unsavedGoal} onClick={()=>void addAnswer(question,option)}>{option.label}</button>)}{question.allowFreeText&&<><label htmlFor={'ai-answer-'+question.id}>Your answer</label><textarea id={'ai-answer-'+question.id} value={answerDraft(answers,question.id)} disabled={busy} onChange={event=>{setAnswers(previous=>({...previous,[question.id]:event.target.value}));setReviewed(false)}}/><button disabled={busy||unsavedGoal||!(answerDraft(answers,question.id)).trim()} onClick={()=>void addAnswer(question)}>Send answer and update understanding</button></>}</section>)}
    <label htmlFor="ai-refinement">Anything to change or add?</label><textarea id="ai-refinement" value={refinement} disabled={busy} onChange={event=>{setRefinement(event.target.value);setReviewed(false)}} placeholder="For example: focus on monthly costs rather than individual transactions."/><button disabled={busy||unsavedGoal||!refinement.trim()} onClick={()=>void addAnswer()}>Update my requirements</button>
    {!interpretation&&!previewReady?<p role="status">This is an early AI discussion. You can answer its questions, refine your goal or add supporting information. Your requirements have not been confirmed.</p>:confirmed?<p role="status">Your current requirements are confirmed. Changes will need a new AI review and confirmation.</p>:<><p>Your requirements have not been confirmed.</p><label><input type="checkbox" checked={reviewed} disabled={busy} onChange={event=>setReviewed(event.target.checked)}/>I have reviewed this understanding, its questions and assumptions.</label><p>AI may offer optional questions. Confirm only when you are ready to proceed with the understanding shown.</p>{step==='confirm'?<button disabled={busy||unsavedGoal||!canConfirmAIUnderstanding(state,record.semantic_context_version,reviewed,unsavedGoal)||Object.values(answers).some(value=>value.trim())||refinement.trim().length>0} onClick={()=>void confirm()}>Confirm requirements</button>:<button disabled={busy||unsavedGoal||!(canConfirmAIUnderstanding(state,record.semantic_context_version,reviewed,unsavedGoal)||previewReady&&reviewed)||Object.values(answers).some(value=>value.trim())||refinement.trim().length>0} onClick={()=>void continueToConfirmation()}>Continue to confirmation</button>}{!previewReady&&(interpretation?.state!=='READY_FOR_CONFIRMATION'||interpretation.questions.some(question=>question.required))&&<p>AI has not provided an understanding ready for confirmation. Answer its questions or refine your requirements.</p>}</>}
-   </>:loaded&&!busy&&!error&&<p>AI will review your saved goal and supporting information when you open Understanding. No report has been generated yet.</p>}
+   </>:loaded&&routeKnown&&!busy&&(demo?<>{analysisSaved?<p>The review request was recorded. Reopen the report to check for a saved understanding.</p>:<><p>Review the saved goal and source file with Foundry. You can confirm the resulting requirements before requesting a report.</p><button type="button" disabled={!admin||unsavedGoal} onClick={()=>void analyze()}>Start AI review</button></>}</>:!error&&<p>AI will review your saved goal and supporting information when you open Understanding. No report has been generated yet.</p>)}
    {original&&!summary&&<><label htmlFor="ai-early-answer">Your answer or additional information</label><textarea id="ai-early-answer" value={refinement} disabled={busy} onChange={event=>setRefinement(event.target.value)}/><button disabled={busy||unsavedGoal||!refinement.trim()} onClick={()=>void addAnswer()}>Send answer to AI</button><p>You can continue this conversation or add supporting data. Confirmation is available only when AI provides a current understanding that can be reviewed.</p></>}
    {original&&!summary&&<section aria-label="AI response"><h3>AI response</h3>{original.texts.map((text,i)=><p key={i} style={{whiteSpace:'pre-wrap'}}>{text}</p>)}</section>}
   </section>}
-  {step==='generate'&&<section><h3>Generate your report with AI</h3><p>AI uses your confirmed requirements and saved supporting information to create the output. APBRA saves and delivers the returned files unchanged.</p><button disabled={busy||unsavedGoal||!confirmed||!admin} onClick={()=>void generate()}>Generate report</button>{!confirmed&&<p>Review and confirm the current AI understanding first.</p>}{!admin&&<p>This AI workflow is currently limited to authorized company administrators.</p>}</section>}
-  {step==='report'&&<section aria-label="Report downloads"><h3>{hasReport?'Saved files returned by AI':'Your report is not available yet'}</h3><p>{hasReport?'These files are retained for the current requirements. APBRA has not certified their business correctness or Power BI compatibility.':'Confirm your requirements and generate a report to receive downloadable files.'}</p><ul>{displayedReadyOutputs.map(file=><li key={file.id}><a href={requestOutputsApi.download(record.id,file.id)} download>{file.filename}</a></li>)}</ul>{displayedOutputs.some(file=>!readyOutputs.some(ready=>ready.id===file.id))&&<details><summary>Other saved files</summary><p>Earlier or informational files remain available unchanged. They are not presented as a newly generated report.</p><ul>{displayedOutputs.filter(file=>!readyOutputs.some(ready=>ready.id===file.id)).map(file=><li key={file.id}><a href={requestOutputsApi.download(record.id,file.id)} download>{file.filename}</a></li>)}</ul></details>}{hasReport&&displayedReadyOutputs.length===0&&<p>No current-report file is on this page. Use the page controls to find saved files.</p>}{filePage&&<Pagination label="Saved files" total={filePage.total} page={filePage.page} pageSize={filePage.page_size as PageSize} disabled={busy} onPage={number=>void outputPage(number,filePage.page_size as PageSize,filePage.snapshot)} onPageSize={size=>void outputPage(1,size)}/>}{!filePage&&outputs.length>0&&<><p>Files acknowledged in this action. Reopen the report to refresh its full saved history.</p><Pagination label="Files just saved" total={acknowledgedPage.total} page={acknowledgedPage.page} pageSize={acknowledgedPage.pageSize} onPage={acknowledgedPage.onPage} onPageSize={acknowledgedPage.onPageSize}/></>}</section>}
-  <div className="wizard-navigation"><button type="button" className="subtle" disabled={busy||index===0} onClick={()=>setStep(steps[index-1][0])}>Back</button>{step==='goal'&&<button disabled={busy||unsavedGoal} onClick={()=>setStep('information')}>Continue to supporting information</button>}{step==='information'&&<button disabled={busy||unsavedGoal||informationPending} onClick={()=>setStep('understanding')}>Review my requirements with AI</button>}{step==='confirm'&&confirmed&&<button disabled={busy} onClick={()=>setStep('generate')}>Continue to generation</button>}{step==='generate'&&hasReport&&<button disabled={busy} onClick={()=>setStep('report')}>View saved files</button>}</div>
+  {step==='generate'&&<section><h3>Generate your report with AI</h3><p>AI uses your confirmed requirements and saved supporting information to create the output. APBRA saves and delivers the returned files unchanged.</p><button disabled={busy||unsavedGoal||!confirmed||!admin||!routeKnown||demo&&(reportStarted||hasReport)} onClick={()=>void generate()}>Generate report</button>{demo&&reportStarted&&!hasReport&&<p>The generation request was recorded. Reopen this report to check for a saved file.</p>}{!confirmed&&<p>Review and confirm the current AI understanding first.</p>}{!admin&&<p>This AI workflow is currently limited to authorized company administrators.</p>}</section>}
+  {step==='report'&&<section aria-label="Report downloads">
+   <h3>{hasReport?(demo?'Saved report packages':'Saved files returned by AI'):'Your report is not available yet'}</h3>
+   {(!demo||!hasReport)&&<p>{hasReport?'These files are retained for the current requirements. APBRA has not certified their business correctness or Power BI compatibility.':'Confirm your requirements and generate a report to receive downloadable files.'}</p>}
+   <ul>{displayedReadyOutputs.map(file=><li key={file.id}>
+    {demo?<><p>{v10ReportSource(file.v10_provenance)}</p>
+     <p>APBRA checked the package structure. Power BI Desktop verification and business acceptance are pending.</p>
+     <button type="button" disabled={busy} onClick={()=>void downloadReport(file)}>Download {file.filename}</button>
+     <p>Original SHA-256 <code style={{overflowWrap:'anywhere'}}>{file.sha256}</code></p>
+     {downloaded===file.sha256&&<p role="status">Download bytes matched the original SHA-256.</p>}
+    </>:<a href={requestOutputsApi.download(record.id,file.id)} download>{file.filename}</a>}
+   </li>)}</ul>
+   {otherFiles.length>0&&<details><summary>Other saved files</summary>
+    <p>Earlier or informational files remain available unchanged. They are not presented as a newly generated report.</p>
+    <ul>{otherFiles.map(file=><li key={file.id}>
+     <a href={requestOutputsApi.download(record.id,file.id)} download>{file.filename}</a>
+     {file.delivery_kind==='V10_SUPPORTING_ORIGINAL'&&' (supporting file, report package unverified)'}
+    </li>)}</ul>
+   </details>}
+   {hasReport&&displayedReadyOutputs.length===0&&<p>No current-report file is on this page. Use the page controls to find saved files.</p>}
+   {filePage&&<Pagination label="Saved files" total={filePage.total} page={filePage.page} pageSize={filePage.page_size as PageSize} disabled={busy} onPage={number=>void outputPage(number,filePage.page_size as PageSize,filePage.snapshot)} onPageSize={size=>void outputPage(1,size)}/>}
+   {!filePage&&outputs.length>0&&<><p>Files acknowledged in this action. Reopen the report to refresh its full saved history.</p><Pagination label="Files just saved" total={acknowledgedPage.total} page={acknowledgedPage.page} pageSize={acknowledgedPage.pageSize} onPage={acknowledgedPage.onPage} onPageSize={acknowledgedPage.onPageSize}/></>}
+  </section>}
+  <div className="wizard-navigation"><button type="button" className="subtle" disabled={busy||index===0} onClick={()=>setStep(steps[index-1][0])}>Back</button>{step==='goal'&&<button disabled={busy||unsavedGoal} onClick={()=>setStep('information')}>Continue to supporting information</button>}{step==='information'&&<button disabled={busy||unsavedGoal||informationPending} onClick={()=>setStep('understanding')}>{demo?'Review saved information':'Review my requirements with AI'}</button>}{step==='confirm'&&confirmed&&<button disabled={busy} onClick={()=>setStep('generate')}>Continue to generation</button>}{step==='generate'&&hasReport&&<button disabled={busy} onClick={()=>setStep('report')}>View saved files</button>}</div>
  </section>;
 }
