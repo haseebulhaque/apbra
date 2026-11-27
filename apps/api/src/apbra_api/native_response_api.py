@@ -7,20 +7,20 @@ existing semantic/confirmation/design validation; it sends no provider request.
 
 import json
 from collections.abc import Callable, Iterator
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Final, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import Cookie, Depends, FastAPI, Header, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .application import AcceptanceService
 from .auth_boundary import SESSION_COOKIE
-from .authorization import authorized_case_access, resolve_actor
+from .authorization import authorized_case_access, resolve_actor, resolve_session
 from .content_storage import EvidenceObjectStore
 from .domain import (
     Actor,
+    ApplicationError,
     ApplicationPersistence,
     CaseRecord,
     ConfigurationUnavailable,
@@ -31,6 +31,8 @@ from .domain import (
     StaleVersion,
 )
 from .foundry_report_runtime import CURRENT, Reservations
+from .foundry_v10_demo_receiver import V10DemoReceiver
+from .foundry_v10_report_transport import V10Operation
 from .generation import GenerationService, _provider_confirmed_requirements
 from .model_provider import (
     FoundryAccess,
@@ -62,9 +64,23 @@ from .native_response_probe import (
     native_request_content,
     receive_native_response,
 )
+from .persistence import ApplicationSession as Session
 from .persistence import Database
 from .provider_diagnostics import safe_provider_diagnostic
+from .request_outputs import (
+    OutputInputError,
+    V10ReportSave,
+    has_v10_history,
+    v10_binding_metadata,
+    v10_command_key,
+    v10_output_for_receipt,
+)
 from .tenant_settings import TenantSettingsSnapshot
+
+FULL_REPORT: Final = "FULL_REPORT_ARTIFACT"
+ANALYSIS: Final = "REQUIREMENT_ANALYSIS"
+NativePurpose = Literal["REQUIREMENT_ANALYSIS", "REPORT_DESIGN", "FULL_REPORT_ARTIFACT"]
+DemoPurpose = Literal["REQUIREMENT_ANALYSIS", "FULL_REPORT_ARTIFACT"]
 
 
 class NativeReceiveCreate(BaseModel):
@@ -72,8 +88,9 @@ class NativeReceiveCreate(BaseModel):
     expected_context_version: int = Field(ge=1, strict=True)
     expected_settings_id: UUID
     command_key: UUID
-    task: Literal["REQUIREMENT_ANALYSIS", "REPORT_DESIGN"] = "REQUIREMENT_ANALYSIS"
+    task: NativePurpose = ANALYSIS
     confirmed_contract_id: UUID | None = None
+    explicit_demo_action: StrictBool | None = None
 
 
 class NativeContractIntake(BaseModel):
@@ -94,6 +111,9 @@ def register_native_response_routes(
     objects: EvidenceObjectStore,
     reservations: Reservations | None,
     receive_enabled: bool = False,
+    v10_receiver: V10DemoReceiver | None = None,
+    save_v10_report: V10ReportSave | None = None,
+    require_qualified_profile: Callable[[ProviderProfile], None],
 ) -> None:
     index = DatabaseNativeResponseIndex(database)
     # Public correlation only; never an approval or credential.
@@ -101,7 +121,7 @@ def register_native_response_routes(
 
     def sessions() -> Iterator[Session]:
         with database.session() as db:
-            yield db
+            yield cast(Session, db)
 
     def authorize(db: Session, token: str | None, case_id: UUID) -> Actor:
         actor = resolve_actor(db, token)
@@ -120,8 +140,9 @@ def register_native_response_routes(
             )
         )
         binding = db.get(NativeContractBindingRow, command.id)
-        return {
-            "task": binding.task if binding is not None else None,
+        demo = v10_binding_metadata(binding)
+        result = {
+            "task": demo["purpose"] if demo else binding.task if binding is not None else None,
             "http_status": command.http_status,
             "provider_status": command.provider_status,
             "diagnostic": safe_provider_diagnostic(
@@ -134,6 +155,9 @@ def register_native_response_routes(
             "bytes": receipt.size if receipt else None,
             "sha256": receipt.digest if receipt else None,
         }
+        if demo and demo["purpose"] == FULL_REPORT:
+            result["report_output"] = v10_output_for_receipt(db, receipt) if receipt else None
+        return result
 
     def prepare_request(
         db: Session, actor: Actor, case: CaseRecord, snapshot: TenantSettingsSnapshot,
@@ -219,6 +243,54 @@ def register_native_response_routes(
                                      "serviceFileUploaded": False, "processingVerified": False},
                     "generationPolicy": service.generation_policy,
                 })
+        elif task == FULL_REPORT:
+            if contract_id is None or goal_only:
+                raise Conflict()
+            # This purpose uses the existing confirmed-contract validation, but
+            # leaves design and compilation to the selected Foundry agent.
+            contract = store.confirmed_contract_for_case(case.id, contract_id)
+            latest = store.latest_interpretation(case.id)
+            if (contract is None or latest is None or contract.interpretation_id != latest.id
+                    or latest.context_version != case.semantic_context_version
+                    or latest.request_version_id != case.current_request_version_id
+                    or contract.settings_version_id != snapshot.id):
+                raise StaleVersion()
+            source_receipt = db.scalar(
+                select(NativeResponseReceiptRow).join(
+                    NativeReceiveCommandRow,
+                    NativeReceiveCommandRow.id == NativeResponseReceiptRow.operation_id,
+                ).where(
+                    NativeResponseReceiptRow.company_id == actor.company_id,
+                    NativeResponseReceiptRow.case_id == case.id,
+                    NativeReceiveCommandRow.actor_membership_id == actor.membership_id,
+                    NativeReceiveCommandRow.command_key == v10_command_key(
+                        actor.company_id, case.id, ANALYSIS),
+                    NativeReceiveCommandRow.context_version == case.semantic_context_version,
+                    NativeReceiveCommandRow.settings_id == snapshot.id,
+                    NativeReceiveCommandRow.state == "RECEIVED",
+                    NativeReceiveCommandRow.provider_status == "completed",
+                )
+            )
+            provenance = json.loads(latest.session_json).get("providerProvenance", {})
+            source_binding = (db.get(NativeContractBindingRow, source_receipt.operation_id)
+                              if source_receipt is not None else None)
+            demo_analysis = v10_binding_metadata(source_binding)
+            if (source_receipt is None or source_binding is None or v10_receiver is None
+                    or not demo_analysis or demo_analysis["purpose"] != ANALYSIS
+                    or provenance.get("sourceReceiptId") != str(source_receipt.id)
+                    or demo_analysis["grant_sha256"] != v10_receiver.grant_sha256
+                    or json.loads(source_binding.metadata_json).get("qualification")
+                    != v10_receiver.qualification):
+                raise Conflict()
+            request = ProviderRequest(task="REPORT_DESIGN", system_prompt="", output_schema={},
+                requires_vision=False, context={
+                    "confirmedRequirements": _provider_confirmed_requirements(
+                        json.loads(contract.contract_json)),
+                    "dataStructure": request.context["dataStructure"],
+                    "generationPolicy": service.generation_policy,
+                    "caseFiles": bundle.sources,
+                    "fileDelivery": request.context["fileDelivery"],
+                })
         elif task == "REPORT_DESIGN":
             if contract_id is None:
                 raise Conflict()
@@ -262,12 +334,232 @@ def register_native_response_routes(
         )
         return request, availability, bundle.image_parts, bundle.file_parts
 
+    def nominated(actor: Actor, case_id: UUID) -> bool:
+        return (v10_receiver is not None and v10_receiver.case.company_id == actor.company_id
+                and v10_receiver.case.case_id == case_id)
+
+    def v10_inputs(
+        db: Session, actor: Actor, case: CaseRecord, snapshot: TenantSettingsSnapshot,
+        purpose: DemoPurpose,
+        contract_id: UUID | None, operation_id: UUID, request: ProviderRequest,
+    ) -> tuple[V10Operation, ProviderProfile]:
+        assert v10_receiver is not None
+        profile = snapshot.settings.provider_profile
+        version = cast(ApplicationPersistence, db).request_version(case.current_request_version_id)
+        sources = request.context.get("caseFiles", [])
+        if (not snapshot.settings.automatic_generation_enabled or profile is None
+                or profile.protocol != "FOUNDRY_AGENT_RESPONSES"
+                or snapshot.secret_reference_id is not None or version is None
+                or request.requires_vision or len(sources) != 1
+                or sources[0].get("transport") != "INLINE_UTF8_SOURCE"):
+            raise NativeInputsUnavailable()
+        source = sources[0]
+        if purpose == FULL_REPORT and contract_id is None:
+            raise Conflict()
+        require_qualified_profile(profile)
+        config = v10_receiver.case
+        return V10Operation(
+            scope=NativeResponseScope(actor.company_id, case.id, case.semantic_context_version,
+                                      operation_id),
+            purpose=purpose, project_url=config.project_url, agent_name=config.agent_name,
+            knowledge_binding=config.knowledge_binding, knowledge_scope=config.knowledge_scope,
+            profile_sha256=digest(profile.model_dump(mode="json")),
+            context_sha256=digest(request.context),
+            source_id=UUID(source["id"]), request_version_id=version.id,
+            source_digest=source["contentDigest"], goal=version.request_text,
+        ), profile
+
+    def v10_command(db: Session, actor: Actor, case_id: UUID, purpose: str
+                    ) -> NativeReceiveCommandRow | None:
+        key = v10_command_key(actor.company_id, case_id, purpose)
+        return db.scalar(select(NativeReceiveCommandRow).where(
+            NativeReceiveCommandRow.company_id == actor.company_id,
+            NativeReceiveCommandRow.case_id == case_id,
+            NativeReceiveCommandRow.command_key == key,
+        ))
+
+    def receive_v10(
+        db: Session, actor: Actor, case_id: UUID, payload: NativeReceiveCreate,
+        token: str | None,
+    ) -> dict[str, Any]:
+        if (v10_receiver is None or payload.explicit_demo_action is not True
+                or payload.task not in (ANALYSIS, FULL_REPORT)):
+            raise ConfigurationUnavailable()
+        purpose = cast(DemoPurpose, payload.task)
+        session, _ = resolve_session(db, token)
+        active = cast(ApplicationPersistence, db).active_actor(
+            actor.membership_id, actor.identity_id, lock=True
+        )
+        if active != actor or not actor.role.can_invite:
+            raise ProtectedResourceNotFound()
+        authorized_case_access(db, actor, case_id, require_edit=True, lock=True)
+        case = cast(ApplicationPersistence, db).locked_case(case_id)
+        if case is None:
+            raise ProtectedResourceNotFound()
+        snapshot = snapshot_for(db, actor)
+        if (case.semantic_context_version != payload.expected_context_version
+                or snapshot.id != payload.expected_settings_id):
+            raise StaleVersion()
+        previous = v10_command(db, actor, case.id, purpose)
+        if previous is not None:
+            binding = db.get(NativeContractBindingRow, previous.id)
+            demo = v10_binding_metadata(binding)
+            if (not demo or binding is None or previous.actor_membership_id != actor.membership_id
+                    or demo["session_id"] != str(session.id) or demo["purpose"] != purpose
+                    or demo["grant_sha256"] != v10_receiver.grant_sha256
+                    or previous.settings_id != snapshot.id
+                    or previous.context_version != case.semantic_context_version
+                    or binding.contract_id != payload.confirmed_contract_id):
+                raise Conflict()
+            return {"native_response": summary(db, previous)}
+        if purpose == FULL_REPORT:
+            analysis = v10_command(db, actor, case_id, ANALYSIS)
+            admission = (db.get(NativeContractBindingRow, analysis.id)
+                         if analysis is not None else None)
+            if v10_binding_metadata(admission).get("session_id") != str(session.id):
+                raise Conflict()
+        request, availability, images, files = prepare_request(
+            db, actor, case, snapshot, purpose, payload.confirmed_contract_id
+        )
+        if request is None or not availability["ready"] or images or files:
+            raise NativeInputsUnavailable()
+        operation, profile = v10_inputs(db, actor, case, snapshot, purpose,
+                                       payload.confirmed_contract_id, uuid4(), request)
+        claimed = False
+
+        def verify(check_db: Session) -> bool:
+            check_db.expire_all()
+            actual = authorize(check_db, token, case_id)
+            active_session, _ = resolve_session(check_db, token)
+            if actual != actor or active_session.id != session.id:
+                return False
+            current_case, _ = authorized_case_access(check_db, actual, case_id, require_edit=True)
+            current = snapshot_for(check_db, actual)
+            if (current_case.current_request_version_id != operation.request_version_id
+                    or current_case.semantic_context_version != operation.scope.context_version
+                    or current.id != snapshot.id or current.digest != snapshot.digest):
+                return False
+            candidate, readiness, pictures, attachments = prepare_request(
+                check_db, actual, current_case, current, purpose, payload.confirmed_contract_id
+            )
+            if candidate is None or not readiness["ready"] or pictures or attachments:
+                return False
+            fresh, _ = v10_inputs(
+                check_db, actual, current_case, current, purpose, payload.confirmed_contract_id,
+                operation.scope.operation_id, candidate,
+            )
+            return fresh == operation
+
+        def current() -> bool:
+            with database.session() as fresh_db:
+                return verify(cast(Session, fresh_db))
+
+        def claim() -> bool:
+            # Only this handler can dispatch the admission it successfully
+            # committed. Concurrent callers and restarts return the saved row.
+            nonlocal claimed
+            if claimed:
+                return False
+            with database.session() as fresh_db:
+                db_session = cast(Session, fresh_db)
+                admitted = v10_command(db_session, actor, case_id, purpose)
+                if (admitted is None or admitted.id != operation.scope.operation_id
+                        or admitted.state != "ADMITTED" or not verify(db_session)):
+                    return False
+                claimed = True
+                return True
+
+        try:
+            exchange = v10_receiver.open(
+                operation, actor_id=actor.identity_id, membership_id=actor.membership_id,
+                session_id=session.id, settings_id=snapshot.id, settings_digest=snapshot.digest,
+                current=current, claim=claim,
+            )
+        except ProviderCallError:
+            raise ConfigurationUnavailable() from None
+        command = NativeReceiveCommandRow(
+            id=operation.scope.operation_id, company_id=actor.company_id, case_id=case_id,
+            actor_membership_id=actor.membership_id,
+            context_version=operation.scope.context_version,
+            settings_id=snapshot.id,
+            command_key=v10_command_key(actor.company_id, case_id, purpose),
+            state="ADMITTED",
+        )
+        db.add(command)
+        db.flush()
+        db.add(NativeContractBindingRow(
+            operation_id=command.id, company_id=actor.company_id, case_id=case_id,
+            context_version=command.context_version, task=request.task,
+            contract_id=payload.confirmed_contract_id,
+            input_digest=digest({"task": request.task, "context": request.context, "images": []}),
+            profile_digest=digest(profile.model_dump()),
+            metadata_json=json.dumps({
+                "v10_demo": {"purpose": purpose, "session_id": str(session.id),
+                             "request_version_id": str(operation.request_version_id),
+                             "source_sha256": operation.source_digest,
+                             "context_sha256": operation.context_sha256,
+                             "grant_sha256": v10_receiver.grant_sha256},
+                "knowledge_binding": operation.knowledge_binding,
+                "knowledge_scope": operation.knowledge_scope,
+                "agent_version": "10",
+                "qualification": v10_receiver.qualification,
+            }, sort_keys=True, separators=(",", ":")),
+        ))
+        cast(ApplicationPersistence, db).add_audit(
+            actor, "NATIVE_V10_STAGE_ADMITTED", "NATIVE_RECEIVE_COMMAND", command.id,
+            json.dumps({
+                "purpose": purpose, "request_version_id": str(operation.request_version_id),
+            }),
+        )
+        db.commit()
+
+        archive = NativeResponseArchive(operation.scope, objects, index)
+        original = None
+        try:
+            result = exchange.send(profile, request, archive=archive)
+            command.state = result.status
+            command.http_status = result.http_status
+            command.provider_status = result.provider_status
+            diagnostic = result.diagnostic
+            if (purpose == FULL_REPORT and result.provider_status == "completed"
+                    and result.receipt is not None and save_v10_report is not None):
+                try:
+                    original = exchange.read_report(
+                        profile, archive=archive, receipt_id=result.receipt.id,
+                    )
+                except ProviderCallError as exc:
+                    diagnostic = exc.diagnostic
+        except ProviderCallError as exc:
+            command.state = "UNCERTAIN"
+            diagnostic = exc.diagnostic
+        safe = safe_provider_diagnostic(diagnostic)
+        encoded = json.dumps(safe, sort_keys=True, separators=(",", ":"))
+        command.diagnostic_json = encoded if len(encoded.encode("utf-8")) <= 4096 else "{}"
+        db.commit()
+        # Save the exact file already read for this operation. A failed
+        # storage/ACL check cannot cause another provider call.
+        if original is not None and save_v10_report is not None:
+            def guard(save_db: Session) -> None:
+                # Native session validation touches the password session row.
+                # Reuse the save transaction to avoid waiting on its own lock.
+                if not verify(save_db) or not exchange.report_save_lease_current():
+                    raise StaleVersion()
+
+            try:
+                save_v10_report(db, token, case_id, command.context_version, original, guard)
+            except OutputInputError:
+                # The response receipt remains available even when an unsafe
+                # file cannot enter the case's downloadable output history.
+                pass
+        authorize(db, token, case_id)
+        return {"native_response": summary(db, command)}
+
     @app.get("/api/cases/{case_id}/native-response-input")
     def inspect_input(
         case_id: UUID,
         response: Response,
         db: Annotated[Session, Depends(sessions)],
-        task: Literal["REQUIREMENT_ANALYSIS", "REPORT_DESIGN"] = "REQUIREMENT_ANALYSIS",
+        task: NativePurpose = ANALYSIS,
         confirmed_contract_id: UUID | None = None,
         token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
     ) -> dict[str, Any]:
@@ -277,11 +569,35 @@ def register_native_response_routes(
             raise ProtectedResourceNotFound()
         response.headers["Cache-Control"] = "no-store"
         snapshot = snapshot_for(db, actor)
-        _, availability, _, _ = prepare_request(
+        demo = nominated(actor, case_id) or has_v10_history(db, actor.company_id, case_id)
+        if task == FULL_REPORT and not demo:
+            raise ConfigurationUnavailable()
+        request, availability, images, files = prepare_request(
             db, actor, case, snapshot, task, confirmed_contract_id,
         )
         can_receive = False
-        if receive_enabled and reservations is not None:
+        selected_connection = None
+        if demo:
+            availability["demo_mode"] = "FOUNDRY_V10"
+            if (v10_receiver is not None and task in (ANALYSIS, FULL_REPORT)
+                    and request is not None and availability["ready"]
+                    and not images and not files and not v10_command(db, actor, case_id, task)):
+                try:
+                    purpose = cast(DemoPurpose, task)
+                    operation, _ = v10_inputs(
+                        db, actor, case, snapshot, purpose, confirmed_contract_id, uuid4(), request,
+                    )
+                    session, _ = resolve_session(db, token)
+                    can_receive = v10_receiver.permits(
+                        operation, actor_id=actor.identity_id, membership_id=actor.membership_id,
+                        session_id=session.id, settings_id=snapshot.id,
+                        settings_digest=snapshot.digest,
+                    )
+                    if can_receive:
+                        selected_connection = v10_receiver.connection_id(purpose)
+                except (ApplicationError, ProviderCallError):
+                    pass
+        elif receive_enabled and reservations is not None:
             approval = reservations.approval
             can_receive = (
                 availability["ready"] is True
@@ -296,11 +612,12 @@ def register_native_response_routes(
                 and approval.semantic_context_version == case.semantic_context_version
                 and reservations.ready()
             )
+            selected_connection = connection_id if can_receive else None
         availability.update(
             receive_available=can_receive,
             receive_reason=("AUTHORIZED_SINGLE_RESPONSE_READY" if can_receive
                             else "PRIVATE_AUTHORIZATION_UNAVAILABLE"),
-            connection_id=connection_id if can_receive else None,
+            connection_id=selected_connection,
         )
         return availability
 
@@ -327,14 +644,20 @@ def register_native_response_routes(
         token: str | None = Cookie(default=None, alias=SESSION_COOKIE),
         csrf: str | None = Header(default=None, alias="X-CSRF-Token"),
     ) -> dict[str, Any]:
-        if not receive_enabled:
+        if not receive_enabled and v10_receiver is None:
             raise ConfigurationUnavailable()
         require_csrf(token, csrf)
         actor = authorize(db, token, case_id)
+        if nominated(actor, case_id):
+            return receive_v10(db, actor, case_id, payload, token)
+        if has_v10_history(db, actor.company_id, case_id):
+            raise ConfigurationUnavailable()
         store = cast(ApplicationPersistence, db)
         case = store.locked_case(case_id)
         if case is None:
             raise ProtectedResourceNotFound()
+        if payload.task == FULL_REPORT or payload.explicit_demo_action is not None:
+            raise ConfigurationUnavailable()
         previous = db.scalar(
             select(NativeReceiveCommandRow).where(
                 NativeReceiveCommandRow.company_id == actor.company_id,
@@ -465,6 +788,11 @@ def register_native_response_routes(
         command = db.get(NativeReceiveCommandRow, row.operation_id)
         assert command is not None
         binding = db.get(NativeContractBindingRow, row.operation_id)
+        demo = v10_binding_metadata(binding)
+        if demo and demo["purpose"] == FULL_REPORT:
+            return command, binding, None, {
+                "code": "NATIVE_OUTPUT_ARTIFACT_ONLY", "phase": "NATIVE_BINDING", "findings": [],
+            }
         profile = snapshot.settings.provider_profile
         unavailable = (
             "NATIVE_BINDING_MISSING" if binding is None else
@@ -566,6 +894,13 @@ def register_native_response_routes(
         if candidate is None or binding is None:
             return {"accepted": False, "reason": "INFORMATIONAL_ANSWER_ONLY",
                     "diagnostic": diagnostic}
+        demo = v10_binding_metadata(binding)
+        if demo:
+            session, _ = resolve_session(db, token)
+            if (command.actor_membership_id != actor.membership_id
+                    or demo["session_id"] != str(session.id)
+                    or demo["request_version_id"] != str(case.current_request_version_id)):
+                raise ProtectedResourceNotFound()
         acceptance = service_for(db, snapshot, include_provider=False)
         if binding.task == "REQUIREMENT_ANALYSIS":
             existing = store.interpretation_for_context(case_id, case.semantic_context_version)

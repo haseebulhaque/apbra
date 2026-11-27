@@ -61,6 +61,7 @@ from .evidence import LocalEvidenceStore
 from .foundry_admin_reads import AdminReadCredentials, ReadRequest, observe
 from .foundry_agent_details import AgentMetadataCredentialProvider, agent_details
 from .foundry_report_runtime import ReservedCredentials
+from .foundry_v10_demo_receiver import V10DemoReceiver
 from .generation import GenerationBridge, GenerationService
 from .identity_service import IdentityService
 from .knowledge_dispatch import KnowledgeDispatchService, KnowledgeProvider, parse_request
@@ -310,11 +311,18 @@ def create_app(
     native_receive_enabled: bool = False,
     password_mailer: PasswordMailer | None = None,
     password_settings: PasswordAuthSettings | None = None,
+    v10_demo_receiver: V10DemoReceiver | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     settings.validate_security_profile()
     if native_receive_enabled and settings.profile not in {"development", "test"}:
         raise ValueError("Native receive inspection is qualified only for local development/test.")
+    if v10_demo_receiver is not None and (
+        type(v10_demo_receiver) is not V10DemoReceiver
+        or settings.profile not in {"development", "test"}
+        or not v10_demo_receiver.allowed_in(settings.profile)
+    ):
+        raise ValueError("The private version-10 demo requires a qualified local receiver.")
     if knowledge_provider is not None and settings.profile != "test":
         raise ValueError("Document provider injection requires the test profile.")
     qualified_profiles = settings.qualified_provider_profiles()
@@ -2604,7 +2612,7 @@ def create_app(
         db.commit()
         return {"membership": {"id": str(row.id), "role": row.role, "active": row.active}}
 
-    if native_receive_enabled and evidence_store is None:
+    if (native_receive_enabled or v10_demo_receiver is not None) and evidence_store is None:
         raise ConfigurationUnavailable()
     if evidence_store is not None:
 
@@ -2638,6 +2646,11 @@ def create_app(
             access_for=native_access,
             objects=evidence_store,
             receive_enabled=native_receive_enabled,
+            v10_receiver=v10_demo_receiver,
+            save_v10_report=lambda *args: store_v10_report(*args),
+            require_qualified_profile=lambda profile: validate_qualified_profile(
+                profile, qualified_profiles,
+            ),
             reservations=(
                 foundry_credentials.reservations
                 if isinstance(foundry_credentials, ReservedCredentials)
@@ -2668,7 +2681,7 @@ def create_app(
         )
         return profile, access, lambda: credentials.ready(company_id, profile)
 
-    register_request_output_routes(
+    store_v10_report = register_request_output_routes(
         app,
         database,
         require_csrf=require_csrf,
@@ -2676,6 +2689,8 @@ def create_app(
         cursor_secret=settings.session_secret,
         native_objects=evidence_store,
         artifact_access_for=artifact_access if foundry_credentials is not None else None,
+        v10_case=(v10_demo_receiver.case.company_id, v10_demo_receiver.case.case_id)
+        if v10_demo_receiver is not None else None,
     )
 
     register_password_routes(

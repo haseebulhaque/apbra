@@ -24,6 +24,7 @@ from .foundry_owner_metadata import _Discard, _private_sdk_logging
 if TYPE_CHECKING:
     from .config import Settings
     from .foundry_catalogue_lease import CataloguePlan
+    from .model_provider import FoundryAccess
     from .tenant_settings import TenantSettingsSnapshot
 
 
@@ -322,6 +323,7 @@ def run_receiver(
     catalogue_plan: CataloguePlan | None = None,
     catalogue_guard: Callable[[], bool] | None = None,
     preview_exposure: PreviewExposure | None = None,
+    v10_public_verifier: str | None = None,
 ) -> None:
     """Trusted host entrypoint. CLI cannot enable invocation or manufacture attestation."""
     from .config import get_settings
@@ -331,6 +333,9 @@ def run_receiver(
     from .tenant_settings import validate_qualified_profile
 
     token = None
+    v10_peer = None
+    v10_grant = None
+    v10_receiver = None
     admin_credentials = None
     database = None
     stopped = threading.Event()
@@ -355,6 +360,16 @@ def run_receiver(
                 require(catalogue_guard is None or callable(catalogue_guard))
             settings = settings or get_settings()
             settings.validate_security_profile()
+            if v10_public_verifier is not None:
+                from .foundry_v10_demo_receiver import V10PrivatePeer
+
+                require(not runtime and invocation_gate is None and catalogue_plan is None
+                        and application_factory is None and preview_exposure is None
+                        and settings.profile in {"test", "development"}
+                        and settings.automatic_generation_enabled is False
+                        and settings.foundry_host_enabled is False
+                        and not settings.bootstrap_enabled)
+                v10_peer = V10PrivatePeer(channel, v10_public_verifier, plan)
             if catalogue_plan is not None:
                 require(settings.automatic_generation_enabled is False)
             _, public = _local_address(settings)
@@ -459,12 +474,21 @@ def run_receiver(
             require(exact(channel, len(HELLO), plan.authorization_deadline) == HELLO)
             nonce = (nonce_factory or (lambda: secrets.token_hex(32)))()
             require(type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce))
-            channel.write(
-                json.dumps(
-                    handoff_challenge(nonce, preview_exposure), separators=(",", ":")
-                ).encode()
-                + b"\n"
-            )
+            challenge = handoff_challenge(nonce, preview_exposure)
+            if v10_peer is not None:
+                challenge["v10_public_verifier"] = v10_peer.key
+            channel.write(json.dumps(challenge, separators=(",", ":")).encode() + b"\n")
+            if v10_peer is not None:
+                from .native_contracts import digest as json_digest
+
+                v10_grant = v10_peer.receive_grant(nonce)
+                case = v10_grant.case
+                require((case.settings_id, case.settings_digest, case.profile_sha256) ==
+                        (initial.id, initial.digest, json_digest(profile.model_dump(mode="json")))
+                        and profile.endpoint == (case.project_url + "/agents/" + case.agent_name
+                                                 + "/endpoint/protocols/openai/responses")
+                        and profile.agent_version in {None, "10"} and unchanged())
+                channel.write(b"V10_DEMO_GRANT_ACCEPTED\n")
             catalogue_account = None
             if catalogue_plan is not None:
                 from .foundry_catalogue_lease import validate_approval
@@ -478,6 +502,7 @@ def run_receiver(
                 require(catalogue_current())
                 channel.write(b"CATALOGUE_APPROVAL_ACCEPTED\n")
             confirmed_account = receive_account(channel, plan, nonce, preview_exposure)
+            require(v10_grant is None or confirmed_account == v10_grant.home_account_id)
             require(catalogue_plan is None or confirmed_account == catalogue_account)
             require(
                 unchanged() and (binding is None or binding.home_account_id == confirmed_account)
@@ -512,7 +537,7 @@ def run_receiver(
                     catalogue_plan, account, token, catalogue_current
                 )
             del acquired, account, catalogue_account
-            credentials = (None if catalogue_plan is not None else
+            credentials = (None if catalogue_plan is not None or v10_peer is not None else
                            BrowserMetadataCredential(initial, token, unchanged))
             runtime_credentials = None
             if binding is not None:
@@ -549,14 +574,41 @@ def run_receiver(
                 "foundry_metadata_credentials": credentials,
                 "foundry_credentials": runtime_credentials,
             }
+            if v10_peer is not None and v10_grant is not None:
+                from .foundry_v10_demo_receiver import V10DemoReceiver
+
+                grant = v10_grant
+                private_peer = v10_peer
+
+                def demo_current() -> bool:
+                    return (not stopped.is_set() and grant.current() and unchanged()
+                            and token is not None and token.ready() and private_peer.connected(0))
+
+                def scoped_access() -> FoundryAccess:
+                    assert profile is not None and token is not None
+                    provider = FoundryTokenCredentialProvider(
+                        company_id=plan.company_id, profile=profile, token_credential=token,
+                        enabled=demo_current, knowledge_binding=grant.case.knowledge_binding,
+                        knowledge_scope=grant.case.knowledge_scope, agent_version="10",
+                        qualification="LIVE_METADATA_VERIFIED",
+                    )
+                    return provider.resolve(plan.company_id, profile)
+
+                v10_receiver = V10DemoReceiver(
+                    grant, scoped_access(), scoped_access(), host_current=demo_current,
+                    authorize_stage=v10_peer.authorize_stage,
+                    exclusive_writer=v10_peer.exclusive_writer,
+                )
+                app_kwargs["v10_demo_receiver"] = v10_receiver
             if catalogue_plan is not None:
                 app_kwargs["foundry_admin_credentials"] = admin_credentials
             app = (application_factory or create_app)(**app_kwargs)
 
             def monitor() -> None:
                 try:
+                    connected = v10_peer.connected if v10_peer is not None else channel.connected
                     while not stopped.is_set():
-                        if not channel.connected(0.1) or token is None or not token.ready():
+                        if not connected(0.1) or token is None or not token.ready():
                             break
                 except BaseException:
                     stopped.set()
@@ -568,6 +620,7 @@ def run_receiver(
             watcher = threading.Thread(target=monitor, daemon=True)
             watcher.start()
             require(not stopped.is_set() and (
+                demo_current() if v10_receiver is not None else
                 catalogue_current() if catalogue_plan is not None else
                 credentials is not None and credentials.ready(plan.company_id, profile)
             ))
@@ -583,6 +636,7 @@ def run_receiver(
         stopped.set()
         with _private_sdk_logging(), redirect_stdout(_Discard()), redirect_stderr(_Discard()):
             for close in (admin_credentials.close if admin_credentials is not None else None,
+                          v10_receiver.close if v10_receiver is not None else None,
                           token.close if token is not None else None, channel.close):
                 if close is not None:
                     try:
@@ -612,12 +666,15 @@ def main() -> None:
     parser.add_argument("--listen-port", required=True, type=int)
     parser.add_argument("--published-port", required=True, type=int)
     parser.add_argument("--runtime", action="store_true")
+    parser.add_argument("--v10-public-verifier", default=None)
     args = vars(parser.parse_args())
     runtime = args.pop("runtime")
+    v10_key = args.pop("v10_public_verifier")
     listener = (args.pop("listen_host"), args.pop("listen_port"))
     published = args.pop("published_port")
     try:
         if runtime:
+            require(v10_key is None)
             from .foundry_report_runtime import run_private_report_receiver
 
             run_private_report_receiver(
@@ -628,6 +685,7 @@ def main() -> None:
             HandoffPlan(**args),
             StdioChannel(),
             runtime=runtime,
+            v10_public_verifier=v10_key,
             listener=listener,
             published_port=published,
         )

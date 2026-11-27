@@ -1,4 +1,4 @@
-"""Opaque request outputs: preserve bytes, enforce access, never judge report content."""
+"""Authorized request outputs and bounded structural inspection of the v10 original."""
 
 import base64
 import binascii
@@ -6,12 +6,17 @@ import hashlib
 import hmac
 import io
 import json
+import ntpath
+import posixpath
+import re
+import stat
+import unicodedata
 import zipfile
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 from urllib.parse import quote
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import Cookie, Depends, FastAPI, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -36,7 +41,9 @@ from .foundry_artifacts import (
     generated_files,
     retrieve_file,
 )
+from .foundry_v10_report_transport import V10Original
 from .model_provider import FoundryAccess, ProviderProfile
+from .native_contracts import unique_object
 from .native_response_archive import (
     NativeResponseArchive,
     NativeResponsePreservationFailed,
@@ -75,6 +82,102 @@ class OutputTooLarge(OutputInputError):
     public_message = 'The output exceeds the supported artifact byte limit.'
 
 
+V10ReportSave = Callable[
+    [Session, str | None, UUID, int, V10Original, Callable[[Session], None]], dict[str, Any]
+]
+
+
+def v10_binding_metadata(binding: NativeContractBindingRow | None) -> dict[str, str]:
+    if binding is None:
+        return {}
+    value = json.loads(binding.metadata_json).get("v10_demo")
+    if not isinstance(value, dict):
+        return {}
+    required = {
+        "purpose", "session_id", "request_version_id", "source_sha256", "context_sha256",
+        "grant_sha256",
+    }
+    if set(value) != required or not all(isinstance(v, str) for v in value.values()):
+        raise OutputInputError()
+    if any(not re.fullmatch(r"[a-f0-9]{64}", value[key])
+           for key in ("source_sha256", "context_sha256", "grant_sha256")):
+        raise OutputInputError()
+    if (value["purpose"], binding.task) not in {
+        ("REQUIREMENT_ANALYSIS", "REQUIREMENT_ANALYSIS"),
+        ("FULL_REPORT_ARTIFACT", "REPORT_DESIGN"),
+    }:
+        raise OutputInputError()
+    return dict(value)
+
+
+def v10_command_key(company_id: UUID, case_id: UUID, purpose: str) -> UUID:
+    # Renewal, context changes, and a different browser command cannot reopen a stage.
+    return uuid5(NAMESPACE_URL, f"apbra:v10-demo:{company_id}:{case_id}:{purpose}")
+
+
+def has_v10_history(db: Session, company_id: UUID, case_id: UUID) -> bool:
+    commands = db.scalars(select(NativeContractBindingRow).join(
+        NativeReceiveCommandRow,
+        NativeReceiveCommandRow.id == NativeContractBindingRow.operation_id,
+    ).where(
+        NativeReceiveCommandRow.company_id == company_id,
+        NativeReceiveCommandRow.case_id == case_id,
+        NativeReceiveCommandRow.command_key.in_([
+            v10_command_key(company_id, case_id, purpose)
+            for purpose in ("REQUIREMENT_ANALYSIS", "FULL_REPORT_ARTIFACT")
+        ]),
+    ))
+    return any(v10_binding_metadata(binding) for binding in commands)
+
+
+def _v10_file_binding(receipt: NativeResponseReceiptRow, package_checked: bool) -> str:
+    return json.dumps(["APBRA_V10_ORIGINAL", str(receipt.operation_id), receipt.digest,
+                       package_checked], separators=(",", ":"))
+
+
+def _v10_output_kind(
+    row: RequestOutputRow, receipt: NativeResponseReceiptRow, binding: NativeContractBindingRow,
+) -> str | None:
+    metadata = v10_binding_metadata(binding)
+    if (metadata.get("purpose") != "FULL_REPORT_ARTIFACT"
+            or str(row.request_version_id) != metadata["request_version_id"]
+            or row.native_receipt_id != receipt.id or row.command_key != receipt.operation_id
+            or row.case_id != receipt.case_id or row.company_id != receipt.company_id
+            or row.context_version != receipt.context_version or row.origin != "NATIVE_OUTPUT"):
+        return None
+    for checked, kind in ((True, "V10_REPORT_ORIGINAL"), (False, "V10_SUPPORTING_ORIGINAL")):
+        expected = save_digest(row.context_version, row.filename, row.origin, receipt.id,
+                               row.content_digest, _v10_file_binding(receipt, checked))
+        if hmac.compare_digest(row.payload_digest, expected):
+            return kind
+    return None
+
+
+def v10_output_for_receipt(db: Session, receipt: NativeResponseReceiptRow) -> dict[str, Any] | None:
+    command = db.get(NativeReceiveCommandRow, receipt.operation_id)
+    binding = db.get(NativeContractBindingRow, receipt.operation_id)
+    if (binding is None or command is None or command.state != "RECEIVED"
+            or command.provider_status != "completed" or command.http_status != 200):
+        return None
+    qualification = json.loads(binding.metadata_json).get("qualification")
+    if qualification not in ("OFFLINE_FIXTURE", "LIVE_METADATA_VERIFIED"):
+        return None
+    rows = db.scalars(select(RequestOutputRow).where(
+        RequestOutputRow.case_id == receipt.case_id,
+        RequestOutputRow.company_id == receipt.company_id,
+        RequestOutputRow.actor_membership_id == command.actor_membership_id,
+        RequestOutputRow.native_receipt_id == receipt.id,
+        RequestOutputRow.command_key == command.id,
+    ))
+    for row in rows:
+        if kind := _v10_output_kind(row, receipt, binding):
+            return {
+                **output_json(row, "FULL_REPORT_ARTIFACT", v10_kind=kind),
+                "v10_provenance": qualification,
+            }
+    return None
+
+
 def safe_filename(name: str) -> str:
     try:
         name.encode('utf-8')
@@ -94,6 +197,175 @@ def tree_path(name: str) -> str:
     for part in name.split('/'):
         safe_filename(part)
     return name
+
+
+def inspect_v10_package(content: bytes) -> bool:
+    """Reject unsafe archives; recognize a linked PBIP structure without opening it."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            members = archive.infolist()
+            if (not members or len(members) > 500
+                    or sum(info.file_size for info in members) > MAX_ARTIFACT_BYTES):
+                raise OutputInputError()
+            entries: dict[str, zipfile.ZipInfo] = {}
+            spelling: dict[str, str] = {}
+            directories: set[str] = set()
+            files: dict[str, zipfile.ZipInfo] = {}
+            for info in members:
+                filename = info.filename.removesuffix("/") if info.is_dir() else info.filename
+                name = tree_path(filename)
+                parts = name.split("/")
+                mode = stat.S_IFMT(info.external_attr >> 16)
+                if (info.orig_filename != info.filename or info.flag_bits & 1
+                        or info.external_attr & 0x400
+                        or info.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+                        or mode not in {0, stat.S_IFDIR if info.is_dir() else stat.S_IFREG}
+                        or info.is_dir() and info.file_size
+                        or any(ntpath.isreserved(part) or part.casefold() in {".pbi", ".git"}
+                               for part in parts)):
+                    raise OutputInputError()
+                for index in range(1, len(parts) + 1):
+                    segment = "/".join(parts[:index])
+                    key = unicodedata.normalize("NFKC", segment).casefold()
+                    if spelling.setdefault(key, segment) != segment:
+                        raise OutputInputError()
+                    if index != len(parts):
+                        directories.add(segment)
+                if name in entries:
+                    raise OutputInputError()
+                entries[name] = info
+                if not info.is_dir():
+                    if (parts[-1] not in {".platform", ".gitignore"}
+                            and posixpath.splitext(name)[1].casefold() not in {
+                                ".pbip", ".pbir", ".pbism", ".json", ".tmdl", ".bim",
+                                ".md", ".txt", ".csv", ".png", ".jpeg", ".jpg",
+                            }):
+                        raise OutputInputError()
+                    files[name] = info
+            if directories.intersection(files) or archive.testzip() is not None:
+                raise OutputInputError()
+
+            def document(path: str) -> dict[str, Any]:
+                value = json.loads(archive.read(files[path]).decode("utf-8-sig"),
+                                   object_pairs_hook=unique_object)
+                if not isinstance(value, dict):
+                    raise ValueError()
+                return value
+
+            def populated_text(value: object) -> bool:
+                return isinstance(value, str) and bool(value.strip())
+
+            def versioned(value: dict[str, Any]) -> bool:
+                version = value.get("version")
+                return (isinstance(version, str)
+                        and bool(re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", version)))
+
+            def well_formed_table(table: Any) -> bool:
+                if not isinstance(table, dict) or not populated_text(table.get("name")):
+                    return False
+                columns = table.get("columns", [])
+                return (isinstance(columns, list)
+                        and all(isinstance(column, dict) and populated_text(column.get("name"))
+                                for column in columns))
+
+            def sibling(path: str, relative: str) -> str:
+                if not relative or relative.startswith("/") or "\\" in relative:
+                    raise ValueError()
+                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(path), relative))
+                return tree_path(resolved)
+
+            shortcuts = [name for name in files if name.casefold().endswith(".pbip")]
+            if len(shortcuts) != 1:
+                return False
+            try:
+                shortcut = shortcuts[0]
+                project = document(shortcut)
+                artifacts = project["artifacts"]
+                if not versioned(project) or not isinstance(artifacts, list) or len(artifacts) != 1:
+                    return False
+                report = sibling(shortcut, artifacts[0]["report"]["path"])
+                pbir = report + "/definition.pbir"
+                definition = document(pbir)
+                reference = definition["datasetReference"]
+                if not versioned(definition) or reference.get("byConnection") is not None:
+                    return False
+                model = sibling(pbir, reference["byPath"]["path"])
+                model_def = document(model + "/definition.pbism")
+                if not versioned(model_def):
+                    return False
+                legacy = report + "/report.json"
+                modern = report + "/definition/report.json"
+                if (legacy in files) == (modern in files):
+                    return False
+                def legacy_visual(container: Any) -> bool:
+                    if not (isinstance(container, dict)
+                            and isinstance(container.get("config"), str)):
+                        return False
+                    visual = json.loads(container["config"], object_pairs_hook=unique_object)
+                    single = visual.get("singleVisual") if isinstance(visual, dict) else None
+                    return (isinstance(single, dict) and populated_text(single.get("visualType"))
+                            and isinstance(single.get("projections"), dict)
+                            and bool(single["projections"]))
+
+                def enhanced_visual(path: str) -> bool:
+                    if (not path.startswith(report + "/definition/pages/")
+                            or not path.endswith("/visual.json")):
+                        return False
+                    prefix = path.split("/visuals/", 1)[0]
+                    if prefix + "/page.json" not in files:
+                        return False
+                    page = document(prefix + "/page.json")
+                    visual = document(path).get("visual")
+                    query = visual.get("query") if isinstance(visual, dict) else None
+                    return (populated_text(page.get("name")) and isinstance(visual, dict)
+                            and populated_text(visual.get("visualType"))
+                            and isinstance(query, dict)
+                            and isinstance(query.get("queryState"), dict)
+                            and bool(query["queryState"]))
+
+                if legacy in files:
+                    sections = document(legacy)["sections"]
+                    visual = isinstance(sections, list) and any(
+                        legacy_visual(container)
+                        for section in sections if isinstance(section, dict)
+                        for container in section.get("visualContainers", [])
+                    )
+                else:
+                    report_schema = document(modern).get("$schema")
+                    visual = (isinstance(report_schema, str)
+                              and report_schema.startswith(
+                                  "https://developer.microsoft.com/json-schemas/fabric/item/report/"
+                                  "definition/report/",
+                              )
+                              and versioned(document(report + "/definition/version.json"))
+                              and any(enhanced_visual(path) for path in files))
+                bim, tmdl = model + "/model.bim", model + "/definition/model.tmdl"
+                if (bim in files) == (tmdl in files):
+                    return False
+                if not visual:
+                    return False
+                if bim in files:
+                    tables = document(bim)["model"]["tables"]
+                    return (isinstance(tables, list)
+                            and all(well_formed_table(table) for table in tables)
+                            and any(table.get("columns") for table in tables))
+                model_text = archive.read(files[tmdl]).decode("utf-8-sig")
+                if not re.search(r"(?m)^model[ \t]+\S+", model_text):
+                    return False
+                for path in files:
+                    if (path.startswith(model + "/definition/tables/")
+                            and path.endswith(".tmdl")):
+                        table = archive.read(files[path]).decode("utf-8-sig")
+                        if (re.search(r"(?m)^table[ \t]+\S+", table)
+                                and re.search(r"(?m)^[ \t]+column[ \t]+\S+", table)):
+                            return True
+                return False
+            except (
+                KeyError, TypeError, ValueError, AttributeError, RecursionError, OutputInputError,
+            ):
+                return False
+    except (ValueError, zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError) as exc:
+        raise OutputInputError() from exc
 
 
 def native_output(raw: bytes) -> tuple[bytes, str, str]:
@@ -197,15 +469,18 @@ def save_digest(expected: int, filename: str, origin: str, native_id: UUID | Non
 
 
 def output_json(row: RequestOutputRow, native_task: str | None = None,
-                generated_file: bool = False) -> dict[str, Any]:
+                generated_file: bool = False, *, v10_kind: str | None = None) -> dict[str, Any]:
     return {'id': str(row.id), 'case_id': str(row.case_id),
             'request_version_id': str(row.request_version_id),
             'context_version': row.context_version, 'filename': row.filename,
             'origin': row.origin, 'bytes': row.byte_size, 'sha256': row.content_digest,
             'native_task': native_task,
-            'delivery_kind': 'GENERATED_FILE' if generated_file else 'RETAINED_OUTPUT',
+            'delivery_kind': v10_kind or (
+                'GENERATED_FILE' if generated_file else 'RETAINED_OUTPUT'
+            ),
             'native_receipt_id': str(row.native_receipt_id) if row.native_receipt_id else None,
-            'content_verification': 'NOT_RUN', 'created_at': row.created_at.isoformat()}
+            'content_verification': 'PACKAGE_CHECKED' if v10_kind == 'V10_REPORT_ORIGINAL'
+            else 'NOT_RUN', 'created_at': row.created_at.isoformat()}
 
 
 def register_request_output_routes(
@@ -216,7 +491,8 @@ def register_request_output_routes(
     artifact_access_for: Callable[[Session, UUID, UUID], tuple[
         ProviderProfile, FoundryAccess, Callable[[], bool]
     ]] | None = None,
-) -> None:
+    v10_case: tuple[UUID, UUID] | None = None,
+) -> V10ReportSave:
     def sessions() -> Iterator[Session]:
         with database.session() as db:
             yield cast(Session, db)
@@ -294,6 +570,31 @@ def register_request_output_routes(
         return {'output': output_json(row, generated_file=source_binding is not None),
                     'replayed': False}
 
+    def save_v10(
+        db: Session, token: str | None, case_id: UUID, expected: int,
+        original: V10Original, guard: Callable[[Session], None],
+    ) -> dict[str, Any]:
+        actor = resolve_actor(db, token)
+        if v10_case != (actor.company_id, case_id):
+            raise ProtectedResourceNotFound()
+        receipt = db.get(NativeResponseReceiptRow, original.receipt_id)
+        if (receipt is None or receipt.company_id != actor.company_id or receipt.case_id != case_id
+                or receipt.context_version != expected or receipt.digest != original.response_digest
+                or original.digest != hashlib.sha256(original.content).hexdigest()):
+            raise OutputInputError()
+        binding = db.get(NativeContractBindingRow, receipt.operation_id)
+        command = db.get(NativeReceiveCommandRow, receipt.operation_id)
+        if (v10_binding_metadata(binding).get("purpose") != "FULL_REPORT_ARTIFACT"
+                or command is None or command.actor_membership_id != actor.membership_id
+                or command.state != "RECEIVED" or command.provider_status != "completed"
+                or command.http_status != 200):
+            raise ProtectedResourceNotFound()
+        checked = inspect_v10_package(original.content)
+        result = save(db, token, case_id, expected, command.id, original.content,
+                      original.reference.filename, "NATIVE_OUTPUT", receipt.id,
+                      source_binding=_v10_file_binding(receipt, checked), guard=guard)
+        return {"output": v10_output_for_receipt(db, receipt), "replayed": result["replayed"]}
+
     @app.post('/api/cases/{case_id}/outputs')
     async def upload_output(
         case_id: UUID, request: Request, filename: str, expected_context_version: int,
@@ -330,6 +631,8 @@ def register_request_output_routes(
         ))
         if row is None:
             raise ProtectedResourceNotFound()
+        if v10_binding_metadata(db.get(NativeContractBindingRow, row.operation_id)):
+            raise OutputBytesUnavailable()
         if row.context_version != payload.expected_context_version:
             raise StaleVersion()
         if case.semantic_context_version != payload.expected_context_version:
@@ -371,7 +674,9 @@ def register_request_output_routes(
     @app.get('/api/cases/{case_id}/native-response-receipts/{reference}/files')
     def list_native_files(case_id: UUID, reference: UUID, db: DB,
                           token: CookieToken = None) -> dict[str, Any]:
-        _, raw = file_receipt(db, token, case_id, reference)
+        receipt, raw = file_receipt(db, token, case_id, reference)
+        if v10_binding_metadata(db.get(NativeContractBindingRow, receipt.operation_id)):
+            return {'items': [], 'retrieval_configured': False, 'content_verification': 'NOT_RUN'}
         items = []
         for index, file in enumerate(generated_files(raw)):
             try:
@@ -391,6 +696,8 @@ def register_request_output_routes(
     ) -> dict[str, Any]:
         require_csrf(token, csrf)
         row, raw = file_receipt(db, token, case_id, reference, payload.expected_context_version)
+        if v10_binding_metadata(db.get(NativeContractBindingRow, row.operation_id)):
+            raise OutputBytesUnavailable()
         # Archive reads can interleave with committed role/access/request changes.
         db.expire_all()
         actor = resolve_actor(db, token)
@@ -463,6 +770,9 @@ def register_request_output_routes(
     ) -> dict[str, Any]:
         actor = resolve_actor(db, token)
         case_record, _ = authorized_case_access(db, actor, case_id)
+        demo = v10_case == (actor.company_id, case_id) or has_v10_history(
+            db, actor.company_id, case_id,
+        )
         response.headers["Cache-Control"] = "no-store"
         query = select(RequestOutputRow).where(
             RequestOutputRow.case_id == case_id, RequestOutputRow.company_id == actor.company_id
@@ -564,6 +874,18 @@ def register_request_output_routes(
         }
         file_bindings: dict[UUID, list[Any]] = {}
 
+        def v10_projection(row: RequestOutputRow) -> dict[str, Any] | None:
+            if row.native_receipt_id is None:
+                return None
+            receipt = db.get(NativeResponseReceiptRow, row.native_receipt_id)
+            if receipt is None:
+                return None
+            binding = db.get(NativeContractBindingRow, receipt.operation_id)
+            if not v10_binding_metadata(binding):
+                return None
+            output = v10_output_for_receipt(db, receipt)
+            return output if output and output["id"] == str(row.id) else output_json(row)
+
         def is_generated_file(row: RequestOutputRow) -> bool:
             if row.native_receipt_id is None or native_objects is None:
                 return False
@@ -608,7 +930,7 @@ def register_request_output_routes(
             )
 
         projected = [
-            output_json(
+            v10_projection(row) or output_json(
                 row,
                 stages.get(row.native_receipt_id) if row.native_receipt_id is not None else None,
                 is_generated_file(row),
@@ -639,7 +961,10 @@ def register_request_output_routes(
             )
             available = False
             for candidate in db.scalars(candidates.execution_options(yield_per=100)):
-                if is_generated_file(candidate):
+                projection = v10_projection(candidate)
+                if (demo and projection and projection["delivery_kind"] == "V10_REPORT_ORIGINAL"
+                        and candidate.request_version_id == case_record.current_request_version_id
+                        or not demo and projection is None and is_generated_file(candidate)):
                     available = True
                     break
                 if len(file_bindings) > 100:
@@ -648,6 +973,8 @@ def register_request_output_routes(
                 current_context_version=case_record.semantic_context_version,
                 current_report_available=available,
             )
+        if demo:
+            metadata["demo_mode"] = "FOUNDRY_V10"
         return {
             "items": projected,
             "has_more": has_more,
@@ -668,12 +995,29 @@ def register_request_output_routes(
         ))
         if row is None:
             raise ProtectedResourceNotFound()
+        if row.native_receipt_id is not None:
+            receipt = db.get(NativeResponseReceiptRow, row.native_receipt_id)
+            binding = (db.get(NativeContractBindingRow, receipt.operation_id)
+                       if receipt is not None else None)
+            if v10_binding_metadata(binding):
+                output = v10_output_for_receipt(db, receipt) if receipt else None
+                if output is None or output["id"] != str(row.id):
+                    raise ProtectedResourceNotFound()
         if objects is None:
             raise ConfigurationUnavailable()
         content = read_verified_artifact(
             objects, row.storage_key, row.content_digest, row.byte_size
         )
+        if row.native_receipt_id is not None and v10_binding_metadata(binding):
+            db.expire_all()
+            current = resolve_actor(db, token)
+            authorized_case_access(db, current, case_id)
+            if (current.company_id != actor.company_id
+                    or current.membership_id != actor.membership_id):
+                raise ProtectedResourceNotFound()
         return Response(content, media_type='application/octet-stream', headers={
             'Content-Disposition': "attachment; filename*=UTF-8''" + quote(row.filename, safe=''),
             'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
         })
+
+    return save_v10
