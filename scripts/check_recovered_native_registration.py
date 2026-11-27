@@ -2084,3 +2084,379 @@ def stage_authorities(root, catalog, schema_errors, task_errors, identity, branc
         return authorities, faults
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         return (), ["APBRA-160 signed-in demo issuance denied: " + str(error)]
+
+# APBRA-160 issue the one-file Home pagination correction on the actual PR202 merge.
+PAGER_BASE = "959f39a89911b05e278feedd0cdc8edd8e1d77d9"
+PAGER_ISSUE_BASE = "a1ec568eefae3e4e8d41cafe6be239dc7c84fb20"
+PAGER_TRANSPORT_PARENT = "bfb87010d2a4f7571069522ce57438a35f720391"
+PAGER_TRANSPORT_HEAD = "5f4f082fb17358ed77d3c119d8f46ccd628ac179"
+PAGER_BASE_TREE = "5429c192037029c4c58661a3d49f2b79a712e2db"
+PAGER_PRIOR_RELEASE = "a1ec568eefae3e4e8d41cafe6be239dc7c84fb20"
+PAGER_PRIOR_HEAD = "4d1314abc121bda921db2aee11d73897a38ee2a6"
+PAGER_PRIOR_CHECKER = "a3de8de8c637c18f79972445016016096942e97e2a55ca3e0e14c807a7872564"
+PAGER_ISSUER = "agent/APBRA-DEVOPS/APBRA-160-workspace-pagination-chevron-issuance"
+PAGER_PRODUCT = "agent/APBRA-DEV-FE/APBRA-160-workspace-pagination-chevron"
+PAGER_TASK = "tasks/APBRA-160-workspace-pagination-chevron-20261126.json"
+PAGER_TEST = "tests/bootstrap/test_workspace_pagination_chevron_scope.py"
+PAGER_PATHS = frozenset({INVITATION_READBACK_WRAPPER, PAGER_TASK, PAGER_TEST})
+PAGER_CSS = "apps/web/src/style.css"
+PAGER_STYLE = frozenset({PAGER_CSS})
+PAGER_BEFORE = "aa9fbdcf08939765496366619cbe2d833fa0b86c"
+PAGER_AFTER = "661c55c3dd7e7f4312863e95e693fd53f09c42a4"
+INVITE_BEFORE = "df910c2cd12ba284d5ccb1fcc7df78c895dddd89"
+INVITE_AFTER = "5d640d25164f952a1aeceb1924f488fec7a8218e"
+PAGER_TASK_SHA = "1be87fed94d677de69755d00d7da43e635bd3b47168c03df8b2cc0c7cf1737b0"
+PAGER_TEST_SHA = "7c54b5e355ddee0c8205ff321db45ab8d1fc3f35a5fafc630f180a652bf866e9"
+PAGER_CHECKER_SHA = "03f65c866ebfab776c3c0d34da967a878098736788564ebec2020e19e407066c"
+_before_pager_packet = v10_packet
+_before_pager_v10 = v10_issuance_state
+_before_pager_context = invitation_readback_context
+_before_pager_browser = metadata_browser_witness
+_before_pager_stage = stage_authorities
+_before_pager_branch = issued_v7_branch
+
+
+def pager_present(root):
+    return any(os.path.lexists(root / path) for path in (PAGER_TASK, PAGER_TEST))
+
+
+def issued_v7_branch(branch):
+    return branch in (PAGER_ISSUER, PAGER_PRODUCT) or _before_pager_branch(branch)
+
+
+def pager_packet(root, *, checker_bytes=None):
+    """Verify the entire current packet, or its exact retained checker in a later qualified release."""
+    pins = {**V10_PACKET_PINS, V10_ISSUANCE_TASK: V10_ISSUANCE_TASK_SHA,
+            V10_ISSUANCE_TEST: V10_ISSUANCE_TEST_SHA, PAGER_TASK: PAGER_TASK_SHA, PAGER_TEST: PAGER_TEST_SHA}
+    for path in V10_REGISTRATION | V10_ISSUANCE_PATHS | PAGER_PATHS:
+        if not safe(root, path) or (root / path).stat().st_mode & 0o111:
+            raise ValueError("Incomplete or unsafe pagination or predecessor packet: " + path)
+    for path, digest in pins.items():
+        if hashlib.sha256((root / path).read_bytes()).hexdigest() != digest:
+            raise ValueError("Pagination or predecessor source differs: " + path)
+    checker = (root / INVITATION_READBACK_WRAPPER).read_bytes() if checker_bytes is None else checker_bytes
+    boundary = b"\n# APBRA-160 issue the one-file Home pagination correction on the actual PR202 merge.\n"
+    declaration = ('PAGER_CHECKER_SHA = "' + PAGER_CHECKER_SHA + '"').encode()
+    normal = declaration.replace(PAGER_CHECKER_SHA.encode(), b"0" * 64)
+    if (checker.count(boundary) != 1 or checker.count(declaration) != 1
+            or hashlib.sha256(checker.partition(boundary)[0]).hexdigest() != PAGER_PRIOR_CHECKER
+            or hashlib.sha256(checker.replace(declaration, normal)).hexdigest() != PAGER_CHECKER_SHA):
+        raise ValueError("Pagination checker or exact retained PR200 checker differs")
+
+
+def v10_packet(root):
+    if not pager_present(root):
+        return _before_pager_packet(root)
+    pager_packet(root)
+    marker = b"\n# APBRA-160 issue the one-file Home pagination " + b"correction on the actual PR202 merge.\n"
+    prefix = (root / INVITATION_READBACK_WRAPPER).read_bytes().split(marker)[0]
+    return signedin_packet(root, checker_bytes=prefix)
+
+
+def pager_style(root, metadata, revision):
+    entry = metadata["git"](root, "ls-tree", revision, "--", PAGER_CSS)
+    match = re.fullmatch(rb"100644 blob ([0-9a-f]{40})\tapps/web/src/style\.css\n", entry)
+    if match is None:
+        raise ValueError("Pagination stylesheet is absent or its mode differs")
+    return match.group(1).decode()
+
+
+def pager_invitation_head(root, metadata, readback, base, child, paths, approved_style):
+    frozen = readback["FROZEN"]
+    git, changed, entries = metadata["git"], metadata["changed"], readback["entries"]
+    if (readback["parents"](root, git, child) != [frozen, base]
+            or changed(root, base, child) != paths or pager_style(root, metadata, child) != approved_style
+            or entries(root, metadata, child, paths - PAGER_STYLE)
+            != entries(root, metadata, frozen, paths - PAGER_STYLE)):
+        raise ValueError("Invitation refresh differs from its exact frozen source and permitted stylesheet")
+
+
+def pager_state(root, readback, metadata, raw):
+    """Prove both finite release orders before any historical read is projected."""
+    git, ref, changed = metadata["git"], metadata["ref"], metadata["changed"]
+    readback["require_checkout"](root, metadata)
+    main, head = ref(root, metadata["MAIN"]), ref(root, "HEAD")
+    if (ref(root, PAGER_BASE + "^{tree}") != PAGER_BASE_TREE
+            or readback["parents"](root, git, PAGER_BASE) != [PAGER_TRANSPORT_PARENT, PAGER_TRANSPORT_HEAD]
+            or not metadata["owner_merge"](root, PAGER_BASE, V10_PRODUCT_BRANCH, V10_RESERVED)
+            or not metadata["ancestor"](root, PAGER_BASE, main) or not metadata["ancestor"](root, main, head)):
+        raise ValueError("Pagination requires the exact ordinary PR201 transport release")
+    if (readback["parents"](root, git, PAGER_PRIOR_RELEASE) != [PAGER_BASE, PAGER_PRIOR_HEAD]
+            or not metadata["owner_merge"](root, PAGER_PRIOR_RELEASE, SIGNEDIN_ISSUER, SIGNEDIN_PACKET)
+            or not metadata["ancestor"](root, PAGER_PRIOR_RELEASE, main)):
+        raise ValueError("Pagination reissue requires the actual earlier signed-in ordinary release")
+    previous = SIGNEDIN_PACKET - {INVITATION_READBACK_WRAPPER}
+    if (readback["entries"](root, metadata, PAGER_PRIOR_RELEASE, previous)
+            != readback["entries"](root, metadata, head, previous)
+            or not metadata["matches_commit"](root, previous, PAGER_PRIOR_RELEASE, raw)):
+        raise ValueError("Earlier signed-in task or test committed or working entry differs")
+    frozen = readback["FROZEN"]
+    paths = changed(root, readback["FROZEN_PARENT"], frozen)
+    if (len(paths) != 28 or PAGER_CSS not in paths or ref(root, frozen + "^{tree}") != readback["FROZEN_TREE"]
+            or pager_style(root, metadata, PAGER_BASE) != PAGER_BEFORE):
+        raise ValueError("Retained pagination or invitation input differs")
+    issuer = product = invitation = None
+    expected_style = PAGER_BEFORE
+    for revision in git(root, "rev-list", "--first-parent", "--reverse", PAGER_PRIOR_RELEASE + ".." + main).decode().split():
+        parents = readback["parents"](root, git, revision)
+        base = parents[0]
+        delta = changed(root, base, revision)
+        if delta & PAGER_PATHS:
+            if (issuer or base != PAGER_ISSUE_BASE
+                    or not metadata["owner_merge"](root, revision, PAGER_ISSUER, PAGER_PATHS)
+                    or not metadata["matches_commit"](root, PAGER_PATHS, revision, raw)):
+                raise ValueError("Pagination issuance or continued governance bytes differ")
+            issuer = revision
+        if delta == SIGNEDIN_PATHS:
+            if not metadata["owner_merge"](root, revision, SIGNEDIN_PRODUCT, SIGNEDIN_PATHS):
+                raise ValueError("Signed-in sibling product needs its ordinary release")
+        elif delta & paths:
+            if delta == PAGER_STYLE and issuer and not product:
+                if not metadata["owner_merge"](root, revision, PAGER_PRODUCT, PAGER_STYLE):
+                    raise ValueError("Pagination stylesheet requires its ordinary issued release")
+                expected_style = INVITE_AFTER if invitation else PAGER_AFTER
+                product = revision
+            elif delta == paths and not invitation and len(parents) == 2:
+                expected_style = INVITE_AFTER if product else INVITE_BEFORE
+                pager_invitation_head(root, metadata, readback, base, parents[1], paths, expected_style)
+                expected = "Merge pull request #185 from haseebulhaque/" + readback["INVITATION_BRANCH"]
+                if (git(root, "show", "-s", "--format=%cn <%ce>%n%s", revision).decode().splitlines()
+                        != ["GitHub <noreply@github.com>", expected]
+                        or ref(root, revision + "^{tree}") != ref(root, parents[1] + "^{tree}")):
+                    raise ValueError("Original invitation ordinary merge identity or tree differs")
+                invitation = revision
+            else:
+                raise ValueError("Unissued change to the pagination or invitation entries")
+            if pager_style(root, metadata, revision) != expected_style:
+                raise ValueError("Effective pagination stylesheet blob differs")
+
+    branch = None
+    delta = changed(root, main, head)
+    if issuer is None:
+        if main != PAGER_ISSUE_BASE or not docs_checkout_candidate(
+                root, readback, metadata, raw, main, PAGER_ISSUER, PAGER_PATHS):
+            raise ValueError("Pagination issuance requires its exact clean three-file candidate")
+        branch = PAGER_ISSUER
+    elif (not metadata["matches_commit"](root, PAGER_PATHS, head, raw)
+          or readback["entries"](root, metadata, issuer, PAGER_PATHS)
+          != readback["entries"](root, metadata, head, PAGER_PATHS)):
+        raise ValueError("Effective pagination issuance differs")
+    if delta == SIGNEDIN_PATHS:
+        if not docs_checkout_candidate(root, readback, metadata, raw, main, SIGNEDIN_PRODUCT, SIGNEDIN_PATHS):
+            raise ValueError("Signed-in sibling candidate requires its exact physical checkout")
+    elif delta & paths:
+        if delta == PAGER_STYLE and issuer and not product:
+            if not docs_checkout_candidate(root, readback, metadata, raw, main, PAGER_PRODUCT, PAGER_STYLE):
+                raise ValueError("Pagination requires its exact clean FE candidate")
+            expected_style = INVITE_AFTER if invitation else PAGER_AFTER
+            branch = PAGER_PRODUCT
+        elif delta == paths and not invitation:
+            # PR185 is refreshed by merging main into the frozen source. Its second
+            # parent is deliberately different from a single-commit FE proposal.
+            if not readback["actual_branch"](root, metadata, readback["INVITATION_BRANCH"]):
+                raise ValueError("Invitation candidate requires its original branch")
+            attached = git(root, "branch", "--show-current").decode().strip()
+            child = head
+            if attached:
+                if attached != readback["INVITATION_BRANCH"] or os.environ.get("PR_HEAD_SHA") not in (None, "", head):
+                    raise ValueError("Invitation branch or reported head differs")
+            else:
+                child = os.environ.get("PR_HEAD_SHA", "")
+                if (readback["parents"](root, git, head) != [main, child]
+                        or ref(root, head + "^{tree}") != ref(root, child + "^{tree}")):
+                    raise ValueError("Invitation hosted checkout differs")
+            expected_style = INVITE_AFTER if product else INVITE_BEFORE
+            pager_invitation_head(root, metadata, readback, main, child, paths, expected_style)
+            if (git(root, "status", "--porcelain", "--untracked-files=all", "-z")
+                    or not metadata["matches_commit"](root, paths, head, raw)):
+                raise ValueError("Invitation checkout differs from its reviewed entries")
+        else:
+            raise ValueError("Candidate changes protected invitation or pagination entries outside scope")
+    if (pager_style(root, metadata, head) != expected_style or not safe(root, PAGER_CSS)
+            or (root / PAGER_CSS).stat().st_mode & 0o111 or not metadata["matches_commit"](root, PAGER_STYLE, head, raw)):
+        raise ValueError("Working or committed pagination stylesheet differs")
+    return main, head, issuer, product, invitation, branch
+
+
+def v10_issuance_state(root, readback, metadata, raw):
+    if not pager_present(root):
+        return _before_pager_v10(root, readback, metadata, raw)
+    v10_packet(root)
+    main, head, issuer, _, _, _ = pager_state(root, readback, metadata, raw)
+    def first_touch(origin, sources, lower, upper, paths):
+        found = readback["first_touch"](origin, sources, lower, upper, paths)
+        if issuer and found == issuer and paths & PAGER_PATHS == {INVITATION_READBACK_WRAPPER}:
+            return readback["first_touch"](origin, sources, issuer, upper, paths)
+        return found
+
+    return _before_pager_v10(root, dict(readback, first_touch=first_touch), metadata, raw)
+
+
+def invitation_readback_context(root):
+    readback, state, metadata, old = _before_pager_context(root)
+    if not pager_present(root):
+        return readback, state, metadata, old
+
+    def invitation_prior(origin, sources, current, invitation, raw):
+        # First authenticate every actual changed entry, transition and both merge
+        # levels. Only the already proved CSS release may precede the invitation.
+        base_reader, base_metadata, actual = _v10_previous_sources(origin)
+        main, head, _, product, release, physical = pager_state(origin, base_reader, base_metadata, actual["raw"])
+        original = readback["invitation_release_before"]
+        if not product and physical != PAGER_PRODUCT:
+            return original(origin, sources, current, invitation, raw)
+
+        def history_changed(checkout, parent, revision):
+            delta = sources["changed"](checkout, parent, revision)
+            if revision == product and delta == PAGER_STYLE:
+                return set()
+            return delta
+
+        def historical_git(checkout, *args):
+            result = sources["git"](checkout, *args)
+            # The immutable invitation reader compares raw ls-tree rows for its
+            # 28 paths. Only the verified combined CSS row has a historical form.
+            if (len(args) > 3 and args[:2] == ("ls-tree", "-rz")
+                    and args[3:] == ("--", *sorted(invitation["P"]))
+                    and sources["ref"](checkout, args[2]) in {main, head, release}):
+                new = ("100644 blob " + INVITE_AFTER + "\t" + PAGER_CSS + "\0").encode()
+                old_row = new.replace(INVITE_AFTER.encode(), INVITE_BEFORE.encode(), 1)
+                if new in result:
+                    return result.replace(new, old_row, 1)
+            return result
+
+        historical = dict(sources, git=historical_git, changed=history_changed)
+        return original(origin, historical, current, invitation, raw)
+
+    def browser_snapshot(historical, invitation_paths, prior, protected):
+        # The invitation's prior can itself have a separately released cosmetic
+        # stylesheet. Establish the real release and check its preimage before
+        # the original browser snapshot compares that one historical digest.
+        base_reader, base_metadata, actual = _v10_previous_sources(root)
+        main, _, _, product, _, physical = pager_state(root, base_reader, base_metadata, actual["raw"])
+        before_css = base_reader["parents"](root, base_metadata["git"], product)[0] if product else main
+        if ((product or physical == PAGER_PRODUCT) and pager_style(root, base_metadata, before_css) == PAGER_BEFORE):
+            original = historical["files_match"]
+
+            def match(origin, expected, ref=None):
+                if PAGER_CSS not in expected or ref not in (None, base_metadata["MAIN"], prior):
+                    return original(origin, expected, ref)
+                other = {path: digest for path, digest in expected.items() if path != PAGER_CSS}
+                return (original(origin, other, ref)
+                        and original(origin, {PAGER_CSS: expected[PAGER_CSS]}, before_css))
+
+            historical = dict(historical, files_match=match)
+        return readback["historical_with_invitation"](historical, invitation_paths, prior, protected)
+
+    return dict(readback, invitation_release_before=invitation_prior,
+                historical_with_invitation=browser_snapshot), state, metadata, old
+
+
+def metadata_browser_witness(root, checker, context, overlap, candidate, module, old):
+    witness = _before_pager_browser(root, checker, context, overlap, candidate, module, old)
+    if witness or not pager_present(root):
+        return witness
+    # Before PR185 is released the original code uses its unchanged-source reader.
+    # Retry that same protected snapshot with only physically proved preimages.
+    if (context != checker["delivery_context"](root) or context[1] == METADATA_ISSUANCE_BRANCH
+            or not module["released_issuance"](root, old["raw"])):
+        return set()
+    reader, metadata, actual = _v10_previous_sources(root)
+    main, _, _, product, invitation, physical = pager_state(root, reader, metadata, actual["raw"])
+    if invitation or not (product or physical == PAGER_PRODUCT):
+        return set()
+    snapshot_paths = PAGER_STYLE
+    invite = None
+    if context[0] == "APBRA-184":
+        modules, faults = finite_modules(root)
+        invite = next((stage for stage in modules if stage["KEY"] == "184"), None)
+        if faults or not invite or context[1:] != (invite["B"], invite["P"]):
+            return set()
+        snapshot_paths = invite["P"]
+    view, _, _, _ = invitation_readback_context(root)
+    witness = released_invitation_browser_witness(root, checker, context, overlap, candidate, view,
+                                                 {"P": snapshot_paths}, main)
+    if invite and witness == set(overlap):
+        return invite["qualified_paths"](root, checker, *context, overlap, candidate)
+    return witness
+
+
+def stage_authorities(root, catalog, schema_errors, task_errors, identity, branch, paths):
+    selected = branch in (PAGER_ISSUER, PAGER_PRODUCT)
+    if not pager_present(root):
+        if selected or paths and paths & {PAGER_TEST, PAGER_TASK}:
+            return (), ["Pagination execution has not been issued"]
+        return _before_pager_stage(root, catalog, schema_errors, task_errors, identity, branch, paths)
+    try:
+        v10_packet(root)
+        task = json.loads((root / PAGER_TASK).read_bytes())
+        source = json.loads((root / V10_SOURCE).read_bytes())
+        historical = json.loads((root / "docs/source-register.json").read_bytes())
+        schema = json.loads((root / "contracts/engineering/task-contract.schema.json").read_bytes())
+        if (task["base_commit"] != PAGER_ISSUE_BASE or schema_errors(schema, task)
+                or task_errors(task, catalog, {"sources": historical["sources"] + source["sources"]})):
+            raise ValueError("Pagination task or accepted sources differ")
+        physical = None
+        main = PAGER_BASE
+        if os.path.lexists(root / ".git"):
+            readback, metadata, old = _v10_previous_sources(root)
+            main, _, _, _, _, physical = pager_state(root, readback, metadata, old["raw"])
+        expected = PAGER_PATHS if branch == PAGER_ISSUER else PAGER_STYLE
+        if selected and (identity != "APBRA-160" or paths != expected or physical != branch):
+            raise ValueError("Pagination requires its exact issued identity, scope and Git checkout")
+        if not selected and paths and paths & {PAGER_TASK, PAGER_TEST}:
+            raise ValueError("Pagination issuance files require their selected governance branch")
+        authorities, faults = _before_pager_stage(root, catalog, schema_errors, task_errors, identity,
+                                                 None if selected else branch, None if selected else paths)
+        issuer = dict(json.loads((root / V10_TASK).read_bytes()), branch=PAGER_ISSUER,
+                      execution_id="APBRA-160-20261127-HOME-PAGINATION-PR202", base_commit=PAGER_ISSUE_BASE,
+                      allowed_paths=sorted(PAGER_PATHS))
+        return authorities + ((issuer, PAGER_PATHS), (dict(task, base_commit=main), PAGER_STYLE)), faults
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        return (), ["APBRA-160 pagination registration denied: " + str(error)]
+
+# The prior signed-in registration is an exact protected release whose checker
+# remains the authenticated prefix of this concrete pagination reissue.
+_prior_signedin_state_for_pager = signedin_state
+
+
+def signedin_state(root, readback, metadata, raw):
+    main, head, issuer, product, _, physical = pager_state(root, readback, metadata, raw)
+    shared = {INVITATION_READBACK_WRAPPER}
+
+    def changed(origin, lower, upper):
+        delta = metadata["changed"](origin, lower, upper)
+        if issuer and upper == issuer and delta == PAGER_PATHS:
+            return delta - shared
+        if delta == PAGER_STYLE and (product and upper == product or upper == head and physical == PAGER_PRODUCT):
+            return set()
+        return delta
+
+    def matches(origin, paths, rev, incoming):
+        if paths == SIGNEDIN_PACKET and rev == PAGER_PRIOR_RELEASE:
+            def old_checker(checkout, path):
+                return (metadata["git"](checkout, "show", PAGER_PRIOR_RELEASE + ":" + path)
+                        if path == INVITATION_READBACK_WRAPPER else incoming(checkout, path))
+            return metadata["matches_commit"](origin, paths, rev, old_checker)
+        return metadata["matches_commit"](origin, paths, rev, incoming)
+
+    def previous_entry(origin, sources, revision, paths):
+        value = readback["entries"](origin, sources, revision, paths)
+        source = sources["ref"](origin, revision)
+        if paths == SIGNEDIN_PACKET and source == head:
+            now = readback["entries"](origin, sources, revision, shared)
+            then = readback["entries"](origin, sources, PAGER_PRIOR_RELEASE, shared)
+        elif (PAGER_CSS in paths and source != readback["FROZEN"]
+                and paths == metadata["changed"](origin, readback["FROZEN_PARENT"], readback["FROZEN"])
+                and pager_style(origin, sources, source) == INVITE_AFTER):
+            now = readback["entries"](origin, sources, revision, PAGER_STYLE)
+            then = readback["entries"](origin, sources, readback["FROZEN"], PAGER_STYLE)
+        else:
+            return value
+        if not now or not then or value.count(now) != 1:
+            raise ValueError("Signed-in predecessor retained entry differs")
+        return value.replace(now, then, 1)
+
+    return _prior_signedin_state_for_pager(
+        root, dict(readback, entries=previous_entry), dict(metadata, changed=changed, matches_commit=matches), raw,
+    )
