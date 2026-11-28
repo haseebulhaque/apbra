@@ -7,7 +7,8 @@ Native principals have NO external issuer or subject. Email never links them.
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
+from collections.abc import Iterable
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -55,38 +56,57 @@ class NativeWorkspaceSessionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+def lock_accounts(db: ApplicationSession, ids: Iterable[UUID]) -> dict[UUID, PasswordAccountRow]:
+    rows = db.scalars(
+        select(PasswordAccountRow)
+        .where(PasswordAccountRow.id.in_(set(ids)))
+        .order_by(PasswordAccountRow.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return {row.id: row for row in rows}
+
+
+def live_parent(parent: PasswordSessionRow, account: PasswordAccountRow, now: datetime) -> bool:
+    return (
+        account.active
+        and parent.account_id == account.id
+        and parent.epoch == account.epoch
+        and parent.revoked_at is None
+        and parent.expires_at > now
+        and parent.touched_at + timedelta(minutes=30) > now
+    )
+
+
 def native_parent(
-    db: ApplicationSession,
-    session: SessionRow,
-    identity: ExternalIdentityRow,
-    now: datetime,
+    db: ApplicationSession, session: SessionRow, identity: ExternalIdentityRow, now: datetime
 ) -> PasswordSessionRow | None:
-    """No claim, cookie, or method label alone can establish native authority."""
-    if (
-        identity.issuer is not None
-        or identity.subject is not None
-        or identity.provider_profile_id != NATIVE_METHOD
-        or session.provider_profile_id != NATIVE_METHOD
-        or not identity.active
-    ):
-        return None
-    binding = db.get(NativeAccountPrincipalRow, identity.id)
+    """Serialize every native workspace credential with password reset, rotation and logout."""
     workspace = db.get(NativeWorkspaceSessionRow, session.id)
-    if binding is None or workspace is None:
+    binding = db.get(NativeAccountPrincipalRow, identity.id)
+    if workspace is None or binding is None:
         return None
-    parent = db.get(PasswordSessionRow, workspace.parent_digest)
-    account = db.get(PasswordAccountRow, binding.account_id)
+    account = lock_accounts(db, [binding.account_id]).get(binding.account_id)
+    parent = db.get(
+        PasswordSessionRow, workspace.parent_digest, with_for_update=True, populate_existing=True
+    )
+    row = db.get(SessionRow, session.id, with_for_update=True, populate_existing=True)
+    current = db.get(ExternalIdentityRow, identity.id, populate_existing=True)
+    now = max(now, utcnow())
     if (
-        parent is None
-        or account is None
-        or parent.account_id != binding.account_id
-        or not account.active
-        or parent.epoch != account.epoch
-        or parent.revoked_at is not None
-        or parent.expires_at <= now
-        or parent.touched_at + timedelta(minutes=30) <= now
-        or session.revoked_at is not None
-        or session.expires_at <= now
+        account is None
+        or parent is None
+        or row is None
+        or current is None
+        or not live_parent(parent, account, now)
+        or row.identity_id != current.id
+        or row.provider_profile_id != NATIVE_METHOD
+        or not current.active
+        or current.provider_profile_id != NATIVE_METHOD
+        or current.issuer is not None
+        or current.subject is not None
+        or row.revoked_at is not None
+        or row.expires_at <= now
     ):
         return None
     parent.touched_at = now
@@ -152,13 +172,29 @@ def check_existing_workspace(
 ) -> SessionRow | None:
     if not raw:
         return None
-    found = db.active_session(digest(raw), datetime.now(UTC))
-    if found is None:
+    row = db.scalar(select(SessionRow).where(SessionRow.token_digest == digest(raw)))
+    now = utcnow()
+    if row is None or row.revoked_at is not None or row.expires_at <= now:
         return None
-    row, _ = found
     binding = db.get(NativeWorkspaceSessionRow, row.id)
-    if binding is None or binding.parent_digest != parent.digest:
-        # Do not overwrite an external session or another native account/session.
+    if binding is None:
+        raise CompanyCreationNotAvailable()
+    if binding.parent_digest != parent.digest:
+        # Never take another account's lock while holding the caller's parent.
+        other = db.get(PasswordSessionRow, binding.parent_digest)
+        other_account = db.get(PasswordAccountRow, other.account_id) if other else None
+        if other and other_account and live_parent(other, other_account, now):
+            raise CompanyCreationNotAvailable()
+        return None
+    row = db.get_one(SessionRow, row.id, with_for_update=True, populate_existing=True)
+    principal_binding = db.get(NativeAccountPrincipalRow, row.identity_id)
+    if (
+        row.revoked_at is not None
+        or row.expires_at <= utcnow()
+        or row.provider_profile_id != NATIVE_METHOD
+        or principal_binding is None
+        or principal_binding.account_id != parent.account_id
+    ):
         raise CompanyCreationNotAvailable()
     return row
 
@@ -201,10 +237,13 @@ def create_organisation(
     current_workspace: str | None,
 ) -> tuple[dict[str, Any], bool, str]:
     check_existing_workspace(db, parent, current_workspace)
-    identity = principal(db, account, create=True)
+    existing = principal(db, account)
+    previous = db.company_creation_command(existing.id, key) if existing is not None else None
+    if previous is not None and db.active_company(previous.company_id, lock=True) is None:
+        raise CompanyCreationNotAvailable()
+    identity = existing or principal(db, account, create=True)
     assert identity is not None
     db.lock_identity_for_membership(identity.id)
-    previous = db.company_creation_command(identity.id, key)
     # Historical/inactive membership cannot be escaped through new onboarding.
     if (
         previous is None

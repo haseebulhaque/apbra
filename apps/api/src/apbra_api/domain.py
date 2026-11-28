@@ -379,6 +379,12 @@ class ApplicationPersistence(Protocol):
 
     def lock_company_for_membership_management(self, company_id: UUID) -> None: ...
 
+    def pending_native_grants(self, company_id: UUID, membership_id: UUID) -> list[UUID]: ...
+
+    def revoke_native_grants(
+        self, invitation_ids: list[UUID], actor: Actor, reason: str
+    ) -> None: ...
+
     def active_owner_count(self, company_id: UUID) -> int: ...
 
     def active_actor(
@@ -455,6 +461,8 @@ class ApplicationPersistence(Protocol):
     def company_memberships(
         self, company_id: UUID
     ) -> list[tuple[MembershipRecord, IdentityRecord]]: ...
+
+    def accepted_native_invitation_addresses(self, company_id: UUID) -> dict[UUID, str]: ...
 
     def lock_company_membership(
         self, company_id: UUID, membership_id: UUID
@@ -680,6 +688,7 @@ class ApplicationPersistence(Protocol):
 
 
 class ApplicationError(Exception):
+    support_reference: UUID | None = None
     status_code = 400
     code = "INVALID_REQUEST"
     public_message = "The request could not be completed."
@@ -727,6 +736,21 @@ class CompanyCreationNotAvailable(Conflict):
 class NativeInvitationsUnsupported(Conflict):
     code = "NATIVE_INVITATIONS_UNSUPPORTED"
     public_message = "Invitations for email/password accounts are not available yet."
+
+
+class NativeMembershipExists(Conflict):
+    code = "MEMBERSHIP_ALREADY_EXISTS"
+    public_message = "You already belong to this organisation. Open it from your workspace."
+
+
+class NativeMembershipInactive(Conflict):
+    code = "MEMBERSHIP_UNAVAILABLE"
+    public_message = "Contact your organisation owner to check your access."
+
+
+class NativeInvitationConsumed(Conflict):
+    code = "INVITATION_ALREADY_ACCEPTED"
+    public_message = "This invitation has been accepted. Manage the existing membership."
 
 
 class CompanyNameInvalid(ApplicationError):

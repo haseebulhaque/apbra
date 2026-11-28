@@ -78,6 +78,9 @@ def test_clean_upgrade_head_and_recovery(settings: Settings, database: Database)
     config = disposable_alembic_config(settings.database_url)
     command.current(config, check_heads=True)
     with database.session() as db:
+        assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261118_19"
+    command.downgrade(config, "20261108_18")
+    with database.session() as db:
         assert db.scalar(text("SELECT version_num FROM alembic_version")) == "20261108_18"
 
 

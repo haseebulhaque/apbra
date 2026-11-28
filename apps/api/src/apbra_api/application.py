@@ -460,18 +460,32 @@ class InvitationService:
 
 
 class MembershipService:
-    def list(self, db: object, actor: Actor) -> list[dict[str, Any]]:
+    def list(
+        self, db: object, actor: Actor, *, include_invitation_addresses: bool = False
+    ) -> list[dict[str, Any]]:
         store = cast(ApplicationPersistence, db)
         store.lock_company_for_membership_management(actor.company_id)
         current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
         if current_actor is None or not current_actor.role.can_invite:
             raise Forbidden()
-        rows = store.company_memberships(actor.company_id)
+        rows = store.company_memberships(current_actor.company_id)
+        # Only correlate delivery addresses already visible in this company's
+        # invitation history. The password account directory stays private.
+        addresses = (
+            store.accepted_native_invitation_addresses(current_actor.company_id)
+            if include_invitation_addresses
+            else {}
+        )
         return [
             {
                 "id": str(membership.id),
                 "display_name": identity.display_name,
                 "subject": identity.subject,
+                **(
+                    {"invitation_address": addresses[membership.id]}
+                    if membership.id in addresses
+                    else {}
+                ),
                 "role": membership.role,
                 "active": membership.active,
             }
@@ -481,6 +495,7 @@ class MembershipService:
     def deactivate(self, db: object, actor: Actor, membership_id: UUID) -> None:
         store = cast(ApplicationPersistence, db)
         store.lock_company_for_membership_management(actor.company_id)
+        pending = store.pending_native_grants(actor.company_id, membership_id)
         current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
         if current_actor is None or not current_actor.role.can_invite:
             raise Forbidden()
@@ -495,6 +510,7 @@ class MembershipService:
             if store.active_owner_count(actor.company_id) <= 1:
                 raise LastOwnerRequired()
         if membership.active:
+            store.revoke_native_grants(pending, current_actor, "ISSUER_DEACTIVATED")
             membership.active = False
             store.add_audit(current_actor, "MEMBERSHIP_DEACTIVATED", "MEMBERSHIP", membership.id)
 
@@ -505,6 +521,7 @@ class MembershipService:
             raise Forbidden()
         store = cast(ApplicationPersistence, db)
         store.lock_company_for_membership_management(actor.company_id)
+        pending = store.pending_native_grants(actor.company_id, membership_id)
         current_actor = store.active_actor(actor.membership_id, actor.identity_id, lock=True)
         if current_actor is None or current_actor.role != Role.COMPANY_OWNER:
             raise Forbidden()
@@ -517,6 +534,8 @@ class MembershipService:
             raise Forbidden()
         if membership.role != role.value:
             previous = membership.role
+            if Role(previous).can_invite and not role.can_invite:
+                store.revoke_native_grants(pending, current_actor, "ISSUER_PRIVILEGE_LOST")
             membership.role = role.value
             store.add_audit(
                 current_actor,

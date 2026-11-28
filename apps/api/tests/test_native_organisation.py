@@ -420,7 +420,7 @@ def test_additive_migration_preserves_prior_rows_and_refuses_lossy_native_downgr
     before = snapshot()
     config = disposable_alembic_config(settings.database_url)
     command.downgrade(config, "20261106_17")
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261108_18")
     assert snapshot() == before
     create(native)
     with pytest.raises(RuntimeError, match="preservation"):

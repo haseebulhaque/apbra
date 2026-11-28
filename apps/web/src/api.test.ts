@@ -1,7 +1,7 @@
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {ApiError,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,dateDisplayApi,requestOutputsApi,validRequestOutputPage,workspaceBrandingApi,knowledgeDocumentsApi,observabilityApi} from './api';
+import {ApiError,nativeInvitationsApi,acceptanceApi,authApi,casesApi,companiesApi,conversationApi,evidenceApi,generationApi,invitationsApi,membershipsApi,profileApi,reviewedDesignApi,tenantSettingsApi,dateDisplayApi,requestOutputsApi,validRequestOutputPage,workspaceBrandingApi,knowledgeDocumentsApi,observabilityApi} from './api';
 
 afterEach(()=>vi.unstubAllGlobals());
 const response=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
@@ -175,4 +175,34 @@ describe('tenant date display and numbered history transport',()=>{
   expect(validRequestOutputPage(page,'case',1,'a')).toBe(true);
   for(const patch of [{company_id:'foreign'},{case_id:'foreign'},{current_context_version:2},{page:0},{total:NaN},{total:-1},{page_size:11},{pages:0},{snapshot:undefined},{current_report_available:undefined}])expect(validRequestOutputPage({...page,...patch} as typeof page,'case',1,'a')).toBe(false);
  });
+});
+
+describe('Native invitation transport',()=>{
+  it('sends the recipient proof only in a same-origin command after a fresh password challenge',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({enabled:true,csrf:'challenge'}))
+      .mockResolvedValueOnce(response({status:'AVAILABLE',invitation:{company_name:'Orchard'}}));
+    vi.stubGlobal('fetch',fetch);
+    await nativeInvitationsApi.inspect('synthetic-proof');
+    expect(fetch.mock.calls.map(([path])=>path)).toEqual(['/api/password/options','/api/password/invitations/inspect']);
+    expect(fetch.mock.calls[1][1]).toMatchObject({method:'POST',credentials:'same-origin',redirect:'error',cache:'no-store',
+      headers:{'X-Password-CSRF':'challenge'},body:JSON.stringify({proof:'synthetic-proof'})});
+  });
+  it('does not submit a proof after a missing challenge; preserves typed membership denials',async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce(response({enabled:false}));vi.stubGlobal('fetch',fetch);
+    await expect(nativeInvitationsApi.accept('synthetic-proof')).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockResolvedValueOnce(response({enabled:true,csrf:'challenge'}))
+      .mockResolvedValueOnce(response({status:'MEMBERSHIP_ALREADY_EXISTS'},409));
+    await expect(nativeInvitationsApi.accept('synthetic-proof')).rejects.toMatchObject({status:409,code:'MEMBERSHIP_ALREADY_EXISTS'});
+  });
+  it('binds the displayed management context while carrying no client-selected authority in the body',async()=>{
+    const fetch=vi.fn(async()=>response({items:[],next_cursor:null}));vi.stubGlobal('fetch',fetch);
+    await nativeInvitationsApi.issue('colleague@example.org','MEMBER','key-12345','csrf','membership-a');
+    await nativeInvitationsApi.list('csrf','membership-a','cursor+1');
+    await nativeInvitationsApi.revoke('invitation-1','csrf','membership-a');
+    const calls=fetch.mock.calls as unknown as Array<[string,RequestInit]>;
+    expect(calls[0][1].body).toBe(JSON.stringify({email:'colleague@example.org',role:'MEMBER'}));
+    expect(calls[1][0]).toBe('/api/native-invitations?cursor=cursor%2B1');
+    for(const [,init] of calls)expect(init.headers).toMatchObject({'X-Expected-Membership-Id':'membership-a','X-CSRF-Token':'csrf'});
+  });
 });

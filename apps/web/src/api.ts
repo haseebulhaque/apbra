@@ -9,7 +9,7 @@ export type CaseSummary=CaseRecord;
 export type Invitation={id:string;company_id:string;subject:string;role:string;expires_at:string};
 export type InvitationInspection={invitation:Invitation;status?:string};
 export type IssuedInvitation={invitation:Invitation;token:string};
-export type Membership={id:string;display_name:string;subject:string;role:string;active:boolean};
+export type Membership={id:string;display_name:string;subject:string|null;invitation_address?:string;role:string;active:boolean};
 export type MembershipRoleChange={id:string;role:'MEMBER'|'COMPANY_ADMIN';active:boolean};
 export type CompanyCreation={company:{id:string;name:string};membership:{id:string;role:'COMPANY_OWNER'}};
 export type Profile={display_name:string};
@@ -122,6 +122,43 @@ export const casesApi={
   grantAccess:(caseId:string,membershipId:string,accessLevel:'EDITOR'|'VIEWER',csrfToken:string)=>request<{granted:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/access`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({membership_id:membershipId,access_level:accessLevel})}),
   revokeAccess:(caseId:string,membershipId:string,csrfToken:string)=>request<{revoked:boolean}>(`/api/cases/${encodeURIComponent(caseId)}/access/${encodeURIComponent(membershipId)}/revoke`,{method:'POST',headers:csrfHeaders(csrfToken)}),
 };
+export type NativeInviteRole = 'COMPANY_ADMIN' | 'EXPERT' | 'MEMBER';
+export type NativeInviteSummary = {company_id:string; company_name:string; role:NativeInviteRole; expires_at:string};
+export type NativeInviteReceipt = {id:string; invitation_id:string; company_id:string; membership_id:string; role_at_accept:NativeInviteRole; accepted_at:string};
+export type NativeInviteResult = {status:'AVAILABLE'|'ACCEPTED'|'ALREADY_ACCEPTED'; invitation:NativeInviteSummary; receipt?:NativeInviteReceipt};
+export type NativeInviteRow = {id:string; email:string; role:NativeInviteRole; expires_at:string; state:string; delivery_state:string};
+
+export async function freshPasswordCsrf():Promise<string> {
+  const options = await request<{csrf:string; enabled:boolean}>('/api/password/options', {cache:'no-store',redirect:'error'});
+  if (!options.enabled || !options.csrf) throw new Error('Account access is unavailable.');
+  return options.csrf;
+}
+
+export async function passwordCommand<T>(action:string, data:Record<string,string>):Promise<T> {
+  const csrf=await freshPasswordCsrf();
+  const response = await fetch('/api/password/'+action, {
+    method:'POST', credentials:'same-origin', redirect:'error', cache:'no-store',
+    headers:{...jsonHeaders,'X-Password-CSRF':csrf}, body:JSON.stringify(data),
+  });
+  const value = await response.json();
+  if (!response.ok) throw new ApiError(response.status, value.status || 'REQUEST_FAILED',
+    'The invitation request could not be completed.', value);
+  return value as T;
+}
+
+export const nativeInvitationsApi = {
+  inspect:(proof:string)=>passwordCommand<NativeInviteResult>('invitations/inspect',{proof}),
+  accept:(proof:string)=>passwordCommand<NativeInviteResult>('invitations/accept',{proof}),
+  issue:(email:string,role:NativeInviteRole,key:string,csrf:string,membership:string)=>
+    request<{invitation:NativeInviteRow}>('/api/native-invitations',{method:'POST',
+      headers:{...csrfHeaders(csrf),'X-Expected-Membership-Id':membership,'Idempotency-Key':key},body:JSON.stringify({email,role})}),
+  list:(csrf:string,membership:string,cursor?:string)=>request<{items:NativeInviteRow[];next_cursor:string|null}>(
+    '/api/native-invitations'+(cursor?'?cursor='+encodeURIComponent(cursor):''),
+    {headers:{...csrfHeaders(csrf),'X-Expected-Membership-Id':membership},cache:'no-store'}),
+  revoke:(id:string,csrf:string,membership:string)=>request<{invitation:NativeInviteRow}>(
+    '/api/native-invitations/'+encodeURIComponent(id)+'/revoke',{method:'POST',headers:{...csrfHeaders(csrf),'X-Expected-Membership-Id':membership}}),
+};
+
 export const invitationsApi={
   inspect:(token:string)=>request<InvitationInspection>('/api/invitations/inspect',{method:'POST',body:JSON.stringify({token})}),
   accept:(token:string,csrfToken:string)=>request<unknown>('/api/invitations/accept',{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({token})}),
@@ -129,7 +166,10 @@ export const invitationsApi={
   revoke:(invitationId:string,csrfToken:string)=>request<{revoked:boolean}>(`/api/invitations/${encodeURIComponent(invitationId)}/revoke`,{method:'POST',headers:csrfHeaders(csrfToken)}),
 };
 export const membershipsApi={
-  list:()=>request<{items:Membership[]}>('/api/memberships'),
+  list:(nativeContext?:{csrfToken:string;membershipId:string})=>request<{items:Membership[]}>(
+    nativeContext?'/api/memberships?include_invitation_addresses=true':'/api/memberships',
+    nativeContext?{headers:{...csrfHeaders(nativeContext.csrfToken),'X-Expected-Membership-Id':nativeContext.membershipId}}:undefined,
+  ),
   deactivate:(membershipId:string,csrfToken:string)=>request<{deactivated:boolean}>(`/api/memberships/${encodeURIComponent(membershipId)}/deactivate`,{method:'POST',headers:csrfHeaders(csrfToken)}),
   changeRole:(membershipId:string,role:'MEMBER'|'COMPANY_ADMIN',csrfToken:string)=>request<{membership:MembershipRoleChange}>(`/api/memberships/${encodeURIComponent(membershipId)}/role`,{method:'POST',headers:csrfHeaders(csrfToken),body:JSON.stringify({role})}).then(value=>value.membership),
 };
